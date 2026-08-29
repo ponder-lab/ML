@@ -37,6 +37,8 @@
         <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="random" value="np_uniform_fn"/>
         <new def="seed_fn" class="Lnumpy/random/seed"/>
         <putfield class="LRoot" field="seed" fieldType="LRoot" ref="random" value="seed_fn"/>
+        <new def="random_state_fn" class="Lnumpy/random/RandomState"/>
+        <putfield class="LRoot" field="RandomState" fieldType="LRoot" ref="random" value="random_state_fn"/>
         <new def="ndarray_fn" class="Lnumpy/ndarray_constructor"/>
         <putfield class="LRoot" field="ndarray" fieldType="LRoot" ref="x" value="ndarray_fn"/>
         <new def="array_fn" class="Lnumpy/array"/>
@@ -355,6 +357,24 @@
           <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
           <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/legacy.html#numpy.random.RandomState -->
+      <!-- `np.random.RandomState(seed)`: the legacy GENERATOR object. Its draw methods are the same functions the module-level surface exposes, so the instance carries the same per-function fields rather than duplicating their models; `rng.uniform(size=...)` then resolves exactly as `np.random.uniform(size=...)` does. Without this the generator is unmodeled, every draw taken through it is shape-absent, and a following `.astype(...)` recovers the dtype while leaving the shape unknown, which is the shape-absent-with-dtype signature. wala/ML#827. -->
+      <class name="RandomState" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self seed">
+          <new def="rs" class="Lobject"/>
+          <new def="rs_uniform" class="Lnumpy/random/uniform"/>
+          <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="rs" value="rs_uniform"/>
+          <new def="rs_normal" class="Lnumpy/random/normal"/>
+          <putfield class="LRoot" field="normal" fieldType="LRoot" ref="rs" value="rs_normal"/>
+          <new def="rs_randn" class="Lnumpy/random/randn"/>
+          <putfield class="LRoot" field="randn" fieldType="LRoot" ref="rs" value="rs_randn"/>
+          <new def="rs_rand" class="Lnumpy/random/rand"/>
+          <putfield class="LRoot" field="rand" fieldType="LRoot" ref="rs" value="rs_rand"/>
+          <new def="rs_seed" class="Lnumpy/random/seed"/>
+          <putfield class="LRoot" field="seed" fieldType="LRoot" ref="rs" value="rs_seed"/>
+          <return value="rs"/>
         </method>
       </class>
       <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.uniform.html -->

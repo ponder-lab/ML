@@ -46,6 +46,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -2311,6 +2312,53 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * A directly-called step function's parameters, fed by destructuring iteration over a chained
+   * {@code shuffle().batch()} dataset whose images gained their channel axis from an ellipsis
+   * subscript and their dtype from a division: the corpus's custom-training-loop shape in
+   * miniature. Train side: every batch is full, so the images are exactly {@code (32, 28, 28, 1)
+   * float64} and the labels {@code (32,) uint8}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testStepFunctionParamsTrain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_step_function_params.py",
+        "train_step",
+        2,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1)), 3, Set.of(TENSOR_32_UINT8)));
+  }
+
+  /**
+   * Companion to {@link #testStepFunctionParamsTrain()} for the test side, whose element count
+   * leaves a partial final batch, so each parameter is the union over the full and partial batch.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testStepFunctionParamsTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_step_function_params.py",
+        "test_step",
+        2,
+        2,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1), TensorType.of(FLOAT_64, 16, 28, 28, 1)),
+            3,
+            Set.of(TENSOR_32_UINT8, TENSOR_16_UINT8)));
+  }
+
+  /**
    * Probe: {@code drop_remainder=True} discards the partial final batch.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
@@ -2446,5 +2494,52 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_4_3_FLOAT32, TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * A negative {@code padded_shapes} entry declares "pad to the longest element in the batch"
+   * rather than an extent (<a href="https://github.com/wala/ML/issues/810">wala/ML#810</a>). Where
+   * the upstream extent is itself variable, the padded extent varies per batch.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedShapesToLongestIsDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_padded_shapes_to_longest.py",
+        "consume_padded_dynamic",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(DType.INT32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(DType.INT32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Where the upstream extent is fixed, padding to the longest yields that extent (wala/ML#810).
+   * This is tighter than the runtime's own static shape, which reports {@code None} because it does
+   * not track the upstream size, and it is why the negative entry is resolved against the upstream
+   * rather than mapped to a wildcard unconditionally.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedShapesToLongestKeepsFixedExtent()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_padded_shapes_to_longest.py",
+        "consume_padded_known",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(DType.INT64, 4, 3))));
   }
 }

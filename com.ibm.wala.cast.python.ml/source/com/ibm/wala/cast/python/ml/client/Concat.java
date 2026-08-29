@@ -103,11 +103,42 @@ public class Concat extends TensorGenerator {
     super(node);
   }
 
+  /**
+   * The tensors-list argument's positional index, excluding the implicit {@code self} receiver.
+   * Overridable because the Keras layer spelling receives the list at a different position
+   * (wala/ML#840).
+   *
+   * @return The zero-based positional index.
+   */
+  protected int getValuesParameterIndex() {
+    return Parameters.VALUES.getIndex();
+  }
+
+  /**
+   * The tensors-list argument's keyword name. Overridable because the Keras spellings name it
+   * {@code inputs} (wala/ML#840).
+   *
+   * @return The keyword name.
+   */
+  protected String getValuesParameterName() {
+    return Parameters.VALUES.getName();
+  }
+
+  /**
+   * The axis used when the call supplies none: {@code tf.concat}'s documented default. Overridable
+   * because the Keras concatenate family defaults to {@code -1} instead (wala/ML#840).
+   *
+   * @return The default concatenation axis.
+   */
+  protected int getDefaultAxis() {
+    return 0;
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, Parameters.VALUES.getIndex(), Parameters.VALUES.getName());
+            builder, this.getValuesParameterIndex(), this.getValuesParameterName());
     if (valuesPts == null || valuesPts.isEmpty()) return null;
 
     Integer axis = resolveConstantAxis(builder);
@@ -169,7 +200,7 @@ public class Concat extends TensorGenerator {
    */
   @Override
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
-    int valuesVn = getArgumentValueNumber(Parameters.VALUES.getIndex());
+    int valuesVn = getArgumentValueNumber(this.getValuesParameterIndex());
     if (valuesVn <= 0) return null;
     PointerKey argument =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), valuesVn);
@@ -183,7 +214,7 @@ public class Concat extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, Parameters.VALUES.getIndex(), Parameters.VALUES.getName());
+            builder, this.getValuesParameterIndex(), this.getValuesParameterName());
     if (valuesPts == null || valuesPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
 
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
@@ -315,15 +346,20 @@ public class Concat extends TensorGenerator {
 
   /**
    * Reads the {@code axis} argument's PTS and resolves it to a concrete integer if all keys are
-   * {@code ConstantKey<Number>}. Returns {@code 0} when {@code axis} isn't passed (TF default) and
-   * {@code null} when the argument is present but unresolvable (caller should emit ⊤).
+   * {@code ConstantKey<Number>}. Returns {@link #getDefaultAxis()} when {@code axis} isn't passed
+   * and {@code null} when the argument is present but unresolvable (caller should emit ⊤).
+   * Overridable because the Keras layer spelling stores the axis on the instance at construction
+   * rather than passing it at the call (wala/ML#840).
+   *
+   * @param builder The propagation call graph builder.
+   * @return The resolved axis, or {@code null} when it does not resolve to exactly one integer.
    */
-  private Integer resolveConstantAxis(PropagationCallGraphBuilder builder) {
+  protected Integer resolveConstantAxis(PropagationCallGraphBuilder builder) {
     boolean axisPresent =
         this.isKeywordArgumentPresent(builder, Parameters.AXIS.getName())
             || this.getNumberOfPossiblePositionalArguments(builder).stream()
                 .anyMatch(n -> n > Parameters.AXIS.getIndex());
-    if (!axisPresent) return 0;
+    if (!axisPresent) return this.getDefaultAxis();
     OrdinalSet<InstanceKey> axisPts =
         this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
     if (axisPts == null || axisPts.isEmpty()) return null;
@@ -336,7 +372,7 @@ public class Concat extends TensorGenerator {
       if (ret == null) ret = v;
       else if (ret != v) return null;
     }
-    return ret == null ? 0 : ret;
+    return ret == null ? this.getDefaultAxis() : ret;
   }
 
   /**

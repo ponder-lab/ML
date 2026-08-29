@@ -41,8 +41,11 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CLIP_BY_VALUE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCATENATE_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV1D_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV2D_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV2D_TRANSPOSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
@@ -121,6 +124,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.KERAS_CONCATENATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
@@ -224,6 +228,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VAR_LEN_FEATURE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZERO_PADDING_2D_CALL;
 import static com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
@@ -883,9 +888,15 @@ public class TensorGeneratorFactory {
       if (pk instanceof LocalPointerKey) {
         LocalPointerKey lpk = (LocalPointerKey) pk;
         SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+        // A binary-op-defined value is a creator too: the factory dispatches it to the elementwise
+        // generator, which resolves the operands itself. Without the stop, a walk arriving from a
+        // container field (a destructured `x, y = a / 255.0, ...` whose field feeds a subscript or
+        // a dataset argument) passes through the elementwise result, exhausts its predecessors,
+        // and falls back to the field key, which nothing can dispatch (wala/ML#396).
         if (def instanceof SSAAbstractInvokeInstruction
             || def instanceof EachElementGetInstruction
-            || def instanceof PythonPropertyRead) {
+            || def instanceof PythonPropertyRead
+            || def instanceof SSABinaryOpInstruction) {
           LOGGER.fine(() -> "findCreator found creator instruction: " + def);
           return current;
         }
@@ -1901,6 +1912,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, CONV2D_CALL.getDeclaringClass())) return new Conv2DCall(source);
+    else if (isType(calledFunction, CONV1D_CALL.getDeclaringClass())) return new Conv1DCall(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
@@ -1909,6 +1921,10 @@ public class TensorGeneratorFactory {
     else if (isShapePreservingLayerCall(calledFunction))
       return new ShapePreservingLayerCall(source);
     else if (isPooling2DLayerCall(calledFunction)) return new Pooling2DCall(source);
+    else if (isType(calledFunction, CONV2D_TRANSPOSE_CALL.getDeclaringClass()))
+      return new Conv2DTransposeCall(source);
+    else if (isType(calledFunction, ZERO_PADDING_2D_CALL.getDeclaringClass()))
+      return new ZeroPadding2DCall(source);
     else if (isType(calledFunction, GLOBAL_MAX_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalMaxPoolingCall(source, GlobalMaxPoolingCall.INPUT_RANK_1D);
     else if (isType(calledFunction, GLOBAL_MAX_POOLING_2D_CALL.getDeclaringClass()))
@@ -1916,6 +1932,10 @@ public class TensorGeneratorFactory {
     else if (isRecurrentLayerCall(calledFunction)) return new RecurrentLayerCall(source);
     else if (isType(calledFunction, BIDIRECTIONAL_LAYER_CALL.getDeclaringClass()))
       return new BidirectionalCall(source);
+    else if (isType(calledFunction, CONCATENATE_LAYER_CALL.getDeclaringClass()))
+      return new ConcatenateCall(source);
+    else if (isType(calledFunction, KERAS_CONCATENATE.getDeclaringClass()))
+      return new KerasConcatenate(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalAveragePooling1DCall(source);
     else if (isType(calledFunction, EMBEDDING_LAYER_CALL.getDeclaringClass()))

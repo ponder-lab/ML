@@ -92,7 +92,7 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     super(node);
   }
 
-  private OrdinalSet<InstanceKey> getReceiverPTS(PropagationCallGraphBuilder builder) {
+  protected OrdinalSet<InstanceKey> getReceiverPTS(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (pts != null && !pts.isEmpty()) {

@@ -337,6 +337,65 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The token-classification driver's destructured loop element resolves exactly, batch included:
+   * the driver's literal batch size reaches the loader's stored field, the keyword {@code
+   * batch(batch_size=..., drop_remainder=True)} resolves it, and the partial batch is suppressed,
+   * so the element is a full {@code (8, 100)} int64. This pins the stored-attribute batch chase
+   * that was the named gap for this parameter family. The list-valued {@code predict} parameter
+   * these elements feed deliberately carries no direct tensor type: container parameters are the
+   * specification consumer's to reduce per position from exactly these element values, so the
+   * element probe is the whole engine-side contract.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNerLoopElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ner_predict_params.py",
+        "consume_x",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 8, 100))));
+  }
+
+  @Test
+  public void testFnResultParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fn_result_param.py",
+        "accuracy",
+        2,
+        7,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 256, 10)), 3, Set.of(TensorType.of(UINT_8, 256))));
+  }
+
+  @Test
+  public void testGanDiscriminatorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gan_loss_params.py",
+        "discriminator_loss",
+        2,
+        7,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 2)), 3, Set.of(TensorType.of(FLOAT_32, 8, 2))));
+  }
+
+  @Test
+  public void testGanGeneratorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gan_loss_params.py",
+        "generator_loss",
+        1,
+        3,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 2))));
+  }
+
+  /**
    * Pins {@code LSTM.call(x)}'s parameter type. Class and method body mirror the {@code LSTM}
    * recurrent model from {@code
    * aymericdamien/TensorFlow-Examples/.../3_NeuralNetworks/recurrent_network.py}, a real-world

@@ -129,7 +129,17 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     }
 
     int objRef = propRead.getObjectRef();
-    Set<List<Dimension<?>>> receiverShapes = getShapes(builder, getNode(), objRef);
+    // The SSA-chain variant, not the plain read: the receiver may be a tuple-unpack read of a
+    // value with no allocation (a destructured elementwise result, `x, y = a / 255.0, ...`), which
+    // only the chain walk's tuple-field peel resolves (wala/ML#396).
+    Set<List<Dimension<?>>> receiverShapes;
+    try {
+      receiverShapes = getShapesOrSSAChain(builder, getNode(), objRef);
+    } catch (IllegalArgumentException e) {
+      LOGGER.fine(
+          () -> "NdarraySubscriptOperation: receiver vn=" + objRef + " unresolved: " + e + ".");
+      return null;
+    }
     LOGGER.fine(
         () -> "NdarraySubscriptOperation: receiver vn=" + objRef + " shapes=" + receiverShapes);
     if (receiverShapes == null || receiverShapes.isEmpty()) return null;

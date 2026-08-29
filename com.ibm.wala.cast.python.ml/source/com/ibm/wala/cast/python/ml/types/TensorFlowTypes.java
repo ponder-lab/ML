@@ -2028,6 +2028,17 @@ public class TensorFlowTypes extends PythonTypes {
       "tf.keras.layers.Conv2D." + CALLABLE_METHOD_NAME + "()";
 
   /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Conv1D} instance
+   * (wala/ML#840): the output keeps the batch axis, rewrites the temporal axis through the
+   * convolution window, and takes its channel axis from the declared filter count. Dispatches to
+   * {@link com.ibm.wala.cast.python.ml.client.Conv1DCall}.
+   */
+  public static final MethodReference CONV1D_CALL = kerasLayerCall("Conv1D");
+
+  private static final String CONV1D_CALL_SIGNATURE =
+      "tf.keras.layers.Conv1D." + CALLABLE_METHOD_NAME + "()";
+
+  /**
    * https://github.com/keras-team/keras/blob/f6c4ac55692c132cd16211f4877fac6dbeead749/keras/src/layers/core/dense.py#L149-L155.
    */
   public static final MethodReference DENSE_CALL =
@@ -2096,6 +2107,22 @@ public class TensorFlowTypes extends PythonTypes {
       List.of(kerasLayerCall("MaxPool2D"), kerasLayerCall("AveragePooling2D"));
 
   /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Conv2DTranspose} instance
+   * (wala/ML#840): the output keeps the batch axis, rewrites the two spatial axes upward from the
+   * upsampling window stored on the instance, and takes its channel axis from the declared filter
+   * count. Dispatches to {@link com.ibm.wala.cast.python.ml.client.Conv2DTransposeCall}.
+   */
+  public static final MethodReference CONV2D_TRANSPOSE_CALL = kerasLayerCall("Conv2DTranspose");
+
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.ZeroPadding2D} instance
+   * (wala/ML#840): the output keeps the batch and channel axes and grows the two spatial axes by
+   * the padding stored on the instance. Dispatches to {@link
+   * com.ibm.wala.cast.python.ml.client.ZeroPadding2DCall}.
+   */
+  public static final MethodReference ZERO_PADDING_2D_CALL = kerasLayerCall("ZeroPadding2D");
+
+  /**
    * The {@code __call__} synthetic method on a {@code tf.keras.layers.GlobalMaxPooling1D} instance
    * (wala/ML#840).
    *
@@ -2134,6 +2161,29 @@ public class TensorFlowTypes extends PythonTypes {
    *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional">tf.keras.layers.Bidirectional</a>
    */
   public static final MethodReference BIDIRECTIONAL_LAYER_CALL = kerasLayerCall("Bidirectional");
+
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Concatenate} instance
+   * (wala/ML#840).
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate">tf.keras.layers.Concatenate</a>
+   */
+  public static final MethodReference CONCATENATE_LAYER_CALL = kerasLayerCall("Concatenate");
+
+  /**
+   * The functional {@code tf.keras.layers.concatenate} spelling (wala/ML#840); its default axis is
+   * {@code -1} where {@code tf.concat}'s is {@code 0}, so it carries its own summary and generator.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/concatenate">tf.keras.layers.concatenate</a>
+   */
+  public static final MethodReference KERAS_CONCATENATE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/concatenate")),
+          AstMethodReference.fnSelector);
 
   /**
    * Builds the {@code __call__} method reference for a Keras layer class by its simple name.
@@ -2451,6 +2501,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(CONV2D_CALL.getDeclaringClass(), CONV2D_CALL_SIGNATURE),
+          Map.entry(CONV1D_CALL.getDeclaringClass(), CONV1D_CALL_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(
               GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass(),

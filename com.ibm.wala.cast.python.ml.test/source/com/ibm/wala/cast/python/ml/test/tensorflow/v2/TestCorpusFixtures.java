@@ -799,6 +799,21 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * list, which wala/ML#730 removed. These residual body locals are pre-existing modeling gaps, not
    * new findings, and are downstream of the (exact) input signature.
    *
+   * <p>Modeling the functional {@code layers.concatenate} spelling (wala/ML#840) types the {@code
+   * concatenate(convs)} result as well, which moved the local count from four to five, and wiring
+   * the {@code GlobalAvgPool1D} alias to the modeled {@code GlobalAveragePooling1D} types the
+   * loop's pooled result too, moving it from five to six. Both are both-axes-⊤ tensors rather than
+   * shaped ones: their inputs ride the unmodeled {@code Conv1D} above, so there is nothing to
+   * compute from yet, and the values are simply no longer dropped.
+   *
+   * <p>Folding the convolution layers' extents (wala/ML#840) moved the local count from six to
+   * seven and, more importantly, retyped the rest of the chain. The {@code Conv1D} result was the ⊤
+   * at its head, so everything below it inherited that: the pooled results, the concatenation and
+   * the final {@code Dense} output were all shape-⊤ before. They now carry rank, and the output
+   * resolves to {@code (2, 3)} exactly. The convolution's own two extents stay {@code Unresolved}
+   * because the encoder builds its kernels in a loop, so the receiver instances disagree and one
+   * answer would be wrong.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -818,7 +833,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "TextCNN.call",
         "textcnn_proj",
         1,
-        4,
+        7,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 

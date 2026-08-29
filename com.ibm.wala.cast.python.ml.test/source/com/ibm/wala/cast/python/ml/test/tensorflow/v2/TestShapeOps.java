@@ -127,6 +127,167 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A slice whose bounds are runtime tensors keeps its rank: {@code tf.slice} never changes the
+   * rank at run time, so unresolvable {@code begin}/{@code size} degrade the extents and not the
+   * shape. The receiver is the image-augmentation crop in miniature, whose bounds come from {@code
+   * tf.image.sample_distorted_bounding_box}, and before the degradation the whole downstream
+   * transform chain inherited ⊤ from this one call.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceRuntimeBoundsKeepsRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_crop",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The recovered rank survives the shape-preserving image helpers: the flip's parameter is the
+   * crop's result, one hop downstream.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceRuntimeBoundsChainFlip()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_flip",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * Two hops downstream, through the random flip: the contrast helper's parameter still carries the
+   * crop's rank.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceRuntimeBoundsChainContrast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_contrast",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The subject-shaped two-call-site geometry: the same helper takes the full image directly and
+   * the crop's result, so its parameter is the union of the concrete shape and the rank-3 degraded
+   * one — two rank-3 members rather than a collapse to ⊤.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceRuntimeBoundsUnionWithDirect()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_union",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(UINT_8, 1332, 800, 3),
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The narrowness pin for the wala/ML#844 contract arm: the same destructuring shape over a
+   * DIFFERENT tuple producer must keep the all-degraded answer rather than borrowing the crop's
+   * channel contract, since fabricating an extent is the unsafe direction.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceOtherBoundsProducerStaysDegraded()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_other_bounds",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The cross-caller safety property of the wala/ML#844 arm, stated in its Javadoc and verified
+   * here: evidence from one call site must never apply to another. One helper receives the
+   * documented crop's bounds from one caller and a different producer's from the other; the slice
+   * inside sees its bounds as parameters, the contract declines, and the result stays all-degraded
+   * for both.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceMixedCallersStayDegraded()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_mixed_callers",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
    * Pins the output shape of {@code tf.squeeze} with a named axis (wala/ML#513). {@code
    * tf.squeeze(x, [1])} over a {@code (2, 1, 3, 1)} tensor drops only axis 1: {@code (2, 3, 1)}.
    *

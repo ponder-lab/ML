@@ -367,6 +367,7 @@
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="x" value="tanh"/>
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="math" value="tanh"/>
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="gen_math_ops" value="tanh"/>
+        <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="nn" value="tanh"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/log_softmax -->
         <new def="log_softmax" class="Ltensorflow/math/log_softmax"/>
         <putfield class="LRoot" field="log_softmax" fieldType="LRoot" ref="nn" value="log_softmax"/>
@@ -437,10 +438,13 @@
         <putfield class="LRoot" field="Dense" fieldType="LRoot" ref="layers" value="Dense"/>
         <new def="Conv2DCls" class="Ltensorflow/keras/layers/class/Conv2D"/>
         <putfield class="LRoot" field="Conv2D" fieldType="LRoot" ref="layers" value="Conv2DCls"/>
+        <new def="Conv1DCls" class="Ltensorflow/keras/layers/class/Conv1D"/>
+        <putfield class="LRoot" field="Conv1D" fieldType="LRoot" ref="layers" value="Conv1DCls"/>
         <new def="FlattenLayerCls" class="Ltensorflow/keras/layers/class/Flatten"/>
         <putfield class="LRoot" field="Flatten" fieldType="LRoot" ref="layers" value="FlattenLayerCls"/>
         <new def="GlobalAveragePooling1DCls" class="Ltensorflow/keras/layers/class/GlobalAveragePooling1D"/>
         <putfield class="LRoot" field="GlobalAveragePooling1D" fieldType="LRoot" ref="layers" value="GlobalAveragePooling1DCls"/>
+        <putfield class="LRoot" field="GlobalAvgPool1D" fieldType="LRoot" ref="layers" value="GlobalAveragePooling1DCls"/>
         <new def="EmbeddingCls" class="Ltensorflow/keras/layers/class/Embedding"/>
         <putfield class="LRoot" field="Embedding" fieldType="LRoot" ref="layers" value="EmbeddingCls"/>
         <new def="DropoutLayerCls" class="Ltensorflow/keras/layers/class/Dropout"/>
@@ -471,6 +475,10 @@
         <new def="GlobalMaxPooling2DLayerCls" class="Ltensorflow/keras/layers/class/GlobalMaxPooling2D"/>
         <putfield class="LRoot" field="GlobalMaxPooling2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
         <putfield class="LRoot" field="GlobalMaxPool2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
+        <new def="Conv2DTransposeLayerCls" class="Ltensorflow/keras/layers/class/Conv2DTranspose"/>
+        <putfield class="LRoot" field="Conv2DTranspose" fieldType="LRoot" ref="layers" value="Conv2DTransposeLayerCls"/>
+        <new def="ZeroPadding2DLayerCls" class="Ltensorflow/keras/layers/class/ZeroPadding2D"/>
+        <putfield class="LRoot" field="ZeroPadding2D" fieldType="LRoot" ref="layers" value="ZeroPadding2DLayerCls"/>
         <new def="LSTMLayerCls" class="Ltensorflow/keras/layers/class/LSTM"/>
         <putfield class="LRoot" field="LSTM" fieldType="LRoot" ref="layers" value="LSTMLayerCls"/>
         <new def="GRULayerCls" class="Ltensorflow/keras/layers/class/GRU"/>
@@ -479,6 +487,10 @@
         <putfield class="LRoot" field="SimpleRNN" fieldType="LRoot" ref="layers" value="SimpleRNNLayerCls"/>
         <new def="BidirectionalLayerCls" class="Ltensorflow/keras/layers/class/Bidirectional"/>
         <putfield class="LRoot" field="Bidirectional" fieldType="LRoot" ref="layers" value="BidirectionalLayerCls"/>
+        <new def="ConcatenateLayerCls" class="Ltensorflow/keras/layers/class/Concatenate"/>
+        <putfield class="LRoot" field="Concatenate" fieldType="LRoot" ref="layers" value="ConcatenateLayerCls"/>
+        <new def="kerasConcatenateFn" class="Ltensorflow/functions/concatenate"/>
+        <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="layers" value="kerasConcatenateFn"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model"/>
@@ -1851,6 +1863,13 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/concatenate. The functional Keras concatenation spelling: same computation as `concat`, but the list parameter is named `inputs` and the default axis is -1 rather than 0, so it pairs with the `KerasConcatenate` generator instead of sharing `concat`'s summary (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self inputs axis">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Variable" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="13" paramNames="self initial_value trainable validate_shape caching_device name variable_def dtype import_scope constraint synchronization aggregation shape">
           <new def="res" class="Ltensorflow/python/ops/variables/Variable"/>
@@ -2647,10 +2666,26 @@
         </method>
       </class>
       <class name="Conv2D" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2D. `filters` fixes the output channel count; the `Conv2DCall` generator reads it back off the instance. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2D. `filters` fixes the output channel count and the window fixes the spatial extents; the `Conv2DCall` generator reads both back off the instance (wala/ML#840). -->
         <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self filters kernel_size strides padding data_format dilation_rate groups activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
           <new def="res" class="Ltensorflow/keras/layers/Conv2D"/>
           <putfield class="LRoot" field="filters" fieldType="LRoot" ref="res" value="filters"/>
+          <putfield class="LRoot" field="kernel_size" fieldType="LRoot" ref="res" value="kernel_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <putfield class="LRoot" field="dilation_rate" fieldType="LRoot" ref="res" value="dilation_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Conv1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv1D. The window and the filter count are stored on the instance so `Conv1DCall` can rewrite the temporal and channel axes from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self filters kernel_size strides padding data_format dilation_rate groups activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
+          <new def="res" class="Ltensorflow/keras/layers/Conv1D"/>
+          <putfield class="LRoot" field="filters" fieldType="LRoot" ref="res" value="filters"/>
+          <putfield class="LRoot" field="kernel_size" fieldType="LRoot" ref="res" value="kernel_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <putfield class="LRoot" field="dilation_rate" fieldType="LRoot" ref="res" value="dilation_rate"/>
           <return value="res"/>
         </method>
       </class>
@@ -2730,6 +2765,26 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="Conv2DTranspose" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2DTranspose. The upsampling window and the filter count are stored on the instance so `Conv2DTransposeCall` can rewrite the spatial and channel axes from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self filters kernel_size strides padding output_padding data_format">
+          <new def="res" class="Ltensorflow/keras/layers/Conv2DTranspose"/>
+          <putfield class="LRoot" field="filters" fieldType="LRoot" ref="res" value="filters"/>
+          <putfield class="LRoot" field="kernel_size" fieldType="LRoot" ref="res" value="kernel_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <putfield class="LRoot" field="output_padding" fieldType="LRoot" ref="res" value="output_padding"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ZeroPadding2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/ZeroPadding2D. The padding is stored on the instance so `ZeroPadding2DCall` can grow the spatial axes by it (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self padding data_format">
+          <new def="res" class="Ltensorflow/keras/layers/ZeroPadding2D"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="GlobalMaxPooling1D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D. Rank-reducing pooling: the `GlobalMaxPoolingCall` generator drops the temporal axis (wala/ML#840). -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data_format keepdims">
@@ -2780,6 +2835,14 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="Concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate. The `axis` argument is stored on the instance so `ConcatenateCall` can read it back at the call (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self axis">
+          <new def="res" class="Ltensorflow/keras/layers/Concatenate"/>
+          <putfield class="LRoot" field="axis" fieldType="LRoot" ref="res" value="axis"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Embedding" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding. The `output_dim` argument is stored on the instance so `EmbeddingCall` can append it to the input shape (wala/ML#676). -->
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input_dim output_dim embeddings_initializer embeddings_regularizer embeddings_constraint mask_zero input_length">
@@ -2827,6 +2890,17 @@
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Conv1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv1D#__call__. The output type is computed by `Conv1DCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -2953,6 +3027,28 @@
           <return value="out"/>
         </method>
       </class>
+      <class name="Conv2DTranspose" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2DTranspose. The output type is computed by `Conv2DTransposeCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="ZeroPadding2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/ZeroPadding2D. The output type is computed by `ZeroPadding2DCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
       <class name="GlobalMaxPooling1D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D. The output type is computed by `GlobalMaxPoolingCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
@@ -3010,6 +3106,17 @@
       </class>
       <class name="Bidirectional" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate. The output type is computed by `ConcatenateCall`, which walks the `inputs` list and sums the extents along the stored axis (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
