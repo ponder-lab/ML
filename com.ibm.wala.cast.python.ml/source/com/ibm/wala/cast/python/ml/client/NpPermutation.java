@@ -4,7 +4,9 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -75,9 +77,23 @@ public class NpPermutation extends TensorGenerator {
       return ret;
     }
 
-    // The array arm: the shape survives the draw unchanged.
     OrdinalSet<InstanceKey> argumentPointsToSet =
         this.getArgumentPointsToSet(builder, X_PARAMETER_POSITION, X_PARAMETER_NAME);
+
+    if (isIntegralArgument(argumentPointsToSet)) {
+      // Still the integer arm, with a length that does not resolve to one value: the argument is
+      // numeric at every site but carries more than one, so `resolveStaticIntArgument` declines.
+      // Falling through to the array arm here would map a number to its own scalar shape and
+      // report `()` where the runtime gives a vector, which is the confidently wrong shape this
+      // class exists to avoid, reached by the other route. The rank is known regardless of the
+      // length, so the extent is what degrades.
+      LOGGER.fine(() -> "NpPermutation: integral argument of unresolved length; rank one.");
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      ret.add(List.of(UnresolvedDim.INSTANCE));
+      return ret;
+    }
+
+    // The array arm: the shape survives the draw unchanged.
     Set<List<Dimension<?>>> preserved = this.getShapesOfValue(builder, argumentPointsToSet);
     LOGGER.fine(() -> "NpPermutation: array argument; preserved shapes " + preserved + ".");
 
@@ -95,9 +111,37 @@ public class NpPermutation extends TensorGenerator {
 
     OrdinalSet<InstanceKey> argumentPointsToSet =
         this.getArgumentPointsToSet(builder, X_PARAMETER_POSITION, X_PARAMETER_NAME);
+
+    // The dtype shares the shape's edge: an integral argument whose length does not resolve is
+    // still the integer arm, and its result is still indices rather than the argument's own dtype.
+    if (isIntegralArgument(argumentPointsToSet)) return EnumSet.of(DType.INT64);
+
     Set<DType> preserved = this.getDTypesOfValue(builder, argumentPointsToSet);
 
     return preserved == null || preserved.isEmpty() ? EnumSet.of(DType.UNKNOWN) : preserved;
+  }
+
+  /**
+   * Whether the argument is an integer at every site it can hold, which selects the integer arm
+   * whether or not a single length resolves.
+   *
+   * <p>Separate from {@link #resolveStaticIntArgument}, which answers a narrower question: that
+   * helper declines a multi-valued argument, and declining is not the same as the argument not
+   * being an integer. Treating the decline as "not an integer" sends a numeric argument down the
+   * array arm, whose pass-through maps a number to the scalar shape the number itself has.
+   *
+   * @param argumentPointsToSet The argument's points-to set.
+   * @return {@code true} iff the set is non-empty and every member is a numeric constant.
+   */
+  private static boolean isIntegralArgument(OrdinalSet<InstanceKey> argumentPointsToSet) {
+    if (argumentPointsToSet == null || argumentPointsToSet.isEmpty()) return false;
+
+    for (InstanceKey instanceKey : argumentPointsToSet) {
+      if (!(instanceKey instanceof ConstantKey)) return false;
+      if (!(((ConstantKey<?>) instanceKey).getValue() instanceof Number)) return false;
+    }
+
+    return true;
   }
 
   @Override

@@ -15,8 +15,10 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_2_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_7_5_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
+import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -437,5 +439,28 @@ public class TestRandomOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_64, 3, 7))));
+  }
+
+  /**
+   * An integer argument that carries more than one value, so no single length resolves. The result
+   * is still rank one and still indices; only the extent degrades. Falling through to the array arm
+   * here would map the number to its own scalar shape and report a scalar where the runtime gives a
+   * vector, which is the same confidently wrong shape the two arms exist to prevent, reached by the
+   * other route (wala/ML#858).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationMultiValuedLength()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_permutation_multivalued.py",
+        "consume_multivalued",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(UnresolvedDim.INSTANCE)))));
   }
 }
