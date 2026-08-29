@@ -6,11 +6,18 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -90,11 +97,19 @@ public class Slice extends PassThroughUnaryTensorGenerator {
     // `tf.image.sample_distorted_bounding_box`'s outputs), which is how an augmentation chain's
     // helpers lost their image parameters' ranks.
     if (sizeLists == null) {
+      // The documented-contract crop keeps its channel extent (wala/ML#844): when both bounds are
+      // the destructured outputs of one `sample_distorted_bounding_box` call, `size` is documented
+      // as `[target_height, target_width, -1]` and `begin` as `[offset_height, offset_width, 0]`,
+      // so a rank-3 input's channel extent survives verbatim while the spatial axes stay degraded.
+      boolean cropContract = this.boundsAreSampleDistortedBoundingBoxOutputs(builder);
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (List<Dimension<?>> input : inputShapes) {
         List<Dimension<?>> out = new ArrayList<>(input.size());
-        for (Dimension<?> inDim : input)
-          out.add(inDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+        for (int i = 0; i < input.size(); i++) {
+          Dimension<?> inDim = input.get(i);
+          if (cropContract && input.size() == 3 && i == 2) out.add(inDim);
+          else out.add(inDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+        }
         ret.add(out);
       }
       return ret.isEmpty() ? null : ret;
@@ -114,6 +129,92 @@ public class Slice extends PassThroughUnaryTensorGenerator {
           ret.add(out);
         }
     return ret.isEmpty() ? null : ret;
+  }
+
+  /** The producer whose bounds carry the documented crop contract (wala/ML#844). */
+  private static final String CROP_PRODUCER_NAME = "sample_distorted_bounding_box";
+
+  /**
+   * Whether every invocation anchoring this generator takes its {@code begin} and {@code size} from
+   * elements 0 and 1 of the same {@code sample_distorted_bounding_box} result (wala/ML#844).
+   *
+   * <p>The match is deliberately narrow, since firing on a different producer that happens to share
+   * the destructuring shape would fabricate an extent: both bounds must be property reads of the
+   * constant members 0 and 1 on one tuple, and that tuple's producing invoke's callee must be an
+   * attribute read of exactly this operation's name. Every candidate invocation must match, so a
+   * manual anchor whose callers disagree keeps the all-degraded answer. The failure direction is
+   * silence: a pattern this does not recognize degrades to unresolved extents, never to a claimed
+   * one.
+   *
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the documented crop contract applies to every anchoring invocation.
+   */
+  private boolean boundsAreSampleDistortedBoundingBoxOutputs(PropagationCallGraphBuilder builder) {
+    PythonInvokeInstruction call = this.getInvokeInstruction();
+    if (call != null) return isCropContractCall(this.getNode(), call);
+
+    boolean any = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) return false;
+      if (!isCropContractCall(callerInvoke.fst, (PythonInvokeInstruction) callerInvoke.snd))
+        return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /**
+   * The per-invocation half of {@link #boundsAreSampleDistortedBoundingBoxOutputs}: whether one
+   * {@code tf.slice} call's {@code begin} and {@code size} are the destructured first and second
+   * elements of a single {@code sample_distorted_bounding_box} result.
+   *
+   * @param node The calling frame.
+   * @param call The {@code tf.slice} invocation.
+   * @return {@code true} iff the documented crop contract applies to this invocation.
+   */
+  private static boolean isCropContractCall(CGNode node, PythonInvokeInstruction call) {
+    if (node.getIR() == null) return false;
+    SymbolTable st = node.getIR().getSymbolTable();
+    DefUse du = node.getDU();
+
+    int beginVn = call.getUse("begin");
+    if (beginVn == -1 && call.getNumberOfPositionalParameters() > 2) beginVn = call.getUse(2);
+    int sizeVn = call.getUse("size");
+    if (sizeVn == -1 && call.getNumberOfPositionalParameters() > 3) sizeVn = call.getUse(3);
+    if (beginVn <= 0 || sizeVn <= 0) return false;
+
+    SSAInstruction beginDef = du.getDef(beginVn);
+    SSAInstruction sizeDef = du.getDef(sizeVn);
+    if (!(beginDef instanceof PythonPropertyRead) || !(sizeDef instanceof PythonPropertyRead))
+      return false;
+    PythonPropertyRead beginRead = (PythonPropertyRead) beginDef;
+    PythonPropertyRead sizeRead = (PythonPropertyRead) sizeDef;
+    if (beginRead.getObjectRef() != sizeRead.getObjectRef()) return false;
+    if (!isConstantMember(st, beginRead.getMemberRef(), 0)
+        || !isConstantMember(st, sizeRead.getMemberRef(), 1)) return false;
+
+    SSAInstruction tupleDef = du.getDef(beginRead.getObjectRef());
+    if (!(tupleDef instanceof PythonInvokeInstruction)) return false;
+    SSAInstruction calleeDef = du.getDef(((PythonInvokeInstruction) tupleDef).getUse(0));
+    if (!(calleeDef instanceof PythonPropertyRead)) return false;
+    int calleeMemberVn = ((PythonPropertyRead) calleeDef).getMemberRef();
+    return st.isStringConstant(calleeMemberVn)
+        && CROP_PRODUCER_NAME.equals(st.getStringValue(calleeMemberVn));
+  }
+
+  /**
+   * Whether the given value number is a constant equal to the expected tuple-field index.
+   *
+   * @param st The frame's symbol table.
+   * @param memberVn The member reference's value number.
+   * @param expected The expected field index.
+   * @return {@code true} iff the member is that constant.
+   */
+  private static boolean isConstantMember(SymbolTable st, int memberVn, int expected) {
+    if (!st.isConstant(memberVn)) return false;
+    Object value = st.getConstantValue(memberVn);
+    return value != null && String.valueOf(expected).equals(String.valueOf(value));
   }
 
   /**

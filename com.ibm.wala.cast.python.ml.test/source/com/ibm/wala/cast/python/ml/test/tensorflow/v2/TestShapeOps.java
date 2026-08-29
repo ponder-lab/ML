@@ -151,8 +151,7 @@ public class TestShapeOps extends AbstractTensorTest {
             Set.of(
                 new TensorType(
                     UINT_8,
-                    asList(
-                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
 
   /**
@@ -177,8 +176,7 @@ public class TestShapeOps extends AbstractTensorTest {
             Set.of(
                 new TensorType(
                     UINT_8,
-                    asList(
-                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
 
   /**
@@ -203,8 +201,7 @@ public class TestShapeOps extends AbstractTensorTest {
             Set.of(
                 new TensorType(
                     UINT_8,
-                    asList(
-                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
 
   /**
@@ -229,6 +226,32 @@ public class TestShapeOps extends AbstractTensorTest {
             2,
             Set.of(
                 TensorType.of(UINT_8, 1332, 800, 3),
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The narrowness pin for the wala/ML#844 contract arm: the same destructuring shape over a
+   * DIFFERENT tuple producer must keep the all-degraded answer rather than borrowing the crop's
+   * channel contract, since fabricating an extent is the unsafe direction.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceOtherBoundsProducerStaysDegraded()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_other_bounds",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
                 new TensorType(
                     UINT_8,
                     asList(
