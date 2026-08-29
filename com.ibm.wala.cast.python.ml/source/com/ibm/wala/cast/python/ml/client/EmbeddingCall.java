@@ -73,9 +73,36 @@ public class EmbeddingCall extends TensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    Set<List<Dimension<?>>> inputShapes = null;
     OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 1, "inputs");
-    if (inputPts == null || inputPts.isEmpty()) return null;
-    Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    if (inputPts != null && !inputPts.isEmpty())
+      inputShapes = this.getShapesOfValue(builder, inputPts);
+
+    if (inputShapes == null || inputShapes.isEmpty()) {
+      // A destructured tuple dataset element reaches this parameter with exact dataflow state but
+      // no points-to evidence (the element read's pointer key is implicit), so the direct read
+      // resolves nothing while the same value's type is measured exactly one frame up
+      // (wala/ML#845). Re-dispatch through the SSA chain so the factory's caller-side trace-back
+      // reaches the element's per-index generator, the same fallback the Dense family carries
+      // (wala/ML#358).
+      int inputsVn = this.getArgumentValueNumber(builder, 1, "inputs", true);
+      if (inputsVn > 0) {
+        LOGGER.fine(
+            () ->
+                "PTS walk produced no input shapes; attempting SSA-chain fallback on vn="
+                    + inputsVn
+                    + ".");
+        try {
+          Set<List<Dimension<?>>> viaSsa =
+              this.getShapesOrSSAChain(builder, this.getNode(), inputsVn);
+          if (viaSsa != null && !viaSsa.isEmpty()) inputShapes = viaSsa;
+        } catch (IllegalArgumentException e) {
+          LOGGER.fine(
+              () -> "SSA-chain fallback IAE for vn=" + inputsVn + ": " + e.getMessage() + ".");
+        }
+      }
+    }
+
     if (inputShapes == null || inputShapes.isEmpty()) return null;
 
     Set<Long> outputDims = getPossibleOutputDims(builder);
