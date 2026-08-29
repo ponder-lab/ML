@@ -9040,6 +9040,9 @@ public abstract class TensorGenerator {
       return new Placeholder(node);
     } else if (type.equals(TensorFlowTypes.CONV2D_CALL.getDeclaringClass())) {
       return new Conv2DCall(node);
+    } else if (type.equals(TensorFlowTypes.CONV1D_CALL.getDeclaringClass())) {
+      // Registered in tandem with the factory's arm (wala/ML#840).
+      return new Conv1DCall(node);
     } else if (type.equals(TensorFlowTypes.DENSE_CALL.getDeclaringClass())) {
       return new DenseCall(node);
     } else if (type.equals(TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass())) {

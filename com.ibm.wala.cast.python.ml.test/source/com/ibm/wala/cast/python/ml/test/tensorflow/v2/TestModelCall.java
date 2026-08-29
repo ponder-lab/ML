@@ -2132,4 +2132,138 @@ public class TestModelCall extends AbstractTensorTest {
                         DynamicDim.INSTANCE,
                         new NumericDim(3))))));
   }
+
+  /**
+   * A {@code Conv1D} rewrites its temporal axis through the convolution window and takes its
+   * channel axis from the filter count (wala/ML#840): a kernel of 5 under the default {@code valid}
+   * padding takes 20 steps to 16.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv1DValidPadding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_extents.py",
+        "consume_conv1d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16))));
+  }
+
+  /**
+   * A {@code Conv2D} folds its spatial extents rather than reporting them unresolved (wala/ML#840):
+   * a kernel of 4 at stride 2 under {@code valid} padding takes 32 to 15.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DFoldsValidExtents()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_extents.py",
+        "consume_conv2d_valid",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 15, 15, 64))));
+  }
+
+  /**
+   * The {@code same} padding mode scales the extent by the stride instead of shrinking it by the
+   * kernel (wala/ML#840), which is the arm that distinguishes this arithmetic from pooling's.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DFoldsSameExtents()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_extents.py",
+        "consume_conv2d_same",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 32))));
+  }
+
+  /**
+   * A padding layer's resolved extent survives the convolution that follows it (wala/ML#840). This
+   * is the witness that motivated folding the arithmetic: an unfolded convolution reported both
+   * spatial axes unresolved whatever it was given, so it discarded whatever the layer above it had
+   * recovered.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPaddingExtentSurvivesConvolution()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_extents.py",
+        "consume_padded_then_conv",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 31, 31, 8))));
+  }
+
+  /**
+   * A tuple {@code kernel_size} names each spatial axis separately and is not proven single-valued,
+   * so the spatial extents degrade while the channel axis still resolves from {@code filters}
+   * (wala/ML#840). This is the spelling most generator code writes, so it is the common case.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DTupleKernelDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_extents.py",
+        "consume_tuple_kernel",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(4),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(16))))));
+  }
+
+  /**
+   * Dilation widens the kernel's span, so it is read rather than assumed (wala/ML#840): a kernel of
+   * 3 dilated by 2 spans 5, and {@code valid} padding loses that span rather than the kernel size.
+   * Assuming the undilated size would report 18 steps where the runtime gives 16.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv1DDilationWidensTheSpan()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_extents.py",
+        "consume_dilated",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 12))));
+  }
 }

@@ -2028,6 +2028,17 @@ public class TensorFlowTypes extends PythonTypes {
       "tf.keras.layers.Conv2D." + CALLABLE_METHOD_NAME + "()";
 
   /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Conv1D} instance
+   * (wala/ML#840): the output keeps the batch axis, rewrites the temporal axis through the
+   * convolution window, and takes its channel axis from the declared filter count. Dispatches to
+   * {@link com.ibm.wala.cast.python.ml.client.Conv1DCall}.
+   */
+  public static final MethodReference CONV1D_CALL = kerasLayerCall("Conv1D");
+
+  private static final String CONV1D_CALL_SIGNATURE =
+      "tf.keras.layers.Conv1D." + CALLABLE_METHOD_NAME + "()";
+
+  /**
    * https://github.com/keras-team/keras/blob/f6c4ac55692c132cd16211f4877fac6dbeead749/keras/src/layers/core/dense.py#L149-L155.
    */
   public static final MethodReference DENSE_CALL =
@@ -2490,6 +2501,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(CONV2D_CALL.getDeclaringClass(), CONV2D_CALL_SIGNATURE),
+          Map.entry(CONV1D_CALL.getDeclaringClass(), CONV1D_CALL_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(
               GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass(),
