@@ -1052,4 +1052,81 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             3,
             Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /**
+   * The wala/ML#845 reduction, literal-feed arm. The layer sources here are the subject's own,
+   * copied verbatim; only the driver is bespoke. Fed a literal tensor, the attention layer's {@code
+   * encoder_output} resolves exactly, which clears the layer sources themselves.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testHieAttentionLiteralFeed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"hieatt_proj/bilstm.py", "hieatt_proj/attention.py", "hieatt_proj/driver.py"},
+        "attention.py",
+        "HieAttention.call",
+        "hieatt_proj",
+        1,
+        12,
+        Map.of(3, Set.of(TENSOR_64_128_100_FLOAT32)));
+  }
+
+  /**
+   * The same model fed from a dataset whose element is a SINGLE tensor, so nothing is destructured.
+   * Also exact. Paired with the arm below, this separates "the value came from a dataset" from "the
+   * value came from a destructured tuple element": only the latter loses the shape, so a dataset
+   * feed as such is not the cause.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testHieAttentionSingleElementFeed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "hieatt_proj/bilstm.py", "hieatt_proj/attention.py", "hieatt_proj/driver_single.py"
+        },
+        "attention.py",
+        "HieAttention.call",
+        "hieatt_proj",
+        1,
+        12,
+        Map.of(3, Set.of(TENSOR_64_128_100_FLOAT32)));
+  }
+
+  /**
+   * The same model again, differing from the two arms above ONLY in that its input arrives as one
+   * field of a four-way destructured dataset element, which is how the subject's training loop
+   * produces it. The shape is lost here and only here.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/845">wala/ML#845</a>. Flip this
+   * to a plain test when a destructured tuple element's shape survives into a layer it feeds.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testHieAttentionDestructuredElementFeed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "hieatt_proj/bilstm.py", "hieatt_proj/attention.py", "hieatt_proj/driver_dataset.py"
+        },
+        "attention.py",
+        "HieAttention.call",
+        "hieatt_proj",
+        1,
+        12,
+        Map.of(3, Set.of(TENSOR_64_128_100_FLOAT32)));
+  }
 }
