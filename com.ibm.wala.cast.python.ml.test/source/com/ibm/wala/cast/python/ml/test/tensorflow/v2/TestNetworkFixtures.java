@@ -815,6 +815,69 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The function-form pooling window, same-padding literal arm: `ksize=2, strides=2,
+   * padding="SAME"` over {@code (2, 16, 16, 3)} folds to {@code (2, 8, 8, 3)}, the window read from
+   * the call's own arguments where the orphaned generator once hard-coded a halving (wala/ML#857).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNnMaxPoolSame()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nn_max_pool.py",
+        "consume_same",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 8, 8, 3))));
+  }
+
+  /**
+   * The valid-padding arm with a non-default window: `ksize=3, strides=2, padding="VALID"` over
+   * {@code (2, 17, 17, 3)} folds to {@code (2, 8, 8, 3)} by ⌊(17 − 3) / 2⌋ + 1, a value the old
+   * hard-coded halving could not produce, so the probe measures the fold rather than the
+   * approximation it replaced.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNnMaxPoolValid()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nn_max_pool.py",
+        "consume_valid",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 8, 8, 3))));
+  }
+
+  /**
+   * The destructured-tuple-element arm, the wala/ML#855 configuration: the input's read has an
+   * implicit pointer key, so the shared SSA-chain fallback recovers it before the window fold runs.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNnMaxPoolDestructured()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nn_max_pool.py",
+        "consume_destructured",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 8, 8, 3))));
+  }
+
+  /**
    * The {@code channels} refinement of the decode contract: a literal nonzero {@code channels}
    * argument pins the channel axis, exactly as TensorFlow's own static shape then reports it
    * ({@code (None, None, 3)}); the spatial axes stay dynamic.
