@@ -2336,4 +2336,26 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 8))));
   }
+
+  /**
+   * The return side of the same chain: the destructured tuple's first element travelling back out
+   * through the model's own call to a script-level consumer. The three guards above pin the value
+   * on its way IN; without this one that half is pinned only by the fixture's runtime assertion,
+   * which the analysis never reads.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testChainedUserLayerReturn()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_forward.py",
+        "consume_returned",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 8))));
+  }
 }

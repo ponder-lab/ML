@@ -14,6 +14,10 @@ def consume_downstream(c):
     pass
 
 
+def consume_returned(d):
+    pass
+
+
 # The real chain's head, which the earlier witnesses skipped: integer token IDs through an
 # `Embedding`, then a `Bidirectional` recurrent layer, then across a layer-call boundary into a
 # second user-defined layer's parameter.
@@ -55,3 +59,7 @@ tokens = tf.constant(np.ones((2, 5), dtype=np.int32))
 out = Net()(tokens)
 assert out.shape == (2, 5, 8), out.shape
 assert out.dtype == tf.float32, out.dtype
+
+# The return side of the destructure: the tuple's first element travels back out through the
+# model's own call to a script-level consumer. Pinned rather than left to the runtime assert above.
+consume_returned(out)
