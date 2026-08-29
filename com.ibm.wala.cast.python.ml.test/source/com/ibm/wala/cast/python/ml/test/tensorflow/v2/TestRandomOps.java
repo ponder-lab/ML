@@ -375,4 +375,67 @@ public class TestRandomOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
   }
+
+  /**
+   * The array arm of {@code permutation}: the draw shuffles along the first axis only, so the
+   * argument's shape survives it unchanged (wala/ML#858). Before it was modeled the value reached
+   * its consumer with no rank at all, which forfeits every axis rather than one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationArrayArm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_permutation.py",
+        "consume_array_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 20))));
+  }
+
+  /**
+   * The integer arm, which disagrees with the array arm and is why the two are distinguished rather
+   * than collapsed into a pass-through: {@code permutation(10)} is a shuffled {@code arange}, rank
+   * one of that length, where passing the integer's own scalar shape through would report a scalar
+   * the runtime never produces.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationIntegerArm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_permutation.py",
+        "consume_int_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 10))));
+  }
+
+  /**
+   * The module-level surface of the same operation, which must agree with the generator object's.
+   * The two are separate classes in the model, so one can be wired without the other.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationModuleSurface()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_permutation.py",
+        "consume_module_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 3, 7))));
+  }
 }
