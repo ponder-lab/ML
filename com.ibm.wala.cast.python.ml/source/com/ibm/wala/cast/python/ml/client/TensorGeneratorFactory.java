@@ -1902,6 +1902,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
     else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
+    else if (isType(calledFunction, TensorFlowTypes.READ_FILE.getDeclaringClass()))
+      return new ReadFile(source);
+    else if (isType(calledFunction, TensorFlowTypes.DECODE_JPEG.getDeclaringClass()))
+      return new DecodeJpeg(source);
     else if (isType(calledFunction, EXPAND_DIMS.getDeclaringClass())) return new ExpandDims(source);
     else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
       return new ClipByValue(source);
