@@ -2157,6 +2157,50 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The wala/ML#848 witness, direct half: a mapped callback with a SINGLE tensor return (no tuple),
+   * consumed whole off the mapped dataset. The element is the callback's return, a {@code (?,)}
+   * int32 after the cast; the defect resolved it to the callback's PARAMETER type instead, a rank-0
+   * string, wrong on both axes and confident. The tuple-return fixture (tf2_test_tfrecord_map.py)
+   * never sees this because its consumers destructure through the per-index route.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMapSingleReturnElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_map_single_return.py",
+        "consume_direct",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The wala/ML#848 witness, pass-through half: the same whole-element read through {@code
+   * take(1)}, so the element type must survive the wala/ML#649 receiver-inheritance route as well.
+   * The paired direct probe separates the pass-through inheritance from the plain mapped element.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMapSingleReturnElementThroughTake()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_map_single_return.py",
+        "consume_take",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
    * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
    * identical to {@code mnist.load_data()}. The fixture passes all four unpacked arrays ({@code
    * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the 4-arg sink, so the
