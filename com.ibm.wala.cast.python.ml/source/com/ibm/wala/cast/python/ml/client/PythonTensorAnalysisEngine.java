@@ -852,12 +852,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             boolean added = false;
 
             // When the iterated object itself came from a container read (its def is a property
-            // read, e.g. `d = [ds, other][0]`), it may point directly to a dataset. Check its
-            // points-to set before the def-chain walk below, which would otherwise climb to the
-            // container and miss the dataset. Gated to dataset instances inside, and only on this
-            // container-read shape, so attribute reads on a direct dataset are unaffected.
-            // wala/ML#648.
-            if (def instanceof PythonPropertyRead) {
+            // read, e.g. `d = [ds, other][0]`; wala/ML#648) or is the result of a call that
+            // returns a dataset (`for e in loader.load_mapped():`; wala/ML#847), it may point
+            // directly to a dataset. Check its points-to set before the def-chain walk below,
+            // which would otherwise climb past the dataset (to the container, or through the
+            // called function's own body) and miss it. A nullary call's invoke also fails the
+            // `next()` arm's use-count gate below, so without this check a whole-element read of
+            // a call-returned dataset never seeds. Gated to dataset instances inside, so
+            // attribute reads on non-dataset objects are unaffected. wala/ML#648, wala/ML#847.
+            if (def instanceof PythonPropertyRead || def instanceof PythonInvokeInstruction) {
               added =
                   processInstructionInterprocedurally(
                       propertyRead, objectRef, localPointerKeyNode, src, sources, pointerAnalysis);

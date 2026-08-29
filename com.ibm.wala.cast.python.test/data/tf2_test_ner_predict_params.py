@@ -26,6 +26,10 @@ def consume_x(x):
     pass
 
 
+def consume_element(e):
+    pass
+
+
 class TFLoader:
     def __init__(self, maxlen, batch_size):
         self.maxlen = maxlen
@@ -52,6 +56,10 @@ class TFLoader:
         dataset = dataset.batch(batch_size=self.batch_size, drop_remainder=True)
         return dataset
 
+    def load_mapped(self):
+        raw_dataset = tf.data.TFRecordDataset("valid.tfrecords")
+        return raw_dataset.map(lambda record: self.decode_record(record))
+
 
 class TokenTagger(tf.keras.Model):
     def __init__(self, param):
@@ -75,3 +83,10 @@ ner_load = TFLoader(param.maxlen, param.batch_size)
 for X, token_type_id, input_mask, Y in ner_load.load_valid():
     consume_x(X)
     predict = model.predict([X, token_type_id, input_mask])
+
+# The whole-element read: the mapped element consumed WITHOUT destructuring. The element is a
+# tuple of three (100,) int64 tensors and a scalar int64 label, so the whole-element view is the
+# union of exactly those component types; a (4, 100) or (4,) member would be the tuple's arity
+# walked as a tensor axis, a shape the runtime never produces.
+for element in ner_load.load_mapped():
+    consume_element(element)
