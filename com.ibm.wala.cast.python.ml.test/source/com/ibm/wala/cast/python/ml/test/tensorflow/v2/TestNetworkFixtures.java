@@ -39,6 +39,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -855,6 +856,37 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 8, 8, 3))));
+  }
+
+  /**
+   * The degradation arm as a behavior rather than a rationale: a list-valued window names each axis
+   * separately and is not proven single-valued, so the spatial axes degrade to {@code Unresolved}
+   * while the batch and channel axes survive; a guess from the list would be a confidently wrong
+   * extent whenever the per-axis values differ.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNnMaxPoolListWindowDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nn_max_pool.py",
+        "consume_list_window",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(3))))));
   }
 
   /**

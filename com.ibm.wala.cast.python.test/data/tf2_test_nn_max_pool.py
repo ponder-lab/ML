@@ -18,6 +18,10 @@ def consume_destructured(x):
     pass
 
 
+def consume_list_window(x):
+    pass
+
+
 lit = tf.constant(np.ones((2, 16, 16, 3), dtype=np.float32))
 same = tf.nn.max_pool(lit, ksize=2, strides=2, padding="SAME")
 assert same.shape == (2, 8, 8, 3), same.shape
@@ -28,6 +32,13 @@ lit2 = tf.constant(np.ones((2, 17, 17, 3), dtype=np.float32))
 valid = tf.nn.max_pool(lit2, ksize=3, strides=2, padding="VALID")
 assert valid.shape == (2, 8, 8, 3), valid.shape
 consume_valid(valid)
+
+# The degradation arm as a behavior: a list-valued window names each axis separately and is not
+# proven single-valued, so the spatial axes degrade rather than being guessed at, while the batch
+# and channel axes survive.
+listed = tf.nn.max_pool(lit, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+assert listed.shape == (2, 8, 8, 3), listed.shape
+consume_list_window(listed)
 
 rows = 8
 imgs = tf.constant(np.ones((rows, 16, 16, 3), dtype=np.float32))
