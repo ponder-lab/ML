@@ -2056,4 +2056,27 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 7))));
   }
+
+  /**
+   * The {@code *args} spelling of the wala/ML#843 trap. A vararg formal is appended to the argument
+   * array exactly as {@code **kwargs} is, so it inflates the same tally, but the issue left that
+   * spelling presumed-equivalent and untested. This pins it instead of presuming it: the sole
+   * defaulted parameter sits immediately before the vararg, which is the slot a one-formal
+   * overshoot would skip.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testVarargDefaults()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_kwargs_defaults.py",
+        "consume_vararg",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 9, 2))));
+  }
 }
