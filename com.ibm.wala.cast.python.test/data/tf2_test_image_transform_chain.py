@@ -23,6 +23,10 @@ def consume_union(x):
     pass
 
 
+def consume_other_bounds(x):
+    pass
+
+
 img_array = np.ones((1332, 800, 3), dtype=np.uint8)
 
 
@@ -73,3 +77,18 @@ direct = random_brightness(img_array)
 assert direct.shape == (1332, 800, 3), direct.shape
 chained = random_brightness(distorted_random_crop(img_array))
 assert chained.shape.rank == 3, chained.shape
+
+
+def make_bounds():
+    b = tf.random.uniform([3], maxval=2, dtype=tf.int32) * tf.constant([1, 1, 0])
+    s = tf.constant([100, 100, 3]) - b
+    return b, s
+
+
+# A producer whose contract is NOT the documented crop's: the same destructuring shape over a
+# different tuple source must keep the all-degraded answer rather than borrowing the channel
+# contract.
+other_begin, other_size = make_bounds()
+other = tf.slice(img_array, other_begin, other_size)
+assert other.shape.rank == 3, other.shape
+consume_other_bounds(other)
