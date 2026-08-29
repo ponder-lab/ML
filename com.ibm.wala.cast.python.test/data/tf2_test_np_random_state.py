@@ -44,3 +44,13 @@ module_cast = np.random.uniform(size=(2, 20)).astype(np.float32)
 assert module_cast.shape == (2, 20), module_cast.shape
 assert module_cast.dtype == np.float32, module_cast.dtype
 consume_module_cast(tf.convert_to_tensor(module_cast))
+
+
+def consume_raw_cast(e):
+    pass
+
+
+# Isolate the conversion: consume the narrowed array directly, without converting it.
+raw_cast = np.random.uniform(size=(2, 20)).astype(np.float32)
+assert raw_cast.shape == (2, 20), raw_cast.shape
+consume_raw_cast(raw_cast)
