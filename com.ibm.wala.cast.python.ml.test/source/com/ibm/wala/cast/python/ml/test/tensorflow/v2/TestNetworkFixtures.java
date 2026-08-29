@@ -410,6 +410,95 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The paired-image GAN's discriminator loss parameters: outputs of a functional {@code Model}
+   * whose graph routes through {@code Sequential} stages built by {@code add()}. The composition
+   * dies at the {@code Sequential} hop (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>), so the honest current answer is
+   * float32 with ⊤ shape, pinned here as the floor; when the layers walk lands, these tighten to
+   * the composed rank-4 patch map (<a
+   * href="https://github.com/wala/ML/issues/854">wala/ML#854</a>). The two model-call controls
+   * below bound the failure to that hop.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixDiscLossParams()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pix2pix_disc_loss.py",
+        "discriminator_loss",
+        2,
+        4,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, null)), 3, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /**
+   * The list-input control: a two-headed functional model with NO {@code Sequential} in its graph,
+   * called with a list of two batch-1 images. The composition holds, and the batch axis reads the
+   * ELEMENTS' batch of 1 rather than the list's arity of 2, which is what the refinement fabricated
+   * before the wala/ML#854 fix: a wrong constant, the same arity-walk class as the mapped-tuple
+   * view (wala/ML#847).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixPairModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pix2pix_disc_loss.py",
+        "consume_pair",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        new NumericDim(1))))));
+  }
+
+  /**
+   * The single-input control: the same functional construction with one declared head and one
+   * {@code Conv2D}, composing exactly. Together with the pair control it bounds the discriminator
+   * loss to the {@code Sequential} hop rather than to the functional call or the list form.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixSingleModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pix2pix_disc_loss.py",
+        "consume_single",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        new NumericDim(1))))));
+  }
+
+  /**
    * The {@code channels} refinement of the decode contract: a literal nonzero {@code channels}
    * argument pins the channel axis, exactly as TensorFlow's own static shape then reports it
    * ({@code (None, None, 3)}); the spatial axes stay dynamic.
