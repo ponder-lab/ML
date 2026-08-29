@@ -37,6 +37,7 @@ import com.ibm.wala.cast.python.ml.types.SparseTensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -302,6 +303,166 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         2,
         5,
         Map.of(2, Set.of(TENSOR_256_256_3_FLOAT32), 3, Set.of(TENSOR_256_256_3_FLOAT32)));
+  }
+
+  /**
+   * The paired-image pipeline's jitter parameters at the SUBJECT shape: fed by a mapped {@code
+   * load} whose image comes from {@code decode_jpeg}, whose static shape is rank 3 with every
+   * extent unknown at trace time ({@code (None, None, None)}), split at a computed width and cast.
+   * The statically right answer is rank 3 float32 with dynamic extents: the concrete sizes live in
+   * the data files, not the program, so a concrete extent here would be fabricated and unknown rank
+   * loses the rank the chain proves. Distinct from ⊤ and from any generator fallback, so the probe
+   * measures the chain.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixJitterParams()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pix2pix_load.py",
+        "random_jitter",
+        2,
+        5,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE))),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The mapped loader's parameter at the subject shape: an element of {@code list_files}, a scalar
+   * filename string.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixLoadParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_pix2pix_load.py", "load", 1, 7, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
+   * The variable-length sequence classifier's loss parameters: the prediction is a user-model call
+   * result whose rank the model's own internal {@code reshape([-1, seq_max_len, 1])} re-establishes
+   * before Masking, LSTM, and the final {@code Dense(2)}, so it composes to rank 2 with the class
+   * axis concrete even though the model's INPUT has statically unknown rank (a {@code
+   * from_generator} dataset with no {@code output_shapes}). The batch axis is the reshape {@code
+   * -1} placeholder, which carries no runtime-{@code None} guarantee either way (wala/ML#721). The
+   * labels ride the generator element, so ⊤ shape is the honest answer there. Pins that the whole
+   * composition, including the forward-result return edge, holds; nothing else reads this chain.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDynamicRnnLossParams()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dynamic_rnn_params.py",
+        "cross_entropy_loss",
+        2,
+        5,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)))),
+            3,
+            Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /**
+   * The accuracy twin of {@link #testDynamicRnnLossParams()}: the same composed prediction at the
+   * other consumer, with the same ⊤-shaped label.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDynamicRnnAccuracyParams()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dynamic_rnn_params.py",
+        "accuracy",
+        2,
+        7,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)))),
+            3,
+            Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /**
+   * The {@code channels} refinement of the decode contract: a literal nonzero {@code channels}
+   * argument pins the channel axis, exactly as TensorFlow's own static shape then reports it
+   * ({@code (None, None, 3)}); the spatial axes stay dynamic.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixDecodeChannels()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pix2pix_load.py",
+        "consume_rgb",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The crop stage's parameters at the subject shape: the jitter parameters after the
+   * rank-preserving {@code resize} pass-through, so rank 3 float32 with dynamic extents survives
+   * one more hop before the stack-and-crop.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPix2pixCropParams()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pix2pix_load.py",
+        "random_crop",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE))),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
   }
 
   /**

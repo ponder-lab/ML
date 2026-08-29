@@ -1875,6 +1875,26 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String CAST_SIGNATURE = "tf.cast()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/io/read_file. */
+  public static final MethodReference READ_FILE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/read_file")),
+          AstMethodReference.fnSelector);
+
+  private static final String READ_FILE_SIGNATURE = "tf.io.read_file()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/io/decode_jpeg. */
+  public static final MethodReference DECODE_JPEG =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/decode_jpeg")),
+          AstMethodReference.fnSelector);
+
+  private static final String DECODE_JPEG_SIGNATURE = "tf.io.decode_jpeg()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax_cross_entropy_with_logits. */
   public static final MethodReference SOFTMAX_CROSS_ENTROPY_WITH_LOGITS =
       MethodReference.findOrCreate(
@@ -2481,6 +2501,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GREATER.getDeclaringClass(), GREATER_SIGNATURE),
           Map.entry(GREATER_EQUAL.getDeclaringClass(), GREATER_EQUAL_SIGNATURE),
           Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),
+          Map.entry(READ_FILE.getDeclaringClass(), READ_FILE_SIGNATURE),
+          Map.entry(DECODE_JPEG.getDeclaringClass(), DECODE_JPEG_SIGNATURE),
           Map.entry(
               SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass(),
               SOFTMAX_CROSS_ENTROPY_WITH_LOGITS_SIGNATURE),
