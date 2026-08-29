@@ -349,4 +349,26 @@ public class TestRandomOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
   }
+
+  /**
+   * Isolates the tensor conversion from the narrowing (wala/ML#849): consuming a narrowed array
+   * directly, without converting it, is exact and single-membered. Together with the two blocked
+   * cases above, this places the extra member on the conversion of a narrowed value rather than on
+   * the narrowing, which an earlier reading of this issue had it on.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRawCastProbe()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_random_state.py",
+        "consume_raw_cast",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
 }
