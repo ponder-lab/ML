@@ -24,7 +24,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_96_28_28_1_FLOAT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
@@ -707,11 +706,15 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * Dense}, so the runtime-true {@code (4, 16) float32} is inferred without the other instance's
    * spurious {@code (4, 8)}. The remaining {@code ? of float32} member comes from the statically
    * dead {@code outputs += features} residual branch ({@code self._residual} is constantly {@code
-   * False}), which the path-insensitive analysis still evaluates.
+   * False}).
    *
-   * <p>TODO: Expect exactly {@code (4, 16) float32} once <a
-   * href="https://github.com/wala/ML/issues/681">wala/ML#681</a> prunes branches guarded by
-   * statically-constant instance fields.
+   * <p>That spurious member is gone, and NOT because <a
+   * href="https://github.com/wala/ML/issues/681">wala/ML#681</a> landed; branches guarded by
+   * statically-constant instance fields are still not pruned. The guard was never actually read as
+   * constantly {@code False}: {@code residual} is the FIRST defaulted parameter of a {@code
+   * __init__} that also declares {@code **kwargs}, which is exactly the slot the wala/ML#843
+   * misbinding left empty, so the branch was evaluated with an unresolved guard. With the default
+   * bound to the parameter that owns it, the residual branch no longer contributes an unknown.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -735,7 +738,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "gcn_chain_proj",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16))));
   }
 
   /**

@@ -26,6 +26,7 @@ import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.parser.AbstractParser.MissingType;
 import com.ibm.wala.cast.python.parser.AbstractParser.PythonGlobalsEntity;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
@@ -279,7 +280,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             hasMonitorOp,
             lexicalInfo,
             debugInfo,
-            N.getArgumentDefaults().length);
+            N.getArgumentDefaults().length,
+            numberOfTrailingNonDefaultableParameters(N));
   }
 
   @Override
@@ -518,14 +520,43 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
     String fnName = composeEntityName(context, n) + "_defaults";
     if (n.getArgumentDefaults() != null) {
-      int first = n.getArgumentCount() - n.getArgumentDefaults().length;
-      for (int i = first; i < n.getArgumentCount(); i++) {
+      // The defaulted parameters are the last of the PLAIN POSITIONAL formals, but `*args`,
+      // `**kwargs`, and keyword-only parameters are appended to the same argument array. Counting
+      // back from its end therefore overshoots by exactly those, storing every default under the
+      // index of the parameter after the one it belongs to and leaving the first defaulted
+      // parameter with none (wala/ML#843). The reader in `PythonSSAPropagationCallGraphBuilder`
+      // discounts them the same way.
+      int trailing = numberOfTrailingNonDefaultableParameters(n);
+      int last = n.getArgumentCount() - trailing;
+      int first = last - n.getArgumentDefaults().length;
+      for (int i = first; i < last; i++) {
         CAstNode dflt = n.getArgumentDefaults()[i - first];
         WalkContext cc = context.codeContext();
         visitor.visit(dflt, cc, visitor);
         doGlobalWrite(cc, "L" + fnName + "_" + i, PythonTypes.Root, cc.getValue(dflt));
       }
     }
+  }
+
+  /**
+   * How many of the entity's trailing formals cannot receive a positional default: the {@code
+   * *args} and {@code **kwargs} formals and any keyword-only parameters (wala/ML#843).
+   *
+   * @param n The entity.
+   * @return The count, zero for an entity that does not report one, which is the correct reading
+   *     for a function whose formals are all plain positionals.
+   */
+  static int numberOfTrailingNonDefaultableParameters(CAstEntity n) {
+    // The entity reaching this translator is normally a `CAstRewriter` wrapper around the parser's
+    // own entity, and the wrapper implements only `CAstEntity`. Testing the wrapper alone always
+    // reports zero, which silently reinstates the very miscount this exists to correct, so follow
+    // the `getOriginal` chain the same way the globals handling does.
+    for (CAstEntity e = n; e != null; e = e.getOriginal()) {
+      if (e instanceof StarFormalDeclaration)
+        return ((StarFormalDeclaration) e).getNumberOfTrailingNonDefaultableParameters();
+      if (e.getOriginal() == e) break;
+    }
+    return 0;
   }
 
   private final Stack<PythonGlobalsEntity> globalsStack = new Stack<>();

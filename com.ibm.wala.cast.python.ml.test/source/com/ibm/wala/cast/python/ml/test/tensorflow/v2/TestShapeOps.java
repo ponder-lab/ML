@@ -1987,4 +1987,73 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));
   }
+
+  /**
+   * A defaulted parameter of a function that also declares {@code **kwargs} (wala/ML#843). Python's
+   * positional defaults apply to the last parameters of the plain positional list, but the parser
+   * appends the {@code **kwargs} formal to the same argument array, so locating the defaulted range
+   * by counting back from that array's end binds each default to the parameter AFTER the one it
+   * owns and leaves the first defaulted parameter with none. That is a wrong constant flowing
+   * rather than no constant.
+   *
+   * <p>This one is the first defaulted parameter, the slot the shift left empty. The three probes
+   * use three DIFFERENT shapes so a one-slot shift is visible; a fixture whose defaults shared a
+   * value would pass under the defect.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testKwargsDefaultsFirst()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_kwargs_defaults.py",
+        "consume_first",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * The middle defaulted parameter of the wala/ML#843 witness, which under the defect received its
+   * left neighbor's default. Its rank differs from both neighbors, so the shift shows up as a rank
+   * change rather than only an extent change.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testKwargsDefaultsMiddle()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_kwargs_defaults.py",
+        "consume_middle",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 5, 6))));
+  }
+
+  /**
+   * The last defaulted parameter of the wala/ML#843 witness, the slot immediately before the {@code
+   * **kwargs} formal.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testKwargsDefaultsLast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_kwargs_defaults.py",
+        "consume_last",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 7))));
+  }
 }
