@@ -337,27 +337,31 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
-   * Pins {@code LSTM.call(x)}'s parameter type. Class and method body mirror the {@code LSTM}
-   * recurrent model from {@code
-   * aymericdamien/TensorFlow-Examples/.../3_NeuralNetworks/recurrent_network.py}, a real-world
-   * sequence-classification utility (a built-in {@code tf.keras.layers.LSTM} followed by a {@code
-   * Dense} read-out), for tensor-type inference coverage.
-   *
-   * <p>The input parameter {@code x} is recovered concretely on both axes—{@code (256, 28, 28)
-   * float32}—flowing from the {@code lstm_net(x, is_training=True)} call site through {@code
-   * tf.keras.Model.__call__} dispatch.
-   *
-   * <p>The forward-pass locals are inferred concretely on both axes: the {@code lstm_layer} output
-   * as {@code (256, 32) float32} from the layer's declared width (wala/ML#840), and the {@code
-   * out}/{@code softmax} chain as {@code (256, 10) float32}. Modeling the recurrent layer also
-   * types one value the chain previously dropped, which is what moved the local count from four to
-   * five.
+   * The token-classification driver's destructured loop element resolves exactly, batch included:
+   * the driver's literal batch size reaches the loader's stored field, the keyword {@code
+   * batch(batch_size=..., drop_remainder=True)} resolves it, and the partial batch is suppressed,
+   * so the element is a full {@code (8, 100)} int64. This pins the stored-attribute batch chase
+   * that was the named gap for this parameter family. The list-valued {@code predict} parameter
+   * these elements feed deliberately carries no direct tensor type: container parameters are the
+   * specification consumer's to reduce per position from exactly these element values, so the
+   * element probe is the whole engine-side contract.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
+  @Test
+  public void testNerLoopElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ner_predict_params.py",
+        "consume_x",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 8, 100))));
+  }
+
   @Test
   public void testFnResultParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -391,6 +395,28 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 2))));
   }
 
+  /**
+   * Pins {@code LSTM.call(x)}'s parameter type. Class and method body mirror the {@code LSTM}
+   * recurrent model from {@code
+   * aymericdamien/TensorFlow-Examples/.../3_NeuralNetworks/recurrent_network.py}, a real-world
+   * sequence-classification utility (a built-in {@code tf.keras.layers.LSTM} followed by a {@code
+   * Dense} read-out), for tensor-type inference coverage.
+   *
+   * <p>The input parameter {@code x} is recovered concretely on both axes—{@code (256, 28, 28)
+   * float32}—flowing from the {@code lstm_net(x, is_training=True)} call site through {@code
+   * tf.keras.Model.__call__} dispatch.
+   *
+   * <p>The forward-pass locals are inferred concretely on both axes: the {@code lstm_layer} output
+   * as {@code (256, 32) float32} from the layer's declared width (wala/ML#840), and the {@code
+   * out}/{@code softmax} chain as {@code (256, 10) float32}. Modeling the recurrent layer also
+   * types one value the chain previously dropped, which is what moved the local count from four to
+   * five.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
   @Test
   public void testLstmCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
