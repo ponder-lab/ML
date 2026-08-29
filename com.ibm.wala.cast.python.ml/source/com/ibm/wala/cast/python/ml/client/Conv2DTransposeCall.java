@@ -262,7 +262,14 @@ public class Conv2DTransposeCall extends TensorGenerator {
           getConstantValues(
               getInstanceFieldPointsToSet(builder, selfAsin, PADDING_FIELD_NAME), true);
       if (paddingValues == null) return null;
-      paddings.addAll(paddingValues);
+      // Keras normalizes the padding mode case-insensitively (`normalize_padding` lower-cases
+      // it), and real code writes `'SAME'` as often as `'same'`; normalize at collection so the
+      // spellings agree and the comparison below stays exact.
+      for (Object paddingValue : paddingValues)
+        paddings.add(
+            paddingValue instanceof String
+                ? ((String) paddingValue).toLowerCase(java.util.Locale.ROOT)
+                : paddingValue);
     }
 
     if (kernelSizes.size() != 1 || kernelSizes.contains(null)) return null;

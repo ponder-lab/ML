@@ -359,6 +359,39 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    */
   @Test
+  public void testFnResultParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fn_result_param.py",
+        "accuracy",
+        2,
+        7,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 256, 10)), 3, Set.of(TensorType.of(UINT_8, 256))));
+  }
+
+  @Test
+  public void testGanDiscriminatorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gan_loss_params.py",
+        "discriminator_loss",
+        2,
+        7,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 2)), 3, Set.of(TensorType.of(FLOAT_32, 8, 2))));
+  }
+
+  @Test
+  public void testGanGeneratorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gan_loss_params.py",
+        "generator_loss",
+        1,
+        3,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 2))));
+  }
+
+  @Test
   public void testLstmCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_lstm_call.py", "LSTM.call", 1, 5, Map.of(3, Set.of(TENSOR_256_28_28_FLOAT32)));
