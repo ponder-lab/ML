@@ -14,6 +14,10 @@ IMG_WIDTH = 256
 IMG_HEIGHT = 256
 
 
+def consume_rgb(x):
+    pass
+
+
 def load(image_file):
     image = tf.io.read_file(image_file)
     image = tf.image.decode_jpeg(image)
@@ -87,3 +91,11 @@ with tempfile.TemporaryDirectory() as tmp:
         assert input_image.dtype == tf.float32, input_image.dtype
         seen += 1
     assert seen == 1
+
+    # The channels refinement: a literal nonzero `channels` pins the channel axis, exactly as
+    # TensorFlow's own static shape then reports it ((None, None, 3)).
+    rgb = tf.image.decode_jpeg(tf.io.read_file(jpg), channels=3)
+    assert rgb.shape.rank == 3, rgb.shape
+    assert rgb.shape[2] == 3, rgb.shape
+    assert rgb.dtype == tf.uint8, rgb.dtype
+    consume_rgb(rgb)
