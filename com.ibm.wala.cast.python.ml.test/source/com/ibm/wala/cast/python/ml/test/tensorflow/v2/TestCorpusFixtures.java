@@ -1107,15 +1107,16 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * field of a four-way destructured dataset element, which is how the subject's training loop
    * produces it. The shape is lost here and only here.
    *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/845">wala/ML#845</a>. Flip this
-   * to a plain test when a destructured tuple element's shape survives into a layer it feeds.
+   * <p>With the wala/ML#845 fix the shape survives: the layer body's argument reads fall back
+   * through the SSA chain to the element's per-index generator when the points-to set is empty, so
+   * this arm now resolves exactly like its two controls and stands as the positive guard.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testHieAttentionDestructuredElementFeed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
