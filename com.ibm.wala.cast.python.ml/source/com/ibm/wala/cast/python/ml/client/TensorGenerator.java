@@ -8860,6 +8860,13 @@ public abstract class TensorGenerator {
       // Producer delegation for `tolist_result` allocations: dtype and shape recover from the
       // receiver (wala/ML#796).
       return new TolistOperation(node);
+    } else if (type.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
+      // Producer delegation for the `ndarray` this operation allocates: without the arm, a
+      // consumer reading a narrowed array reached the allocation and resolved nothing, unioning a
+      // ⊤-shaped member beside the exact one. Both the shape and the dtype recover through the
+      // caller-aware walk, the receiver by the receiver position and the dtype by its declared
+      // parameter (wala/ML#849).
+      return new AstypeOperation(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
       return new SparseMatrixDot(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_TODENSE.getDeclaringClass())) {

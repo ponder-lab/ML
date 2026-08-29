@@ -306,16 +306,18 @@ public class TestRandomOps extends AbstractTensorTest {
    * (wala/ML#827). Before the generator was modeled this reached a consumer with its dtype
    * recovered and its shape absent, which is the dangerous half of that pair.
    *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/849">wala/ML#849</a>: the
-   * narrowing adds a spurious unknown member beside the exact one. The draw itself is exact; flip
-   * this to a plain test when the narrowing stops contributing the extra member.
+   * <p>Regression guard for <a href="https://github.com/wala/ML/issues/849">wala/ML#849</a>, where
+   * converting the narrowed array unioned a ⊤-shaped member beside the exact one and summarized the
+   * whole value to unknown rank. The conversion reached the narrowing's allocation and found no
+   * generator anchored on it; the receiver is never passed as an argument, so it now resolves
+   * through the caller-aware receiver walk.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testRandomStateDrawThenCast()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -330,16 +332,18 @@ public class TestRandomOps extends AbstractTensorTest {
    * Control for {@link #testRandomStateDrawThenCast()}: the module-level surface with the same
    * narrowing.
    *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/849">wala/ML#849</a>. This is
-   * the control that established the extra member belongs to the narrowing rather than to the
-   * generator object, since both surfaces produce it identically.
+   * <p>This is the control that established the extra member of <a
+   * href="https://github.com/wala/ML/issues/849">wala/ML#849</a> did not belong to the generator
+   * object, since both surfaces produced it identically. It keeps that role now that the defect is
+   * fixed: the two surfaces must stay in agreement, so a regression reaching only one of them fails
+   * here rather than passing unnoticed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testModuleDrawThenCastControl()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

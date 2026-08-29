@@ -1658,21 +1658,64 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * The positional spelling of {@code astype}'s dtype, on a receiver whose shape is known. Paired
+   * with {@link #testAstypeKeywordDType()} so that the two spellings are pinned against each other:
+   * the runtime accepts both and the analysis must agree with it on both.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypePositionalDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_keyword.py",
+        "consume_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 20))));
+  }
+
+  /**
+   * The keyword spelling, {@code arr.astype(dtype=np.float32)}. {@code astype} is a method-form
+   * operation whose receiver is never passed as an argument, so its only bindable parameter is the
+   * dtype; a layout that also declares a slot for the array binds the user's dtype into it and
+   * leaves the named {@code dtype} slot empty, which is the trap the sibling {@code transpose}
+   * model records (wala/ML#796). The positional twin above passes either way, so this is the
+   * spelling that distinguishes a correct layout from one that merely appears to work.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypeKeywordDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_keyword.py",
+        "consume_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 20))));
+  }
+
+  /**
    * Regression guard for wala/ML#403: chained {@code x.astype(int32).astype(float32)} on an mnist
    * receiver. The first cast's result is a synthetic-method return whose PointerKey is implicit, so
    * the receiver-shape lookup for the second {@code astype} call hits the {@code
-   * IllegalArgumentException}-catch fallback path in {@link AstypeOperation#getDefaultShapes},
-   * which returns {@code null} (⊤) for shape while dtype still resolves to {@code float32}.
+   * IllegalArgumentException}-catch fallback path in {@link AstypeOperation#getDefaultShapes}.
    *
-   * <p>The runtime-vs-analyzer asymmetry here ({@code (60000, 28, 28) float32} at runtime vs.
-   * {@code TensorType(float32, null)} from the analyzer) is the same kind of deliberate limitation
-   * as {@link #testInputUnresolvableShape}: traversing implicit-PK chains across synthetic-method
-   * returns is a known architectural gap (wala/ML#402 / wala/WALA#1889), and returning ⊤ rather
-   * than ⊥ is the lattice-correct response in the meantime — dtype still carries through, so
-   * downstream analysis isn't dropped. The test asserts the analyzer's lattice-correct output
-   * rather than suppressing it as a would-be-fixed failure; if and when the implicit-PK chain
-   * traversal lands, this expectation flips to {@code TENSOR_60000_28_28_FLOAT32} as part of that
-   * change.
+   * <p>This expectation used to be ⊤, and its note said it would flip to {@code
+   * TENSOR_60000_28_28_FLOAT32} if and when implicit-PK chain traversal landed (wala/ML#402,
+   * wala/WALA#1889). It has flipped, though by a different route than the one anticipated: nothing
+   * traverses the implicit PK. The receiver walk added for <a
+   * href="https://github.com/wala/ML/issues/849">wala/ML#849</a> reads the receiver from the call
+   * sites dispatching to the operation's body rather than from a value number in the anchoring
+   * frame, so the implicit PointerKey is never on the path to begin with and the chain resolves
+   * exactly. The architectural gap itself is untouched and still open.
    */
   @Test
   public void testAstypeChained()
@@ -1682,7 +1725,7 @@ public class TestMathOps extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
   }
 
   /**
