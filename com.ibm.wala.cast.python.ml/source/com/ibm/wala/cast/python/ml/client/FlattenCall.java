@@ -4,11 +4,9 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -55,9 +53,9 @@ public class FlattenCall extends TensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 1, "inputs");
-    if (inputPts == null || inputPts.isEmpty()) return null;
-    Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    // The SSA-chain fallback covers an input with dataflow state but no points-to evidence, e.g.
+    // a destructured tuple dataset element (wala/ML#855).
+    Set<List<Dimension<?>>> inputShapes = this.getArgumentShapesWithFallback(builder, 1, "inputs");
     if (inputShapes == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> inputShape : inputShapes) {
@@ -80,9 +78,8 @@ public class FlattenCall extends TensorGenerator {
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 1, "inputs");
-    if (inputPts == null || inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-    Set<DType> dtypes = this.getDTypesOfValue(builder, inputPts);
+    // The dtype twin of the shape fallback (wala/ML#855).
+    Set<DType> dtypes = this.getArgumentDTypesWithFallback(builder, 1, "inputs");
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
   }
 

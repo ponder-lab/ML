@@ -35,6 +35,7 @@ import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.SparseTensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
@@ -496,6 +497,321 @@ public class TestNetworkFixtures extends AbstractTensorTest {
                         DynamicDim.INSTANCE,
                         DynamicDim.INSTANCE,
                         new NumericDim(1))))));
+  }
+
+  /**
+   * The shape-preserving family through {@code BatchNormalization}, one of the six layer types the
+   * single {@code ShapePreservingLayerCall} serves. Fed from a destructured tuple dataset element,
+   * whose read has an implicit pointer key, so the pre-fix bare points-to read resolved nothing and
+   * the result read ⊤ on both axes; the shared SSA-chain fallback recovers it (wala/ML#855, the
+   * wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadBatchNorm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_bn",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The shape-preserving family through {@code ReLU}. Fed from a destructured tuple dataset
+   * element, whose read has an implicit pointer key, so the pre-fix bare points-to read resolved
+   * nothing and the result read ⊤ on both axes; the shared SSA-chain fallback recovers it
+   * (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadRelu()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_relu",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The shape-preserving family through {@code LeakyReLU}. Fed from a destructured tuple dataset
+   * element, whose read has an implicit pointer key, so the pre-fix bare points-to read resolved
+   * nothing and the result read ⊤ on both axes; the shared SSA-chain fallback recovers it
+   * (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadLeakyRelu()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_leaky",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The shape-preserving family through {@code Softmax}. Fed from a destructured tuple dataset
+   * element, whose read has an implicit pointer key, so the pre-fix bare points-to read resolved
+   * nothing and the result read ⊤ on both axes; the shared SSA-chain fallback recovers it
+   * (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadSoftmax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_softmax",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The shape-preserving family through {@code Masking}. Fed from a destructured tuple dataset
+   * element, whose read has an implicit pointer key, so the pre-fix bare points-to read resolved
+   * nothing and the result read ⊤ on both axes; the shared SSA-chain fallback recovers it
+   * (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadMasking()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_masking",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The shape-preserving family through {@code Activation}. Fed from a destructured tuple dataset
+   * element, whose read has an implicit pointer key, so the pre-fix bare points-to read resolved
+   * nothing and the result read ⊤ on both axes; the shared SSA-chain fallback recovers it
+   * (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadActivation()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_activation",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The 2-D window pooling generator, its spatial fold running over the recovered input. Fed from a
+   * destructured tuple dataset element, whose read has an implicit pointer key, so the pre-fix bare
+   * points-to read resolved nothing and the result read ⊤ on both axes; the shared SSA-chain
+   * fallback recovers it (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadMaxPool2D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_pool2d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 8, 8, 3))));
+  }
+
+  /**
+   * The zero-padding generator, its per-axis widening running over the recovered input. Fed from a
+   * destructured tuple dataset element, whose read has an implicit pointer key, so the pre-fix bare
+   * points-to read resolved nothing and the result read ⊤ on both axes; the shared SSA-chain
+   * fallback recovers it (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadZeroPadding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_zeropad",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 18, 18, 3))));
+  }
+
+  /**
+   * The transposed-convolution generator, its window arithmetic running over the recovered input.
+   * Fed from a destructured tuple dataset element, whose read has an implicit pointer key, so the
+   * pre-fix bare points-to read resolved nothing and the result read ⊤ on both axes; the shared
+   * SSA-chain fallback recovers it (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadConv2DTranspose()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_convt",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 18, 18, 5))));
+  }
+
+  /**
+   * The flatten layer generator, collapsing the recovered trailing axes into its compound
+   * dimension. Fed from a destructured tuple dataset element, whose read has an implicit pointer
+   * key, so the pre-fix bare points-to read resolved nothing and the result read ⊤ on both axes;
+   * the shared SSA-chain fallback recovers it (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadFlatten()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_flatten",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(4),
+                        new CompoundDim(
+                            asList(new NumericDim(16), new NumericDim(16), new NumericDim(3))))))));
+  }
+
+  /**
+   * The 1-D global average pooling generator over the recovered rank-3 input. Fed from a
+   * destructured tuple dataset element, whose read has an implicit pointer key, so the pre-fix bare
+   * points-to read resolved nothing and the result read ⊤ on both axes; the shared SSA-chain
+   * fallback recovers it (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadGlobalAvgPool1D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_gap1d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 32))));
+  }
+
+  /**
+   * The 1-D global max pooling generator over the recovered rank-3 input. Fed from a destructured
+   * tuple dataset element, whose read has an implicit pointer key, so the pre-fix bare points-to
+   * read resolved nothing and the result read ⊤ on both axes; the shared SSA-chain fallback
+   * recovers it (wala/ML#855, the wala/ML#845 mechanism).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadGlobalMaxPool1D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_destructured.py",
+        "consume_gmp1d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 32))));
+  }
+
+  /**
+   * The middle arm of the three-arm geometry, rank-4 representative: the same application fed from
+   * a dataset whose element is a SINGLE tensor, so nothing is destructured and the element carries
+   * real allocations. Passing before and after the wala/ML#855 fallback, it separates "came from a
+   * dataset" from "came from a destructured tuple element"; one representative per input rank,
+   * since every candidate shares the one argument-read implementation.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadSingleElementControl4D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_single_element.py",
+        "consume_bn_single",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 16, 3))));
+  }
+
+  /**
+   * The rank-3 twin of {@link #testBareReadSingleElementControl4D()}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBareReadSingleElementControl3D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bare_reads_single_element.py",
+        "consume_gap_single",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 32))));
   }
 
   /**
