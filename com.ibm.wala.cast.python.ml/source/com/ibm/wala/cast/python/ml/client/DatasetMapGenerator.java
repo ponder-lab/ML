@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -13,6 +14,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -130,10 +132,60 @@ public class DatasetMapGenerator extends DatasetGenerator {
     return ret;
   }
 
+  /**
+   * Returns the integer component indices of the mapped element, when {@code map_func} returns a
+   * tuple or list: the union of the object-catalog indices across the element's container
+   * allocations. Empty when the element is not a container (or its catalog is invisible), in which
+   * case the whole-element walk applies.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The component indices; empty if the element is not a tuple or list.
+   */
+  private Set<Integer> getMappedElementTupleIndices(PropagationCallGraphBuilder builder) {
+    Set<Integer> ret = HashSetFactory.make();
+    OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
+    if (elementPTS == null) return ret;
+    for (InstanceKey ik : elementPTS) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(tuple) && !reference.equals(list)) continue;
+      OrdinalSet<InstanceKey> catalogPTS =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+      for (InstanceKey catalogIK : catalogPTS) {
+        if (!(catalogIK instanceof ConstantKey)) continue;
+        Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+        if (fieldIndex != null) ret.add(fieldIndex);
+      }
+    }
+    return ret;
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
     if (elementPTS != null && !elementPTS.isEmpty()) {
+      // A tuple element is a bundle of independent per-index tensors, not a tensor whose leading
+      // axis is the tuple's arity: the whole-element view is the union of the component types,
+      // exactly what the per-index protocol reports position by position. Letting the walk below
+      // see the container fabricates an (arity, ...) shape the runtime never produces
+      // (wala/ML#847), the same walk the from_tensor_slices tuple handling retired on its own
+      // path (wala/ML#366). An unknown component makes the whole union unknown: a union missing
+      // a member it cannot express is a confident undercount, not a partial answer.
+      Set<Integer> tupleIndices = getMappedElementTupleIndices(builder);
+      if (!tupleIndices.isEmpty()) {
+        Set<List<Dimension<?>>> union = HashSetFactory.make();
+        for (int index : tupleIndices) {
+          Set<List<Dimension<?>>> componentShapes = this.getShapesForIndex(builder, index);
+          if (componentShapes == null || componentShapes.isEmpty()) return null;
+          union.addAll(componentShapes);
+        }
+        return union;
+      }
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, elementPTS);
       if (shapes != null && !shapes.isEmpty()) return shapes;
     }
@@ -161,6 +213,21 @@ public class DatasetMapGenerator extends DatasetGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
     if (elementPTS != null && !elementPTS.isEmpty()) {
+      // The dtype counterpart of the tuple-element union in getDefaultShapes (wala/ML#847): the
+      // whole-element view is the union of the component dtypes, and an unknown component makes
+      // the whole union unknown.
+      Set<Integer> tupleIndices = getMappedElementTupleIndices(builder);
+      if (!tupleIndices.isEmpty()) {
+        Set<DType> union = EnumSet.noneOf(DType.class);
+        for (int index : tupleIndices) {
+          Set<DType> componentDTypes = this.getDTypesForIndex(builder, index);
+          if (componentDTypes == null
+              || componentDTypes.isEmpty()
+              || componentDTypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+          union.addAll(componentDTypes);
+        }
+        return union;
+      }
       Set<DType> dtypes = this.getDTypesOfValue(builder, elementPTS);
       if (dtypes != null && !dtypes.isEmpty()) return dtypes;
     }

@@ -362,6 +362,31 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         Map.of(2, Set.of(TensorType.of(INT_64, 8, 100))));
   }
 
+  /**
+   * The mapped tuple element read WHOLE, without destructuring: the element is a bundle of three
+   * {@code (100,)} int64 tensors and a scalar int64 label, so the whole-element view is the union
+   * of exactly those component types with no container axis. A {@code (4, 100)} or {@code (4,)}
+   * member would be the tuple's arity walked as a leading tensor axis, a shape the runtime never
+   * produces (<a href="https://github.com/wala/ML/issues/847">wala/ML#847</a>). Pinned directly
+   * because nothing else in the suite performs a whole-element read of a mapped tuple: without this
+   * probe a regression here is invisible.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNerMappedElementWhole()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ner_predict_params.py",
+        "consume_element",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 100), SCALAR_TENSOR_OF_INT64)));
+  }
+
   @Test
   public void testFnResultParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
