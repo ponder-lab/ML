@@ -68,13 +68,15 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * call site through {@code tf.keras.layers.Layer.__call__} dispatch.
    *
    * <p>Modeling {@code Bidirectional} (wala/ML#840) types the {@code self.bilstm(embed, ...)}
-   * result as well, which is what moved the local count from two to three. Its member currently
-   * lacks the temporal axis: the wrapped {@code LSTM} receives {@code return_sequences} from {@code
-   * BiLSTM.__init__}'s default parameter value, and the front end binds defaults one slot to the
-   * right for a {@code **kwargs}-declaring function (<a
-   * href="https://github.com/wala/ML/issues/843">wala/ML#843</a>), so the flag reads as its
-   * neighbor's {@code False} where the source says {@code True}. When that misbinding is fixed, the
-   * member gains the temporal axis; the count asserted here stays three.
+   * result as well, which is what moved the local count from two to three. Its member used to lack
+   * the temporal axis, reading {@code (2, 8)} where the driver's own runtime assertion pins {@code
+   * (2, 5, 8)}: the wrapped {@code LSTM} receives {@code return_sequences} from {@code
+   * BiLSTM.__init__}'s default, and the front end bound defaults one slot to the right for a {@code
+   * **kwargs}-declaring function (<a href="https://github.com/wala/ML/issues/843">wala/ML#843</a>),
+   * so the flag read as its neighbor's {@code False} where the source says {@code True}. With that
+   * fixed the member carries the temporal axis. The harness asserts parameter types and a local
+   * count rather than a local's type, so the member itself is not pinned here; the mechanism is
+   * pinned directly by the {@code testKwargsDefaults*} probes.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

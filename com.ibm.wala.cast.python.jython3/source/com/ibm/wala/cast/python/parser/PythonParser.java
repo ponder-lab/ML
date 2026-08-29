@@ -24,6 +24,7 @@ import com.ibm.wala.cast.ir.translator.AbstractScriptEntity;
 import com.ibm.wala.cast.ir.translator.TranslatorToCAst;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
+import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAst;
@@ -1292,13 +1293,20 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     public CAstNode visitFunctionDef(FunctionDef arg0) throws Exception {
       arguments aa = arg0.getInternalArgs();
       java.util.List<arg> args = aa.getInternalArgs();
+      // Everything appended below is a formal parameter, but none of them can receive one of the
+      // positional defaults, which apply to the last parameters of the plain positional list.
+      // Anything locating the defaulted range by counting back from the end of the combined array
+      // must discount them or it binds every default one slot to the right (wala/ML#843).
+      int trailingNonDefaultable = 0;
       if (aa.getInternalKwarg() != null) {
         args = new LinkedList<>(args);
         args.add(aa.getInternalKwarg());
+        trailingNonDefaultable++;
       }
       if (aa.getInternalVararg() != null) {
         args = new LinkedList<>(args);
         args.add(aa.getInternalVararg());
+        trailingNonDefaultable++;
       }
       // Keyword-only parameters (declared after a bare `*` or `*args`) are formal parameters too;
       // include them so downstream analyses can bind call-site keyword arguments to them
@@ -1306,6 +1314,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       if (aa.getInternalKwonlyargs() != null && !aa.getInternalKwonlyargs().isEmpty()) {
         args = new LinkedList<>(args);
         args.addAll(aa.getInternalKwonlyargs());
+        trailingNonDefaultable += aa.getInternalKwonlyargs().size();
       }
       java.util.Set<CAstNode> x = HashSetFactory.make();
       if (arg0.getDecorator_list() != null) {
@@ -1321,7 +1330,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           makePosition(arg0.getInternalNameNode()),
           codeBody,
           aa.getInternalDefaults(),
-          x);
+          x,
+          trailingNonDefaultable);
     }
 
     private <R extends PythonTree, S extends PythonTree> CAstNode defineFunction(
@@ -1333,6 +1343,34 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         CAstType superType,
         java.util.List<expr> defaults,
         Iterable<CAstNode> dynamicAnnotations)
+        throws Exception {
+      return defineFunction(
+          functionName,
+          arguments,
+          body,
+          function,
+          namePos,
+          superType,
+          defaults,
+          dynamicAnnotations,
+          0);
+    }
+
+    /**
+     * @param trailingNonDefaultable How many of the trailing formals cannot receive a positional
+     *     default: the {@code *args} and {@code **kwargs} formals and any keyword-only parameters.
+     *     See {@link com.ibm.wala.cast.python.loader.StarFormalDeclaration} (wala/ML#843).
+     */
+    private <R extends PythonTree, S extends PythonTree> CAstNode defineFunction(
+        String functionName,
+        java.util.List<R> arguments,
+        java.util.List<S> body,
+        PythonTree function,
+        Position namePos,
+        CAstType superType,
+        java.util.List<expr> defaults,
+        Iterable<CAstNode> dynamicAnnotations,
+        int trailingNonDefaultable)
         throws Exception {
 
       if (defaults != null) {
@@ -1487,7 +1525,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       }
 
       class PythonCodeEntity extends AbstractCodeEntity
-          implements PythonGlobalsEntity, DynamicAnnotatableEntity {
+          implements PythonGlobalsEntity, DynamicAnnotatableEntity, StarFormalDeclaration {
+
+        @Override
+        public int getNumberOfTrailingNonDefaultableParameters() {
+          return trailingNonDefaultable;
+        }
+
         private final java.util.Set<String> downwardGlobals;
 
         private final Collection<CAstAnnotation> annotations;

@@ -26,6 +26,7 @@ import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
+import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -413,7 +414,13 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           ctors.put(
               receiver,
               new PythonConstructorFunction(
-                  ref, ctor, receiver, init == null ? 0 : init.getNumberOfDefaultParameters()));
+                  ref,
+                  ctor,
+                  receiver,
+                  init == null ? 0 : init.getNumberOfDefaultParameters(),
+                  init instanceof StarFormalDeclaration
+                      ? ((StarFormalDeclaration) init).getNumberOfTrailingNonDefaultableParameters()
+                      : 0));
         }
 
         return ctors.get(receiver);

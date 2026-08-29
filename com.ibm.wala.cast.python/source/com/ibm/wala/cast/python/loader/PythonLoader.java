@@ -553,7 +553,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       boolean hasMonitorOp,
       AstLexicalInformation lexicalInfo,
       DebuggingInformation debugInfo,
-      int defaultArgs) {
+      int defaultArgs,
+      int trailingNonDefaultableArgs) {
     DynamicCodeBody C = (DynamicCodeBody) lookupClass(clsName, cha);
     assert C != null : clsName;
     return C.setCodeBody(
@@ -566,7 +567,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
             lexicalInfo,
             debugInfo,
             C,
-            defaultArgs));
+            defaultArgs,
+            trailingNonDefaultableArgs));
   }
 
   public DynamicMethodObject makeCodeBodyCode(
@@ -578,22 +580,68 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       AstLexicalInformation lexicalInfo,
       DebuggingInformation debugInfo,
       IClass C,
-      int defaultArgs) {
-    return new DynamicMethodObject(
+      int defaultArgs,
+      int trailingNonDefaultableArgs) {
+    return new PythonCodeBodyMethod(
         C,
-        Collections.emptySet(),
         cfg,
         symtab,
         hasCatchBlock,
         caughtTypes,
         hasMonitorOp,
         lexicalInfo,
-        debugInfo) {
-      @Override
-      public int getNumberOfDefaultParameters() {
-        return defaultArgs;
-      }
-    };
+        debugInfo,
+        defaultArgs,
+        trailingNonDefaultableArgs);
+  }
+
+  /**
+   * A source-defined function's method, carrying the two counts that locate its defaulted parameter
+   * range: how many parameters have defaults, and how many trailing formals cannot take one. It is
+   * a named class rather than an anonymous subclass because the second count is read back through
+   * {@link StarFormalDeclaration}, which an anonymous subclass cannot declare. It is an inner class
+   * because {@code DynamicMethodObject} is itself one (wala/ML#843).
+   */
+  public class PythonCodeBodyMethod extends DynamicMethodObject implements StarFormalDeclaration {
+
+    private final int defaultArgs;
+
+    private final int trailingNonDefaultableArgs;
+
+    public PythonCodeBodyMethod(
+        IClass C,
+        AbstractCFG<?, ?> cfg,
+        SymbolTable symtab,
+        boolean hasCatchBlock,
+        Map<IBasicBlock<SSAInstruction>, Set<TypeReference>> caughtTypes,
+        boolean hasMonitorOp,
+        AstLexicalInformation lexicalInfo,
+        DebuggingInformation debugInfo,
+        int defaultArgs,
+        int trailingNonDefaultableArgs) {
+      super(
+          C,
+          Collections.emptySet(),
+          cfg,
+          symtab,
+          hasCatchBlock,
+          caughtTypes,
+          hasMonitorOp,
+          lexicalInfo,
+          debugInfo);
+      this.defaultArgs = defaultArgs;
+      this.trailingNonDefaultableArgs = trailingNonDefaultableArgs;
+    }
+
+    @Override
+    public int getNumberOfDefaultParameters() {
+      return this.defaultArgs;
+    }
+
+    @Override
+    public int getNumberOfTrailingNonDefaultableParameters() {
+      return this.trailingNonDefaultableArgs;
+    }
   }
 
   public void defineType(

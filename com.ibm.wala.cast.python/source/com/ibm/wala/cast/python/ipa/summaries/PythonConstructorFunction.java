@@ -10,6 +10,7 @@
  */
 package com.ibm.wala.cast.python.ipa.summaries;
 
+import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.types.MethodReference;
@@ -26,7 +27,8 @@ import com.ibm.wala.types.MethodReference;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class PythonConstructorFunction extends PythonSummarizedFunction {
+public class PythonConstructorFunction extends PythonSummarizedFunction
+    implements StarFormalDeclaration {
 
   /**
    * The wrapped {@code __init__}'s defaulted-parameter count; see {@link
@@ -35,20 +37,30 @@ public class PythonConstructorFunction extends PythonSummarizedFunction {
   private final int initDefaultParameters;
 
   /**
+   * The wrapped {@code __init__}'s count of trailing formals that cannot take a positional default;
+   * see {@link #getNumberOfTrailingNonDefaultableParameters()}.
+   */
+  private final int initTrailingNonDefaultableParameters;
+
+  /**
    * Constructs a {@link PythonConstructorFunction}.
    *
    * @param ref The constructor's method reference.
    * @param summary The synthesized constructor body.
    * @param declaringClass The class being constructed.
    * @param initDefaultParameters The wrapped {@code __init__}'s defaulted-parameter count.
+   * @param initTrailingNonDefaultableParameters The wrapped {@code __init__}'s count of trailing
+   *     formals that cannot take a positional default.
    */
   public PythonConstructorFunction(
       MethodReference ref,
       MethodSummary summary,
       IClass declaringClass,
-      int initDefaultParameters) {
+      int initDefaultParameters,
+      int initTrailingNonDefaultableParameters) {
     super(ref, summary, declaringClass);
     this.initDefaultParameters = initDefaultParameters;
+    this.initTrailingNonDefaultableParameters = initTrailingNonDefaultableParameters;
   }
 
   /**
@@ -61,5 +73,18 @@ public class PythonConstructorFunction extends PythonSummarizedFunction {
   @Override
   public int getNumberOfDefaultParameters() {
     return this.initDefaultParameters;
+  }
+
+  /**
+   * The constructor's trailing formals mirror the wrapped {@code __init__}'s parameters, so its
+   * count of formals that cannot take a positional default carries over too. Without it the
+   * defaulted range is located by counting back from the end of a formal list that includes the
+   * {@code **kwargs} slot, which binds every default one parameter to the right (wala/ML#843).
+   *
+   * @return The wrapped {@code __init__}'s count.
+   */
+  @Override
+  public int getNumberOfTrailingNonDefaultableParameters() {
+    return this.initTrailingNonDefaultableParameters;
   }
 }

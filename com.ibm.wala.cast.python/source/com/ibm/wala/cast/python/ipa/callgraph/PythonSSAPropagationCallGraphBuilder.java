@@ -29,6 +29,7 @@ import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
@@ -1007,8 +1008,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       // so its defaulted range shifts down by one (wala/ML#762).
       boolean ctorTarget = target.getMethod() instanceof PythonConstructorFunction;
       int numParams = target.getMethod().getNumberOfParameters() - (ctorTarget ? 1 : 0);
-      int dflts = numParams - target.getMethod().getNumberOfDefaultParameters();
-      for (int i = dflts; i < numParams; i++) {
+      // The `*args`, `**kwargs`, and keyword-only formals are parameters but cannot receive a
+      // positional default, and the parser appends them after the plain positionals. Counting the
+      // defaulted range back from the end of the formal list therefore has to discount them, or
+      // every default binds one parameter to the right and the first defaulted parameter binds
+      // nothing (wala/ML#843). The writer in `PythonCAstToIRTranslator` discounts them the same
+      // way, so the two sides agree on which index carries which default.
+      int trailing =
+          target.getMethod() instanceof StarFormalDeclaration
+              ? ((StarFormalDeclaration) target.getMethod())
+                  .getNumberOfTrailingNonDefaultableParameters()
+              : 0;
+      int last = numParams - trailing;
+      int dflts = last - target.getMethod().getNumberOfDefaultParameters();
+      for (int i = dflts; i < last; i++) {
         if (!args.contains(i)) {
           // A synthesized constructor's trailing formal i mirrors `__init__`'s parameter i + 1,
           // and the default globals are written under `__init__`'s entity name, so the lookup
