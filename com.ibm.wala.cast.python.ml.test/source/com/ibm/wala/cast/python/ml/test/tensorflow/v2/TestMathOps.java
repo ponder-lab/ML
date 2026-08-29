@@ -1658,6 +1658,51 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * The positional spelling of {@code astype}'s dtype, on a receiver whose shape is known. Paired
+   * with {@link #testAstypeKeywordDType()} so that the two spellings are pinned against each other:
+   * the runtime accepts both and the analysis must agree with it on both.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypePositionalDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_keyword.py",
+        "consume_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 20))));
+  }
+
+  /**
+   * The keyword spelling, {@code arr.astype(dtype=np.float32)}. {@code astype} is a method-form
+   * operation whose receiver is never passed as an argument, so its only bindable parameter is the
+   * dtype; a layout that also declares a slot for the array binds the user's dtype into it and
+   * leaves the named {@code dtype} slot empty, which is the trap the sibling {@code transpose}
+   * model records (wala/ML#796). The positional twin above passes either way, so this is the
+   * spelling that distinguishes a correct layout from one that merely appears to work.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypeKeywordDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_keyword.py",
+        "consume_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 20))));
+  }
+
+  /**
    * Regression guard for wala/ML#403: chained {@code x.astype(int32).astype(float32)} on an mnist
    * receiver. The first cast's result is a synthetic-method return whose PointerKey is implicit, so
    * the receiver-shape lookup for the second {@code astype} call hits the {@code
