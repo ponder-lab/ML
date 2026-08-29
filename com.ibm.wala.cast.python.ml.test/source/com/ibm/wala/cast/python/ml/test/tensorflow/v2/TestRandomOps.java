@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10_2_FLOAT64;
@@ -14,6 +16,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_7_5_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -257,5 +260,93 @@ public class TestRandomOps extends AbstractTensorTest {
   public void testNpRandomSizedScalarDraw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_np_random.py", "consume6", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * A seeded generator object reaches the same draws as the module-level surface, so `size` shapes
+   * the result exactly as it does for `np.random.uniform` (wala/ML#827).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRandomStateUniform()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_random_state.py",
+        "consume_uniform",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 20))));
+  }
+
+  /**
+   * The same generator's normal draw (wala/ML#827).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRandomStateNormal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_random_state.py",
+        "consume_normal",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 3, 4))));
+  }
+
+  /**
+   * The draw-then-narrow idiom: the cast keeps the drawn shape and changes only the dtype
+   * (wala/ML#827). Before the generator was modeled this reached a consumer with its dtype
+   * recovered and its shape absent, which is the dangerous half of that pair.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/849">wala/ML#849</a>: the
+   * narrowing adds a spurious unknown member beside the exact one. The draw itself is exact; flip
+   * this to a plain test when the narrowing stops contributing the extra member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testRandomStateDrawThenCast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_random_state.py",
+        "consume_cast",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * Control for {@link #testRandomStateDrawThenCast()}: the module-level surface with the same
+   * narrowing.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/849">wala/ML#849</a>. This is
+   * the control that established the extra member belongs to the narrowing rather than to the
+   * generator object, since both surfaces produce it identically.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testModuleDrawThenCastControl()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_random_state.py",
+        "consume_module_cast",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
   }
 }
