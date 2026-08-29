@@ -4815,8 +4815,7 @@ public abstract class TensorGenerator {
           defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
         }
 
-        TensorGenerator generator =
-            createManualGenerator(readDataNode, asin.concreteType().getReference(), builder);
+        TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
 
         if (generator != null) {
           // Avoid infinite recursion for manual generators
@@ -5754,8 +5753,7 @@ public abstract class TensorGenerator {
           defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
         }
 
-        TensorGenerator generator =
-            createManualGenerator(readDataNode, asin.concreteType().getReference(), builder);
+        TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
 
         if (generator != null) {
           if (applyRecursionGuards
@@ -8704,14 +8702,25 @@ public abstract class TensorGenerator {
    * {@code x_train} and {@code y_train} with different shapes.
    *
    * @param node The {@link CGNode} containing the allocation.
-   * @param allocationType The concrete {@link TypeReference} of the allocated object.
+   * @param allocation The {@link AllocationSiteInNode} of the allocated object.
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
    * @return A {@link TensorGenerator} for the allocation, or {@code null} if the type is not
    *     recognized.
    */
   protected static TensorGenerator createManualGenerator(
-      CGNode node, TypeReference allocationType, PropagationCallGraphBuilder builder) {
+      CGNode node, AllocationSiteInNode allocation, PropagationCallGraphBuilder builder) {
+    TypeReference allocationType = allocation.concreteType().getReference();
     LOGGER.fine("createManualGenerator checking allocation type: " + allocationType.getName());
+
+    // A dataset allocated by `map.do()` carries the mapped element on ITS OWN `element` field,
+    // so its generator must anchor on the allocation instance (the wala/ML#649 form). The
+    // node-based dispatch this overload falls through to has only the node, and its map arm
+    // therefore degrades to ⊤; without either arm the DATA_PACKAGE_PREFIX catch-all inherited
+    // from `map.do`'s own receiver, typing the mapped element from the callback's INPUT rather
+    // than its return (wala/ML#848).
+    if (sanitize(allocation.getNode().getMethod().getDeclaringClass().getReference())
+        .equals(TensorFlowTypes.DATASET_MAP_TYPE))
+      return new DatasetMapGenerator(allocation.getNode(), allocation);
 
     TypeReference sanitized = sanitize(allocationType);
 
@@ -8924,6 +8933,13 @@ public abstract class TensorGenerator {
       // resolves the chain to the pre-batch element and the batch transform never applies
       // (wala/ML#759).
       return new DatasetPaddedBatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
+      // The map twin of the padded-batch arm above: the DATA_PACKAGE_PREFIX catch-all would
+      // inherit from map.do's own receiver, typing the mapped element from the callback's INPUT
+      // rather than its return (wala/ML#848). This node-only form has no allocation instance to
+      // read the `element` field off, so it degrades to ⊤ where the field is needed; the
+      // allocation-bearing overload above constructs the wala/ML#649 instance-anchored form.
+      return new DatasetMapGenerator(node);
     } else if (type.equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE)) {
       return new FlowFromDirectoryGenerator(node);
     } else if (type.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
