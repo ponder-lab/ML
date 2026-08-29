@@ -27,6 +27,10 @@ def consume_other_bounds(x):
     pass
 
 
+def consume_mixed_callers(x):
+    pass
+
+
 img_array = np.ones((1332, 800, 3), dtype=np.uint8)
 
 
@@ -92,3 +96,24 @@ other_begin, other_size = make_bounds()
 other = tf.slice(img_array, other_begin, other_size)
 assert other.shape.rank == 3, other.shape
 consume_other_bounds(other)
+
+
+def apply_bounds(image, b, s):
+    out = tf.slice(image, b, s)
+    assert out.shape.rank == 3, out.shape
+    consume_mixed_callers(out)
+    return out
+
+
+# One helper, two callers: one hands it the documented crop's bounds, the other a different
+# producer's. The slice inside sees its bounds as parameters, so the contract must not fire on
+# evidence from one call site and apply to the other; the parameter stays all-degraded.
+mixed_cropbox = tf.constant([0.0, 0.0, 1.0, 1.0], dtype=tf.float32, shape=[1, 1, 4])
+mixed_begin, mixed_size, _ = tf.image.sample_distorted_bounding_box(
+    tf.shape(tf.constant(img_array)),
+    bounding_boxes=mixed_cropbox,
+    min_object_covered=0.1,
+    use_image_if_no_bounding_boxes=True,
+)
+apply_bounds(img_array, mixed_begin, mixed_size)
+apply_bounds(img_array, other_begin, other_size)

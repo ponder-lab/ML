@@ -259,6 +259,35 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * The cross-caller safety property of the wala/ML#844 arm, stated in its Javadoc and verified
+   * here: evidence from one call site must never apply to another. One helper receives the
+   * documented crop's bounds from one caller and a different producer's from the other; the slice
+   * inside sees its bounds as parameters, the contract declines, and the result stays all-degraded
+   * for both.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceMixedCallersStayDegraded()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_transform_chain.py",
+        "consume_mixed_callers",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
    * Pins the output shape of {@code tf.squeeze} with a named axis (wala/ML#513). {@code
    * tf.squeeze(x, [1])} over a {@code (2, 1, 3, 1)} tensor drops only axis 1: {@code (2, 3, 1)}.
    *
