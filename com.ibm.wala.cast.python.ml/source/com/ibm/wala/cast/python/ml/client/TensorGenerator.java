@@ -9052,6 +9052,12 @@ public abstract class TensorGenerator {
       // Registered in tandem with the factory's arm, like the shape-preserving group above
       // (wala/ML#840).
       return new Pooling2DCall(node);
+    } else if (type.equals(TensorFlowTypes.CONV2D_TRANSPOSE_CALL.getDeclaringClass())) {
+      // Registered in tandem with the factory's arm, like the pooling group above (wala/ML#840).
+      return new Conv2DTransposeCall(node);
+    } else if (type.equals(TensorFlowTypes.ZERO_PADDING_2D_CALL.getDeclaringClass())) {
+      // Registered in tandem with the factory's arm, like the pooling group above (wala/ML#840).
+      return new ZeroPadding2DCall(node);
     } else if (type.equals(TensorFlowTypes.GLOBAL_MAX_POOLING_1D_CALL.getDeclaringClass())) {
       return new GlobalMaxPoolingCall(node, GlobalMaxPoolingCall.INPUT_RANK_1D);
     } else if (type.equals(TensorFlowTypes.GLOBAL_MAX_POOLING_2D_CALL.getDeclaringClass())) {

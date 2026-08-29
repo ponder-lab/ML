@@ -472,6 +472,10 @@
         <new def="GlobalMaxPooling2DLayerCls" class="Ltensorflow/keras/layers/class/GlobalMaxPooling2D"/>
         <putfield class="LRoot" field="GlobalMaxPooling2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
         <putfield class="LRoot" field="GlobalMaxPool2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
+        <new def="Conv2DTransposeLayerCls" class="Ltensorflow/keras/layers/class/Conv2DTranspose"/>
+        <putfield class="LRoot" field="Conv2DTranspose" fieldType="LRoot" ref="layers" value="Conv2DTransposeLayerCls"/>
+        <new def="ZeroPadding2DLayerCls" class="Ltensorflow/keras/layers/class/ZeroPadding2D"/>
+        <putfield class="LRoot" field="ZeroPadding2D" fieldType="LRoot" ref="layers" value="ZeroPadding2DLayerCls"/>
         <new def="LSTMLayerCls" class="Ltensorflow/keras/layers/class/LSTM"/>
         <putfield class="LRoot" field="LSTM" fieldType="LRoot" ref="layers" value="LSTMLayerCls"/>
         <new def="GRULayerCls" class="Ltensorflow/keras/layers/class/GRU"/>
@@ -2742,6 +2746,26 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="Conv2DTranspose" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2DTranspose. The upsampling window and the filter count are stored on the instance so `Conv2DTransposeCall` can rewrite the spatial and channel axes from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self filters kernel_size strides padding output_padding data_format">
+          <new def="res" class="Ltensorflow/keras/layers/Conv2DTranspose"/>
+          <putfield class="LRoot" field="filters" fieldType="LRoot" ref="res" value="filters"/>
+          <putfield class="LRoot" field="kernel_size" fieldType="LRoot" ref="res" value="kernel_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <putfield class="LRoot" field="output_padding" fieldType="LRoot" ref="res" value="output_padding"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ZeroPadding2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/ZeroPadding2D. The padding is stored on the instance so `ZeroPadding2DCall` can grow the spatial axes by it (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self padding data_format">
+          <new def="res" class="Ltensorflow/keras/layers/ZeroPadding2D"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="GlobalMaxPooling1D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D. Rank-reducing pooling: the `GlobalMaxPoolingCall` generator drops the temporal axis (wala/ML#840). -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data_format keepdims">
@@ -2964,6 +2988,28 @@
       </class>
       <class name="AveragePooling2D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/AveragePooling2D. The output type is computed by `Pooling2DCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Conv2DTranspose" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2DTranspose. The output type is computed by `Conv2DTransposeCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="ZeroPadding2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/ZeroPadding2D. The output type is computed by `ZeroPadding2DCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
