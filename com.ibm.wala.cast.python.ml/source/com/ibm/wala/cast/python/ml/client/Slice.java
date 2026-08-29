@@ -13,6 +13,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -29,9 +30,12 @@ import java.util.logging.Logger;
  *
  * A constant {@code size} with no {@code -1} entries gives a fully concrete shape independent of
  * {@code input_.shape}; a {@code -1} entry needs the corresponding {@code input_} dim and {@code
- * begin[i]}, and degrades to a {@link DynamicDim} on that axis (keeping the rank) when either is
- * non-constant. The shape falls back to ⊤ only when {@code begin}/{@code size} are themselves
- * non-constant or their ranks disagree with {@code input_}. See <a
+ * begin[i]}, and degrades on that axis (keeping the rank) when either is non-constant. Bounds that
+ * do not resolve at all degrade the same way rather than losing the shape: a slice never changes
+ * the rank at run time, so an unresolvable {@code size} keeps the input's rank with every extent
+ * degraded per the wala/ML#721 conventions, and an unresolvable {@code begin} affects only the
+ * {@code size}-of-{@code -1} axes. The shape falls back to ⊤ only when the resolved ranks disagree
+ * with {@code input_} or a resolved {@code size} entry is invalid. See <a
  * href="https://github.com/wala/ML/issues/569">wala/ML#569</a>; dtype forwarding alone landed in <a
  * href="https://github.com/wala/ML/issues/568">wala/ML#568</a>.
  *
@@ -67,8 +71,8 @@ public class Slice extends PassThroughUnaryTensorGenerator {
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The set of possible output shapes, or {@code null} (⊤) when {@code input_}'s shape is
-   *     unknown, {@code begin}/{@code size} are non-constant, or their ranks disagree with {@code
-   *     input_}.
+   *     unknown, a resolved rank disagrees with {@code input_}, or a resolved {@code size} entry is
+   *     invalid; unresolvable bounds degrade the extents while the rank survives.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -78,12 +82,31 @@ public class Slice extends PassThroughUnaryTensorGenerator {
 
     Set<List<Dimension<?>>> beginLists = resolveConstantIntList(builder, 1, "begin");
     Set<List<Dimension<?>>> sizeLists = resolveConstantIntList(builder, 2, "size");
-    if (beginLists == null || sizeLists == null) return null;
+
+    // A slice never changes the rank at run time, so bounds that do not resolve degrade the
+    // extents and not the shape: the output keeps the input's rank with every axis degraded per
+    // the wala/ML#721 conventions. The historical whole-shape ⊤ here dropped the rank of every
+    // value downstream of a runtime-computed crop (a `tf.slice` over
+    // `tf.image.sample_distorted_bounding_box`'s outputs), which is how an augmentation chain's
+    // helpers lost their image parameters' ranks.
+    if (sizeLists == null) {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      for (List<Dimension<?>> input : inputShapes) {
+        List<Dimension<?>> out = new ArrayList<>(input.size());
+        for (Dimension<?> inDim : input)
+          out.add(inDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+        ret.add(out);
+      }
+      return ret.isEmpty() ? null : ret;
+    }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> input : inputShapes)
-      for (List<Dimension<?>> begin : beginLists)
-        for (List<Dimension<?>> size : sizeLists) {
+      for (List<Dimension<?>> size : sizeLists)
+        // An unresolvable `begin` alone does not lose the shape: only the size-of--1 axes need it,
+        // and those degrade per axis inside the rule.
+        for (List<Dimension<?>> begin :
+            beginLists == null ? Collections.<List<Dimension<?>>>singleton(null) : beginLists) {
           List<Dimension<?>> out = sliceShape(input, begin, size);
           // A ⊤ (null) for any combination joins to ⊤ for the whole result: returning only the
           // concrete subset would under-approximate the possible shapes.
@@ -124,28 +147,34 @@ public class Slice extends PassThroughUnaryTensorGenerator {
    * combination.
    *
    * @param input The {@code input_} shape.
-   * @param begin The constant {@code begin} offsets.
+   * @param begin The constant {@code begin} offsets, or {@code null} when {@code begin} did not
+   *     resolve; only the {@code size}-of-{@code -1} axes need it, and those degrade per axis.
    * @param size The constant {@code size} extents.
    * @return The output shape, or {@code null} (⊤) when the ranks disagree, a {@code size} entry is
-   *     non-constant or invalid ({@code < -1}), or a {@code size}-of-{@code -1} axis computes a
-   *     negative extent ({@code begin} past the axis).
+   *     invalid ({@code < -1}), or a {@code size}-of-{@code -1} axis computes a negative extent
+   *     ({@code begin} past the axis).
    */
   private static List<Dimension<?>> sliceShape(
       List<Dimension<?>> input, List<Dimension<?>> begin, List<Dimension<?>> size) {
     int rank = input.size();
-    if (begin.size() != rank || size.size() != rank) return null;
+    if ((begin != null && begin.size() != rank) || size.size() != rank) return null;
 
     List<Dimension<?>> out = new ArrayList<>(rank);
     for (int i = 0; i < rank; i++) {
       Dimension<?> sizeDim = size.get(i);
-      if (!(sizeDim instanceof NumericDim)) return null; // non-constant size extent.
+      if (!(sizeDim instanceof NumericDim)) {
+        // An unresolvable extent inside an otherwise-resolved size list degrades this axis and not
+        // the shape: the rank is the size list's own length (wala/ML#721).
+        out.add(sizeDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+        continue;
+      }
       int s = ((NumericDim) sizeDim).value();
       if (s >= 0) {
         out.add(new NumericDim(s));
       } else if (s == -1) {
         // "all remaining" along axis i: input_.shape[i] - begin[i], when both are constant.
         Dimension<?> inDim = input.get(i);
-        Dimension<?> beginDim = begin.get(i);
+        Dimension<?> beginDim = begin == null ? null : begin.get(i);
         if (inDim instanceof NumericDim && beginDim instanceof NumericDim) {
           int extent = ((NumericDim) inDim).value() - ((NumericDim) beginDim).value();
           // A `begin` past the axis would yield a negative (invalid) extent; degrade to ⊤.
