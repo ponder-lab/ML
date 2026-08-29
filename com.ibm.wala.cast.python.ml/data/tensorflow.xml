@@ -367,6 +367,7 @@
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="x" value="tanh"/>
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="math" value="tanh"/>
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="gen_math_ops" value="tanh"/>
+        <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="nn" value="tanh"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/log_softmax -->
         <new def="log_softmax" class="Ltensorflow/math/log_softmax"/>
         <putfield class="LRoot" field="log_softmax" fieldType="LRoot" ref="nn" value="log_softmax"/>
