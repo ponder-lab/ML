@@ -58,11 +58,12 @@ public class TestModelCall extends AbstractTensorTest {
    * href="https://github.com/wala/ML/issues/817">wala/ML#817</a>): the summary allocates the
    * distinct {@code Sequential} instance type, chained under the canonical {@code Model}, so the
    * call resolves and the result reaches the sink as a definite-dtype tensor rather than nothing.
-   * The unknown shape is a deliberate floor: composing the forward chain through the layer list is
-   * <a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>, and the fixture's runtime
-   * asserts record the {@code (3, 2)} truth the floor stops short of. The dtype expectation does
-   * not distinguish input-dtype recovery from the model-call treatment's {@code float32} default;
-   * both produce it here.
+   *
+   * <p>The shape is now the composed {@code (3, 2)}, matching the fixture's runtime assert: the
+   * layer-list fold applies the model's one {@code Dense(2)} to the called value's {@code (3, 5)}
+   * (<a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>). It was an unknown-shape
+   * floor before the fold existed. The dtype expectation does not distinguish input-dtype recovery
+   * from the model-call treatment's {@code float32} default; both produce it here.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -72,17 +73,118 @@ public class TestModelCall extends AbstractTensorTest {
   @Test
   public void testSequentialModelCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_sequential.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_sequential.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
 
     // A downstream `tf.transpose` reading the call's result exercises the producer-delegation
-    // route — the manual half of the tandem registration for `Sequential/__call__`.
+    // route — the manual half of the tandem registration for `Sequential/__call__`. It also shows
+    // the fold reaching a consumer through that route rather than only the seeded call result:
+    // the transpose of the composed `(3, 2)` is `(2, 3)`, which needs the composition to have
+    // happened on the manual anchoring too.
     test(
         "tf2_test_sequential.py",
         "consume_transposed",
         1,
         1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * The layer-list fold over chains of more than one layer, and its refusal (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+   *
+   * <p>Two {@code Dense} layers in one model are the arm that measures the fold's independence from
+   * the model call it is anchored at: both layers resolve through the same node, so a fold whose
+   * per-layer reads were keyed on that node would answer the second layer with the first layer's
+   * {@code units} and report {@code (3, 4)}. The convolutional stage composes three layer classes
+   * of different kinds — a window that folds the spatial extents and sets the channel, then two
+   * that preserve what it produced.
+   *
+   * <p>The third arm is the refusal. Its one layer is a user subclass the analysis does not model,
+   * and the expectation is the unknown shape rather than the input's: a fold that skipped what it
+   * could not apply would report the chain's output as though that layer were the identity, which
+   * here happens to BE its runtime behavior and would still be a shape the analysis had no evidence
+   * for. Reading it as unknown is the honest floor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialFold()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_two_dense",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_conv_stack",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_8_8_6_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_unmodeled",
+        1,
+        1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The two lists that reach the fold looking well-formed and are not, and the one nesting that
+   * genuinely composes (<a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>). All three
+   * come from an adversarial pass built to compose a wrong shape without tripping a refusal; the
+   * first two did exactly that before the refusals they now pin.
+   *
+   * <p>A sliced list is the harder of the two. The slice application's result aliases its receiver,
+   * so the constructor's argument arrives as the FULL list's allocation, with a catalog that is
+   * contiguous and single-valued at every position. No property of the container can tell it from a
+   * literal, because it IS the receiver; the fold composed the removed layer and reported {@code
+   * (3, 7)}. The refusal reads the argument's own definition instead.
+   *
+   * <p>An appended literal fails the other way: the appended layer lands under the synthetic
+   * append-contents field rather than at an integer index, so the catalog holds one layer and reads
+   * as a complete run. The fold stopped at the literal's layer and reported {@code (3, 4)}.
+   * Appended contents are the positive evidence that the catalog undercounts.
+   *
+   * <p>The nested model composes, and is here because nothing else pins why: the inner model's
+   * instance type dispatches back through the same table, and its fold reads the running shape
+   * through the seam whose index matches the model call's {@code inputs} position. A change to
+   * either alignment would break this arm and nothing else.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialFoldRefusals()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_sliced",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_appended",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_nested",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_6_FLOAT32)));
   }
 
   /**

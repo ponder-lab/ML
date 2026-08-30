@@ -265,6 +265,13 @@ public class DenseCall extends TensorGenerator {
    *     the node is already being resolved on this thread (cycle).
    */
   protected Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
+    // A composed layer's input is the fold's running shape (wala/ML#832). Answering before the
+    // engine divert below is not an optimization: the divert keys on the anchoring NODE, and a
+    // fold anchors every layer of one model at the same model-call node, so two `Dense` layers in
+    // one `Sequential` would share a key and the second would read the first's answer.
+    ComposedArguments composed = this.getComposedArguments();
+    if (composed != null) return composed.inputShapes();
+
     CGNode self = this.getNode();
     // The thread-local guard breaks real recursion, which exists only on the null-engine path.
     // Under the engine, reads never recurse, and the guard's null was an engine-invisible cycle

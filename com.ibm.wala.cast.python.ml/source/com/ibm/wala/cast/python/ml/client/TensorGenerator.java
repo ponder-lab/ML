@@ -402,6 +402,53 @@ public abstract class TensorGenerator {
   protected CGNode manualNode;
 
   /**
+   * The arguments supplied directly to a layer generator that is composing a {@code Sequential}
+   * model's forward chain (<a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>), or
+   * {@code null} for every ordinary anchoring.
+   *
+   * <p>A layer in a {@code Sequential}'s list is constructed but never called: the model's summary
+   * allocates its result in one step, so there is no {@code __call__} node whose arguments name the
+   * layer instance and the value flowing into it. The fold supplies both explicitly, and the
+   * layer's own generator then computes its transform through its ordinary body.
+   *
+   * @param receiver The layer instance the transform reads its configuration off, standing in for
+   *     the {@code self} argument.
+   * @param inputShapes The shapes flowing into the layer, standing in for the {@code inputs}
+   *     argument's resolved shapes; {@code null} is ⊤.
+   * @param inputDTypes The dtypes flowing into the layer; {@code null} is ⊤.
+   */
+  record ComposedArguments(
+      OrdinalSet<InstanceKey> receiver,
+      Set<List<Dimension<?>>> inputShapes,
+      Set<DType> inputDTypes) {}
+
+  /**
+   * The composition arguments in force, or {@code null} when this generator resolves its arguments
+   * from its own anchoring as usual. Set only by {@link SequentialCall}'s fold, on a generator it
+   * constructs and discards within one evaluation.
+   */
+  private ComposedArguments composedArguments;
+
+  /**
+   * Binds the arguments a {@code Sequential} fold supplies to this layer generator (wala/ML#832).
+   *
+   * @param arguments The arguments to resolve the layer's reads against.
+   */
+  void composeWith(ComposedArguments arguments) {
+    this.composedArguments = arguments;
+  }
+
+  /**
+   * The composition arguments in force, for a generator whose input read is its own rather than one
+   * of the two shared seams (wala/ML#832).
+   *
+   * @return The arguments, or {@code null} when this generator resolves its own.
+   */
+  protected ComposedArguments getComposedArguments() {
+    return this.composedArguments;
+  }
+
+  /**
    * Constructs a new tensor generator based on a standard points-to set source.
    *
    * @param source The points-to set variable representing the source of the tensor.
@@ -3450,6 +3497,11 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getArgumentShapesWithFallback(
       PropagationCallGraphBuilder builder, int index, String name) {
+    // The value flowing into a composed layer is the fold's running shape, which no argument of
+    // this generator's anchoring names (wala/ML#832).
+    if (this.composedArguments != null && index == LAYER_INPUTS_ARGUMENT_POSITION)
+      return this.composedArguments.inputShapes();
+
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
     if (pts != null && !pts.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
@@ -3485,6 +3537,10 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> getArgumentDTypesWithFallback(
       PropagationCallGraphBuilder builder, int index, String name) {
+    // The dtype twin of the shape seam above (wala/ML#832).
+    if (this.composedArguments != null && index == LAYER_INPUTS_ARGUMENT_POSITION)
+      return this.composedArguments.inputDTypes();
+
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
     if (pts != null && !pts.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
@@ -6003,6 +6059,19 @@ public abstract class TensorGenerator {
 
   protected static final int RECEIVER_PARAMETER_POSITION = -2;
 
+  /**
+   * The position a Keras layer's {@code __call__} binds its layer instance at, and the position its
+   * {@code inputs} follow at. Every layer-call generator in this package reads its two arguments at
+   * these positions, which is what lets one pair of seams serve the whole family when a {@code
+   * Sequential} fold supplies them directly (wala/ML#832).
+   */
+  protected static final int LAYER_SELF_ARGUMENT_POSITION = 0;
+
+  /**
+   * @see #LAYER_SELF_ARGUMENT_POSITION
+   */
+  protected static final int LAYER_INPUTS_ARGUMENT_POSITION = 1;
+
   protected static final String SELF = "self";
 
   protected int getArgumentValueNumber(int parameterPosition) {
@@ -6198,6 +6267,13 @@ public abstract class TensorGenerator {
    */
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    // A composing layer generator reads its configuration off the instance the fold supplies, not
+    // off a receiver argument: the layer has no call site, so the ordinary resolution would walk
+    // the model call's frame and hand back the MODEL where the layer is meant (wala/ML#832).
+    if (this.composedArguments != null
+        && (paramPos == LAYER_SELF_ARGUMENT_POSITION || paramPos == RECEIVER_PARAMETER_POSITION))
+      return this.composedArguments.receiver();
+
     return getArgumentPointsToSet(builder, this.getNode(), paramPos, paramName);
   }
 
@@ -8910,6 +8986,31 @@ public abstract class TensorGenerator {
 
     LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
 
+    return createManualGenerator(node, type, builder);
+  }
+
+  /**
+   * Dispatches a manual generator for an operation named by a type OTHER than the anchoring node's
+   * own declaring class.
+   *
+   * <p>The two coincide for producer delegation, where the node IS the operation's allocating
+   * synthetic. They come apart for a {@code Sequential} composition (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>), where a layer in the model's
+   * list has no call node of its own: the fold names the layer's {@code __call__} type explicitly
+   * and anchors it at the model call being composed, so the layer's own transform runs without a
+   * call site to hang it on.
+   *
+   * <p>Separating the type from the node keeps that fold on the SAME dispatch table as every other
+   * anchoring rather than opening a second one keyed on layer classes. A second table would drift
+   * from this one exactly as the source and manual tables did before wala/ML#760 unified them.
+   *
+   * @param node The node to anchor the generator at.
+   * @param type The sanitized type naming the operation to dispatch.
+   * @param builder The propagation call graph builder.
+   * @return The generator, or {@code null} when no arm matches the type.
+   */
+  protected static TensorGenerator createManualGenerator(
+      CGNode node, TypeReference type, PropagationCallGraphBuilder builder) {
     TensorGenerator shared =
         TensorGeneratorFactory.dispatchShared(new GeneratorAnchor.NodeAnchor(node, type, builder));
     if (shared != null) return shared;

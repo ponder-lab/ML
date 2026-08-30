@@ -483,13 +483,14 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(s -> new NpTranspose(s, true), n -> new NpTranspose(n, true));
 
     // The Sequential registrations live here so one entry serves both dispatch routes
-    // (wala/ML#817): the constructor type takes the `Model` treatment (its weight resolution is
-    // empty until wala/ML#832's layers walk, which is sound), and the instance's call node —
-    // `Sequential/__call__`, not `Model/__call__` — takes the model-call treatment.
+    // (wala/ML#817): the constructor type takes the `Model` treatment, and the instance's call
+    // node — `Sequential/__call__`, not `Model/__call__` — takes the layer-list fold, which is the
+    // model-call treatment plus the forward chain a `Sequential` keeps in its list rather than in
+    // constructor arguments (wala/ML#832).
     if (isType(type, TensorFlowTypes.SEQUENTIAL.getDeclaringClass()))
       return anchor.makeGenerator(Model::new, Model::new);
     if (isType(type, SEQUENTIAL_CALL.getDeclaringClass()))
-      return anchor.makeGenerator(ModelCall::new, ModelCall::new);
+      return anchor.makeGenerator(SequentialCall::new, SequentialCall::new);
 
     if (isType(type, MULTIPLY.getDeclaringClass())
         || isType(type, ADD.getDeclaringClass())
