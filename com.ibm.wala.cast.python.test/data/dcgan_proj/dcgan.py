@@ -117,9 +117,6 @@ def discriminator_loss(disc_fake, disc_real):
 # copied verbatim. The feed mirrors the subject's optimization step: a normal draw narrowed with
 # `astype`, through the generator, then the discriminator, whose output reaches both loss
 # parameters.
-generator = Generator()
-discriminator = Discriminator()
-
 noise = np.random.normal(-1.0, 1.0, size=[batch_size, noise_dim]).astype(np.float32)
 assert noise.shape == (batch_size, noise_dim), noise.shape
 
