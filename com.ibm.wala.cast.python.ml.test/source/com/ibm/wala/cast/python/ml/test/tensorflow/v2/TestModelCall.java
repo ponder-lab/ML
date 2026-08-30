@@ -188,6 +188,68 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * A {@code Sequential} grown one layer at a time by {@code .add()}, the remaining half of <a
+   * href="https://github.com/wala/ML/issues/854">wala/ML#854</a> and the second spelling of <a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>.
+   *
+   * <p>This spelling holds the same information as a constructor list and holds it nowhere the
+   * analysis can read as a container: the layers arrive one call at a time, and their order, which
+   * the whole composition depends on, exists only as the order of the calls in the building code.
+   *
+   * <p>The straight-line arm repeats the same-class pair for the same reason the constructor-list
+   * arm does. The conditional arms are the canonical downsampling stage, which adds a normalization
+   * only when asked: those are two different models, so the result is the union over both paths
+   * rather than a choice between them, and both paths agree here only because the conditional layer
+   * preserves the shape.
+   *
+   * <p>The looped arm must decline. A loop that adds makes the chain's LENGTH a trip count rather
+   * than a static list, so composing the body once would report a one-layer model where the program
+   * builds two, which is the truncated chain the whole refusal set exists to stop.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialAddSpelling()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_add.py", "consume_plain", 1, 1, Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_conditional_on",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_4_4_6_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_conditional_off",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_4_4_6_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_looped",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    // The arms above agree between the two paths, so they would pass a fold that composed only
+    // one. Here the conditional layer changes the last axis, so the union has two members and a
+    // single-path fold reports one of them.
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_union",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_3_7_FLOAT32)));
+  }
+
+  /**
    * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
    * {@code (20, 28, 28) f32}) plus five intermediate SSA values produced by the {@code
    * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The {@code
