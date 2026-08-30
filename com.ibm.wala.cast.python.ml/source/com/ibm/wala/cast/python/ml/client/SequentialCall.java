@@ -96,6 +96,12 @@ public class SequentialCall extends ModelCall {
    * default: {@code pop} exists to shrink the chain, and any allowance framed as "a member whose
    * name is a constant" admits it. {@code layers} is deliberately absent, since reading it yields
    * the list itself, which a program can then append to.
+   *
+   * <p>Each entry is a claim about the Keras API, and a wrong one is caught by a composing fixture
+   * rather than by reading this list: a member that grew or shrank the chain would make the fold
+   * disagree with the runtime. {@code build}, {@code compile}, {@code summary}, {@code
+   * count_params} and {@code get_weights} carry that witness. The rest are unwitnessed, and an
+   * entry added here should arrive with a fixture that composes through it.
    */
   private static final Set<String> NON_MUTATING_MODEL_MEMBERS =
       Set.of(

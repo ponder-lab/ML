@@ -116,3 +116,24 @@ popped.add(tf.keras.layers.Dense(4))
 popped.add(tf.keras.layers.Dense(2))
 popped.pop()
 consume_popped(popped(tf.ones((3, 5))))
+
+
+def consume_after_model_methods(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 2)
+    assert x.dtype == tf.float32
+
+
+# The whole-model methods a training script calls on the model it built. None of them changes the
+# layer list, which is why the walk tolerates them, and this arm is what would catch it if one did:
+# a member that quietly grew or shrank the chain would make the composed shape disagree with the
+# runtime assert above.
+with_methods = tf.keras.Sequential()
+with_methods.add(tf.keras.layers.Dense(4))
+with_methods.add(tf.keras.layers.Dense(2))
+with_methods.build(input_shape=(None, 5))
+with_methods.compile(optimizer="sgd", loss="mse")
+with_methods.summary()
+with_methods.count_params()
+with_methods.get_weights()
+consume_after_model_methods(with_methods(tf.ones((3, 5))))

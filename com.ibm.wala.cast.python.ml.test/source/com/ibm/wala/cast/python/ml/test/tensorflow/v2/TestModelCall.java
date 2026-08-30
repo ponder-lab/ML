@@ -286,6 +286,17 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    // The tolerated whole-model methods, exercised together. Each is an API claim that the member
+    // leaves the layer list alone, and this arm is what falsifies a wrong one: a member that grew
+    // or shrank the chain would make the composed shape disagree with the fixture's runtime
+    // assert, rather than being caught by inspection of the list.
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_after_model_methods",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
   }
 
   /**
