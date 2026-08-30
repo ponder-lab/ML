@@ -1640,6 +1640,12 @@ public abstract class TensorGenerator {
       Integer agreed = null;
       boolean any = false;
       for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
+        // The walk pairs the variable's recovered write(s) with its merged exit phi, whose
+        // substrate null default hides the write; the phi does not participate, and the writes
+        // it merges are definers of their own.
+        if (definer.snd > 0
+            && definer.fst.getDU() != null
+            && definer.fst.getDU().getDef(definer.snd) instanceof SSAPhiInstruction) continue;
         Integer viaDefiner =
             resolveIntFlowSensitively(builder, definer.fst, definer.snd, visited, depth - 1);
         if (viaDefiner == null) return null;
@@ -1648,6 +1654,35 @@ public abstract class TensorGenerator {
         any = true;
       }
       if (any) return agreed;
+
+      // The funarg walk yields no definer for a module-level variable read from a function frame
+      // (the module's frame has no upward-funarg key): match the variable's lexical writes by
+      // their (name, definer) pair directly, all of which must agree (wala/ML#852).
+      AstLexicalRead read = (AstLexicalRead) def;
+      if (read.getAccessCount() > 0) {
+        String variableName = read.getAccess(0).variableName();
+        String variableDefiner = read.getAccess(0).variableDefiner();
+        Integer agreedWrite = null;
+        for (CGNode candidate : builder.getCallGraph()) {
+          if (candidate.getIR() == null || candidate.getDU() == null) continue;
+          for (SSAInstruction inst : candidate.getIR().getInstructions()) {
+            if (!(inst instanceof AstLexicalWrite)) continue;
+            AstLexicalWrite write = (AstLexicalWrite) inst;
+            for (int a = 0; a < write.getAccessCount(); a++) {
+              if (!variableName.equals(write.getAccess(a).variableName())
+                  || !variableDefiner.equals(write.getAccess(a).variableDefiner())) continue;
+              Integer written =
+                  resolveIntFlowSensitively(
+                      builder, candidate, write.getAccess(a).valueNumber(), visited, depth - 1);
+              if (written == null) return null;
+              if (agreedWrite != null && !agreedWrite.equals(written)) return null;
+              agreedWrite = written;
+            }
+          }
+        }
+        if (agreedWrite != null) return agreedWrite;
+      }
+      return null;
     }
 
     if (def == null) {
@@ -1918,13 +1953,17 @@ public abstract class TensorGenerator {
    *
    * <p>The match is purely structural and stays in the reading node's body: the namespace's
    * definition must be an invoke through a {@code parse_args} member read, and every {@code
-   * add_argument} invoke through the same parser value whose option strings derive the attribute
-   * name (argparse's own destination rule: the first long option, else the first option, leading
-   * dashes stripped and remaining dashes to underscores) contributes its {@code default=} keyword.
-   * All matches must agree; a matching argument with an absent {@code default}, a non-integer
-   * default ({@code None}, a boolean, a string), or a {@code dest=} override this derivation cannot
-   * see declines the whole chase &mdash; recovering a literal is the point, and anything past it
-   * would trade an honest unknown for an invented number.
+   * add_argument} invoke through the same parser value whose destination is the attribute name
+   * contributes its {@code default=} keyword. The destination is a constant {@code dest=} when one
+   * is given (argparse's authoritative override), else the derivation from the option strings
+   * (argparse's own rule: the first long option, else the first option, leading dashes stripped and
+   * remaining dashes to underscores). All matches must agree, which also covers two arguments
+   * writing one destination through different routes (a {@code dest=} retarget beside a derived
+   * twin): their runtime value is decided by registration order, and disagreeing defaults decline
+   * rather than pick. A matching argument with an absent {@code default}, a non-integer default
+   * ({@code None}, a boolean, a string), or a non-constant {@code dest=} declines the whole chase
+   * &mdash; recovering a literal is the point, and anything past it would trade an honest unknown
+   * for an invented number.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose IR contains both the read and the parser calls.
@@ -1969,25 +2008,33 @@ public abstract class TensorGenerator {
       if (!st.isStringConstant(addMemberVn)
           || !"add_argument".equals(st.getStringValue(addMemberVn))) continue;
 
-      // Derive the destination from the option strings; a non-literal option string declines the
-      // call as a candidate rather than the chase (it cannot match anything by name).
+      // An explicit `dest=` is argparse's authoritative destination and replaces the derivation:
+      // a constant one is matched directly, and a non-constant one could name anything, including
+      // the attribute being read, so it declines the whole chase.
       String dest = null;
-      for (int p = 1; p < call.getNumberOfPositionalParameters(); p++) {
-        int optionVn = call.getUse(p);
-        if (!st.isStringConstant(optionVn)) {
-          dest = null;
-          break;
+      if (call.getKeywords().contains("dest")) {
+        int destVn = call.getUse("dest");
+        if (!st.isStringConstant(destVn)) return null;
+        dest = st.getStringValue(destVn);
+      } else {
+        // Derive the destination from the option strings; a non-literal option string declines
+        // the call as a candidate rather than the chase (it cannot match anything by name).
+        for (int p = 1; p < call.getNumberOfPositionalParameters(); p++) {
+          int optionVn = call.getUse(p);
+          if (!st.isStringConstant(optionVn)) {
+            dest = null;
+            break;
+          }
+          String option = st.getStringValue(optionVn);
+          if (option.startsWith("--")) {
+            dest = argparseDestination(option);
+            break; // The first long option names the destination.
+          }
+          if (dest == null) dest = argparseDestination(option);
         }
-        String option = st.getStringValue(optionVn);
-        if (option.startsWith("--")) {
-          dest = argparseDestination(option);
-          break; // The first long option names the destination.
-        }
-        if (dest == null) dest = argparseDestination(option);
       }
       if (dest == null || !attributeName.equals(dest)) continue;
 
-      if (call.getKeywords().contains("dest")) return null; // A dest override defeats the match.
       if (!call.getKeywords().contains("default")) return null; // Matching argument, no default.
       Integer viaDefault =
           resolveIntFlowSensitively(builder, node, call.getUse("default"), visited, depth - 1);
