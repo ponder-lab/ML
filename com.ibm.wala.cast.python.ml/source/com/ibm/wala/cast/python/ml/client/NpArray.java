@@ -8,10 +8,15 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -21,7 +26,14 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.Pair;
@@ -29,10 +41,12 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 /**
  * Modeling of the function-style {@code numpy.array(x, dtype)} call. Preserves the shape of the
@@ -50,6 +64,9 @@ public class NpArray extends TensorGenerator {
    * compile-time dependency on the Jython runtime.
    */
   private static final String PYCOMPLEX_CLASS_NAME = "org.python.core.PyComplex";
+
+  /** The type-name shape of the front-end's synthetic comprehension functions. */
+  private static final Pattern COMPREHENSION_TYPE_NAME = Pattern.compile(".*/comprehension\\d+");
 
   public NpArray(PointsToSetVariable source) {
     super(source);
@@ -126,6 +143,14 @@ public class NpArray extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // The default-mode legacy view of the record result: a partial contributes its resolvable
+    // members (the wala/ML#716 contract); ⊤ and ⊥ keep their legacy encodings.
+    ShapeResult result = this.getDefaultShapeResult(builder);
+    return result.isPartial() ? result.members() : result.toLegacy();
+  }
+
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
     int sourceVn = getArgumentValueNumber(0);
     LOGGER.fine(
         () -> "NpArray.getDefaultShapes: source=" + describe(source) + ", sourceVn=" + sourceVn);
@@ -135,7 +160,7 @@ public class NpArray extends TensorGenerator {
         LOGGER.fine(
             () -> "NpArray.getDefaultShapes: shapes from sourceVn=" + sourceVn + " -> " + shapes);
         if (shapes != null && !shapes.isEmpty()) {
-          return shapes;
+          return ShapeResult.of(shapes);
         }
       } catch (IllegalArgumentException e) {
         LOGGER.log(
@@ -144,7 +169,286 @@ public class NpArray extends TensorGenerator {
             e);
       }
     }
+
+    ShapeResult viaComprehension = this.getComprehensionWindowShapeResult(builder);
+    if (viaComprehension != null) return viaComprehension;
+
+    return ShapeResult.unknown();
+  }
+
+  /**
+   * The windowed-batcher arm (wala/ML#851): {@code np.array} over a list built by a comprehension
+   * of fixed-length windows, the hand-rolled numpy batcher shape ({@code np.array([get(f, length)
+   * for f in random.sample(files, k=batch_size)])}). The content list's element values are opaque
+   * (loaded data sliced to a window), so the value walks resolve nothing, yet both leading extents
+   * are statically determined by the program's own text: the leading axis is the comprehension's
+   * arity, which is {@code random.sample}'s {@code k}, and the second axis is each window's length,
+   * recovered from the element producer's slice contract ({@code data[start : start + K]} is {@code
+   * K} long).
+   *
+   * <p>The result is a partial ({@link ShapeResult}): the two-axis member is the resolvable subset,
+   * and the unknown remainder stays set because nothing proves the element's own rank (a loaded
+   * element could itself be nested), the pad branch of a guarded window is not folded, and the
+   * slice contract reads the unclamped window (the subject's {@code max_length <= len(data)} guard
+   * is what makes it exact at runtime, and this walk does not evaluate guards). An axis whose chase
+   * declines degrades to {@link UnresolvedDim}; when neither axis resolves, the arm yields nothing
+   * and the legacy ⊤ stands.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The partial result, or {@code null} when this is not a resolvable comprehension batch.
+   */
+  private ShapeResult getComprehensionWindowShapeResult(PropagationCallGraphBuilder builder) {
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction) || caller.getDU() == null)
+        continue;
+      PythonInvokeInstruction arrayCall = (PythonInvokeInstruction) callerInvoke.snd;
+      if (arrayCall.getNumberOfPositionalParameters() < 2) continue;
+
+      SSAInstruction contentDef = caller.getDU().getDef(arrayCall.getUse(1));
+      if (!(contentDef instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction compInvoke = (PythonInvokeInstruction) contentDef;
+      // The comprehension call passes the fresh list and the iterable to the synthetic
+      // comprehension function; its function value is a fresh allocation of the comprehension's
+      // own code type.
+      if (compInvoke.getNumberOfPositionalParameters() != 3) continue;
+      SSAInstruction compFnDef = caller.getDU().getDef(compInvoke.getUse(0));
+      if (!(compFnDef instanceof SSANewInstruction)) continue;
+      String compTypeName = ((SSANewInstruction) compFnDef).getConcreteType().getName().toString();
+      if (!COMPREHENSION_TYPE_NAME.matcher(compTypeName).matches()) continue;
+
+      Dimension<?> leading = comprehensionArity(builder, caller, compInvoke.getUse(2));
+      Dimension<?> window = comprehensionElementExtent(builder, caller, compInvoke);
+      if (leading instanceof UnresolvedDim && window instanceof UnresolvedDim) continue;
+
+      LOGGER.fine(
+          () ->
+              "Comprehension window batch resolved: arity=" + leading + ", window=" + window + ".");
+      Set<List<Dimension<?>>> members = new HashSet<>();
+      members.add(List.of(leading, window));
+      return new ShapeResult(members, true);
+    }
     return null;
+  }
+
+  /**
+   * Resolves the comprehension's arity: a comprehension over {@code random.sample(..., k=N)} has
+   * exactly {@code N} elements when {@code N} resolves ({@code k} by keyword or the second
+   * positional argument).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node holding the comprehension call.
+   * @param iterableVn The comprehension's iterable value number.
+   * @return The arity as a {@link NumericDim}, or {@link UnresolvedDim} when the chase declines.
+   */
+  private static Dimension<?> comprehensionArity(
+      PropagationCallGraphBuilder builder, CGNode node, int iterableVn) {
+    SSAInstruction def = node.getDU().getDef(iterableVn);
+    if (def instanceof PythonInvokeInstruction) {
+      PythonInvokeInstruction call = (PythonInvokeInstruction) def;
+      SSAInstruction calleeDef = node.getDU().getDef(call.getUse(0));
+      SymbolTable st = node.getIR().getSymbolTable();
+      if (calleeDef instanceof PythonPropertyRead) {
+        PythonPropertyRead read = (PythonPropertyRead) calleeDef;
+        if (st.isStringConstant(read.getMemberRef())
+            && "sample".equals(st.getStringValue(read.getMemberRef()))
+            && readsLexicalNamed(node, read.getObjectRef(), "random")) {
+          int kVn =
+              call.getKeywords().contains("k")
+                  ? call.getUse("k")
+                  : call.getNumberOfPositionalParameters() >= 3 ? call.getUse(2) : -1;
+          if (kVn > 0) {
+            Integer k =
+                resolveIntFlowSensitively(
+                    builder, node, kVn, new HashSet<>(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+            if (k != null && k > 0) return new NumericDim(k);
+          }
+        }
+      }
+    }
+    return UnresolvedDim.INSTANCE;
+  }
+
+  /**
+   * Resolves the window length of the comprehension's elements by chasing the element expression
+   * into its producers: through the synthetic mapping wrapper to the comprehension body, into the
+   * called producer's returns, across return-site phis, down to a slice whose bounds fold to a
+   * length. Opaque leaves (an unmodeled load, the pad loop) are tolerated &mdash; the caller's
+   * unknown remainder covers them &mdash; but resolved leaves must agree.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param caller The node holding the comprehension call.
+   * @param compInvoke The comprehension invoke.
+   * @return The window length as a {@link NumericDim}, or {@link UnresolvedDim}.
+   */
+  private static Dimension<?> comprehensionElementExtent(
+      PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction compInvoke) {
+    Integer agreed = null;
+    Set<Pair<CGNode, Integer>> visited = new HashSet<>();
+    for (CGNode wrapper :
+        builder.getCallGraph().getPossibleTargets(caller, compInvoke.getCallSite())) {
+      // The wrapper is the synthetic per-element mapping trampoline; its call sites reach the
+      // comprehension body.
+      for (Iterator<CallSiteReference> sites = wrapper.iterateCallSites(); sites.hasNext(); ) {
+        CallSiteReference site = sites.next();
+        for (CGNode body : builder.getCallGraph().getPossibleTargets(wrapper, site)) {
+          Integer extent =
+              returnedLeadingExtent(builder, body, visited, FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+          if (extent == null) continue;
+          if (agreed != null && !agreed.equals(extent)) return UnresolvedDim.INSTANCE;
+          agreed = extent;
+        }
+      }
+    }
+    return agreed == null ? UnresolvedDim.INSTANCE : new NumericDim(agreed);
+  }
+
+  /**
+   * Resolves the agreeing leading extent of a node's returned values; opaque returns are tolerated,
+   * resolved ones must agree.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose returns are chased.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @return The agreeing extent, or {@code null}.
+   */
+  private static Integer returnedLeadingExtent(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
+    Integer agreed = null;
+    for (SSAInstruction inst : node.getIR().getInstructions()) {
+      if (!(inst instanceof SSAReturnInstruction)) continue;
+      int resultVn = ((SSAReturnInstruction) inst).getResult();
+      if (resultVn <= 0) continue;
+      Integer extent = leadingExtentOfValue(builder, node, resultVn, visited, depth);
+      if (extent == null) continue;
+      if (agreed != null && !agreed.equals(extent)) return null;
+      agreed = extent;
+    }
+    return agreed;
+  }
+
+  /**
+   * Resolves one value's leading extent: a phi takes its operands' agreeing extents (opaque
+   * operands tolerated), a call to the {@code slice} builtin folds its bounds, and any other call
+   * chases the callees' returns.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose value is chased.
+   * @param vn The value number to chase.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @return The extent, or {@code null} for an opaque value.
+   */
+  private static Integer leadingExtentOfValue(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (vn <= 0 || depth <= 0 || !visited.add(Pair.make(node, vn))) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+
+    if (def instanceof SSAPhiInstruction) {
+      Integer agreed = null;
+      for (int i = 0; i < def.getNumberOfUses(); i++) {
+        Integer operand = leadingExtentOfValue(builder, node, def.getUse(i), visited, depth - 1);
+        if (operand == null) continue;
+        if (agreed != null && !agreed.equals(operand)) return null;
+        agreed = operand;
+      }
+      return agreed;
+    }
+
+    if (def instanceof PythonInvokeInstruction) {
+      PythonInvokeInstruction call = (PythonInvokeInstruction) def;
+      if (readsLexicalNamed(node, call.getUse(0), "slice")) return sliceExtent(builder, node, call);
+
+      Integer agreed = null;
+      for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+        Integer viaCallee = returnedLeadingExtent(builder, callee, visited, depth - 1);
+        if (viaCallee == null) continue;
+        if (agreed != null && !agreed.equals(viaCallee)) return null;
+        agreed = viaCallee;
+      }
+      return agreed;
+    }
+
+    return null;
+  }
+
+  /**
+   * Folds a {@code slice(obj, start, stop, step)} builtin call's extent: with a unit step, {@code
+   * obj[start : start + K]} is {@code K} long by operand identity, and literal bounds subtract. The
+   * result is the unclamped window; see the arm's contract for why that is the emitted member.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node holding the slice call.
+   * @param call The slice call.
+   * @return The window length, or {@code null} when the bounds do not fold.
+   */
+  private static Integer sliceExtent(
+      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction call) {
+    if (call.getNumberOfPositionalParameters() < 4) return null;
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (call.getNumberOfPositionalParameters() >= 5) {
+      int stepVn = call.getUse(4);
+      boolean unitStep =
+          st.isNullConstant(stepVn)
+              || (st.isNumberConstant(stepVn)
+                  && ((Number) st.getConstantValue(stepVn)).longValue() == 1L);
+      if (!unitStep) return null;
+    }
+
+    int startVn = call.getUse(2);
+    int stopVn = call.getUse(3);
+    SSAInstruction stopDef = node.getDU().getDef(stopVn);
+    if (stopDef instanceof SSABinaryOpInstruction
+        && ((SSABinaryOpInstruction) stopDef).getOperator() == IBinaryOpInstruction.Operator.ADD) {
+      int a = stopDef.getUse(0);
+      int b = stopDef.getUse(1);
+      int lengthVn = a == startVn ? b : b == startVn ? a : -1;
+      if (lengthVn > 0) {
+        // The int chase carries its own cycle guard and needs its own full budget: threading this
+        // walk's depleted depth in starves the caller-agreement hops (parameter, trampoline,
+        // lexical-definer) the length routinely crosses.
+        Integer length =
+            resolveIntFlowSensitively(
+                builder, node, lengthVn, new HashSet<>(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+        if (length != null && length > 0) return length;
+        return null;
+      }
+    }
+
+    Integer start =
+        resolveIntFlowSensitively(
+            builder, node, startVn, new HashSet<>(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+    Integer stop =
+        resolveIntFlowSensitively(
+            builder, node, stopVn, new HashSet<>(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+    if (start != null && stop != null && stop > start && start >= 0) return stop - start;
+    return null;
+  }
+
+  /**
+   * Decides whether a value is a lexical read of the given name (the {@code enumerate}-match
+   * idiom).
+   *
+   * @param node The node whose value is inspected.
+   * @param vn The value number to inspect.
+   * @param name The variable name to match.
+   * @return {@code true} iff the value reads that lexical name.
+   */
+  private static boolean readsLexicalNamed(CGNode node, int vn, String name) {
+    SSAInstruction def = node.getDU().getDef(vn);
+    return def instanceof AstLexicalRead
+        && ((AstLexicalRead) def).getAccessCount() > 0
+        && name.equals(((AstLexicalRead) def).getAccess(0).getName().fst);
   }
 
   @Override

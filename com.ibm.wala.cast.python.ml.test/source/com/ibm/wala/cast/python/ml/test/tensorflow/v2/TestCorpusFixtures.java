@@ -6,7 +6,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_5_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
 
@@ -1048,9 +1047,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         5,
         Map.of(
             2,
-            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            // Both parameters now read the runtime-true (2, 2048): the windowed batcher's extents
+            // compose from the subject's own argparse defaults through the comprehension arity and
+            // the window's slice contract (wala/ML#851, wala/ML#852), and the slide pair's
+            // subscript shrinks the recovered (2, 2049) by one. The dtype stays honestly ⊤, since
+            // the pickled content is opaque.
+            Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(2048)))),
             3,
-            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+            Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(2048))))));
   }
 
   /**

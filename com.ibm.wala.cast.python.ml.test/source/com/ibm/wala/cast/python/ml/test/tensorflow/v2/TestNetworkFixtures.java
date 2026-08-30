@@ -1996,4 +1996,157 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         7,
         Map.of(2, Set.of(TENSOR_2_2_FLOAT32), 3, Set.of(TENSOR_2_INT64)));
   }
+
+  /**
+   * The windowed numpy batcher's raw result, copied near-verbatim from its subject: {@code
+   * np.array} over a comprehension of fixed-length windows, both of whose extents arrive only
+   * through the paired chases &mdash; the arity through {@code random.sample}'s {@code k}, the
+   * window through the element producer's slice contract, and every size literal through the {@code
+   * argparse} default chase at the root (wala/ML#851 and wala/ML#852). The runtime asserts {@code
+   * (2, 2049)}; the dtype is honestly ⊤, since the loaded content is opaque.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWindowedBatchRaw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_windowed_batch.py",
+        "consume_raw",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(2049))))));
+  }
+
+  /**
+   * The consumed slice pair off the windowed batch: {@code data[:, :-1]} and {@code data[:, 1:]}
+   * both read {@code (2, 2048)}, the batcher's recovered {@code (2, 2049)} shrunk by one through
+   * the existing subscript fold &mdash; the composition wala/ML#851's measured evidence predicted
+   * once the extent existed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWindowedBatchSlicePair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Set<TensorType> shrunk =
+        Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(2048))));
+    test("tf2_test_windowed_batch.py", "consume_x", 1, 1, Map.of(2, shrunk));
+    test("tf2_test_windowed_batch.py", "consume_y", 1, 1, Map.of(2, shrunk));
+  }
+
+  /**
+   * The argparse-default chase's resolve arms over the decline fixture (wala/ML#852): the plain
+   * literal default is the positive control that proves this carrier surfaces the chase (an
+   * unresolved pin beside it is a measurement, not the no-inference floor), and an uncontested
+   * {@code dest=} is argparse's authoritative destination, matched directly. The window axis stays
+   * unresolved throughout, since the elements are literal lists this walk does not fold.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testArgparseResolves()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_control",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
+
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_dest_direct",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(new NumericDim(7), UnresolvedDim.INSTANCE)))));
+
+    // A short option alone: the destination is the option name with the dash stripped.
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_short_option",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(new NumericDim(9), UnresolvedDim.INSTANCE)))));
+
+    // Literal slice bounds subtract to the window whatever the sliced data is.
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_literal_bounds",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(4))))));
+
+    // The sample count passed positionally rather than as a keyword.
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_positional_k",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The argparse-default chase's decline arms (wala/ML#852): a {@code None} default, an absent
+   * default, a string default (argparse coerces only command-line values), two spellings deriving
+   * one destination with disagreeing defaults, and a {@code dest=} retarget beside a derived twin.
+   * Each runtime value is a real integer fed through the driver's argv, so the honest static answer
+   * is unknown, and a resolution here would be an invented number: the chase must decline, leaving
+   * the batch at the ⊤ the arity-and-window arm yields nothing for.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testArgparseDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Set<TensorType> top = Set.of(new TensorType(INT_32, null));
+    test("tf2_test_argparse_declines.py", "consume_none_default", 1, 1, Map.of(2, top));
+    test("tf2_test_argparse_declines.py", "consume_no_default", 1, 1, Map.of(2, top));
+    test("tf2_test_argparse_declines.py", "consume_string_default", 1, 1, Map.of(2, top));
+    test("tf2_test_argparse_declines.py", "consume_twins", 1, 1, Map.of(2, top));
+    test("tf2_test_argparse_declines.py", "consume_retargeted", 1, 1, Map.of(2, top));
+
+    // A non-literal option string cannot match any read by name, so the attribute it creates at
+    // runtime has no candidate.
+    test("tf2_test_argparse_declines.py", "consume_dynamic_option", 1, 1, Map.of(2, top));
+  }
+
+  /**
+   * The window fold's step guard (wala/ML#851): a non-unit step is not the length the {@code stop -
+   * start} contract computes, so the window degrades to unresolved while the arity beside it still
+   * resolves, which is what distinguishes the guard from a blanket refusal.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWindowedBatchStepDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_stepped",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
+  }
 }
