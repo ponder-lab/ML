@@ -910,6 +910,109 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The subclassed-CNN training step at its subject shape, measured against current code rather
+   * than the stale emission: the whole chain (dataset-tuple destructure, binary-op normalization,
+   * dim-adding subscript, batch, loop destructure) resolves the images parameter to exactly the
+   * runtime {@code (32, 28, 28, 1)} float64 where the recorded emission had no rank. The training
+   * split divides evenly by the batch, so a single member carries the whole answer. Closed by
+   * earlier work; these probes are the regression guard, and the cluster is reported as measured
+   * closed rather than fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCnnTrainStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cnn_steps.py",
+        "train_step",
+        2,
+        4,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1)),
+            3,
+            Set.of(TensorType.of(UINT_8, 32))));
+  }
+
+  /**
+   * The test-side twin, whose split does NOT divide evenly: the engine's union carries BOTH the
+   * full batch and the partial last one ({@code 10000 mod 32 = 16}), matching what the runtime
+   * actually produces batch by batch, where the recorded emission had no rank at all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCnnTestStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cnn_steps.py",
+        "test_step",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1), TensorType.of(FLOAT_64, 16, 28, 28, 1)),
+            3,
+            Set.of(TensorType.of(UINT_8, 32), TensorType.of(UINT_8, 16))));
+  }
+
+  /**
+   * The model's own call parameter, fed from both step functions: float32 after the Keras input
+   * cast, with the batch union covering the training feed and the test split's partial last batch.
+   * The recorded emission carried no specification for this function at all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCnnModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cnn_steps.py",
+        "MyModel.call",
+        1,
+        5,
+        Map.of(
+            3,
+            Set.of(
+                TensorType.of(FLOAT_32, 32, 28, 28, 1), TensorType.of(FLOAT_32, 16, 28, 28, 1))));
+  }
+
+  /**
+   * The feature-pyramid merge helper at its subject shape, pinned at the honest current floor: both
+   * parameters ride the backbone's loop-built {@code Sequential} stages, whose composition is <a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>'s missing layers walk, so float32
+   * with ⊤ shape is the measured answer today. Everything upstream of the first {@code Sequential}
+   * stage resolves. These tighten to the composed rank-4 maps when the layers walk lands; the
+   * loop-appended constructor list is recorded on the issue as a second measured dependent.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFpnUpsampleAddParams()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fpn_upsample.py",
+        "FPN._upsample_add",
+        2,
+        3,
+        Map.of(
+            3, Set.of(new TensorType(FLOAT_32, null)), 4, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /**
    * The {@code channels} refinement of the decode contract: a literal nonzero {@code channels}
    * argument pins the channel axis, exactly as TensorFlow's own static shape then reports it
    * ({@code (None, None, 3)}); the spatial axes stay dynamic.
