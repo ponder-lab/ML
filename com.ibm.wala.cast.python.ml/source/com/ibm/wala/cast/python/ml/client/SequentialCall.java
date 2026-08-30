@@ -12,6 +12,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.classLoader.IField;
@@ -198,7 +199,6 @@ public class SequentialCall extends ModelCall {
    */
   private Composition fold(PropagationCallGraphBuilder builder) {
     List<List<InstanceKey>> chains = this.getLayerChains(builder);
-    if (chains == null || chains.isEmpty()) return null;
 
     Set<List<Dimension<?>>> inputShapes =
         this.getArgumentShapesWithFallback(
@@ -206,6 +206,15 @@ public class SequentialCall extends ModelCall {
     Set<DType> inputDTypes =
         this.getArgumentDTypesWithFallback(
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
+
+    if (chains == null) {
+      InstanceKey repeated = this.getRepeatedLayer(builder);
+      return repeated == null
+          ? null
+          : this.foldRepeated(builder, repeated, inputShapes, inputDTypes);
+    }
+
+    if (chains.isEmpty()) return null;
 
     Set<List<Dimension<?>>> shapes = HashSetFactory.make();
     Set<DType> dTypes = HashSetFactory.make();
@@ -225,6 +234,257 @@ public class SequentialCall extends ModelCall {
     return new Composition(
         shapes == null || shapes.isEmpty() ? null : shapes,
         dTypes == null || dTypes.isEmpty() ? null : dTypes);
+  }
+
+  /**
+   * Resolves the single layer a loop-built list repeats, when the list is built ONLY by appending.
+   *
+   * <p>A list the program appends to in a loop keeps its elements under the synthetic
+   * append-contents field, never at an integer index, and the loop's iterations collapse to one
+   * allocation site. So the analysis sees WHICH layer the chain is made of and not HOW MANY of
+   * them, which is a different question from the one the catalog answers and is answerable on its
+   * own terms (wala/ML#832).
+   *
+   * <p>A list with BOTH a catalog and appended contents stays refused. There the catalog is a
+   * partial view of an ordered list, its missing elements are missing transforms, and nothing says
+   * where in the order they belong.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The repeated layer, or {@code null} when the list is not a pure append build of one
+   *     element.
+   */
+  private InstanceKey getRepeatedLayer(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> selfPTS =
+        this.getArgumentPointsToSet(builder, Parameters.SELF.getIndex(), Parameters.SELF.getName());
+
+    InstanceKey ret = null;
+
+    for (InstanceKey selfIK : selfPTS) {
+      AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
+      if (selfASIN == null) continue;
+      if (!selfASIN
+          .concreteType()
+          .getReference()
+          .equals(TensorFlowTypes.SEQUENTIAL.getDeclaringClass())) continue;
+
+      IR ir = selfASIN.getNode().getIR();
+      if (ir == null || LAYERS_PARAMETER_IR_INDEX >= ir.getNumberOfParameters()) continue;
+      if (!this.constructorArgumentIsLiteralContainer(builder, selfASIN.getNode())) return null;
+
+      AllocationSiteInNode container =
+          this.soleContainer(
+              builder,
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(
+                              selfASIN.getNode(), ir.getParameter(LAYERS_PARAMETER_IR_INDEX))));
+      if (container == null) return null;
+
+      OrdinalSet<InstanceKey> appended = getAppendedContentsPts(builder, container);
+      if (appended == null || appended.size() != 1) {
+        final int n = appended == null ? -1 : appended.size();
+        LOGGER.fine(() -> "Appended layer contents number " + n + ", not one; no repetition.");
+        return null;
+      }
+      Set<Integer> idx = this.catalogIndices(builder, container);
+      if (!idx.isEmpty()) {
+        LOGGER.fine(
+            () -> "Layer list holds both indexed and appended elements at " + idx + "; declining.");
+        return null;
+      }
+
+      InstanceKey element = appended.iterator().next();
+      if (ret != null && !ret.equals(element)) {
+        LOGGER.fine(() -> "Two models repeat different layers at one call site; declining.");
+        return null;
+      }
+
+      ret = element;
+    }
+
+    return ret;
+  }
+
+  /**
+   * Folds a chain whose LENGTH is unknown, over a layer known to be its only member.
+   *
+   * <p>The rank of such a chain's output does not depend on how many times the layer is applied, as
+   * long as the layer preserves rank; the extents generally do. So this keeps the axes that survive
+   * repetition and degrades the rest, which is worth doing because a consumer reading a static axis
+   * off a rank-4 result is served by it and a ⊤ serves it not at all. Refusing here instead would
+   * throw away the rank, which is the part the program's own text determines.
+   *
+   * <p>The rule is a fixed-point test rather than a single application. An axis is kept only when
+   * the input, one application and TWO agree on it. One application is not enough: a transform
+   * whose output axes are functions of SEVERAL input axes can agree with its input on an axis by
+   * coincidence and move it on the next iteration, and keeping it would emit a confident extent for
+   * a chain length the program never runs. Two applications catch that, and every kept axis is then
+   * a value the transform maps to itself.
+   *
+   * <p>Because a kept axis is one the transform fixes, the result covers the zero-application case
+   * for free: those axes already hold the input's own values, and a degraded axis covers whatever
+   * the input held there.
+   *
+   * @param builder The propagation call graph builder.
+   * @param element The layer the chain repeats.
+   * @param inputShapes The shapes of the value the model was called with.
+   * @param inputDTypes The dtypes of that value.
+   * @return The composed result, or {@code null} when the repetition does not resolve.
+   */
+  private Composition foldRepeated(
+      PropagationCallGraphBuilder builder,
+      InstanceKey element,
+      Set<List<Dimension<?>>> inputShapes,
+      Set<DType> inputDTypes) {
+    int rank = uniformRank(inputShapes);
+    if (rank <= 0) {
+      LOGGER.fine(() -> "Repetition has no single rank to start from: " + inputShapes + ".");
+      return null;
+    }
+
+    Set<List<Dimension<?>>> once = this.applyOnce(builder, element, inputShapes, inputDTypes);
+    if (uniformRank(once) != rank) {
+      LOGGER.fine(() -> "Repeated layer's first application left rank " + rank + ": " + once + ".");
+      return null;
+    }
+
+    Set<List<Dimension<?>>> twice = this.applyOnce(builder, element, once, inputDTypes);
+    if (uniformRank(twice) != rank) {
+      LOGGER.fine(
+          () -> "Repeated layer's second application left rank " + rank + ": " + twice + ".");
+      return null;
+    }
+
+    List<Dimension<?>> ret = new ArrayList<>(rank);
+    for (int axis = 0; axis < rank; axis++) {
+      Dimension<?> fixed = agreedAxis(axis, inputShapes, once, twice);
+      ret.add(fixed == null ? UnresolvedDim.INSTANCE : fixed);
+    }
+
+    LOGGER.fine(
+        () -> "Repeated layer of unknown count composed to " + ret + " from " + inputShapes + ".");
+
+    // The dtype axis takes the same fixed-point test, on the whole set rather than per axis.
+    Set<DType> onceDTypes = this.applyOnceDTypes(builder, element, inputShapes, inputDTypes);
+    Set<DType> twiceDTypes =
+        onceDTypes == null ? null : this.applyOnceDTypes(builder, element, once, onceDTypes);
+
+    return new Composition(
+        Set.of(ret), onceDTypes != null && onceDTypes.equals(twiceDTypes) ? onceDTypes : null);
+  }
+
+  /**
+   * The rank every member of a set of shapes shares.
+   *
+   * <p>Members that disagree give the repetition no rank to name, which is the one thing the
+   * unknown-length rule must have.
+   *
+   * @param shapes The shapes.
+   * @return The shared rank, or {@code -1} when the set is absent, empty, scalar, or ragged in
+   *     rank.
+   */
+  private static int uniformRank(Set<List<Dimension<?>>> shapes) {
+    if (shapes == null || shapes.isEmpty()) return -1;
+
+    int ret = -1;
+    for (List<Dimension<?>> shape : shapes) {
+      if (shape == null || shape.isEmpty()) return -1;
+      if (ret >= 0 && shape.size() != ret) return -1;
+      ret = shape.size();
+    }
+
+    return ret;
+  }
+
+  /**
+   * The value an axis holds in every member of every stage of the repetition, if it holds one.
+   *
+   * <p>An axis survives only when the input, one application and two all agree on it across every
+   * member. Disagreement between MEMBERS is as disqualifying as disagreement between applications:
+   * a transform that yields a union has axes whose value depends on which member the runtime takes,
+   * and those are no more determined than the ones repetition moves.
+   *
+   * @param axis The axis position.
+   * @param stages The input, one application, and two.
+   * @return The agreed dimension, or {@code null} when anything disagrees.
+   */
+  @SafeVarargs
+  private static Dimension<?> agreedAxis(int axis, Set<List<Dimension<?>>>... stages) {
+    Dimension<?> ret = null;
+
+    for (Set<List<Dimension<?>>> stage : stages)
+      for (List<Dimension<?>> shape : stage) {
+        Dimension<?> here = shape.get(axis);
+        if (here == null) return null;
+        if (ret != null && !ret.equals(here)) return null;
+        ret = here;
+      }
+
+    return ret;
+  }
+
+  /**
+   * Applies a layer's transform once to one shape.
+   *
+   * @param builder The propagation call graph builder.
+   * @param element The layer.
+   * @param shapes The shapes flowing in.
+   * @param dTypes The dtypes flowing in.
+   * @return The resulting shapes, or {@code null} when none resolve.
+   */
+  private Set<List<Dimension<?>>> applyOnce(
+      PropagationCallGraphBuilder builder,
+      InstanceKey element,
+      Set<List<Dimension<?>>> shapes,
+      Set<DType> dTypes) {
+    // A fresh generator per application: the transform is asked twice with different inputs, and a
+    // reused instance would carry the first binding into any read that caches on the instance.
+    TensorGenerator generator = this.dispatchLayer(builder, element);
+    if (generator == null) return null;
+
+    generator.composeWith(
+        new ComposedArguments(
+            OrdinalSet.toOrdinalSet(
+                List.of(element), builder.getPointerAnalysis().getInstanceKeyMapping()),
+            shapes,
+            dTypes));
+
+    Set<List<Dimension<?>>> out = generator.getDefaultShapes(builder);
+
+    return out == null || out.isEmpty() ? null : out;
+  }
+
+  /**
+   * The dtype twin of {@link #applyOnce}.
+   *
+   * @param builder The propagation call graph builder.
+   * @param element The layer.
+   * @param shapes The shapes flowing in.
+   * @param dTypes The dtypes flowing in.
+   * @return The resulting dtypes, or {@code null} when the axis declines.
+   */
+  private Set<DType> applyOnceDTypes(
+      PropagationCallGraphBuilder builder,
+      InstanceKey element,
+      Set<List<Dimension<?>>> shapes,
+      Set<DType> dTypes) {
+    TensorGenerator generator = this.dispatchLayer(builder, element);
+    if (generator == null) return null;
+
+    generator.composeWith(
+        new ComposedArguments(
+            OrdinalSet.toOrdinalSet(
+                List.of(element), builder.getPointerAnalysis().getInstanceKeyMapping()),
+            shapes,
+            dTypes));
+
+    Set<DType> out = generator.getDefaultDTypes(builder);
+
+    return out == null || out.isEmpty() ? null : out;
   }
 
   /**
@@ -309,8 +569,17 @@ public class SequentialCall extends ModelCall {
 
     // A USER class in the list has no table arm; its transform is its own `call` body, folded by
     // the same discipline one level down (wala/ML#832).
-    return UserLayerCall.forLayerInstance(
-        builder, this.getNode(), layer, UserLayerCall.BODY_FOLD_DEPTH_CAP);
+    TensorGenerator user =
+        UserLayerCall.forLayerInstance(
+            builder, this.getNode(), layer, UserLayerCall.BODY_FOLD_DEPTH_CAP);
+    LOGGER.fine(
+        () ->
+            "User-layer dispatch for "
+                + allocation.getNode().getMethod().getDeclaringClass().getReference().getName()
+                + " resolved "
+                + (user == null ? "nothing" : user.getClass().getSimpleName())
+                + ".");
+    return user;
   }
 
   /**
@@ -712,6 +981,55 @@ public class SequentialCall extends ModelCall {
   }
 
   /**
+   * Resolves the one list or tuple a value holds.
+   *
+   * @param builder The propagation call graph builder.
+   * @param containerPTS The value's points-to set.
+   * @return The container's allocation site, or {@code null} unless exactly one resolves. A second
+   *     container is a second layer chain, which the fold cannot choose between.
+   */
+  private AllocationSiteInNode soleContainer(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> containerPTS) {
+    AllocationSiteInNode ret = null;
+
+    for (InstanceKey ik : containerPTS) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(list) && !reference.equals(tuple)) continue;
+      if (ret != null) return null;
+      ret = asin;
+    }
+
+    return ret;
+  }
+
+  /**
+   * The integer positions a container's object catalog names.
+   *
+   * @param builder The propagation call graph builder.
+   * @param container The container's allocation site.
+   * @return The positions, possibly empty for a container built only by appending.
+   */
+  private Set<Integer> catalogIndices(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode container) {
+    Set<Integer> ret = HashSetFactory.make();
+
+    for (InstanceKey catalogIK :
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(container))) {
+      if (!(catalogIK instanceof ConstantKey)) continue;
+      Integer index = getFieldIndex((ConstantKey<?>) catalogIK);
+      if (index != null) ret.add(index);
+    }
+
+    return ret;
+  }
+
+  /**
    * Reads a list or tuple's elements in index order.
    *
    * @param builder The propagation call graph builder.
@@ -721,17 +1039,7 @@ public class SequentialCall extends ModelCall {
    */
   private List<InstanceKey> readContainer(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> containerPTS) {
-    AllocationSiteInNode container = null;
-
-    for (InstanceKey ik : containerPTS) {
-      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin == null) continue;
-      TypeReference reference = asin.concreteType().getReference();
-      if (!reference.equals(list) && !reference.equals(tuple)) continue;
-      // A second container is a second layer chain; see the caller.
-      if (container != null) return null;
-      container = asin;
-    }
+    AllocationSiteInNode container = this.soleContainer(builder, containerPTS);
 
     if (container == null) return null;
 
@@ -745,20 +1053,9 @@ public class SequentialCall extends ModelCall {
       return null;
     }
 
-    OrdinalSet<InstanceKey> catalogPTS =
-        builder
-            .getPointerAnalysis()
-            .getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(container));
-
     TreeMap<Integer, InstanceKey> byIndex = new TreeMap<>();
 
-    for (InstanceKey catalogIK : catalogPTS) {
-      if (!(catalogIK instanceof ConstantKey)) continue;
-      Integer index = getFieldIndex((ConstantKey<?>) catalogIK);
-      if (index == null) continue;
-
+    for (Integer index : this.catalogIndices(builder, container)) {
       IField field =
           builder
               .getClassHierarchy()
