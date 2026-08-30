@@ -12,6 +12,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.util.TensorShapeUtil;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -27,6 +28,7 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
@@ -34,8 +36,12 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -341,13 +347,12 @@ public class UserLayerCall extends TensorGenerator {
             : call.getNumberOfPositionalParameters() >= 3 ? call.getUse(2) : -1;
     if (permVn <= 0) return null;
     SSAInstruction permDef = du.getDef(permVn);
-    if (!(permDef instanceof com.ibm.wala.ssa.SSANewInstruction)) return null;
+    if (!(permDef instanceof SSANewInstruction)) return null;
 
-    java.util.Map<Integer, Integer> permByIndex = new java.util.HashMap<>();
-    for (java.util.Iterator<SSAInstruction> uses = du.getUses(permVn); uses.hasNext(); ) {
+    Map<Integer, Integer> permByIndex = new HashMap<>();
+    for (Iterator<SSAInstruction> uses = du.getUses(permVn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
-      if (!(use instanceof com.ibm.wala.cast.python.ssa.PythonPropertyWrite write)
-          || write.getObjectRef() != permVn) continue;
+      if (!(use instanceof PythonPropertyWrite write) || write.getObjectRef() != permVn) continue;
       int memberVn = write.getMemberRef();
       int valueVn = write.getValue();
       if (!symbolTable.isNumberConstant(memberVn) || !symbolTable.isNumberConstant(valueVn))
@@ -361,7 +366,7 @@ public class UserLayerCall extends TensorGenerator {
     if (rank == 0) return null;
     int[] perm = new int[rank];
     boolean[] seen = new boolean[rank];
-    for (java.util.Map.Entry<Integer, Integer> entry : permByIndex.entrySet()) {
+    for (Map.Entry<Integer, Integer> entry : permByIndex.entrySet()) {
       int index = entry.getKey();
       int axis = entry.getValue();
       if (index < 0 || index >= rank || axis < 0 || axis >= rank || seen[axis]) return null;
@@ -372,7 +377,7 @@ public class UserLayerCall extends TensorGenerator {
     Set<List<Dimension<?>>> permuted = HashSetFactory.make();
     for (List<Dimension<?>> shape : argument.shapes()) {
       if (shape.size() != rank) continue;
-      List<Dimension<?>> out = new java.util.ArrayList<>(rank);
+      List<Dimension<?>> out = new ArrayList<>(rank);
       for (int i = 0; i < rank; i++) out.add(shape.get(perm[i]));
       permuted.add(out);
     }
