@@ -1654,35 +1654,6 @@ public abstract class TensorGenerator {
         any = true;
       }
       if (any) return agreed;
-
-      // The funarg walk yields no definer for a module-level variable read from a function frame
-      // (the module's frame has no upward-funarg key): match the variable's lexical writes by
-      // their (name, definer) pair directly, all of which must agree (wala/ML#852).
-      AstLexicalRead read = (AstLexicalRead) def;
-      if (read.getAccessCount() > 0) {
-        String variableName = read.getAccess(0).variableName();
-        String variableDefiner = read.getAccess(0).variableDefiner();
-        Integer agreedWrite = null;
-        for (CGNode candidate : builder.getCallGraph()) {
-          if (candidate.getIR() == null || candidate.getDU() == null) continue;
-          for (SSAInstruction inst : candidate.getIR().getInstructions()) {
-            if (!(inst instanceof AstLexicalWrite)) continue;
-            AstLexicalWrite write = (AstLexicalWrite) inst;
-            for (int a = 0; a < write.getAccessCount(); a++) {
-              if (!variableName.equals(write.getAccess(a).variableName())
-                  || !variableDefiner.equals(write.getAccess(a).variableDefiner())) continue;
-              Integer written =
-                  resolveIntFlowSensitively(
-                      builder, candidate, write.getAccess(a).valueNumber(), visited, depth - 1);
-              if (written == null) return null;
-              if (agreedWrite != null && !agreedWrite.equals(written)) return null;
-              agreedWrite = written;
-            }
-          }
-        }
-        if (agreedWrite != null) return agreedWrite;
-      }
-      return null;
     }
 
     if (def == null) {

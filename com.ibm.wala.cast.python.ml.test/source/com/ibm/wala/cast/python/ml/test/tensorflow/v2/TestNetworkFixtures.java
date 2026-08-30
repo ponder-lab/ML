@@ -2072,6 +2072,32 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         1,
         Map.of(
             2, Set.of(new TensorType(INT_32, asList(new NumericDim(7), UnresolvedDim.INSTANCE)))));
+
+    // A short option alone: the destination is the option name with the dash stripped.
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_short_option",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(new NumericDim(9), UnresolvedDim.INSTANCE)))));
+
+    // Literal slice bounds subtract to the window whatever the sliced data is.
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_literal_bounds",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(4))))));
+
+    // The sample count passed positionally rather than as a keyword.
+    test(
+        "tf2_test_argparse_declines.py",
+        "consume_positional_k",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -2096,6 +2122,10 @@ public class TestNetworkFixtures extends AbstractTensorTest {
     test("tf2_test_argparse_declines.py", "consume_string_default", 1, 1, Map.of(2, top));
     test("tf2_test_argparse_declines.py", "consume_twins", 1, 1, Map.of(2, top));
     test("tf2_test_argparse_declines.py", "consume_retargeted", 1, 1, Map.of(2, top));
+
+    // A non-literal option string cannot match any read by name, so the attribute it creates at
+    // runtime has no candidate.
+    test("tf2_test_argparse_declines.py", "consume_dynamic_option", 1, 1, Map.of(2, top));
   }
 
   /**

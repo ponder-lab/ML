@@ -43,6 +43,22 @@ def consume_stepped(h):
     pass
 
 
+def consume_short_option(i):
+    pass
+
+
+def consume_dynamic_option(j):
+    pass
+
+
+def consume_literal_bounds(m):
+    pass
+
+
+def consume_positional_k(n):
+    pass
+
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--good_size", default=2, type=int)
@@ -54,6 +70,9 @@ parser.add_argument("--twin_size", default=4, type=int)
 parser.add_argument("--alpha", dest="beta_size", default=3, type=int)
 parser.add_argument("--beta_size", default=5, type=int)
 parser.add_argument("--routed", dest="routed_size", default=7, type=int)
+parser.add_argument("-q", default=9, type=int)
+dyn_option = "--dyn" + "_size"
+parser.add_argument(dyn_option, default=11, type=int)
 
 args = parser.parse_args(["--none_size", "2", "--bare_size", "2", "--label_size", "2"])
 
@@ -64,8 +83,10 @@ label_size = args.label_size
 twin_size = args.twin_size
 beta_size = args.beta_size
 routed_size = args.routed_size
+q = args.q
+dyn_size = args.dyn_size
 
-pool = ["a", "b", "c", "d", "e", "f", "g", "h"]
+pool = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]
 
 
 def window(f):
@@ -108,6 +129,27 @@ def stepped(f):
 
 def batch_stepped():
     return np.array([stepped(f) for f in random.sample(pool, k=2)])
+
+
+def batch_short():
+    return np.array([window(f) for f in random.sample(pool, k=q)])
+
+
+def batch_dynamic():
+    return np.array([window(f) for f in random.sample(pool, k=dyn_size)])
+
+
+def clipped(f):
+    data = list(range(50))
+    return data[2:6]
+
+
+def batch_clipped():
+    return np.array([clipped(f) for f in random.sample(pool, k=2)])
+
+
+def batch_positional():
+    return np.array([window(f) for f in random.sample(pool, 2)])
 
 
 # The positive control: a plain integer literal default resolves, which is what makes the
@@ -155,3 +197,25 @@ consume_dest_direct(dest_batch)
 stepped_batch = batch_stepped()
 assert stepped_batch.shape == (2, 1), stepped_batch.shape
 consume_stepped(stepped_batch)
+
+# A short option alone: its destination is the option name with the dash stripped, and the
+# literal default resolves through it.
+short_batch = batch_short()
+assert short_batch.shape == (9, 3), short_batch.shape
+consume_short_option(short_batch)
+
+# A non-literal option string: the call cannot match any read by name, so the read of the
+# attribute it creates at runtime has no candidate and stays unresolved.
+dynamic_batch = batch_dynamic()
+assert dynamic_batch.shape == (11, 3), dynamic_batch.shape
+consume_dynamic_option(dynamic_batch)
+
+# Literal slice bounds subtract: the window is 6 - 2 whatever the sliced data is.
+clipped_batch = batch_clipped()
+assert clipped_batch.shape == (2, 4), clipped_batch.shape
+consume_literal_bounds(clipped_batch)
+
+# `random.sample`'s count passed positionally rather than as `k=`.
+positional_batch = batch_positional()
+assert positional_batch.shape == (2, 3), positional_batch.shape
+consume_positional_k(positional_batch)
