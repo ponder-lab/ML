@@ -1130,4 +1130,61 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         12,
         Map.of(3, Set.of(TENSOR_64_128_100_FLOAT32)));
   }
+
+  /**
+   * The adversarial pair's generator loss, whose parameter is the discriminator's output. Guards
+   * the same chain as {@link #testDcganDiscriminatorLoss()} at its other consumer.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDcganGeneratorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"dcgan_proj/dcgan.py"},
+        "dcgan.py",
+        "generator_loss",
+        "dcgan_proj",
+        1,
+        4,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 128, 2))));
+  }
+
+  /**
+   * An adversarial pair's loss parameters, over the subject's own model and loss sources copied
+   * verbatim with a bespoke driver. The chain runs a narrowed normal draw through a generator and
+   * then a discriminator, both {@code Model} subclasses with explicit layer attributes and an
+   * explicit {@code call}, and reaches these parameters at exactly the runtime's {@code (128, 2)}.
+   *
+   * <p>Worth guarding for two reasons. It crosses four separately-landed pieces of machinery in one
+   * program: the dtype and receiver reads of a narrowing, the fallback across layer-call input
+   * reads, a transposed convolution's window, and a shape-preserving layer's pass-through. And it
+   * is the contrast case for <a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>: the
+   * op inventory here is materially a backbone stage's, held as attributes rather than in a
+   * sequential container, and it composes end to end through two model calls. Where a
+   * sequentially-held equivalent does not, the difference is in how the stages are held rather than
+   * in what they contain.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDcganDiscriminatorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"dcgan_proj/dcgan.py"},
+        "dcgan.py",
+        "discriminator_loss",
+        "dcgan_proj",
+        2,
+        9,
+        Map.of(
+            2, Set.of(TensorType.of(FLOAT_32, 128, 2)),
+            3, Set.of(TensorType.of(FLOAT_32, 128, 2))));
+  }
 }
