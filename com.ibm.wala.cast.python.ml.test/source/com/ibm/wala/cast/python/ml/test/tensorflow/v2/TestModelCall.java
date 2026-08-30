@@ -188,6 +188,118 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * A {@code Sequential} grown one layer at a time by {@code .add()}, the remaining half of <a
+   * href="https://github.com/wala/ML/issues/854">wala/ML#854</a> and the second spelling of <a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>.
+   *
+   * <p>This spelling holds the same information as a constructor list and holds it nowhere the
+   * analysis can read as a container: the layers arrive one call at a time, and their order, which
+   * the whole composition depends on, exists only as the order of the calls in the building code.
+   *
+   * <p>The straight-line arm repeats the same-class pair for the same reason the constructor-list
+   * arm does. The conditional arms are the canonical downsampling stage, which adds a normalization
+   * only when asked: those are two different models, so the result is the union over both paths
+   * rather than a choice between them, and both paths agree here only because the conditional layer
+   * preserves the shape.
+   *
+   * <p>The looped arm must decline. A loop that adds makes the chain's LENGTH a trip count rather
+   * than a static list, so composing the body once would report a one-layer model where the program
+   * builds two, which is the truncated chain the whole refusal set exists to stop.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialAddSpelling()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_add.py", "consume_plain", 1, 1, Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_conditional_on",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_4_4_6_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_conditional_off",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_4_4_6_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_looped",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    // The arms above agree between the two paths, so they would pass a fold that composed only
+    // one. Here the conditional layer changes the last axis, so the union has two members and a
+    // single-path fold reports one of them.
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_union",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_3_7_FLOAT32)));
+  }
+
+  /**
+   * The two escapes that let a model change after the frame the walk reads, both found by an
+   * adversarial pass and both producing a chain of the wrong length (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+   *
+   * <p>A builder that returns its stage lets the CALLER add afterward. That is the same idiom the
+   * composing arms above use, so declining on the return itself would give up the case worth
+   * having; the walk follows the returned value through its callers instead, and declines only when
+   * one of them modifies it. Before that, the constructing frame's one layer was reported as the
+   * whole model.
+   *
+   * <p>{@code pop()} is the other direction, and it is why the use discipline is a LIST of members
+   * known not to change the layer list rather than a rejection of the ones known to. An allowance
+   * framed as "a member whose name is a constant" admits the one method whose purpose is to shrink
+   * the chain, and the walk composed the layer the program had removed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialAddEscapes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_returned_then_added",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_popped",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    // The tolerated whole-model methods, exercised together. Each is an API claim that the member
+    // leaves the layer list alone, and this arm is what falsifies a wrong one: a member that grew
+    // or shrank the chain would make the composed shape disagree with the fixture's runtime
+    // assert, rather than being caught by inspection of the list.
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_after_model_methods",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
    * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
    * {@code (20, 28, 28) f32}) plus five intermediate SSA values produced by the {@code
    * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The {@code

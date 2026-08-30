@@ -412,14 +412,28 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The discriminator's patch map: rank 4 with the declared dynamic spatials and the concrete
+   * channel the last convolution sets (wala/ML#854).
+   */
+  private static final TensorType PATCH_MAP =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(1), DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(1)));
+
+  /**
    * The paired-image GAN's discriminator loss parameters: outputs of a functional {@code Model}
-   * whose graph routes through {@code Sequential} stages built by {@code add()}. The composition
-   * dies at the {@code Sequential} hop (<a
-   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>), so the honest current answer is
-   * float32 with ⊤ shape, pinned here as the floor; when the layers walk lands, these tighten to
-   * the composed rank-4 patch map (<a
-   * href="https://github.com/wala/ML/issues/854">wala/ML#854</a>). The two model-call controls
-   * below bound the failure to that hop.
+   * whose graph routes through {@code Sequential} stages built by {@code add()}. Both now read the
+   * composed rank-4 patch map, which is the tightening <a
+   * href="https://github.com/wala/ML/issues/854">wala/ML#854</a> predicted from the declarations
+   * alone, and it arrived with the {@code add()} spelling of the layer-list fold (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>). It was float32 with a ⊤ shape
+   * while the composition died at the {@code Sequential} hop.
+   *
+   * <p>The spatial axes are dynamic rather than the runtime's {@code 30}: the model declares {@code
+   * Input(shape=[None, None, 3])}, so its own static shape carries {@code None} there, and the
+   * concrete {@code 30} the fixture asserts is a property of the tensor it was fed rather than of
+   * the model. The channel is concrete because the last convolution declares it. The two model-call
+   * controls below read the same shape for the same reason.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -434,8 +448,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "discriminator_loss",
         2,
         4,
-        Map.of(
-            2, Set.of(new TensorType(FLOAT_32, null)), 3, Set.of(new TensorType(FLOAT_32, null))));
+        Map.of(2, Set.of(PATCH_MAP), 3, Set.of(PATCH_MAP)));
   }
 
   /**
