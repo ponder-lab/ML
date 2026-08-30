@@ -12,6 +12,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -21,9 +22,13 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,6 +71,9 @@ public class SequentialCall extends ModelCall {
    * layers name"}): the callable occupies index 0, so the first real argument is index 1.
    */
   private static final int LAYERS_PARAMETER_IR_INDEX = 1;
+
+  /** The keyword name of that same argument. */
+  private static final String LAYERS_PARAMETER_NAME = "layers";
 
   public SequentialCall(PointsToSetVariable source) {
     super(source);
@@ -224,6 +232,12 @@ public class SequentialCall extends ModelCall {
       IR ir = selfASIN.getNode().getIR();
       if (ir == null || LAYERS_PARAMETER_IR_INDEX >= ir.getNumberOfParameters()) continue;
 
+      // The points-to set alone cannot tell a list the caller WROTE from one it derived: a slice
+      // application's result aliases its receiver, so `Sequential(base[:2])` hands the fold the
+      // FULL list's allocation and every refusal below sees a perfectly well-formed catalog. The
+      // constructor's own argument has to be the literal (wala/ML#832).
+      if (!this.constructorArgumentIsLiteralContainer(builder, selfASIN.getNode())) return null;
+
       PointerKey layersPK =
           builder
               .getPointerAnalysis()
@@ -243,6 +257,52 @@ public class SequentialCall extends ModelCall {
     }
 
     return ret;
+  }
+
+  /**
+   * Whether every {@code Sequential(...)} call site that built this model passed a container the
+   * caller allocated on the spot.
+   *
+   * <p>This is the refusal for derived lists. A slice application's result aliases its receiver, so
+   * {@code Sequential(base[:2])} reaches the fold as the FULL list's allocation site, with a
+   * catalog that is contiguous, single-valued at every position, and simply the wrong list. No
+   * property of the container can distinguish that case, because the container IS the receiver;
+   * only the argument's own definition can, and a literal is the one definition that guarantees the
+   * value the fold reads is the value the constructor received.
+   *
+   * <p>The cost is precision on a list built elsewhere and passed in, which now declines rather
+   * than composing. That is the correct direction: such a list's contents are whatever reached it
+   * along every path, and folding them would report one path's chain as the model's.
+   *
+   * @param builder The propagation call graph builder.
+   * @param constructorNode The synthetic {@code Sequential.do} node allocating the model.
+   * @return {@code true} iff at least one call site was found and all of them pass a literal.
+   */
+  private boolean constructorArgumentIsLiteralContainer(
+      PropagationCallGraphBuilder builder, CGNode constructorNode) {
+    boolean sawCallSite = false;
+
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, constructorNode)) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) continue;
+
+      sawCallSite = true;
+
+      int argVn = call.getUse(LAYERS_PARAMETER_NAME);
+      if (argVn == -1 && call.getNumberOfPositionalParameters() > LAYERS_PARAMETER_IR_INDEX)
+        argVn = call.getUse(LAYERS_PARAMETER_IR_INDEX);
+      if (argVn <= 0) return false;
+
+      // A parameter has no defining instruction, which is itself a decline: the list was built
+      // somewhere this call site cannot see.
+      SSAInstruction def = callerInvoke.fst.getDU().getDef(argVn);
+      if (!(def instanceof SSANewInstruction allocation)) return false;
+
+      TypeReference allocated = allocation.getConcreteType();
+      if (!allocated.equals(list) && !allocated.equals(tuple)) return false;
+    }
+
+    return sawCallSite;
   }
 
   /**
@@ -268,6 +328,16 @@ public class SequentialCall extends ModelCall {
     }
 
     if (container == null) return null;
+
+    // A list the program appended to keeps those elements under the synthetic append-contents
+    // field rather than at integer indices, so the catalog below shows only what the literal held
+    // and reads as a complete, contiguous run. Appended contents are positive evidence that the
+    // catalog UNDERCOUNTS, which no property of the catalog itself can supply (wala/ML#832).
+    if (getAppendedContentsPts(builder, container) != null) {
+      LOGGER.fine(
+          () -> "Layer list has appended contents; the catalog undercounts. Declining the fold.");
+      return null;
+    }
 
     OrdinalSet<InstanceKey> catalogPTS =
         builder

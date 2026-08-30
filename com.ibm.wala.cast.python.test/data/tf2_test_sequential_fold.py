@@ -53,3 +53,51 @@ class Unmodeled(tf.keras.layers.Layer):
 
 unmodeled = tf.keras.Sequential([Unmodeled()])
 consume_unmodeled(unmodeled(tf.ones((3, 5))))
+
+
+def consume_sliced(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 2)
+    assert x.dtype == tf.float32
+
+
+def consume_appended(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 2)
+    assert x.dtype == tf.float32
+
+
+def consume_nested(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 6)
+    assert x.dtype == tf.float32
+
+
+# A list the caller DERIVED rather than wrote. The slice application's result aliases its
+# receiver, so the constructor's argument reaches the analysis as the full list's allocation with
+# a catalog that is contiguous and single-valued at every position; it is simply the wrong list.
+# Folding it would compose the layer the slice removed and report (3, 7).
+base = [
+    tf.keras.layers.Dense(4),
+    tf.keras.layers.Dense(2),
+    tf.keras.layers.Dense(7),
+]
+sliced = tf.keras.Sequential(base[:2])
+consume_sliced(sliced(tf.ones((3, 5))))
+
+# A literal the program appended to. The appended layer lands under the synthetic append-contents
+# field rather than at an integer index, so the catalog shows one layer and reads as a complete
+# run. Folding it would stop at the literal's layer and report (3, 4).
+appended = [tf.keras.layers.Dense(4)]
+appended.append(tf.keras.layers.Dense(2))
+appended_model = tf.keras.Sequential(appended)
+consume_appended(appended_model(tf.ones((3, 5))))
+
+# A `Sequential` nested inside another at a non-leading position. This one composes: the inner
+# model's instance type dispatches back through the same table, and the inner fold reads the
+# running shape through the same seam. The correctness rides on the seam's index matching the
+# model call's `inputs` position, which nothing else pins.
+nested = tf.keras.Sequential(
+    [tf.keras.layers.Dense(4), tf.keras.Sequential([tf.keras.layers.Dense(6)])]
+)
+consume_nested(nested(tf.ones((3, 5))))

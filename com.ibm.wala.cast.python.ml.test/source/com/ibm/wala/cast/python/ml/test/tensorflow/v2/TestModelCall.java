@@ -136,6 +136,58 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * The two lists that reach the fold looking well-formed and are not, and the one nesting that
+   * genuinely composes (<a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>). All three
+   * come from an adversarial pass built to compose a wrong shape without tripping a refusal; the
+   * first two did exactly that before the refusals they now pin.
+   *
+   * <p>A sliced list is the harder of the two. The slice application's result aliases its receiver,
+   * so the constructor's argument arrives as the FULL list's allocation, with a catalog that is
+   * contiguous and single-valued at every position. No property of the container can tell it from a
+   * literal, because it IS the receiver; the fold composed the removed layer and reported {@code
+   * (3, 7)}. The refusal reads the argument's own definition instead.
+   *
+   * <p>An appended literal fails the other way: the appended layer lands under the synthetic
+   * append-contents field rather than at an integer index, so the catalog holds one layer and reads
+   * as a complete run. The fold stopped at the literal's layer and reported {@code (3, 4)}.
+   * Appended contents are the positive evidence that the catalog undercounts.
+   *
+   * <p>The nested model composes, and is here because nothing else pins why: the inner model's
+   * instance type dispatches back through the same table, and its fold reads the running shape
+   * through the seam whose index matches the model call's {@code inputs} position. A change to
+   * either alignment would break this arm and nothing else.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialFoldRefusals()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_sliced",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_appended",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_nested",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_6_FLOAT32)));
+  }
+
+  /**
    * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
    * {@code (20, 28, 28) f32}) plus five intermediate SSA values produced by the {@code
    * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The {@code
