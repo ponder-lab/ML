@@ -1001,12 +1001,35 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
-   * The feature-pyramid merge helper at its subject shape, pinned at the honest current floor: both
-   * parameters ride the backbone's loop-built {@code Sequential} stages, whose composition is <a
-   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>'s missing layers walk, so float32
-   * with ⊤ shape is the measured answer today. Everything upstream of the first {@code Sequential}
-   * stage resolves. These tighten to the composed rank-4 maps when the layers walk lands; the
-   * loop-appended constructor list is recorded on the issue as a second measured dependent.
+   * The pyramid's lateral output: rank 4 with the batch and the lateral convolution's own channel
+   * concrete, and the spatial extents degraded because they differ across the helper's three call
+   * sites (wala/ML#832).
+   */
+  private static final TensorType PYRAMID_LATERAL =
+      new TensorType(
+          FLOAT_32,
+          asList(
+              new NumericDim(1),
+              UnresolvedDim.INSTANCE,
+              UnresolvedDim.INSTANCE,
+              new NumericDim(256)));
+
+  /**
+   * The feature-pyramid merge helper at its subject shape. Both parameters ride the backbone's
+   * loop-built {@code Sequential} stages, and both now read the composed rank-4 map (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>). They were float32 with a ⊤ shape
+   * while nothing walked the layer list.
+   *
+   * <p>The helper is called three times, on three lateral outputs whose spatial extents differ, so
+   * the spatial axes MUST NOT be concrete here: the runtime takes 104, 52 and 26 at those axes, and
+   * a single concrete extent would be right for one call site and wrong for two. An intermediate
+   * state of this work emitted exactly that, and the fixture's own asserts are what caught it —
+   * they pin the batch and the channel and deliberately leave the spatials open.
+   *
+   * <p>The extents are {@code Unresolved} rather than {@code Dynamic} because they are fixed
+   * runtime integers the analysis could not compute, and nothing in them carries {@code
+   * None}-evidence (wala/ML#721). Recovering them exactly needs element representation for
+   * concatenated and repeated lists, which is the wala/ML#805 family.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1021,8 +1044,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "FPN._upsample_add",
         2,
         3,
-        Map.of(
-            3, Set.of(new TensorType(FLOAT_32, null)), 4, Set.of(new TensorType(FLOAT_32, null))));
+        Map.of(3, Set.of(PYRAMID_LATERAL), 4, Set.of(PYRAMID_LATERAL)));
   }
 
   /**

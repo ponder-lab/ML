@@ -257,6 +257,70 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * A chain whose LENGTH is unknown, over a layer the analysis does know (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+   *
+   * <p>A list built only by appending in a loop names WHICH layer the chain repeats and not how
+   * many times, because the iterations collapse to one allocation site. The rank of the result does
+   * not depend on the count as long as the layer preserves rank, so refusing outright would discard
+   * the part the program's text determines. The rule keeps the axes the transform maps to
+   * themselves and degrades the rest.
+   *
+   * <p>The pooling arm is the one that measures the rule: every application halves the spatial
+   * extents, so those axes depend on the count and degrade, while the batch and the channel are
+   * fixed points and survive. The normalization arm is its control, where every axis is a fixed
+   * point and the result is exact despite the same unknown count. Both of those measure the rule's
+   * PRESENCE: without it the fold declines and neither shape resolves at all.
+   *
+   * <p>The flattening arm must decline, since a layer that changes the rank gives a chain of
+   * unknown length no rank to name. Unlike the two above it would also pass with the rule absent,
+   * because a decline and a missing feature reach the same floor; it guards against the rule being
+   * loosened later rather than witnessing that it is here.
+   *
+   * <p>An axis is kept only when the input, ONE application and TWO agree on it. One application
+   * would be unsound: a transform whose output axes are functions of several input axes can agree
+   * with its input by coincidence and move the axis on the next iteration.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialRepeatedLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_repeat.py",
+        "consume_repeated",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(3))))));
+
+    test(
+        "tf2_test_sequential_repeat.py",
+        "consume_preserving",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_8_8_3_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_repeat.py",
+        "consume_rank_changing",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * The two escapes that let a model change after the frame the walk reads, both found by an
    * adversarial pass and both producing a chain of the wrong length (<a
    * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
