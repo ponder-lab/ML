@@ -3271,17 +3271,61 @@ public abstract class TensorGenerator {
    */
   private static Object resolveComparableConstant(
       PropagationCallGraphBuilder builder, CGNode node, int vn, Map<Integer, Object> env) {
-    if (vn <= 0 || node.getIR() == null) return null;
+    return resolveComparableConstant(builder, node, vn, env, HashSetFactory.make());
+  }
+
+  /** The phi folds on this thread's stack, breaking the guard-evaluates-its-own-phi cycle. */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  private static Object resolveComparableConstant(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Map<Integer, Object> env,
+      Set<Integer> visited) {
+    if (vn <= 0 || node.getIR() == null || !visited.add(vn)) return null;
     if (env.containsKey(vn)) return env.get(vn);
     SymbolTable st = node.getIR().getSymbolTable();
     if (st.isConstant(vn)) return st.getConstantValue(vn);
 
     SSAInstruction def = node.getDU().getDef(vn);
+
+    // A phi merges its predecessors' values, and its points-to union UNDER-represents them when
+    // an arm's producer mints no instance key (wala/ML#805: a comparison result contributes
+    // NOTHING rather than an unknown), so the singleton fallback below would read half a phi as
+    // the whole value and decide a guard from it — pruning a branch the program runs
+    // (wala/ML#832). A phi folds over its FEASIBLE arms (the wala/ML#746 machinery: control flow
+    // picks one arm of a short-circuit merge, which is what makes such a guard decidable), all of
+    // which must fold to the same constant; the fallback never applies to a phi.
+    if (def instanceof SSAPhiInstruction phi) {
+      Pair<CGNode, Integer> frame = Pair.make(node, vn);
+      Set<Pair<CGNode, Integer>> onStack = PHI_FOLD_ON_STACK.get();
+      // The feasibility check evaluates governing branches through this resolver with fresh
+      // state, so a phi reachable from its own guard must break the cycle here.
+      if (!onStack.add(frame)) return null;
+      try {
+        Object agreed = null;
+        boolean any = false;
+        for (int i = 0; i < phi.getNumberOfUses(); i++) {
+          if (Boolean.FALSE.equals(computePhiArmFeasibility(builder, node, phi, i))) continue;
+          Object operand = resolveComparableConstant(builder, node, phi.getUse(i), env, visited);
+          if (operand == null) return null;
+          if (any && !constantsEqual(agreed, operand)) return null;
+          agreed = operand;
+          any = true;
+        }
+        return any ? agreed : null;
+      } finally {
+        onStack.remove(frame);
+      }
+    }
+
     if (def instanceof SSABinaryOpInstruction) {
       SSABinaryOpInstruction binop = (SSABinaryOpInstruction) def;
       if (!(binop.getOperator() instanceof CAstBinaryOp)) return null;
-      Object left = resolveComparableConstant(builder, node, binop.getUse(0), env);
-      Object right = resolveComparableConstant(builder, node, binop.getUse(1), env);
+      Object left = resolveComparableConstant(builder, node, binop.getUse(0), env, visited);
+      Object right = resolveComparableConstant(builder, node, binop.getUse(1), env, visited);
       if (left == null || right == null) return null;
       Boolean outcome;
       switch ((CAstBinaryOp) binop.getOperator()) {

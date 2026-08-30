@@ -99,11 +99,11 @@ public class TestModelCall extends AbstractTensorTest {
    * of different kinds — a window that folds the spatial extents and sets the channel, then two
    * that preserve what it produced.
    *
-   * <p>The third arm is the refusal. Its one layer is a user subclass the analysis does not model,
-   * and the expectation is the unknown shape rather than the input's: a fold that skipped what it
-   * could not apply would report the chain's output as though that layer were the identity, which
-   * here happens to BE its runtime behavior and would still be a shape the analysis had no evidence
-   * for. Reading it as unknown is the honest floor.
+   * <p>The third arm's user subclass now COMPOSES: its {@code call} body is a bare return of the
+   * input, and the body fold derives the identity from the body itself rather than assuming it
+   * (wala/ML#832), so the shape the earlier floor withheld for lack of evidence is now evidenced.
+   * The refusal witness moved to the fourth arm, whose body hops through a function off the
+   * witnessed pass-through set and therefore declines to the honest floor.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -130,6 +130,13 @@ public class TestModelCall extends AbstractTensorTest {
     test(
         "tf2_test_sequential_fold.py",
         "consume_unmodeled",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_5_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_fold.py",
+        "consume_unfoldable",
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
