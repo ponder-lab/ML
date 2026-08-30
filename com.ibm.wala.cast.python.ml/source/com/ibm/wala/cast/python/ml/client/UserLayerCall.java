@@ -179,7 +179,7 @@ public class UserLayerCall extends TensorGenerator {
 
     IR ir = builder.getAnalysisCache().getIR(this.body);
     if (ir == null) return null;
-    DefUse du = new DefUse(ir);
+    DefUse du = builder.getAnalysisCache().getDefUse(ir);
     SymbolTable symbolTable = ir.getSymbolTable();
 
     // Code-body convention: parameter 0 is the function object, 1 the receiver for a method.

@@ -252,6 +252,11 @@ public class SequentialCall extends ModelCall {
     for (InstanceKey layer : layers) {
       TensorGenerator generator = this.dispatchLayer(builder, layer);
       if (generator == null) {
+        // UNWITNESSED CONTRACT GUARD (wala/ML#832): with the body fold behind the dispatch, no
+        // constructible fixture is known to reach this branch — a layer class the front end
+        // resolves has either a table arm or a foldable body, and one it cannot resolve fails
+        // earlier at the single-element check. The guard stands on `dispatchLayer`'s documented
+        // null contract (depth floor, no allocation site, no obtainable body), not on a witness.
         LOGGER.fine(() -> "No generator for layer " + describe(layer) + "; declining the fold.");
         return null;
       }
