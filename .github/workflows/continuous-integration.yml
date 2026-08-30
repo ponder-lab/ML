@@ -153,7 +153,7 @@ jobs:
           - shard: transformer-pin
             tests: 'TestNlpgnnTransformer'
           - shard: subjects
-            tests: 'TestCorpusFixtures#testGpt*+testMusicTransformer*+testBilstm*+testTextcnn*+testHieAttention*'
+            tests: 'TestCorpusFixtures#testGpt*+testMusicTransformer*+testBilstm*+testTextcnn*+testHieAttention*+testDcgan*'
           - shard: logging-volume
             tests: 'DiagnosticLoggingVolumeTest'
           - shard: order-invariance
