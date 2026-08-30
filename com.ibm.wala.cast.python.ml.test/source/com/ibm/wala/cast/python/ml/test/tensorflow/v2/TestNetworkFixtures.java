@@ -2359,9 +2359,17 @@ public class TestNetworkFixtures extends AbstractTensorTest {
 
   /**
    * A COUPLED user transform through the body fold's transpose hop: a three-cycle axis rotation,
-   * twice, in a constructor-literal list. The composed pins the exact runtime {@code (1, 3, 2, 2)},
-   * and the fixture also serves as the raw material for the unknown-length rule's
-   * second-application witness on the repetition side (wala/ML#832).
+   * twice, in a constructor-literal list, pinning the exact runtime {@code (1, 3, 2, 2)}
+   * (wala/ML#832).
+   *
+   * <p>Read this beside {@link #testUserCycleRepeatedDegrades()}, which applies the SAME layer to
+   * the SAME input in the same module and differs only in whether the chain's length is visible.
+   * Here it is, and the composition is exact. There it is not, and three of the four axes degrade.
+   * That pair is the clearest statement of what the unknown-length rule buys and what it costs: the
+   * rank and the axes a transform fixes survive the loss of the count, and the axes it moves do
+   * not. That pair is the clearest statement of what the unknown-length rule buys and what it
+   * costs: the rank and the axes a transform fixes survive the loss of the count, and the axes it
+   * moves do not.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2386,5 +2394,49 @@ public class TestNetworkFixtures extends AbstractTensorTest {
                         new NumericDim(3),
                         new NumericDim(2),
                         new NumericDim(2))))));
+  }
+
+  /**
+   * The witness for the SECOND application in the unknown-length rule's fixed-point test
+   * (wala/ML#832), and the only arm in the suite that measures it.
+   *
+   * <p>Every other arm of that rule is settled at the first comparison: a pooling chain's extents
+   * disagree immediately, a normalization chain's agree throughout, a rank-changing chain declines
+   * on application one, and the pyramid's spatials are already unresolved when they arrive. A rule
+   * that applied the transform ONCE would pass all of them.
+   *
+   * <p>A rotation cannot be passed that way. It maps {@code (2, 2, 3)} to {@code (2, 3, 2)} and
+   * then to {@code (3, 2, 2)}, so axis 1 reads {@code 2, 2, 3}: it agrees with the input after one
+   * application by coincidence and moves after two. A one-application rule keeps a concrete {@code
+   * 2} there, which is wrong for a chain that runs twice, and this expectation is what refuses it.
+   *
+   * <p>Only a COUPLED transform can serve here, which is the same fact that makes the second
+   * application necessary: a transform whose output axes are functions of the corresponding input
+   * axis alone fixes an axis forever once it fixes it, so no convolution or pooling arm can ever
+   * distinguish one application from two.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUserCycleRepeatedDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_cycle.py",
+        "consume_cycle_repeated",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
   }
 }
