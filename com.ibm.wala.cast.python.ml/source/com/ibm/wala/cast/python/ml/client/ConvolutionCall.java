@@ -69,6 +69,25 @@ public abstract class ConvolutionCall extends DenseCall {
   /** The constructor argument the model file stores on the layer instance. */
   private static final String DILATION_RATE_FIELD_NAME = "dilation_rate";
 
+  /**
+   * The zero-based positions of the window arguments among the constructor's real arguments, shared
+   * by both convolution families this class serves ({@code filters, kernel_size, strides, padding,
+   * data_format, dilation_rate}). The supply detection's positional test leans UNSAFE if one of
+   * these is wrong: an argument supplied positionally past a wrong index would read as
+   * determinately unsupplied and take the default this guard exists to refuse.
+   */
+  private static final int STRIDES_POSITION = 2;
+
+  /**
+   * @see #STRIDES_POSITION
+   */
+  private static final int PADDING_POSITION = 3;
+
+  /**
+   * @see #STRIDES_POSITION
+   */
+  private static final int DILATION_RATE_POSITION = 5;
+
   /** The padding mode that drops incomplete windows: the extent shrinks by the window's span. */
   private static final String VALID_PADDING = "valid";
 
@@ -253,7 +272,8 @@ public abstract class ConvolutionCall extends DenseCall {
       // the window, degrading the spatial extents while the rank and filters survive.
       if (strideValues.isEmpty()
           && !Boolean.FALSE.equals(
-              constructorArgumentSupplied(builder, selfAsin, STRIDES_FIELD_NAME, 2))) return null;
+              constructorArgumentSupplied(builder, selfAsin, STRIDES_FIELD_NAME, STRIDES_POSITION)))
+        return null;
       strides.addAll(strideValues);
 
       Set<Long> dilationValues =
@@ -262,7 +282,8 @@ public abstract class ConvolutionCall extends DenseCall {
       if (dilationValues == null) return null;
       if (dilationValues.isEmpty()
           && !Boolean.FALSE.equals(
-              constructorArgumentSupplied(builder, selfAsin, DILATION_RATE_FIELD_NAME, 99)))
+              constructorArgumentSupplied(
+                  builder, selfAsin, DILATION_RATE_FIELD_NAME, DILATION_RATE_POSITION)))
         return null;
       dilations.addAll(dilationValues);
 
@@ -272,7 +293,8 @@ public abstract class ConvolutionCall extends DenseCall {
       if (paddingValues == null) return null;
       if (paddingValues.isEmpty()
           && !Boolean.FALSE.equals(
-              constructorArgumentSupplied(builder, selfAsin, PADDING_FIELD_NAME, 3))) return null;
+              constructorArgumentSupplied(builder, selfAsin, PADDING_FIELD_NAME, PADDING_POSITION)))
+        return null;
       // Keras normalizes the padding mode case-insensitively (`normalize_padding` lower-cases
       // it), and real code writes `'SAME'` as often as `'same'`; normalize at collection so the
       // spellings agree and the comparison below stays exact.
