@@ -2356,4 +2356,35 @@ public class TestNetworkFixtures extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * A COUPLED user transform through the body fold's transpose hop: a three-cycle axis rotation,
+   * twice, in a constructor-literal list. The composed pins the exact runtime {@code (1, 3, 2, 2)},
+   * and the fixture also serves as the raw material for the unknown-length rule's
+   * second-application witness on the repetition side (wala/ML#832).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUserCyclePairComposes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_cycle.py",
+        "consume_cycle_pair",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        new NumericDim(3),
+                        new NumericDim(2),
+                        new NumericDim(2))))));
+  }
 }

@@ -12,6 +12,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.util.TensorShapeUtil;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -27,6 +28,7 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
@@ -34,8 +36,12 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -86,6 +92,9 @@ public class UserLayerCall extends TensorGenerator {
    * program does not run. {@code relu} is witnessed by the residual-block fixture.
    */
   private static final Set<String> PASS_THROUGH_FUNCTION_MEMBERS = Set.of("relu");
+
+  /** The function-form member whose transform the walk computes in place from a literal perm. */
+  private static final String TRANSPOSE_FUNCTION_MEMBER = "transpose";
 
   /** The user body to fold. */
   private final IMethod body;
@@ -278,6 +287,13 @@ public class UserLayerCall extends TensorGenerator {
       // receiver position), so anything off the set declines rather than dispatching wrong.
       if (PASS_THROUGH_FUNCTION_MEMBERS.contains(member)) return argument;
 
+      // A transpose hop needs no generator: the permutation is a literal in the body's own IR, so
+      // the transform applies directly, like the elementwise arm. The seam cannot serve
+      // function-form generators (their input position is the composed receiver position), which
+      // is exactly why this hop computes in place rather than dispatching (wala/ML#832).
+      if (TRANSPOSE_FUNCTION_MEMBER.equals(member))
+        return transposeHop(du, symbolTable, call, argument);
+
       return null;
     }
 
@@ -309,6 +325,63 @@ public class UserLayerCall extends TensorGenerator {
     }
 
     return null;
+  }
+
+  /**
+   * Computes a {@code transpose} hop in place: the permutation must be a literal list in the body's
+   * IR, complete and a true permutation, and every shape member of the matching rank is reordered
+   * by it. Anything else declines the hop &mdash; a partial or non-literal permutation would
+   * reorder axes the program does not.
+   *
+   * @param du The body's def-use.
+   * @param symbolTable The body's symbol table.
+   * @param call The transpose invoke.
+   * @param argument The state flowing in.
+   * @return The permuted state, or {@code null}.
+   */
+  private static BodyState transposeHop(
+      DefUse du, SymbolTable symbolTable, PythonInvokeInstruction call, BodyState argument) {
+    int permVn =
+        call.getKeywords().contains("perm")
+            ? call.getUse("perm")
+            : call.getNumberOfPositionalParameters() >= 3 ? call.getUse(2) : -1;
+    if (permVn <= 0) return null;
+    SSAInstruction permDef = du.getDef(permVn);
+    if (!(permDef instanceof SSANewInstruction)) return null;
+
+    Map<Integer, Integer> permByIndex = new HashMap<>();
+    for (Iterator<SSAInstruction> uses = du.getUses(permVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof PythonPropertyWrite write) || write.getObjectRef() != permVn) continue;
+      int memberVn = write.getMemberRef();
+      int valueVn = write.getValue();
+      if (!symbolTable.isNumberConstant(memberVn) || !symbolTable.isNumberConstant(valueVn))
+        return null;
+      permByIndex.put(
+          ((Number) symbolTable.getConstantValue(memberVn)).intValue(),
+          ((Number) symbolTable.getConstantValue(valueVn)).intValue());
+    }
+
+    int rank = permByIndex.size();
+    if (rank == 0) return null;
+    int[] perm = new int[rank];
+    boolean[] seen = new boolean[rank];
+    for (Map.Entry<Integer, Integer> entry : permByIndex.entrySet()) {
+      int index = entry.getKey();
+      int axis = entry.getValue();
+      if (index < 0 || index >= rank || axis < 0 || axis >= rank || seen[axis]) return null;
+      perm[index] = axis;
+      seen[axis] = true;
+    }
+
+    Set<List<Dimension<?>>> permuted = HashSetFactory.make();
+    for (List<Dimension<?>> shape : argument.shapes()) {
+      if (shape.size() != rank) continue;
+      List<Dimension<?>> out = new ArrayList<>(rank);
+      for (int i = 0; i < rank; i++) out.add(shape.get(perm[i]));
+      permuted.add(out);
+    }
+    return permuted.isEmpty() ? null : new BodyState(permuted, argument.dTypes());
   }
 
   /**
