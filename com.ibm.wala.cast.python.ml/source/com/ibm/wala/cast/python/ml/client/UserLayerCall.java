@@ -58,6 +58,15 @@ import java.util.logging.Logger;
  * <p>The bare-function form serves a lambda held as a layer attribute (the residual-shortcut idiom,
  * {@code self.shortcut = lambda x, _: x}): its body folds by the same walk with no receiver, and
  * the identity comes out of the walk rather than being assumed.
+ *
+ * <p><b>Invariant: this generator is valid only inside a composition.</b> It is constructed nowhere
+ * but the fold's layer dispatch and its own nested-body recursion, never by a dispatch table, and
+ * it surrenders both axes when no {@link ComposedArguments} are in force. That standing is what
+ * licenses the one deliberate deviation from the documented dtype lattice: a declined fold answers
+ * {@code null} on the dtype axis (an encoding the lattice does not define) so the enclosing fold
+ * can fall through to the model treatment that owns the fallback, instead of reading a {@code
+ * UNKNOWN} floor as a successful resolution. Registering this class in either dispatch table would
+ * therefore introduce a lattice violation at every unseeded use; do not.
  */
 @DispatchExempt(
     "Constructed only by delegation: the list fold's layer dispatch falls back to this class when"

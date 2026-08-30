@@ -2201,4 +2201,137 @@ public class TestNetworkFixtures extends AbstractTensorTest {
                         new NumericDim(4),
                         UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * The user-block stack with the class reaching the builder as a PARAMETER, the pyramid subject's
+   * own construction shape ({@code _make_layer(block, ...)}): the body fold's class identity comes
+   * from the allocating node's declaring class, which survives the parameter hop (wala/ML#832).
+   * Composes identically to the sibling literal-construction fixture.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUserBlockStackParamClass()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_param_class.py",
+        "consume_stack",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        new NumericDim(4),
+                        new NumericDim(4),
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The pyramid's first-stage parameterization: the input channel equals the output and the stride
+   * is one, so the identity shortcut is the runtime branch, and the union carries it exactly beside
+   * the projection branch's degraded channel (wala/ML#832).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUserBlockStageOne()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_param_class.py",
+        "consume_stage_one",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        new NumericDim(8),
+                        new NumericDim(8),
+                        new NumericDim(64))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        new NumericDim(8),
+                        new NumericDim(8),
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A convolution stride SUPPLIED through a value the points-to substrate cannot represent (a
+   * concatenated list's element mints nothing, the wala/ML#805 class): reading the empty resolution
+   * as an unsupplied argument patched in the API default of one and composed the default's shape
+   * for a program that runs stride two, the confidently-wrong direction. The supplied-but-invisible
+   * guard declines the window instead, degrading the spatial extents while the rank and the filter
+   * count survive (wala/ML#832).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testConvInvisibleStrideDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_conv_invisible_stride.py",
+        "consume_hidden",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(6))))));
+  }
+
+  /**
+   * A starred constructor call: positional alignment past the unpack is unreliable (wala/ML#751),
+   * so the supply detection returns its INDETERMINATE state and the window declines. This program
+   * genuinely omits the stride, and the pin records the stated cost of the three-valued decision:
+   * declining on indeterminate loses this window, and the alternative re-opens the default-patching
+   * bug for exactly the shapes least likely to have witnesses (wala/ML#832).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testConvStarredConstructionDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_conv_invisible_stride.py",
+        "consume_starred",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
 }

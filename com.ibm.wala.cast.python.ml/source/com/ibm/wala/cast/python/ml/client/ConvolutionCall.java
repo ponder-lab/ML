@@ -7,12 +7,15 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -243,18 +246,33 @@ public abstract class ConvolutionCall extends DenseCall {
       Set<Long> strideValues =
           getPossibleLongValues(getInstanceFieldPointsToSet(builder, selfAsin, STRIDES_FIELD_NAME));
       if (strideValues == null) return null;
+      // An EMPTY read is not an UNSUPPLIED argument: a stride the program passes through a value
+      // the points-to substrate cannot represent (a concatenated list's element, wala/ML#805)
+      // resolves to nothing, and patching it with the API default composes the default's shape
+      // for a program that runs a different one (wala/ML#832). Supplied-but-invisible declines
+      // the window, degrading the spatial extents while the rank and filters survive.
+      if (strideValues.isEmpty()
+          && !Boolean.FALSE.equals(
+              constructorArgumentSupplied(builder, selfAsin, STRIDES_FIELD_NAME, 2))) return null;
       strides.addAll(strideValues);
 
       Set<Long> dilationValues =
           getPossibleLongValues(
               getInstanceFieldPointsToSet(builder, selfAsin, DILATION_RATE_FIELD_NAME));
       if (dilationValues == null) return null;
+      if (dilationValues.isEmpty()
+          && !Boolean.FALSE.equals(
+              constructorArgumentSupplied(builder, selfAsin, DILATION_RATE_FIELD_NAME, 99)))
+        return null;
       dilations.addAll(dilationValues);
 
       Set<Object> paddingValues =
           getConstantValues(
               getInstanceFieldPointsToSet(builder, selfAsin, PADDING_FIELD_NAME), true);
       if (paddingValues == null) return null;
+      if (paddingValues.isEmpty()
+          && !Boolean.FALSE.equals(
+              constructorArgumentSupplied(builder, selfAsin, PADDING_FIELD_NAME, 3))) return null;
       // Keras normalizes the padding mode case-insensitively (`normalize_padding` lower-cases
       // it), and real code writes `'SAME'` as often as `'same'`; normalize at collection so the
       // spellings agree and the comparison below stays exact.
@@ -284,6 +302,51 @@ public abstract class ConvolutionCall extends DenseCall {
 
     if (kernelSize <= 0 || stride <= 0 || dilation <= 0) return null;
     return new Window(kernelSize, stride, dilation, samePadding);
+  }
+
+  /**
+   * Whether any constructor call site of the given layer instance supplies the named argument, by
+   * keyword or positionally. Syntactic and caller-side, so it is decisive even when the argument's
+   * VALUE resolves to nothing (the wala/ML#774 detection, reused): an argument that is supplied but
+   * invisible must not be read as absent.
+   *
+   * <p>THREE-VALUED by design, because a third state exists and the unmarked case is the one that
+   * borrows confidence: {@code TRUE} when some call visibly supplies it, {@code FALSE} only when
+   * every constructor site was seen, none supplies it, and none carries a starred unpack that could
+   * (positional alignment past a star is unreliable, wala/ML#751), and {@code null} when the
+   * detection cannot tell (no visible site, an unreadable site, or a starred call). Indeterminate
+   * DECLINES at the consumers, costing precision on programs that genuinely omit the argument
+   * through such a call, because the alternative re-opens the default-patching bug for exactly the
+   * shapes least likely to have witnesses. Known residual: a {@code **}-spread of keywords is not
+   * visible in the keyword list at all and therefore reads as unsupplied — the one edge this
+   * detection cannot close (the wala/ML#843 family's standing {@code **kwargs} exposure).
+   *
+   * @param builder The propagation call graph builder.
+   * @param constructed The layer instance's allocation.
+   * @param keyword The argument's keyword name.
+   * @param positionalIndex The argument's zero-based position among the real arguments.
+   * @return {@code TRUE}, {@code FALSE}, or {@code null} as above.
+   */
+  private static Boolean constructorArgumentSupplied(
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode constructed,
+      String keyword,
+      int positionalIndex) {
+    boolean sawSite = false;
+    boolean indeterminate = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, constructed.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) {
+        indeterminate = true;
+        continue;
+      }
+      sawSite = true;
+      if (call.getKeywords().contains(keyword)
+          || call.getNumberOfPositionalParameters() - 1 > positionalIndex) return true;
+      if (call.getStarredPositions().length > 0) indeterminate = true;
+    }
+    if (indeterminate) return null;
+    return sawSite ? Boolean.FALSE : null;
   }
 
   /**
