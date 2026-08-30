@@ -314,6 +314,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String RANDOM_UNIFORM_SIGNATURE = "numpy.random.uniform()";
 
+  /** {@code np.random.permutation(x)} and the {@code RandomState} method of the same name. */
+  public static final MethodReference RANDOM_PERMUTATION =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/random/permutation")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_PERMUTATION_SIGNATURE = "numpy.random.permutation()";
+
   /** A mapping from a {@link TypeReference} to its associated NumPy signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
@@ -327,6 +336,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(RANDOM_RAND.getDeclaringClass(), RANDOM_RAND_SIGNATURE),
           Map.entry(RANDOM_NORMAL.getDeclaringClass(), RANDOM_NORMAL_SIGNATURE),
           Map.entry(RANDOM_UNIFORM.getDeclaringClass(), RANDOM_UNIFORM_SIGNATURE),
+          Map.entry(RANDOM_PERMUTATION.getDeclaringClass(), RANDOM_PERMUTATION_SIGNATURE),
           Map.entry(ARRAY.getDeclaringClass(), ARRAY_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),

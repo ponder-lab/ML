@@ -35,6 +35,8 @@
         <putfield class="LRoot" field="normal" fieldType="LRoot" ref="random" value="np_normal_fn"/>
         <new def="np_uniform_fn" class="Lnumpy/random/uniform"/>
         <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="random" value="np_uniform_fn"/>
+        <new def="np_permutation_fn" class="Lnumpy/random/permutation"/>
+        <putfield class="LRoot" field="permutation" fieldType="LRoot" ref="random" value="np_permutation_fn"/>
         <new def="seed_fn" class="Lnumpy/random/seed"/>
         <putfield class="LRoot" field="seed" fieldType="LRoot" ref="random" value="seed_fn"/>
         <new def="random_state_fn" class="Lnumpy/random/RandomState"/>
@@ -372,9 +374,27 @@
           <putfield class="LRoot" field="randn" fieldType="LRoot" ref="rs" value="rs_randn"/>
           <new def="rs_rand" class="Lnumpy/random/rand"/>
           <putfield class="LRoot" field="rand" fieldType="LRoot" ref="rs" value="rs_rand"/>
+          <new def="rs_permutation" class="Lnumpy/random/permutation"/>
+          <putfield class="LRoot" field="permutation" fieldType="LRoot" ref="rs" value="rs_permutation"/>
           <new def="rs_seed" class="Lnumpy/random/seed"/>
           <putfield class="LRoot" field="seed" fieldType="LRoot" ref="rs" value="rs_seed"/>
           <return value="rs"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.permutation.html -->
+      <!-- `np.random.permutation(x)`: shuffles along the FIRST axis only, so an array argument's shape survives it unchanged, exactly as `ndarray.astype` preserves its receiver's. An integer argument is the other arm: `permutation(n)` is a shuffled `arange(n)`, rank one of length `n` and dtype `int64`. `NpPermutation` distinguishes the two, since passing an integer's scalar shape through would report a scalar where the runtime gives a vector (wala/ML#858). -->
+      <class name="permutation" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self x">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
         </method>
       </class>
       <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.uniform.html -->

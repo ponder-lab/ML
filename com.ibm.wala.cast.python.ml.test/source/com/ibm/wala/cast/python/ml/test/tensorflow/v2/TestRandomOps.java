@@ -15,8 +15,10 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_2_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_7_5_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
+import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -374,5 +376,91 @@ public class TestRandomOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The array arm of {@code permutation}: the draw shuffles along the first axis only, so the
+   * argument's shape survives it unchanged (wala/ML#858). Before it was modeled the value reached
+   * its consumer with no rank at all, which forfeits every axis rather than one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationArrayArm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_permutation.py",
+        "consume_array_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 20))));
+  }
+
+  /**
+   * The integer arm, which disagrees with the array arm and is why the two are distinguished rather
+   * than collapsed into a pass-through: {@code permutation(10)} is a shuffled {@code arange}, rank
+   * one of that length, where passing the integer's own scalar shape through would report a scalar
+   * the runtime never produces.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationIntegerArm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_permutation.py",
+        "consume_int_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 10))));
+  }
+
+  /**
+   * The module-level surface of the same operation, which must agree with the generator object's.
+   * The two are separate classes in the model, so one can be wired without the other.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationModuleSurface()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_permutation.py",
+        "consume_module_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 3, 7))));
+  }
+
+  /**
+   * An integer argument that carries more than one value, so no single length resolves. The result
+   * is still rank one and still indices; only the extent degrades. Falling through to the array arm
+   * here would map the number to its own scalar shape and report a scalar where the runtime gives a
+   * vector, which is the same confidently wrong shape the two arms exist to prevent, reached by the
+   * other route (wala/ML#858).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPermutationMultiValuedLength()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_permutation_multivalued.py",
+        "consume_multivalued",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(UnresolvedDim.INSTANCE)))));
   }
 }

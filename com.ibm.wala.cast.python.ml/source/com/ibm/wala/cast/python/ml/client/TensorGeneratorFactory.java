@@ -607,6 +607,11 @@ public class TensorGeneratorFactory {
         || isType(type, NumpyTypes.RANDOM_UNIFORM.getDeclaringClass()))
       return anchor.makeGenerator(NpRandomSizedDraw::new, NpRandomSizedDraw::new);
 
+    // Dispatched through the shared table, so the source and manual arms are registered together
+    // rather than one at a time (the tandem-registration rule).
+    if (isType(type, NumpyTypes.RANDOM_PERMUTATION.getDeclaringClass()))
+      return anchor.makeGenerator(NpPermutation::new, NpPermutation::new);
+
     // `enumerate` carries index/tuple element semantics its generator models; the manual-side
     // DATA_PACKAGE_PREFIX catch-all would otherwise swallow it into a plain pass-through
     // DatasetGenerator (the wala/ML#759 mis-dispatch class).
