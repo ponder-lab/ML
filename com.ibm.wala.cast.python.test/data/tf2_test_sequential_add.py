@@ -82,3 +82,37 @@ def maybe_wider(wide):
 
 consume_union(maybe_wider(True)(tf.ones((3, 5))))
 consume_union(maybe_wider(False)(tf.ones((3, 5))))
+
+
+def consume_returned_then_added(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 2)
+    assert x.dtype == tf.float32
+
+
+def consume_popped(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 4)
+    assert x.dtype == tf.float32
+
+
+# A builder that returns its stage, with the CALLER adding afterward. The frame that constructs
+# the model sees one layer; the model the program runs has two. Following the return is what keeps
+# the builder idiom above composable while stopping this.
+def half_built():
+    m = tf.keras.Sequential()
+    m.add(tf.keras.layers.Dense(4))
+    return m
+
+
+returned_then_added = half_built()
+returned_then_added.add(tf.keras.layers.Dense(2))
+consume_returned_then_added(returned_then_added(tf.ones((3, 5))))
+
+# `pop()` shrinks the chain. A walk that tolerated any member read whose name is a constant would
+# compose both layers and report the one the program removed.
+popped = tf.keras.Sequential()
+popped.add(tf.keras.layers.Dense(4))
+popped.add(tf.keras.layers.Dense(2))
+popped.pop()
+consume_popped(popped(tf.ones((3, 5))))

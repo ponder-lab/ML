@@ -250,6 +250,45 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * The two escapes that let a model change after the frame the walk reads, both found by an
+   * adversarial pass and both producing a chain of the wrong length (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+   *
+   * <p>A builder that returns its stage lets the CALLER add afterward. That is the same idiom the
+   * composing arms above use, so declining on the return itself would give up the case worth
+   * having; the walk follows the returned value through its callers instead, and declines only when
+   * one of them modifies it. Before that, the constructing frame's one layer was reported as the
+   * whole model.
+   *
+   * <p>{@code pop()} is the other direction, and it is why the use discipline is a LIST of members
+   * known not to change the layer list rather than a rejection of the ones known to. An allowance
+   * framed as "a member whose name is a constant" admits the one method whose purpose is to shrink
+   * the chain, and the walk composed the layer the program had removed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialAddEscapes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_returned_then_added",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    test(
+        "tf2_test_sequential_add.py",
+        "consume_popped",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
    * {@code (20, 28, 28) f32}) plus five intermediate SSA values produced by the {@code
    * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The {@code

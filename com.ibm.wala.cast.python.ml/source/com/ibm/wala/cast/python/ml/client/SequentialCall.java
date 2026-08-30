@@ -89,6 +89,37 @@ public class SequentialCall extends ModelCall {
   private static final String ADD_METHOD_NAME = "add";
 
   /**
+   * The model members the walk will tolerate beside {@code add}, being the ones that cannot change
+   * what is in the layer list.
+   *
+   * <p>A list rather than a rejection of the mutating ones, because the safe direction is deny by
+   * default: {@code pop} exists to shrink the chain, and any allowance framed as "a member whose
+   * name is a constant" admits it. {@code layers} is deliberately absent, since reading it yields
+   * the list itself, which a program can then append to.
+   */
+  private static final Set<String> NON_MUTATING_MODEL_MEMBERS =
+      Set.of(
+          "build",
+          "call",
+          "compile",
+          "count_params",
+          "evaluate",
+          "fit",
+          "get_weights",
+          "load_weights",
+          "predict",
+          "save",
+          "save_weights",
+          "set_weights",
+          "summary",
+          "trainable_variables",
+          "trainable_weights",
+          "weights");
+
+  /** How far a returned model is followed through its callers before the walk gives up. */
+  private static final int ESCAPE_FOLLOWING_DEPTH = 4;
+
+  /**
    * The most chains a conditionally-built model may have before the walk declines. A builder with a
    * handful of optional stages is the idiom; a body whose branching multiplies past this is one
    * whose paths the walk is no longer really enumerating.
@@ -401,36 +432,17 @@ public class SequentialCall extends ModelCall {
     IR ir = frame.getIR();
     Map<Integer, InstanceKey> addedAt = new HashMap<>();
 
-    // Every use of the model has to be one the walk understands. A model handed to a function
-    // could be added to there, and the chain this frame can see would then be a prefix of the real
-    // one: layers missing from the middle, which is the truncated-chain shape the append refusal
-    // exists to stop.
-    for (Iterator<SSAInstruction> uses = frame.getDU().getUses(modelVn); uses.hasNext(); ) {
-      SSAInstruction use = uses.next();
+    // Every use of the model has to be one that cannot change what is in it. The walk sees one
+    // frame, and any operation elsewhere that grows or shrinks the layer list makes the chain it
+    // composed the wrong length.
+    if (!modelIsUnmodifiedIn(frame, modelVn, construction, true)) return null;
 
-      if (use instanceof SSAReturnInstruction) continue;
-
-      if (use instanceof PythonPropertyRead read && read.getObjectRef() == modelVn) {
-        SymbolTable symbolTable = ir.getSymbolTable();
-        if (!symbolTable.isStringConstant(read.getMemberRef())) return null;
-        continue;
-      }
-
-      // The construction itself uses the value only as its definition.
-      if (use.equals(construction)) continue;
-
-      // Calling the model does not change what is in it, so a use as the callee is fine. A use as
-      // an ARGUMENT is the escape this check exists for: the callee could add to it, and the chain
-      // this frame sees would be a prefix of the real one.
-      if (use instanceof PythonInvokeInstruction call && call.getUse(0) == modelVn) {
-        boolean asArgument = false;
-        for (int i = 1; i < call.getNumberOfUses(); i++)
-          if (call.getUse(i) == modelVn) asArgument = true;
-        if (!asArgument) continue;
-      }
-
-      return null;
-    }
+    // Returning the model hands it to callers that can add to it after this frame is done, which
+    // the walk cannot see from here and which produces a chain SHORTER than the program's. The
+    // idiom is common enough (a builder function returning its stage) to be worth following rather
+    // than declining outright, so every caller of this frame is held to the same discipline.
+    if (modelIsReturnedFrom(frame, modelVn)
+        && !returnedModelIsUnmodified(builder, frame, ESCAPE_FOLLOWING_DEPTH)) return null;
 
     for (SSAInstruction instruction : ir.getInstructions()) {
       if (!(instruction instanceof PythonInvokeInstruction call)) continue;
@@ -474,6 +486,114 @@ public class SequentialCall extends ModelCall {
             chains)
         ? chains
         : null;
+  }
+
+  /**
+   * Whether every use of the model in one frame leaves its layer list alone.
+   *
+   * <p>The allowance is a LIST of members known not to change the list, not a rejection of the ones
+   * known to. Allowing anything whose name is merely a constant admits {@code pop()}, whose whole
+   * purpose is to shrink the chain, and the walk would then compose a model longer than the one the
+   * program runs. Deny by default is the only direction that is safe here, and the cost is that a
+   * program calling some other model method declines rather than composing.
+   *
+   * @param frame The node whose body holds the uses.
+   * @param modelVn The model's value number in that frame.
+   * @param construction The invoke that defines it, whose own use of the value is its definition.
+   * @param addAllowed Whether {@code add} is a safe use here, which it is only in the frame whose
+   *     adds the walk collected.
+   * @return {@code true} iff every use is safe.
+   */
+  private static boolean modelIsUnmodifiedIn(
+      CGNode frame, int modelVn, SSAInstruction construction, boolean addAllowed) {
+    SymbolTable symbolTable = frame.getIR().getSymbolTable();
+
+    for (Iterator<SSAInstruction> uses = frame.getDU().getUses(modelVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+
+      // Returning is handled by the caller, which follows the value instead of stopping here.
+      if (use instanceof SSAReturnInstruction) continue;
+
+      if (use instanceof PythonPropertyRead read && read.getObjectRef() == modelVn) {
+        if (!symbolTable.isStringConstant(read.getMemberRef())) return false;
+        String member = symbolTable.getStringValue(read.getMemberRef());
+        // `add` is the builder, and only in the frame whose adds the walk collected. The SAME call
+        // in a caller of that frame is the escape: those layers land at the end of a chain this
+        // walk has already finished reading.
+        boolean growsHere = ADD_METHOD_NAME.equals(member) && addAllowed;
+        if (!growsHere && !NON_MUTATING_MODEL_MEMBERS.contains(member)) return false;
+        continue;
+      }
+
+      // The construction itself uses the value only as its definition.
+      if (use.equals(construction)) continue;
+
+      // Calling the model does not change what is in it, so a use as the callee is fine. A use as
+      // an ARGUMENT is an escape: the callee could add to it, and the chain this frame sees would
+      // be a prefix of the real one.
+      if (use instanceof PythonInvokeInstruction call && call.getUse(0) == modelVn) {
+        boolean asArgument = false;
+        for (int i = 1; i < call.getNumberOfUses(); i++)
+          if (call.getUse(i) == modelVn) asArgument = true;
+        if (!asArgument) continue;
+      }
+
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Whether the model leaves its frame as a return value.
+   *
+   * @param frame The node whose body constructs it.
+   * @param modelVn The model's value number.
+   * @return {@code true} iff some return instruction returns it.
+   */
+  private static boolean modelIsReturnedFrom(CGNode frame, int modelVn) {
+    for (Iterator<SSAInstruction> uses = frame.getDU().getUses(modelVn); uses.hasNext(); )
+      if (uses.next() instanceof SSAReturnInstruction) return true;
+
+    return false;
+  }
+
+  /**
+   * Whether every caller of a frame that returns the model leaves the model's layer list alone.
+   *
+   * <p>A builder function that returns its stage is the ordinary way this spelling is written, so
+   * declining on the return itself would give up the case worth having. Following it costs one
+   * check per caller: the returned value is held to the same use discipline, and a caller that
+   * returns it onward is followed in turn.
+   *
+   * <p>A caller that DOES add is declined rather than composed. Its layers would belong at the end
+   * of the chain, which is recoverable in principle, but a chain assembled across frames is a
+   * different walk than this one and would need its own witnesses.
+   *
+   * @param builder The propagation call graph builder.
+   * @param frame The node returning the model.
+   * @param depth The remaining budget for following returns onward.
+   * @return {@code true} iff no caller can modify the model.
+   */
+  private static boolean returnedModelIsUnmodified(
+      PropagationCallGraphBuilder builder, CGNode frame, int depth) {
+    if (depth <= 0) return false;
+
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke : getCallerInvokes(builder, frame))
+      if (callerInvoke.snd instanceof PythonInvokeInstruction call) {
+        CGNode caller = callerInvoke.fst;
+        if (caller.getIR() == null || caller.getDU() == null) return false;
+
+        int returnedVn = call.getDef();
+        // A result nobody names cannot be modified.
+        if (returnedVn <= 0) continue;
+
+        if (!modelIsUnmodifiedIn(caller, returnedVn, call, false)) return false;
+        if (modelIsReturnedFrom(caller, returnedVn)
+            && !returnedModelIsUnmodified(builder, caller, depth - 1)) return false;
+      }
+
+    return true;
   }
 
   /**
