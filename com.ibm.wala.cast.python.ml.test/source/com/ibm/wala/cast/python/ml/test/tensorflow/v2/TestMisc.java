@@ -855,6 +855,9 @@ public class TestMisc extends AbstractTensorTest {
   @Test
   public void testTypeAnnotationSidecarFeedsThroughLoaderChain()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // The shape tightened from the unknown floor to the runtime-true (2, 4): the batcher's arity
+    // composes from `random.sample`'s literal `k` and the window from the slice contract
+    // (wala/ML#851), beside the annotation-fed int64 this test pins.
     test(
         new String[] {"sidecar_proj/driver_feed2.py"},
         "driver_feed2.py",
@@ -862,6 +865,6 @@ public class TestMisc extends AbstractTensorTest {
         "sidecar_proj",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
+        Map.of(2, Set.of(TensorType.of(INT_64, 2, 4))));
   }
 }

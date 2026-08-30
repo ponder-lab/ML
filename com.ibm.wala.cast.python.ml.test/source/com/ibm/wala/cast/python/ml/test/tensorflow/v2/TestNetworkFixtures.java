@@ -1996,4 +1996,49 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         7,
         Map.of(2, Set.of(TENSOR_2_2_FLOAT32), 3, Set.of(TENSOR_2_INT64)));
   }
+
+  /**
+   * The windowed numpy batcher's raw result, copied near-verbatim from its subject: {@code
+   * np.array} over a comprehension of fixed-length windows, both of whose extents arrive only
+   * through the paired chases &mdash; the arity through {@code random.sample}'s {@code k}, the
+   * window through the element producer's slice contract, and every size literal through the {@code
+   * argparse} default chase at the root (wala/ML#851 and wala/ML#852). The runtime asserts {@code
+   * (2, 2049)}; the dtype is honestly ⊤, since the loaded content is opaque.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWindowedBatchRaw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_windowed_batch.py",
+        "consume_raw",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(2049))))));
+  }
+
+  /**
+   * The consumed slice pair off the windowed batch: {@code data[:, :-1]} and {@code data[:, 1:]}
+   * both read {@code (2, 2048)}, the batcher's recovered {@code (2, 2049)} shrunk by one through
+   * the existing subscript fold &mdash; the composition wala/ML#851's measured evidence predicted
+   * once the extent existed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWindowedBatchSlicePair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Set<TensorType> shrunk =
+        Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(2048))));
+    test("tf2_test_windowed_batch.py", "consume_x", 1, 1, Map.of(2, shrunk));
+    test("tf2_test_windowed_batch.py", "consume_y", 1, 1, Map.of(2, shrunk));
+  }
 }

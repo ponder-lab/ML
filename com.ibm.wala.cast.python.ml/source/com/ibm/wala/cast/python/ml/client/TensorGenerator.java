@@ -1626,7 +1626,28 @@ public abstract class TensorGenerator {
           resolveObjectAttributeIntFlowSensitively(
               builder, node, objectVn, attributeName, visited, depth);
       if (viaObject != null) return viaObject;
+
+      Integer viaArgparse =
+          resolveArgparseDefaultInt(builder, node, objectVn, attributeName, visited, depth);
+      if (viaArgparse != null) return viaArgparse;
       // No chased write resolved: fall through to the points-to fallback below.
+    }
+
+    // A comprehension body reads its enclosing frame's locals lexically; continue in the definer
+    // frame(s), all of which must agree, mirroring the SSA-chain walkers' lexical arm
+    // (wala/ML#851).
+    if (def instanceof AstLexicalRead) {
+      Integer agreed = null;
+      boolean any = false;
+      for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
+        Integer viaDefiner =
+            resolveIntFlowSensitively(builder, definer.fst, definer.snd, visited, depth - 1);
+        if (viaDefiner == null) return null;
+        if (agreed != null && !agreed.equals(viaDefiner)) return null; // Disagreeing definers.
+        agreed = viaDefiner;
+        any = true;
+      }
+      if (any) return agreed;
     }
 
     if (def == null) {
@@ -1643,8 +1664,14 @@ public abstract class TensorGenerator {
             if (paramPos + 1 < call.getNumberOfUses()) argVn = call.getUse(paramPos + 1);
           } else if (paramPos < call.getNumberOfUses()) argVn = call.getUse(paramPos);
           if (argVn <= 0) return null;
+          // A method-dispatch trampoline on either end of the hop forwards the value without
+          // user-code work, so it does not consume budget: charging trampoline hops starved
+          // deep-but-shallow chains (a comprehension element's window length crossing two method
+          // calls, wala/ML#851). The visited set still breaks cycles.
+          boolean forwardingHop = isTrampolineNode(node) || isTrampolineNode(callerInvoke.fst);
           Integer viaCaller =
-              resolveIntFlowSensitively(builder, callerInvoke.fst, argVn, visited, depth - 1);
+              resolveIntFlowSensitively(
+                  builder, callerInvoke.fst, argVn, visited, forwardingHop ? depth : depth - 1);
           if (viaCaller == null) return null;
           if (agreed != null && !agreed.equals(viaCaller)) return null; // Disagreeing callers.
           agreed = viaCaller;
@@ -1879,6 +1906,109 @@ public abstract class TensorGenerator {
       any = true;
     }
     return any ? agreed : null;
+  }
+
+  /**
+   * The {@code argparse} arm of {@link #resolveIntFlowSensitively} (wala/ML#852): resolves an
+   * attribute read off a {@code parser.parse_args()} result to the literal {@code default=} of the
+   * matching {@code add_argument} call on the same parser. A command-line size with a literal
+   * default is a constant in the program's own text, one attribute-name match away from the read,
+   * the same class as the stored-attribute chases; {@code argparse} itself is unmodeled, so the
+   * namespace object is opaque to every points-to walk.
+   *
+   * <p>The match is purely structural and stays in the reading node's body: the namespace's
+   * definition must be an invoke through a {@code parse_args} member read, and every {@code
+   * add_argument} invoke through the same parser value whose option strings derive the attribute
+   * name (argparse's own destination rule: the first long option, else the first option, leading
+   * dashes stripped and remaining dashes to underscores) contributes its {@code default=} keyword.
+   * All matches must agree; a matching argument with an absent {@code default}, a non-integer
+   * default ({@code None}, a boolean, a string), or a {@code dest=} override this derivation cannot
+   * see declines the whole chase &mdash; recovering a literal is the point, and anything past it
+   * would trade an honest unknown for an invented number.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains both the read and the parser calls.
+   * @param objectVn The value number of the namespace object being read.
+   * @param attributeName The attribute being read.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @return The literal default, or {@code null} when the chase declines.
+   */
+  private static Integer resolveArgparseDefaultInt(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int objectVn,
+      String attributeName,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
+    IR ir = node.getIR();
+    SymbolTable st = ir.getSymbolTable();
+
+    SSAInstruction namespaceDef = node.getDU().getDef(objectVn);
+    if (!(namespaceDef instanceof PythonInvokeInstruction)) return null;
+    SSAInstruction parseCalleeDef =
+        node.getDU().getDef(((PythonInvokeInstruction) namespaceDef).getUse(0));
+    if (!(parseCalleeDef instanceof PythonPropertyRead)) return null;
+    PythonPropertyRead parseRead = (PythonPropertyRead) parseCalleeDef;
+    int parseMemberVn = parseRead.getMemberRef();
+    if (!st.isStringConstant(parseMemberVn)
+        || !"parse_args".equals(st.getStringValue(parseMemberVn))) return null;
+    int parserVn = parseRead.getObjectRef();
+
+    Integer agreed = null;
+    for (SSAInstruction inst : ir.getInstructions()) {
+      if (!(inst instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+      if (call.getNumberOfPositionalParameters() < 2) continue;
+      SSAInstruction addCalleeDef = node.getDU().getDef(call.getUse(0));
+      if (!(addCalleeDef instanceof PythonPropertyRead)) continue;
+      PythonPropertyRead addRead = (PythonPropertyRead) addCalleeDef;
+      if (addRead.getObjectRef() != parserVn) continue;
+      int addMemberVn = addRead.getMemberRef();
+      if (!st.isStringConstant(addMemberVn)
+          || !"add_argument".equals(st.getStringValue(addMemberVn))) continue;
+
+      // Derive the destination from the option strings; a non-literal option string declines the
+      // call as a candidate rather than the chase (it cannot match anything by name).
+      String dest = null;
+      for (int p = 1; p < call.getNumberOfPositionalParameters(); p++) {
+        int optionVn = call.getUse(p);
+        if (!st.isStringConstant(optionVn)) {
+          dest = null;
+          break;
+        }
+        String option = st.getStringValue(optionVn);
+        if (option.startsWith("--")) {
+          dest = argparseDestination(option);
+          break; // The first long option names the destination.
+        }
+        if (dest == null) dest = argparseDestination(option);
+      }
+      if (dest == null || !attributeName.equals(dest)) continue;
+
+      if (call.getKeywords().contains("dest")) return null; // A dest override defeats the match.
+      if (!call.getKeywords().contains("default")) return null; // Matching argument, no default.
+      Integer viaDefault =
+          resolveIntFlowSensitively(builder, node, call.getUse("default"), visited, depth - 1);
+      if (viaDefault == null) return null;
+      if (agreed != null && !agreed.equals(viaDefault)) return null; // Disagreeing defaults.
+      agreed = viaDefault;
+    }
+    return agreed;
+  }
+
+  /**
+   * Derives the destination attribute name argparse gives one option string: leading dashes
+   * stripped, remaining dashes to underscores.
+   *
+   * @param optionString The option string as written ({@code "--batch_size"}).
+   * @return The destination attribute name ({@code "batch_size"}).
+   */
+  private static String argparseDestination(String optionString) {
+    int start = 0;
+    while (start < optionString.length() && optionString.charAt(start) == '-') start++;
+    return optionString.substring(start).replace('-', '_');
   }
 
   /**
@@ -6320,13 +6450,24 @@ public abstract class TensorGenerator {
    * @return {@code true} iff {@code node} is a trampoline whose target method has the given name.
    */
   protected static boolean isTrampolineFor(CGNode node, String methodName) {
-    return node.getMethod().getName().toString().startsWith("trampoline")
+    return isTrampolineNode(node)
         && node.getMethod()
             .getDeclaringClass()
             .getReference()
             .getName()
             .toString()
             .endsWith("/" + methodName);
+  }
+
+  /**
+   * Returns whether the given node is a synthetic method-dispatch trampoline, whatever method it
+   * forwards to.
+   *
+   * @param node The {@link CGNode} to test.
+   * @return {@code true} iff {@code node} is a trampoline.
+   */
+  protected static boolean isTrampolineNode(CGNode node) {
+    return node.getMethod().getName().toString().startsWith("trampoline");
   }
 
   /**
