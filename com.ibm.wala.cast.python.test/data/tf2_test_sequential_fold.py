@@ -23,6 +23,12 @@ def consume_unmodeled(x):
     assert x.dtype == tf.float32
 
 
+def consume_unfoldable(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (3, 5)
+    assert x.dtype == tf.float32
+
+
 # Two layers of the SAME class in one model. Each needs its own `units`, so a fold that resolved
 # the layers through anything keyed on the model call's node would read one layer's answer for
 # both and report (3, 4).
@@ -101,3 +107,15 @@ nested = tf.keras.Sequential(
     [tf.keras.layers.Dense(4), tf.keras.Sequential([tf.keras.layers.Dense(6)])]
 )
 consume_nested(nested(tf.ones((3, 5))))
+
+
+# A user layer whose body the walk cannot name: the hop is a function off the witnessed
+# pass-through set, so the body fold declines and the honest floor survives — the refusal witness
+# the identity-bodied layer above no longer provides now that user bodies fold.
+class Unfoldable(tf.keras.layers.Layer):
+    def call(self, inputs):
+        return tf.nn.gelu(inputs)
+
+
+unfoldable = tf.keras.Sequential([Unfoldable()])
+consume_unfoldable(unfoldable(tf.ones((3, 5))))

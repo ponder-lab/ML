@@ -299,7 +299,13 @@ public class SequentialCall extends ModelCall {
             layerType.getClassLoader(),
             TypeName.string2TypeName(layerType.getName().toString() + "/" + CALLABLE_METHOD_NAME));
 
-    return createManualGenerator(this.getNode(), callType, builder);
+    TensorGenerator generator = createManualGenerator(this.getNode(), callType, builder);
+    if (generator != null) return generator;
+
+    // A USER class in the list has no table arm; its transform is its own `call` body, folded by
+    // the same discipline one level down (wala/ML#832).
+    return UserLayerCall.forLayerInstance(
+        builder, this.getNode(), layer, UserLayerCall.BODY_FOLD_DEPTH_CAP);
   }
 
   /**

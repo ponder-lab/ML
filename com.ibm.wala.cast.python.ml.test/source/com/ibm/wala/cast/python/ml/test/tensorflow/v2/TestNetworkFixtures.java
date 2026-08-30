@@ -2162,4 +2162,43 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         Map.of(
             2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * A {@code Sequential} whose list elements are USER {@code Model} subclasses, the pyramid
+   * subject's residual block near-verbatim (wala/ML#832): each block's {@code call} has no
+   * call-graph node, so its transform comes from the body fold walking the method's own IR. The
+   * runtime is {@code (1, 4, 4, 6)}; the composition recovers rank, batch and both spatial extents
+   * exactly, and the channel axis degrades to unresolved, the honest residue this pin records. The
+   * shortcut attribute holds BOTH construction branches path-insensitively; the identity lambda
+   * folds through the bare-function walk, and the projection branch composes through the nested
+   * list fold, with non-broadcastable cross-members filtered at the residual add.
+   *
+   * <p>The same program also witnesses the phi-fold repair beneath it: the residual guard's
+   * disjunction merges a comparison result (no constant key) with a short-circuit constant, and the
+   * pre-fix singleton fallback read half the phi and pruned the LIVE projection branch.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUserBlockStack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_user_blocks.py",
+        "consume_stack",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(1),
+                        new NumericDim(4),
+                        new NumericDim(4),
+                        UnresolvedDim.INSTANCE)))));
+  }
 }
