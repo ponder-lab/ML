@@ -7,12 +7,15 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,6 +68,25 @@ public abstract class ConvolutionCall extends DenseCall {
 
   /** The constructor argument the model file stores on the layer instance. */
   private static final String DILATION_RATE_FIELD_NAME = "dilation_rate";
+
+  /**
+   * The zero-based positions of the window arguments among the constructor's real arguments, shared
+   * by both convolution families this class serves ({@code filters, kernel_size, strides, padding,
+   * data_format, dilation_rate}). The supply detection's positional test leans UNSAFE if one of
+   * these is wrong: an argument supplied positionally past a wrong index would read as
+   * determinately unsupplied and take the default this guard exists to refuse.
+   */
+  private static final int STRIDES_POSITION = 2;
+
+  /**
+   * @see #STRIDES_POSITION
+   */
+  private static final int PADDING_POSITION = 3;
+
+  /**
+   * @see #STRIDES_POSITION
+   */
+  private static final int DILATION_RATE_POSITION = 5;
 
   /** The padding mode that drops incomplete windows: the extent shrinks by the window's span. */
   private static final String VALID_PADDING = "valid";
@@ -243,18 +265,36 @@ public abstract class ConvolutionCall extends DenseCall {
       Set<Long> strideValues =
           getPossibleLongValues(getInstanceFieldPointsToSet(builder, selfAsin, STRIDES_FIELD_NAME));
       if (strideValues == null) return null;
+      // An EMPTY read is not an UNSUPPLIED argument: a stride the program passes through a value
+      // the points-to substrate cannot represent (a concatenated list's element, wala/ML#805)
+      // resolves to nothing, and patching it with the API default composes the default's shape
+      // for a program that runs a different one (wala/ML#832). Supplied-but-invisible declines
+      // the window, degrading the spatial extents while the rank and filters survive.
+      if (strideValues.isEmpty()
+          && !Boolean.FALSE.equals(
+              constructorArgumentSupplied(builder, selfAsin, STRIDES_FIELD_NAME, STRIDES_POSITION)))
+        return null;
       strides.addAll(strideValues);
 
       Set<Long> dilationValues =
           getPossibleLongValues(
               getInstanceFieldPointsToSet(builder, selfAsin, DILATION_RATE_FIELD_NAME));
       if (dilationValues == null) return null;
+      if (dilationValues.isEmpty()
+          && !Boolean.FALSE.equals(
+              constructorArgumentSupplied(
+                  builder, selfAsin, DILATION_RATE_FIELD_NAME, DILATION_RATE_POSITION)))
+        return null;
       dilations.addAll(dilationValues);
 
       Set<Object> paddingValues =
           getConstantValues(
               getInstanceFieldPointsToSet(builder, selfAsin, PADDING_FIELD_NAME), true);
       if (paddingValues == null) return null;
+      if (paddingValues.isEmpty()
+          && !Boolean.FALSE.equals(
+              constructorArgumentSupplied(builder, selfAsin, PADDING_FIELD_NAME, PADDING_POSITION)))
+        return null;
       // Keras normalizes the padding mode case-insensitively (`normalize_padding` lower-cases
       // it), and real code writes `'SAME'` as often as `'same'`; normalize at collection so the
       // spellings agree and the comparison below stays exact.
@@ -284,6 +324,51 @@ public abstract class ConvolutionCall extends DenseCall {
 
     if (kernelSize <= 0 || stride <= 0 || dilation <= 0) return null;
     return new Window(kernelSize, stride, dilation, samePadding);
+  }
+
+  /**
+   * Whether any constructor call site of the given layer instance supplies the named argument, by
+   * keyword or positionally. Syntactic and caller-side, so it is decisive even when the argument's
+   * VALUE resolves to nothing (the wala/ML#774 detection, reused): an argument that is supplied but
+   * invisible must not be read as absent.
+   *
+   * <p>THREE-VALUED by design, because a third state exists and the unmarked case is the one that
+   * borrows confidence: {@code TRUE} when some call visibly supplies it, {@code FALSE} only when
+   * every constructor site was seen, none supplies it, and none carries a starred unpack that could
+   * (positional alignment past a star is unreliable, wala/ML#751), and {@code null} when the
+   * detection cannot tell (no visible site, an unreadable site, or a starred call). Indeterminate
+   * DECLINES at the consumers, costing precision on programs that genuinely omit the argument
+   * through such a call, because the alternative re-opens the default-patching bug for exactly the
+   * shapes least likely to have witnesses. Known residual: a {@code **}-spread of keywords is not
+   * visible in the keyword list at all and therefore reads as unsupplied — the one edge this
+   * detection cannot close (the wala/ML#843 family's standing {@code **kwargs} exposure).
+   *
+   * @param builder The propagation call graph builder.
+   * @param constructed The layer instance's allocation.
+   * @param keyword The argument's keyword name.
+   * @param positionalIndex The argument's zero-based position among the real arguments.
+   * @return {@code TRUE}, {@code FALSE}, or {@code null} as above.
+   */
+  private static Boolean constructorArgumentSupplied(
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode constructed,
+      String keyword,
+      int positionalIndex) {
+    boolean sawSite = false;
+    boolean indeterminate = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, constructed.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) {
+        indeterminate = true;
+        continue;
+      }
+      sawSite = true;
+      if (call.getKeywords().contains(keyword)
+          || call.getNumberOfPositionalParameters() - 1 > positionalIndex) return true;
+      if (call.getStarredPositions().length > 0) indeterminate = true;
+    }
+    if (indeterminate) return null;
+    return sawSite ? Boolean.FALSE : null;
   }
 
   /**
