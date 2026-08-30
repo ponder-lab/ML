@@ -22,3 +22,15 @@ pair = tf.keras.Sequential([Cycle(), Cycle()])
 result = pair(tf.ones((1, 2, 2, 3)))
 assert result.shape == (1, 3, 2, 2), result.shape
 consume_cycle_pair(result)
+
+
+def consume_cycle_repeated(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (1, 3, 2, 2), x.shape
+    assert x.dtype == tf.float32
+
+
+repeated = []
+for _ in range(2):
+    repeated.append(Cycle())
+consume_cycle_repeated(tf.keras.Sequential(repeated)(tf.ones((1, 2, 2, 3))))
