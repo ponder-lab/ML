@@ -867,4 +867,40 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(INT_64, 2, 4))));
   }
+
+  /**
+   * A {@code dtype} argument whose value is a test function's PARAMETER, which is the shape that
+   * ended a whole project's analysis (<a
+   * href="https://github.com/wala/ML/issues/860">wala/ML#860</a>).
+   *
+   * <p>Under test entrypoints such a function is analysed as a root, so its parameters have no
+   * incoming value and resolve to nothing a dtype can be read from. That reached a resolver which
+   * raised {@code IllegalStateException}, and since nothing catches it before the analysis returns,
+   * ONE unreadable value ended the analysis of everything rather than of that value.
+   *
+   * <p>Three earlier attempts at this witness failed because all three reconstructed the shape from
+   * LIBRARY code. The reachable site was in a test file, so the ingredient none of them had was the
+   * entrypoint: a parameter with no caller to supply it. Reading source tells you which shapes
+   * exist and not which the analysis reaches under a given configuration.
+   *
+   * <p>The expectation is a tensor with both axes unknown rather than no result at all. The dtype
+   * is unknown because the argument's members cannot be read, which is the state of an argument
+   * that was never supplied; the shape is unknown because the receiver walk does not resolve here
+   * either. What matters is that the analysis COMPLETES: before the fix this program ended it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEntrypointParameterDtypeDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "entrypoint_dtype_test.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
 }
