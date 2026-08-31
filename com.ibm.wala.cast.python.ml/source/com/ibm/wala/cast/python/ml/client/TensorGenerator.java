@@ -5528,7 +5528,12 @@ public abstract class TensorGenerator {
           if (value.equals("float")) {
             dtype = FLOAT32;
           } else {
-            throw new IllegalStateException("Unknown dtype string: " + value + ".", e);
+            // A string that names no dtype is a specification this cannot read, which is the same
+            // condition as the unreadable member below and takes the same disposition
+            // (wala/ML#860).
+            LOGGER.fine(() -> "Unknown dtype string: " + value + "; contributing UNKNOWN for it.");
+            ret.add(DType.UNKNOWN);
+            continue;
           }
         }
 
@@ -5542,12 +5547,25 @@ public abstract class TensorGenerator {
                 + value
                 + ".");
       } else {
-        throw new IllegalStateException(
-            "Expected a "
-                + TensorFlowTypes.D_TYPE
-                + " for the dtype, but got: "
-                + typeReference
-                + ".");
+        // An argument member this cannot read is a dtype the analysis does not know, which is an
+        // ordinary precision gap. It was an `IllegalStateException`, and because nothing between
+        // here and `performAnalysis` catches it, ONE unreadable member ended the analysis of the
+        // whole project rather than of the one value (wala/ML#860). The condition is a property of
+        // the operation rather than of the type that happened to arrive, so every unreadable
+        // member declines the same way and the resolvable ones still stand.
+        LOGGER.fine(
+            () ->
+                "Expected a "
+                    + TensorFlowTypes.D_TYPE
+                    + " for the dtype, but got: "
+                    + typeReference
+                    + "; contributing UNKNOWN for it.");
+        // UNKNOWN rather than nothing, so the union carries its own incompleteness. Skipping the
+        // member silently would leave a SHORT union indistinguishable from a complete one, and
+        // that difference is read: `ElementWiseOperation` decides on `dtypes.size() != 1`. The
+        // dtype axis has no analogue of `ShapeResult`'s explicit unknown remainder, so a member
+        // valued UNKNOWN is the only way it can say a union is partial.
+        ret.add(DType.UNKNOWN);
       }
     }
 
@@ -5624,9 +5642,15 @@ public abstract class TensorGenerator {
 
     // If the argument dtype is not specified.
     if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
-    else
-      // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
-      return this.getDTypesFromDTypeArgument(builder, pointsToSet);
+
+    // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
+    Set<DType> fromArgument = this.getDTypesFromDTypeArgument(builder, pointsToSet);
+
+    // An argument none of whose members could be read is indistinguishable, for this value, from
+    // one that was never supplied: the dtype is unknown either way. Returning the empty set would
+    // say something stronger and wrong — that the value is not a tensor at all — which is the
+    // lattice mistake the class Javadoc warns about (wala/ML#860).
+    return fromArgument.isEmpty() ? this.getDefaultDTypes(builder) : fromArgument;
   }
 
   /**
