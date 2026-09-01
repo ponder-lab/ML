@@ -590,6 +590,10 @@
         <putfield class="LRoot" field="group" fieldType="LRoot" ref="x" value="group"/>
         <new def="no_op" class="Ltensorflow/functions/no_op"/>
         <putfield class="LRoot" field="no_op" fieldType="LRoot" ref="x" value="no_op"/>
+        <new def="print" class="Ltensorflow/functions/print"/>
+        <putfield class="LRoot" field="print" fieldType="LRoot" ref="x" value="print"/>
+        <new def="assert_equal" class="Ltensorflow/functions/assert_equal"/>
+        <putfield class="LRoot" field="assert_equal" fieldType="LRoot" ref="x" value="assert_equal"/>
         <new def="zeros_like" class="Ltensorflow/functions/zeros_like"/>
         <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="x" value="zeros_like"/>
         <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="array_ops" value="zeros_like"/>
@@ -1988,14 +1992,29 @@
       </class>
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/group. Returns an `Operation`, NOT a tensor: it has neither dtype nor shape, and the tensor type system's whole vocabulary is those two axes, so typing it would yield a tensor answering unknown to everything and be indistinguishable from a Python value the analysis simply cannot read. The point of modeling it is that a consumer can positively IDENTIFY an operation from the points-to set, since a function returning one cannot be traced at all (wala/ML#864). The `Operation` class was already declared in the ops package; what was missing was any API that returns one. -->
       <class name="group" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self inputs name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *inputs **kwargs">
           <new def="res" class="Ltensorflow/python/framework/ops/Operation"/>
           <return value="res"/>
         </method>
       </class>
-      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/no_op. See `group` above for why this allocates an `Operation` rather than a tensor (wala/ML#864). -->
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/no_op. See `group` above for why this allocates an `Operation` rather than a tensor (wala/ML#864). Unlike `group` and `print`, `no_op(name=None)` really does take a fixed parameter, so it is spelled out. -->
       <class name="no_op" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Operation"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- The variadic producers `group` and `print` declare `*inputs **kwargs` because that is their real signature, matching the `einsum` and `meshgrid` precedents in this file. Measured, that spelling changes nothing for THESE summaries: a body that is `<new>`+`<return>` reads no parameter, so the returned allocation does not depend on argument binding, and calls passing unlisted keywords resolve either way. It matters to a summary that USES a parameter, and to anyone reading these as documentation of the API. -->
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/print and https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/debugging/assert_equal, the latter being the page for the `tf.assert_equal` alias modeled below. These are CONDITIONAL producers: under tracing they yield an `Operation`, and eagerly they yield `None`. The model states the TRACED reading, which is deliberately approximate rather than strictly true, and the approximation is chosen because the only question anyone asks of operation identity is whether a function can be traced, and that question is always about the traced context (wala/ML#864). A consumer asking what one of these evaluates to EAGERLY would be told something false; nothing asks that today, and if something ever does, the analysis needs a traced/eager context distinction rather than a different allocation here. The unconditional producers `group` and `no_op` above carry no such caveat. -->
+      <class name="print" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *inputs **kwargs">
+          <new def="res" class="Ltensorflow/python/framework/ops/Operation"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- See `print` above: conditional producer, modeled under the traced reading. Only the bare `tf.assert_equal` spelling is wired; the `tf.debugging` namespace object does not exist in this model, and inventing one to carry an alias nothing exercises would be modeling on speculation. The assertion family is an ENUMERATION, so its siblings are unmodeled and pass silently, which is the same incompleteness every producer list has (wala/ML#864). -->
+      <class name="assert_equal" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self x y message summarize name">
           <new def="res" class="Ltensorflow/python/framework/ops/Operation"/>
           <return value="res"/>
         </method>

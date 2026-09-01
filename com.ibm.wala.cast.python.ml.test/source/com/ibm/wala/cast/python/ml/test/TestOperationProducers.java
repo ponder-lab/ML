@@ -77,6 +77,61 @@ public class TestOperationProducers extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The CONDITIONAL producers resolve to an operation too, under the traced reading (wala/ML#864).
+   *
+   * <p>These differ in kind from the pair above, and the difference is recorded rather than
+   * smoothed over. Eagerly they evaluate to {@code None}; only under tracing do they evaluate to an
+   * operation, and the fixture's own asserts pin the eager behaviour so the approximation is
+   * visible next to the model rather than only in a comment.
+   *
+   * <p>The model states the traced reading because that is the only reading anyone queries: the
+   * question asked of operation identity is whether a function can be traced, which is always about
+   * the traced context. A consumer asking what these evaluate to EAGERLY would be told something
+   * false, and the honest response to that is a traced context distinction rather than a different
+   * allocation here.
+   *
+   * <p>The keyword spellings are asserted because they are what real code writes, NOT because the
+   * summaries' parameter lists make or break them. Measured both ways: with the parameter lists
+   * enumerated as they were, and with them corrected, every one of these still resolves. A summary
+   * whose body is {@code <new>} plus {@code <return>} reads no parameter, so the returned
+   * allocation cannot depend on how arguments bind; a parameter list matters to a summary that USES
+   * one, such as a pass-through return or a generator reading an argument's points-to set. What
+   * these assertions pin is coverage of the spellings a consumer will meet, which is worth having
+   * on its own and is not a witness for the parameter lists.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testConditionalProducersResolveUnderTheTracedReading() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        (PythonTensorAnalysisEngine) makeEngine("tf2_test_operation.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(cg);
+
+    assertEquals(
+        "`tf.print` returns an operation under tracing.",
+        Set.of(OPERATION),
+        returnedAllocations(builder, cg, "returns_print"));
+    assertEquals(
+        "`tf.assert_equal` returns an operation under tracing.",
+        Set.of(OPERATION),
+        returnedAllocations(builder, cg, "returns_assert"));
+    assertEquals(
+        "A keyword spelling resolves too.",
+        Set.of(OPERATION),
+        returnedAllocations(builder, cg, "returns_assert_named"));
+    assertEquals(
+        "So does a keyword the summary does not name, in the spelling real code uses.",
+        Set.of(OPERATION),
+        returnedAllocations(builder, cg, "returns_print_kwarg"));
+    assertEquals(
+        "And the variadic unconditional producer, for the same reason.",
+        Set.of(OPERATION),
+        returnedAllocations(builder, cg, "returns_group_kwarg"));
+  }
+
+  /**
    * The allocation types a named function's return value may hold, unioned over its context-
    * sensitive nodes.
    *

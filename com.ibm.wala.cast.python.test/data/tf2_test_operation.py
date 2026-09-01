@@ -10,6 +10,8 @@
 # trace these calls evaluate to None, and only inside one do they evaluate to an Operation. The
 # analysis models the traced meaning, since that is the context whose validity a consumer is
 # deciding.
+import sys
+
 import tensorflow as tf
 
 a = tf.Variable([1.0, 2.0])
@@ -35,3 +37,38 @@ assert returns_no_op() is None
 
 assert isinstance(returns_tensor(), tf.Tensor)
 assert returns_tensor().shape == (2,)
+
+
+def returns_print():
+    return tf.print("x")
+
+
+def returns_assert():
+    return tf.assert_equal(1, 1)
+
+
+def returns_print_kwarg():
+    # The spelling real code actually uses, with a keyword the summary does not name. This is
+    # COVERAGE of what a consumer will meet rather than a witness for the summary's parameter list:
+    # measured both ways, it resolves to the operation with the list enumerated and with it
+    # variadic, because a `<new>`+`<return>` body reads no parameter.
+    return tf.print("x:", 1, output_stream=sys.stdout)
+
+
+def returns_group_kwarg():
+    return tf.group([], name="g")
+
+
+def returns_assert_named():
+    # The keyword spelling. Coverage rather than a witness, for the reason given above.
+    return tf.assert_equal(1, 1, name="eq")
+
+
+# The conditional pair. Eagerly these evaluate to None, exactly as `tf.group` does; only under
+# tracing do they evaluate to an Operation. Decorating a function that returns either raises, which
+# is why the model states the traced reading rather than the eager one.
+assert returns_print() is None
+assert returns_assert() is None
+assert returns_assert_named() is None
+assert returns_print_kwarg() is None
+assert returns_group_kwarg() is None
