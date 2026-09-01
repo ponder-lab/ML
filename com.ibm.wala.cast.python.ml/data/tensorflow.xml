@@ -1797,15 +1797,53 @@
       </class>
     </package>
     <package name="tensorflow/python/ops/variables">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/variables/Variable"/>` in `tensorflow/functions/Variable.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null` for the allocation, and `getInvariantContents` returns an empty array, so `visitReturn` never adds the iKey to the summary's return-value `PointerKey`. See wala/WALA#1889. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
-      <class name="Variable" allocatable="true"></class>
+      <!-- The assignment family. Each returns a value carrying an `op` field holding an `Operation`, which is what `v.assign_add(...).op` reads (wala/ML#864 follow-on). The field-attach shape is `matmul`'s, the only other place in this file that writes `op`. These were previously UNMODELED, so the receiver of a `.op` read resolved to nothing at all; that is a different defect from a missing field on a resolved receiver, and only this change fixes it. The `op` field is a CONDITIONAL producer, the same class as `print` and `assert_equal` above and carrying the same caveat: measured against the runtime, `.op` is `None` EAGERLY on all six results and an `Operation` under tracing. The model states the traced reading, for the same reason given there. The RECEIVER is unconditional by contrast, since the assignment's value is real either way, so the two are separable and the fixture asserts them as a pair. These are named instance methods rather than `do`. That is load-bearing: `TensorTypeAnalysis`'s syntactic seeding keys on the method names `do` and `read_data`, so naming them for the real API keeps this class out of that seeding, preserving the wala/WALA#1889 arrangement described below. The precedent for named instance methods on a modeled class is `Dataset`'s `__iter__` and `next`. Signatures were read off the TensorFlow runtime rather than recalled. Note the split: the three assignment methods take `use_locking name read_value`, the three scatter methods take only `use_locking name`. As elsewhere, a parameter list on a body that reads no parameter does not affect the returned allocation; it is documentation, and it matters to any later body that does consume one. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/variables/Variable"/>` in `tensorflow/functions/Variable.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null` for the allocation, and `getInvariantContents` returns an empty array, so `visitReturn` never adds the iKey to the summary's return-value `PointerKey`. See wala/WALA#1889. -->
+      <class name="Variable" allocatable="true">
+        <method name="assign" descriptor="()LRoot;" numArgs="5" paramNames="self value use_locking name read_value">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation"/>
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op"/>
+          <return value="res"/>
+        </method>
+        <method name="assign_add" descriptor="()LRoot;" numArgs="5" paramNames="self delta use_locking name read_value">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation"/>
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op"/>
+          <return value="res"/>
+        </method>
+        <method name="assign_sub" descriptor="()LRoot;" numArgs="5" paramNames="self delta use_locking name read_value">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation"/>
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op"/>
+          <return value="res"/>
+        </method>
+        <method name="scatter_add" descriptor="()LRoot;" numArgs="4" paramNames="self sparse_delta use_locking name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation"/>
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op"/>
+          <return value="res"/>
+        </method>
+        <method name="scatter_sub" descriptor="()LRoot;" numArgs="4" paramNames="self sparse_delta use_locking name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation"/>
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op"/>
+          <return value="res"/>
+        </method>
+        <method name="scatter_update" descriptor="()LRoot;" numArgs="4" paramNames="self sparse_delta use_locking name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation"/>
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op"/>
+          <return value="res"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/python/ops/ragged/ragged_math_ops">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_math_ops/range"/>` in `tensorflow/functions/ragged_range.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_math_ops/range"/>` in `tensorflow/functions/ragged_range.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`, cited for its `allocatable` declaration rather than as a body-less example, since it now models the assignment family. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="range" allocatable="true"></class>
     </package>
     <package name="tensorflow/python/ops/ragged/ragged_factory_ops">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant"/>` in `tensorflow/functions/ragged_constant.do()` resolves to a concrete `InstanceKey` in the heap model. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant"/>` in `tensorflow/functions/ragged_constant.do()` resolves to a concrete `InstanceKey` in the heap model. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`, cited for its `allocatable` declaration rather than as a body-less example, since it now models the assignment family. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="constant" allocatable="true"></class>
     </package>
     <package name="tensorflow/functions">
@@ -2672,7 +2710,7 @@
       </class>
     </package>
     <package name="tensorflow/keras/Model">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/keras/Model/attribute"/>` in `tensorflow/keras/models/class/Model.read_data()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/keras/Model/attribute"/>` in `tensorflow/keras/models/class/Model.read_data()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`, cited for its `allocatable` declaration rather than as a body-less example, since it now models the assignment family. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="attribute" allocatable="true"></class>
     </package>
     <package name="tensorflow/keras/models">
