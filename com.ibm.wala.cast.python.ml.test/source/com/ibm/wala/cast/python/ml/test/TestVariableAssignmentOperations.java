@@ -8,6 +8,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import java.util.HashSet;
@@ -29,6 +30,9 @@ public class TestVariableAssignmentOperations extends TestPythonMLCallGraphShape
 
   /** The type a {@code .op} read resolves to. */
   private static final String OPERATION = "Ltensorflow/python/framework/ops/Operation";
+
+  /** The marker the helper records for a member that is not an allocation. */
+  private static final String NON_ALLOCATION_PREFIX = "non-allocation:";
 
   /** The type the assignment itself resolves to. */
   private static final String TENSOR = "Ltensorflow/python/framework/ops/Tensor";
@@ -101,6 +105,37 @@ public class TestVariableAssignmentOperations extends TestPythonMLCallGraphShape
   }
 
   /**
+   * A member that is not an allocation is RECORDED rather than dropped.
+   *
+   * <p>The helper's contract is that a mixed points-to set cannot read as a pure one, since
+   * silently skipping a member would let a set holding an operation beside something else satisfy
+   * an equality assertion for {@code {OPERATION}}. That is the every-member rule these tests exist
+   * to pin, and until now it was only asserted in prose: every fixture function returned an
+   * allocation, so the recording branch never ran and the claim had no witness.
+   *
+   * <p>A function returning a Python literal supplies one. Its return resolves to a {@code
+   * ConstantKey}, which is not an {@code AllocationSiteInNode}, so the branch executes and its
+   * marker is observable. Were the helper to skip instead of record, this would read as the empty
+   * set.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testNonAllocationMembersAreRecordedRatherThanDropped() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        (PythonTensorAnalysisEngine) makeEngine("tf2_test_variable_operation.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(cg);
+
+    assertEquals(
+        "A literal's return is a constant rather than an allocation, and the helper records it. An"
+            + " empty set here would mean the member had been silently dropped.",
+        Set.of(NON_ALLOCATION_PREFIX + ConstantKey.class.getSimpleName()),
+        returnedAllocations(builder, cg, "returns_literal"));
+  }
+
+  /**
    * The allocation types a named function's return value may hold, unioned over its context-
    * sensitive nodes.
    *
@@ -124,7 +159,7 @@ public class TestVariableAssignmentOperations extends TestPythonMLCallGraphShape
         ret.add(
             key instanceof AllocationSiteInNode allocation
                 ? allocation.getSite().getDeclaredType().getName().toString()
-                : "non-allocation:" + key.getClass().getSimpleName());
+                : NON_ALLOCATION_PREFIX + key.getClass().getSimpleName());
     }
 
     return ret;

@@ -25,6 +25,12 @@ def returns_no_op():
     return tf.no_op()
 
 
+def returns_literal():
+    # Not a tensor. Its return resolves to a non-allocation member, which the test helper records
+    # rather than drops.
+    return 1.0
+
+
 def returns_tensor():
     return tf.ones((2,))
 
@@ -72,3 +78,4 @@ assert returns_assert() is None
 assert returns_assert_named() is None
 assert returns_print_kwarg() is None
 assert returns_group_kwarg() is None
+assert returns_literal() == 1.0
