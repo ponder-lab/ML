@@ -23,6 +23,12 @@ w = tf.Variable([1.0, 2.0])
 delta = tf.IndexedSlices(tf.constant([3.0]), tf.constant([0]))
 
 
+def returns_literal():
+    # Not a tensor at all. Its return resolves to a non-allocation member, which is the case the
+    # test helper claims to record rather than drop.
+    return 1.0
+
+
 def returns_assignment():
     # The receiver on its own. Not an operation: it is the assignment's value.
     return v.assign_add(1.0)
@@ -53,6 +59,8 @@ def returns_scatter_sub_op():
 def returns_scatter_update_op():
     return w.scatter_update(delta).op
 
+
+assert returns_literal() == 1.0
 
 # The receiver resolves unconditionally.
 assert returns_assignment().shape == ()

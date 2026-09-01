@@ -8,6 +8,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import java.util.HashSet;
@@ -29,6 +30,9 @@ public class TestOperationProducers extends TestPythonMLCallGraphShape {
 
   /** The type an {@code Operation}-producing API allocates. */
   private static final String OPERATION = "Ltensorflow/python/framework/ops/Operation";
+
+  /** The marker the helper records for a member that is not an allocation. */
+  private static final String NON_ALLOCATION_PREFIX = "non-allocation:";
 
   /** The type its tensor sibling allocates, for the control. */
   private static final String TENSOR = "Ltensorflow/python/framework/ops/Tensor";
@@ -132,6 +136,33 @@ public class TestOperationProducers extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A member that is not an allocation is RECORDED rather than dropped.
+   *
+   * <p>The helper's comment already states this and states why: skipping would let a set holding an
+   * operation beside a constant read as {@code {OPERATION}}, breaking the every-member rule these
+   * tests exist to pin. It had no witness, because every other fixture function returns an
+   * allocation and so the recording branch never ran.
+   *
+   * <p>A function returning a Python literal supplies one, resolving to a {@code ConstantKey}
+   * rather than an {@code AllocationSiteInNode}. Were the helper to skip, this would read as empty.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testNonAllocationMembersAreRecordedRatherThanDropped() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        (PythonTensorAnalysisEngine) makeEngine("tf2_test_operation.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(cg);
+
+    assertEquals(
+        "A literal's return is a constant rather than an allocation, and the helper records it.",
+        Set.of(NON_ALLOCATION_PREFIX + ConstantKey.class.getSimpleName()),
+        returnedAllocations(builder, cg, "returns_literal"));
+  }
+
+  /**
    * The allocation types a named function's return value may hold, unioned over its context-
    * sensitive nodes.
    *
@@ -159,7 +190,7 @@ public class TestOperationProducers extends TestPythonMLCallGraphShape {
         ret.add(
             key instanceof AllocationSiteInNode allocation
                 ? allocation.getSite().getDeclaredType().getName().toString()
-                : "non-allocation:" + key.getClass().getSimpleName());
+                : NON_ALLOCATION_PREFIX + key.getClass().getSimpleName());
     }
 
     return ret;

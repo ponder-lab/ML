@@ -157,6 +157,7 @@ Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When addin
 1. Verify it runs to completion with `python3.10 path/to/file.py`.
 2. Add `assert` statements for tensor `shape` and `dtype` at the points you expect the JUnit test to assert on — the Python runtime truth should match the static-analysis expectation.
 3. Mismatches between Python asserts and JUnit expectations are a red flag either way.
+4. **Rebuild `com.ibm.wala.cast.python.test` after editing a fixture, before running a single-module test.** The analysis reads the *packaged* copy of the fixture, not `data/`. A root `mvn test` is fine, because the reactor rebuilds the module whose resources changed; the single-class recipes above are not, since `mvn -pl com.ibm.wala.cast.python.ml.test -Dtest=... test` resolves its dependency from the installed jar and so runs the *previous* fixture content. Run `mvn clean install -DskipTests` first. This matters because of how it fails: a function you just added is simply absent from the call graph, and an absent node is indistinguishable from a resolved-but-empty points-to set, so a stale fixture presents as a modeling gap rather than as an error. If a fixture-dependent result looks inexplicable, `grep` the copy under `com.ibm.wala.cast.python.test/target/` before theorising about the analysis.
 
 ### Issue-blocked tests
 
