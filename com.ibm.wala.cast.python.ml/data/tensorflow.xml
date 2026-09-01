@@ -586,6 +586,10 @@
         <new def="fill" class="Ltensorflow/functions/fill"/>
         <putfield class="LRoot" field="fill" fieldType="LRoot" ref="x" value="fill"/>
         <putfield class="LRoot" field="fill" fieldType="LRoot" ref="array_ops" value="fill"/>
+        <new def="group" class="Ltensorflow/functions/group"/>
+        <putfield class="LRoot" field="group" fieldType="LRoot" ref="x" value="group"/>
+        <new def="no_op" class="Ltensorflow/functions/no_op"/>
+        <putfield class="LRoot" field="no_op" fieldType="LRoot" ref="x" value="no_op"/>
         <new def="zeros_like" class="Ltensorflow/functions/zeros_like"/>
         <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="x" value="zeros_like"/>
         <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="array_ops" value="zeros_like"/>
@@ -1980,6 +1984,20 @@
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input dtype name">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="x"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/group. Returns an `Operation`, NOT a tensor: it has neither dtype nor shape, and the tensor type system's whole vocabulary is those two axes, so typing it would yield a tensor answering unknown to everything and be indistinguishable from a Python value the analysis simply cannot read. The point of modeling it is that a consumer can positively IDENTIFY an operation from the points-to set, since a function returning one cannot be traced at all (wala/ML#864). The `Operation` class was already declared in the ops package; what was missing was any API that returns one. -->
+      <class name="group" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self inputs name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Operation"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/no_op. See `group` above for why this allocates an `Operation` rather than a tensor (wala/ML#864). -->
+      <class name="no_op" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Operation"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="embedding_lookup" allocatable="true">
