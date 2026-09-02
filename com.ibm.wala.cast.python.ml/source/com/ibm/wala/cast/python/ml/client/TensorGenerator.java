@@ -4805,6 +4805,166 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns whether the argument at the given position or keyword name is SYNTACTICALLY supplied,
+   * independent of whether its value resolves to anything.
+   *
+   * <p>This is deliberately a question about the program text rather than about the points-to set,
+   * because the two answer different things and conflating them is a defect this class has carried
+   * (wala/ML#865). An argument that is absent has a correct API default; an argument that is
+   * present but whose value could not be resolved has no evidence at all, and giving it the default
+   * asserts a guess with the authority of a specification. A points-to set cannot tell those apart:
+   * it is empty in both cases.
+   *
+   * <p>THREE-VALUED, following {@code ConvolutionCall}'s constructor-argument detection
+   * (wala/ML#843 family), because a third state exists and the unmarked case is the one that
+   * borrows confidence: {@code TRUE} when a reachable call site visibly supplies the argument,
+   * {@code FALSE} only when every consulted site was readable, none supplies it, and none carries
+   * an unpack that could: neither a starred positional unpack (alignment past a star is unreliable,
+   * wala/ML#751) nor a keyword ({@code **}) spread (surfaced by the Python 3 front end as a keyword
+   * named per {@link #KEYWORD_SPREAD_NAME}; the Python 2 front end drops call-site spreads
+   * entirely, so absence claims are only as strong as that front end's encoding). {@code null}
+   * means the detection cannot tell. Presence is evaluated PER CALL SITE: a source-based anchor
+   * reads its one invoke exactly, and a caller-walk anchor folds the per-site answers rather than
+   * testing an aggregated arity set, whose ANY-site reading reports an argument supplied at one
+   * site as supplied at all of them.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The 0-based positional index of the argument, or a negative value if it has no
+   *     positional form.
+   * @param paramName The keyword name of the argument, or {@code null}.
+   * @return {@code TRUE}, {@code FALSE}, or {@code null} as above.
+   */
+  protected Boolean isArgumentSyntacticallySupplied(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) return invokeSuppliesArgument(call, paramPos, paramName);
+
+    boolean sawSite = false;
+    boolean indeterminate = false;
+
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) {
+        indeterminate = true;
+        continue;
+      }
+
+      sawSite = true;
+      Boolean here =
+          invokeSuppliesArgument((PythonInvokeInstruction) callerInvoke.snd, paramPos, paramName);
+      if (Boolean.TRUE.equals(here)) return true;
+      if (here == null) indeterminate = true;
+    }
+
+    if (indeterminate) return null;
+    return sawSite ? Boolean.FALSE : null;
+  }
+
+  /**
+   * The keyword-parameter name under which the Python 3 front end records a call-site {@code **}
+   * spread. The parser receives the spread as a {@code keyword} whose name is {@code null} (the
+   * CPython AST convention for {@code f(**d)}) and makes a {@code null} name constant of it, which
+   * the CAst-to-IR translator stringifies via {@code String.valueOf}, so the spread surfaces in
+   * {@link PythonInvokeInstruction#getKeywords()} as a keyword literally named {@code "null"}. A
+   * program's own keyword argument named {@code null} (a legal Python identifier) is
+   * indistinguishable from a spread under this encoding; both are treated as a spread, which errs
+   * toward indeterminacy rather than toward a fabricated absence.
+   */
+  private static final String KEYWORD_SPREAD_NAME = String.valueOf((Object) null);
+
+  /**
+   * Returns whether the given invoke supplies the argument at the given position or keyword name:
+   * the per-call-site half of {@link #isArgumentSyntacticallySupplied(PropagationCallGraphBuilder,
+   * int, String)}.
+   *
+   * @param call The {@link PythonInvokeInstruction} to read.
+   * @param paramPos The 0-based positional index of the argument, or a negative value if it has no
+   *     positional form.
+   * @param paramName The keyword name of the argument, or {@code null}.
+   * @return {@code TRUE} if the invoke supplies the argument by keyword or position, {@code null}
+   *     if it carries a starred unpack or a keyword ({@code **}) spread that could (see {@link
+   *     #KEYWORD_SPREAD_NAME}), and {@code FALSE} otherwise.
+   */
+  private static Boolean invokeSuppliesArgument(
+      PythonInvokeInstruction call, int paramPos, String paramName) {
+    if (paramName != null && call.getKeywords().contains(paramName)) return true;
+    if (paramPos >= 0 && call.getNumberOfPositionalParameters() - 1 > paramPos) return true;
+    if (call.getStarredPositions().length > 0) return null;
+    if (call.getKeywords().contains(KEYWORD_SPREAD_NAME)) return null;
+    return false;
+  }
+
+  /**
+   * Emits a dtype API default only when the {@code dtype} argument is determinately absent,
+   * degrading to {@link DType#UNKNOWN} otherwise (wala/ML#865). The terminal step of a {@link
+   * #getDefaultDTypes(PropagationCallGraphBuilder)} override: every richer reading (the points-to
+   * walk, a token reader, a field walk) has already run dry by the time the override reaches its
+   * default constant, so what remains is exactly the absent-versus-unresolved question that an
+   * empty points-to set cannot answer. An absent argument takes the documented default, which is
+   * genuinely correct; a supplied one whose value nothing could read has no evidence, and the
+   * default would assert a guess indistinguishable downstream from a real resolution.
+   *
+   * <p>The decision, in order: a non-empty points-to set that is all {@code None} constants takes
+   * the default, because an explicit {@code dtype=None} documents "use the default" (the same
+   * reading {@code getDTypesFromDTypeArgument} gives it); any other non-empty set that reached the
+   * default emission is a supplied argument every reader failed on, so it degrades. An empty set
+   * defers to {@link #isArgumentSyntacticallySupplied(PropagationCallGraphBuilder, int, String)}:
+   * only determinate absence earns the default, and both supplied and indeterminate degrade,
+   * because treating indeterminate as absence re-opens the default-patching defect for exactly the
+   * call shapes least likely to have witnesses (the wala/ML#843 family's lesson).
+   *
+   * <p>UNWITNESSED CONTRACT GUARD: the non-empty-but-unreadable arm (a points-to member that is
+   * neither a {@code None} constant nor anything {@code getDTypesFromDTypeArgument} could map, e.g.
+   * a skipped non-allocation key) has no exercising fixture on this corpus; the witnessed arms are
+   * absent (default), supplied-with-empty-set (degrade), explicit {@code None} (default), and the
+   * starred and keyword-spread indeterminates (degrade), all pinned by {@code
+   * TestDTypeAbsentVersusUnresolved} (which also pins a positionally supplied resolvable dtype, a
+   * case that resolves before reaching this helper but would land in it wrongly if the positional
+   * offset broke).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param apiDefault The API's documented default dtypes for an absent argument.
+   * @return {@code apiDefault} when the argument is determinately absent or an explicit {@code
+   *     None}; {@code EnumSet.of(DType.UNKNOWN)} otherwise.
+   */
+  protected Set<DType> dTypeApiDefaultOrUnknown(
+      PropagationCallGraphBuilder builder, Set<DType> apiDefault) {
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+
+    if (pointsToSet != null && !pointsToSet.isEmpty()) {
+      if (allNullConstants(pointsToSet)) return apiDefault;
+
+      LOGGER.fine(
+          () ->
+              "DType argument of "
+                  + describe(this.getSource())
+                  + " is supplied but no member could be read; degrading to "
+                  + DType.UNKNOWN
+                  + " instead of the API default (wala/ML#865).");
+      return EnumSet.of(DType.UNKNOWN);
+    }
+
+    Boolean supplied =
+        this.isArgumentSyntacticallySupplied(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+
+    if (Boolean.FALSE.equals(supplied)) return apiDefault;
+
+    LOGGER.fine(
+        () ->
+            "DType argument of "
+                + describe(this.getSource())
+                + " is "
+                + (supplied == null ? "indeterminately" : "syntactically")
+                + " supplied with an unresolvable value; degrading to "
+                + DType.UNKNOWN
+                + " instead of the API default (wala/ML#865).");
+    return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
    * Returns whether every member of the given points-to set is a {@code null} {@link ConstantKey},
    * i.e., the value is statically an explicit Python {@code None}. Consumers of optional arguments
    * use this to treat an explicit {@code None} the same as an omitted argument, since the shape and
@@ -4822,6 +4982,37 @@ public abstract class TensorGenerator {
       if (!(ik instanceof ConstantKey) || ((ConstantKey<?>) ik).getValue() != null) return false;
 
     return true;
+  }
+
+  /**
+   * Returns whether any member of the given points-to set is a {@code null} {@link ConstantKey},
+   * i.e., the value may be an explicit Python {@code None} at runtime. The existentially quantified
+   * counterpart of {@link #allNullConstants(OrdinalSet)}, for the opposite kind of consumer: where
+   * that predicate serves a positive claim ("this value <em>is</em> an omitted argument", so every
+   * member must agree), this one serves a universal claim over the values that may arrive (e.g., a
+   * client declaring a tensor specification for a value), which a single {@code None} member
+   * defeats even when tensor-typed members sit beside it on the same key (wala/ML#867). A mixed
+   * set, part {@code None} and part tensor, is {@code true} here and {@code false} there; that
+   * mixed state—tensor may-evidence and a {@code None} constant coexisting on one pointer key—is
+   * precisely the configuration wala/ML#867 is about.
+   *
+   * <p>An EMPTY (or {@code null}) set yields {@code false}, because no {@code None} member is
+   * present—but "no {@code None} was seen" and "nothing was seen" are different facts with the same
+   * return value here. A consumer gating a universal claim on this predicate alone would accept a
+   * value with no evidence at all, which is the same unsound claim this predicate exists to
+   * prevent, one step over (the absent-versus-unresolved conflation of wala/ML#865): such a
+   * consumer must ALSO require the evidence to be non-empty.
+   *
+   * @param pointsToSet The {@link OrdinalSet} of {@link InstanceKey}s to examine.
+   * @return {@code true} iff {@code pointsToSet} has at least one {@code null}-constant member.
+   */
+  public static boolean anyNullConstant(OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null) return false;
+
+    for (InstanceKey ik : pointsToSet)
+      if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() == null) return true;
+
+    return false;
   }
 
   /**
@@ -5640,16 +5831,23 @@ public abstract class TensorGenerator {
         this.getArgumentPointsToSet(
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
-    // If the argument dtype is not specified.
+    // An empty points-to set cannot distinguish an omitted argument from a supplied one whose
+    // value did not resolve (wala/ML#865), and `getDefaultDTypes` overrides are not mere API
+    // constants: several read the supplied argument by non-points-to means (`NpArray`'s token
+    // reader, the wala/ML#570 field walk), so this routing must stay. The absent-versus-unresolved
+    // distinction is made where the API-default CONSTANT is finally emitted, after those readers
+    // have run dry; see `dTypeApiDefaultOrUnknown`.
     if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
 
     // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
     Set<DType> fromArgument = this.getDTypesFromDTypeArgument(builder, pointsToSet);
 
-    // An argument none of whose members could be read is indistinguishable, for this value, from
-    // one that was never supplied: the dtype is unknown either way. Returning the empty set would
-    // say something stronger and wrong — that the value is not a tensor at all — which is the
-    // lattice mistake the class Javadoc warns about (wala/ML#860).
+    // An argument none of whose members could be read still routes to `getDefaultDTypes` for the
+    // same reason as above: the override may resolve it by other means, and an adopter of
+    // `dTypeApiDefaultOrUnknown` degrades to UNKNOWN there rather than patching the default
+    // (wala/ML#865). Returning the empty set would say something stronger and wrong (that the
+    // value is not a tensor at all), which is the lattice mistake the class Javadoc warns about
+    // (wala/ML#860).
     return fromArgument.isEmpty() ? this.getDefaultDTypes(builder) : fromArgument;
   }
 

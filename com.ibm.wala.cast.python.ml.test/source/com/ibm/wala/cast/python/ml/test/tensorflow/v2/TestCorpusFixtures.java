@@ -1191,4 +1191,28 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             2, Set.of(TensorType.of(FLOAT_32, 128, 2)),
             3, Set.of(TensorType.of(FLOAT_32, 128, 2))));
   }
+
+  /**
+   * Pins the negative fact wala/ML#867's disposition rests on: the engine's per-function census for
+   * {@code TUDataset.cat} is empty: no tensor parameters and no function-local tensor variables in
+   * {@code cat}'s own frame. The tensor may-evidence for {@code cat}'s container argument rides on
+   * the argument list's element {@link com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey}s
+   * (see {@link TestNoneContainerElement}), never on the parameter's local, so a client that reads
+   * {@code cat}'s frame sees nothing while a client that sweeps field keys sees element evidence
+   * beside a {@code None} constant on the same key. If this census ever becomes non-empty, the
+   * engine has started classifying the parameter itself and wala/ML#867's seat analysis must be
+   * revisited.
+   */
+  @Test
+  public void testNlpgnnCatCensusEmpty()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/datas/graphloader.py",
+        "TUDataset.cat",
+        "nlpgnn_full_proj",
+        0,
+        0,
+        Map.of());
+  }
 }
