@@ -4836,6 +4836,13 @@ public abstract class TensorGenerator {
    * mixed state—tensor may-evidence and a {@code None} constant coexisting on one pointer key—is
    * precisely the configuration wala/ML#867 is about.
    *
+   * <p>An EMPTY (or {@code null}) set yields {@code false}, because no {@code None} member is
+   * present—but "no {@code None} was seen" and "nothing was seen" are different facts with the same
+   * return value here. A consumer gating a universal claim on this predicate alone would accept a
+   * value with no evidence at all, which is the same unsound claim this predicate exists to
+   * prevent, one step over (the absent-versus-unresolved conflation of wala/ML#865): such a
+   * consumer must ALSO require the evidence to be non-empty.
+   *
    * @param pointsToSet The {@link OrdinalSet} of {@link InstanceKey}s to examine.
    * @return {@code true} iff {@code pointsToSet} has at least one {@code null}-constant member.
    */

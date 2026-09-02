@@ -10,7 +10,6 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.TensorGenerator;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.util.collections.Pair;
@@ -32,10 +31,11 @@ import org.junit.Test;
  * tensor state <em>and</em> a {@code ConstantKey(null)}. It fails if the pointer analysis stops
  * propagating the {@code None} constant into the element field's points-to set (the predicate's
  * reason to exist disappears) or if the tensor may-state vanishes (the configuration degenerates
- * into the plain no-evidence case a consumer already handles). {@link
- * #testAllTensorElementsAreNotFlagged} is the sibling that keeps the predicate falsifiable in the
- * other direction: the same geometry with every element unconditionally an ndarray must not be
- * flagged.
+ * into the plain no-evidence case a consumer already handles). Two siblings keep the predicate
+ * falsifiable in the other direction: {@link #testAllTensorElementsAreNotFlagged} (the same
+ * geometry with every element unconditionally an ndarray) and {@link
+ * #testLiteralBesideTensorIsNotFlagged} (the dual-channel geometry with an ordinary literal in
+ * place of {@code None}, so a predicate mistakenly flagging any constant fails it).
  */
 public class TestNoneContainerElement extends AbstractTensorTest {
 
@@ -48,6 +48,21 @@ public class TestNoneContainerElement extends AbstractTensorTest {
     for (Pair<Boolean, Boolean> key : keys) {
       assertTrue("Expecting the None constant in the element field's points-to set.", key.fst);
       assertTrue("Expecting tensor may-state beside the None constant on the same key.", key.snd);
+    }
+  }
+
+  @Test
+  public void testLiteralBesideTensorIsNotFlagged() throws Exception {
+    List<Pair<Boolean, Boolean>> keys =
+        leadingElementFieldKeys("tf2_test_literal_container_element.py");
+    assertFalse("Expecting the read-side list's leading element field key.", keys.isEmpty());
+
+    for (Pair<Boolean, Boolean> key : keys) {
+      assertFalse(
+          "Expecting an ordinary literal beside tensor state not to be flagged: the predicate"
+              + " tests None-possibility, not constant-ness.",
+          key.fst);
+      assertTrue("Expecting tensor may-state beside the literal on the same key.", key.snd);
     }
   }
 
@@ -97,9 +112,7 @@ public class TestNoneContainerElement extends AbstractTensorTest {
         result.add(
             Pair.make(
                 TensorGenerator.anyNullConstant(
-                    builder
-                        .getPointerAnalysis()
-                        .getPointsToSet((InstanceFieldPointerKey) fieldKey)),
+                    builder.getPointerAnalysis().getPointsToSet(fieldKey)),
                 pair.snd != null && !pair.snd.getTypes().isEmpty()));
     }
 
