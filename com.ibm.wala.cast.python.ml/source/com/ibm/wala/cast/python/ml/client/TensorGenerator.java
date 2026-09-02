@@ -4825,6 +4825,37 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns whether any member of the given points-to set is a {@code null} {@link ConstantKey},
+   * i.e., the value may be an explicit Python {@code None} at runtime. The existentially quantified
+   * counterpart of {@link #allNullConstants(OrdinalSet)}, for the opposite kind of consumer: where
+   * that predicate serves a positive claim ("this value <em>is</em> an omitted argument", so every
+   * member must agree), this one serves a universal claim over the values that may arrive (e.g., a
+   * client declaring a tensor specification for a value), which a single {@code None} member
+   * defeats even when tensor-typed members sit beside it on the same key (wala/ML#867). A mixed
+   * set, part {@code None} and part tensor, is {@code true} here and {@code false} there; that
+   * mixed state—tensor may-evidence and a {@code None} constant coexisting on one pointer key—is
+   * precisely the configuration wala/ML#867 is about.
+   *
+   * <p>An EMPTY (or {@code null}) set yields {@code false}, because no {@code None} member is
+   * present—but "no {@code None} was seen" and "nothing was seen" are different facts with the same
+   * return value here. A consumer gating a universal claim on this predicate alone would accept a
+   * value with no evidence at all, which is the same unsound claim this predicate exists to
+   * prevent, one step over (the absent-versus-unresolved conflation of wala/ML#865): such a
+   * consumer must ALSO require the evidence to be non-empty.
+   *
+   * @param pointsToSet The {@link OrdinalSet} of {@link InstanceKey}s to examine.
+   * @return {@code true} iff {@code pointsToSet} has at least one {@code null}-constant member.
+   */
+  public static boolean anyNullConstant(OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null) return false;
+
+    for (InstanceKey ik : pointsToSet)
+      if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() == null) return true;
+
+    return false;
+  }
+
+  /**
    * Record-carrying core of {@link #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet,
    * boolean)} (wala/ML#718): in exact mode, a member whose shapes do not resolve marks the unknown
    * remainder and the resolvable members keep collecting, so a partially resolvable points-to union
