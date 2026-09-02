@@ -9,6 +9,7 @@ import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.TensorGenerator;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -35,65 +36,91 @@ import org.junit.Test;
  * falsifiable in the other direction: {@link #testAllTensorElementsAreNotFlagged} (the same
  * geometry with every element unconditionally an ndarray) and {@link
  * #testLiteralBesideTensorIsNotFlagged} (the dual-channel geometry with an ordinary literal in
- * place of {@code None}, so a predicate mistakenly flagging any constant fails it).
+ * place of {@code None}, so a predicate mistakenly flagging any constant fails it). Each witness
+ * also pins the points-to facts it depends on: the literal case asserts the non-null {@link
+ * ConstantKey} is actually IN the element field's points-to set, so the not-flagged assertion
+ * cannot be satisfied vacuously by a field the substrate stopped propagating the literal into.
  */
 public class TestNoneContainerElement extends AbstractTensorTest {
 
+  /**
+   * The facts this class asserts about one leading-element field key: whether {@link
+   * TensorGenerator#anyNullConstant} flags its points-to set, whether the analysis carries
+   * non-empty tensor state on the same key, and whether the points-to set actually contains a
+   * non-null {@link ConstantKey} (the fact the literal witness's not-flagged assertion depends on
+   * to be non-vacuous).
+   */
+  private record ElementKeyFacts(
+      boolean flaggedAsPossiblyNone, boolean hasTensorState, boolean hasNonNullConstant) {}
+
   @Test
   public void testNoneBesideTensorIsDetected() throws Exception {
-    List<Pair<Boolean, Boolean>> keys =
-        leadingElementFieldKeys("tf2_test_none_container_element.py");
+    List<ElementKeyFacts> keys = leadingElementFieldKeys("tf2_test_none_container_element.py");
     assertFalse("Expecting the read-side list's leading element field key.", keys.isEmpty());
 
-    for (Pair<Boolean, Boolean> key : keys) {
-      assertTrue("Expecting the None constant in the element field's points-to set.", key.fst);
-      assertTrue("Expecting tensor may-state beside the None constant on the same key.", key.snd);
+    for (ElementKeyFacts key : keys) {
+      assertTrue(
+          "Expecting the None constant in the element field's points-to set.",
+          key.flaggedAsPossiblyNone());
+      assertTrue(
+          "Expecting tensor may-state beside the None constant on the same key.",
+          key.hasTensorState());
+      assertFalse(
+          "Expecting no non-null constant in this fixture's element field.",
+          key.hasNonNullConstant());
     }
   }
 
   @Test
   public void testLiteralBesideTensorIsNotFlagged() throws Exception {
-    List<Pair<Boolean, Boolean>> keys =
-        leadingElementFieldKeys("tf2_test_literal_container_element.py");
+    List<ElementKeyFacts> keys = leadingElementFieldKeys("tf2_test_literal_container_element.py");
     assertFalse("Expecting the read-side list's leading element field key.", keys.isEmpty());
 
-    for (Pair<Boolean, Boolean> key : keys) {
+    for (ElementKeyFacts key : keys) {
+      assertTrue(
+          "Expecting the literal's non-null constant in the element field's points-to set: without"
+              + " it the not-flagged assertion below is vacuous, satisfied by a field the"
+              + " substrate stopped propagating the literal into.",
+          key.hasNonNullConstant());
       assertFalse(
           "Expecting an ordinary literal beside tensor state not to be flagged: the predicate"
               + " tests None-possibility, not constant-ness.",
-          key.fst);
-      assertTrue("Expecting tensor may-state beside the literal on the same key.", key.snd);
+          key.flaggedAsPossiblyNone());
+      assertTrue(
+          "Expecting tensor may-state beside the literal on the same key.", key.hasTensorState());
     }
   }
 
   @Test
   public void testAllTensorElementsAreNotFlagged() throws Exception {
-    List<Pair<Boolean, Boolean>> keys =
-        leadingElementFieldKeys("tf2_test_tensor_container_element.py");
+    List<ElementKeyFacts> keys = leadingElementFieldKeys("tf2_test_tensor_container_element.py");
     assertFalse("Expecting the read-side list's leading element field key.", keys.isEmpty());
 
-    for (Pair<Boolean, Boolean> key : keys) {
-      assertFalse("Expecting no None constant in the element field's points-to set.", key.fst);
-      assertTrue("Expecting tensor may-state on the element field key.", key.snd);
+    for (ElementKeyFacts key : keys) {
+      assertFalse(
+          "Expecting no None constant in the element field's points-to set.",
+          key.flaggedAsPossiblyNone());
+      assertTrue("Expecting tensor may-state on the element field key.", key.hasTensorState());
+      assertFalse(
+          "Expecting no constant of any kind in this fixture's element field.",
+          key.hasNonNullConstant());
     }
   }
 
   /**
-   * Runs the tensor analysis on the given fixture and returns, for each field-{@code 0} key of the
-   * list allocated in the fixture's {@code read} function, whether {@link
-   * TensorGenerator#anyNullConstant} flags its points-to set (first) and whether the analysis
-   * carries non-empty tensor state on the same key (second).
+   * Runs the tensor analysis on the given fixture and returns the {@link ElementKeyFacts} for each
+   * field-{@code 0} key of the list allocated in the fixture's {@code read} function.
    *
    * @param fixture The Python fixture file name.
-   * @return One pair per matching field key; empty if the fixture's geometry no longer produces
+   * @return One entry per matching field key; empty if the fixture's geometry no longer produces
    *     one.
    */
-  private List<Pair<Boolean, Boolean>> leadingElementFieldKeys(String fixture) throws Exception {
+  private List<ElementKeyFacts> leadingElementFieldKeys(String fixture) throws Exception {
     PythonTensorAnalysisEngine engine = makeEngine(Collections.<java.io.File>emptyList(), fixture);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     builder.makeCallGraph(builder.getOptions());
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);
-    List<Pair<Boolean, Boolean>> result = new ArrayList<>();
+    List<ElementKeyFacts> result = new ArrayList<>();
 
     for (Pair<PointerKey, TensorVariable> pair : analysis) {
       if (!(pair.fst instanceof InstanceFieldKey)) continue;
@@ -108,12 +135,21 @@ public class TestNoneContainerElement extends AbstractTensorTest {
           allocation.getNode().getMethod().getDeclaringClass().getName().toString();
 
       if (allocatingMethod.endsWith("/read")
-          && fieldKey.getField().getName().toString().equals("0"))
+          && fieldKey.getField().getName().toString().equals("0")) {
+        boolean nonNullConstant = false;
+        for (InstanceKey member : builder.getPointerAnalysis().getPointsToSet(fieldKey))
+          if (member instanceof ConstantKey && ((ConstantKey<?>) member).getValue() != null) {
+            nonNullConstant = true;
+            break;
+          }
+
         result.add(
-            Pair.make(
+            new ElementKeyFacts(
                 TensorGenerator.anyNullConstant(
                     builder.getPointerAnalysis().getPointsToSet(fieldKey)),
-                pair.snd != null && !pair.snd.getTypes().isEmpty()));
+                pair.snd != null && !pair.snd.getTypes().isEmpty(),
+                nonNullConstant));
+      }
     }
 
     return result;
