@@ -4820,13 +4820,11 @@ public abstract class TensorGenerator {
    * borrows confidence: {@code TRUE} when a reachable call site visibly supplies the argument,
    * {@code FALSE} only when every consulted site was readable, none supplies it, and none carries
    * an unpack that could: neither a starred positional unpack (alignment past a star is unreliable,
-   * wala/ML#751) nor a keyword ({@code **}) spread (surfaced by the Python 3 front end as a keyword
-   * named per {@link #KEYWORD_SPREAD_NAME}; the Python 2 front end drops call-site spreads
-   * entirely, so absence claims are only as strong as that front end's encoding). {@code null}
-   * means the detection cannot tell. Presence is evaluated PER CALL SITE: a source-based anchor
-   * reads its one invoke exactly, and a caller-walk anchor folds the per-site answers rather than
-   * testing an aggregated arity set, whose ANY-site reading reports an argument supplied at one
-   * site as supplied at all of them.
+   * wala/ML#751) nor a keyword ({@code **}) spread (surfaced by the front end as a keyword named
+   * per {@link #KEYWORD_SPREAD_NAME}). {@code null} means the detection cannot tell. Presence is
+   * evaluated PER CALL SITE: a source-based anchor reads its one invoke exactly, and a caller-walk
+   * anchor folds the per-site answers rather than testing an aggregated arity set, whose ANY-site
+   * reading reports an argument supplied at one site as supplied at all of them.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param paramPos The 0-based positional index of the argument, or a negative value if it has no
@@ -4861,14 +4859,14 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * The keyword-parameter name under which the Python 3 front end records a call-site {@code **}
-   * spread. The parser receives the spread as a {@code keyword} whose name is {@code null} (the
-   * CPython AST convention for {@code f(**d)}) and makes a {@code null} name constant of it, which
-   * the CAst-to-IR translator stringifies via {@code String.valueOf}, so the spread surfaces in
-   * {@link PythonInvokeInstruction#getKeywords()} as a keyword literally named {@code "null"}. A
-   * program's own keyword argument named {@code null} (a legal Python identifier) is
-   * indistinguishable from a spread under this encoding; both are treated as a spread, which errs
-   * toward indeterminacy rather than toward a fabricated absence.
+   * The keyword-parameter name under which the front end records a call-site {@code **} spread. The
+   * parser receives the spread as a {@code keyword} whose name is {@code null} (the CPython AST
+   * convention for {@code f(**d)}) and makes a {@code null} name constant of it, which the
+   * CAst-to-IR translator stringifies via {@code String.valueOf}, so the spread surfaces in {@link
+   * PythonInvokeInstruction#getKeywords()} as a keyword literally named {@code "null"}. A program's
+   * own keyword argument named {@code null} (a legal Python identifier) is indistinguishable from a
+   * spread under this encoding; both are treated as a spread, which errs toward indeterminacy
+   * rather than toward a fabricated absence.
    */
   private static final String KEYWORD_SPREAD_NAME = String.valueOf((Object) null);
 
