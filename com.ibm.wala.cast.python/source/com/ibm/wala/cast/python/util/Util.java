@@ -228,6 +228,98 @@ public class Util {
   }
 
   /**
+   * A decorator application with its mined argument names: the (possibly dotted) decorator name
+   * and, per positional argument in call order, the argument's dotted name, {@code "None"} for the
+   * {@code None} constant, or {@link #UNMINEABLE_DECORATOR_ARGUMENT} for anything else. A bare
+   * decorator yields an entry with an empty argument list: the front end normalizes bare
+   * application to a zero-argument call node in the CAst, so {@code @dec} and {@code @dec()} are
+   * indistinguishable here (observed on the Python 3 front end; nothing downstream depends on the
+   * difference, since decoration is not applied in IR at all).
+   *
+   * @param name The decorator's (possibly dotted) name, as {@link #getName(CAstAnnotation)} mines
+   *     it.
+   * @param argumentNames The mined argument names, in call order, one entry per positional
+   *     argument; empty for a bare or zero-argument application.
+   */
+  public record DecoratorCall(String name, List<String> argumentNames) {}
+
+  /**
+   * The per-argument marker for a decorator argument that has no minable name: a call expression, a
+   * non-{@code None} literal, a keyword argument, or a starred unpack. Deliberately not a legal
+   * Python identifier, so it cannot collide with a real name, and deliberately present rather than
+   * skipped, so a consumer sees the argument COUNT the program has: an argument that silently
+   * vanished would let a consumer bind the remaining names to the wrong positions (the wala/ML#868
+   * concern one step over).
+   */
+  public static final String UNMINEABLE_DECORATOR_ARGUMENT = "<unmineable>";
+
+  /**
+   * Mines the decorators from the given annotations with their argument names (wala/ML#868): each
+   * decorator yields a {@link DecoratorCall} with the decorator's name and its per-argument mined
+   * names. The CAst already carries every decorator's full expression under {@link
+   * #DYNAMIC_ANNOTATION_KEY}; {@link #getName(CAstAnnotation)} mines only the callee's name
+   * segments, and this is its argument-side sibling. Only name-shaped arguments (identifiers,
+   * dotted attributes) and the {@code None} constant mine to names; every other argument form
+   * yields {@link #UNMINEABLE_DECORATOR_ARGUMENT} in its position.
+   *
+   * @param annotations The {@link CAstAnnotation}s of a function entity, as the parser recorded
+   *     them.
+   * @return The decorator applications in declaration order; empty when there are none.
+   */
+  public static List<DecoratorCall> getDecoratorCalls(Collection<CAstAnnotation> annotations) {
+    if (annotations == null) return emptyList();
+
+    List<DecoratorCall> ret = new ArrayList<>();
+
+    for (CAstAnnotation annotation : annotations) {
+      if (!annotation.getType().equals(CAST_DYNAMIC_ANNOTATION)) continue;
+
+      CAstNode node = (CAstNode) annotation.getArguments().get(DYNAMIC_ANNOTATION_KEY);
+      if (node == null || node.getKind() != CAstNode.CALL) continue;
+
+      Optional<String> name = getName(annotation);
+      if (name.isEmpty()) continue;
+
+      // The CALL node's children are the callee expression, the empty receiver slot, and then the
+      // arguments; keyword and starred arguments arrive as ARRAY_LITERAL wrappers and mine to the
+      // unmineable marker.
+      List<String> argumentNames = new ArrayList<>();
+      for (int i = 2; i < node.getChildCount(); i++)
+        argumentNames.add(mineDecoratorArgumentName(node.getChild(i)));
+
+      ret.add(new DecoratorCall(name.get(), List.copyOf(argumentNames)));
+    }
+
+    return ret;
+  }
+
+  /**
+   * Mines one decorator argument's name: an identifier's name, a dotted attribute chain joined with
+   * {@code "."}, {@code "None"} for the {@code None} constant, and {@link
+   * #UNMINEABLE_DECORATOR_ARGUMENT} for every other form.
+   *
+   * @param argument The argument's CAst expression.
+   * @return The mined name or the unmineable marker.
+   */
+  private static String mineDecoratorArgumentName(CAstNode argument) {
+    switch (argument.getKind()) {
+      case CAstNode.CONSTANT:
+        return argument.getValue() == null ? "None" : UNMINEABLE_DECORATOR_ARGUMENT;
+      case CAstNode.VAR:
+        Object name = argument.getChild(0).getValue();
+        return name instanceof String ? (String) name : UNMINEABLE_DECORATOR_ARGUMENT;
+      case CAstNode.OBJECT_REF:
+        String qualifier = mineDecoratorArgumentName(argument.getChild(0));
+        Object member = argument.getChild(1).getValue();
+        return !UNMINEABLE_DECORATOR_ARGUMENT.equals(qualifier) && member instanceof String
+            ? qualifier + "." + member
+            : UNMINEABLE_DECORATOR_ARGUMENT;
+      default:
+        return UNMINEABLE_DECORATOR_ARGUMENT;
+    }
+  }
+
+  /**
    * Returns true iff the given {@link IClass} represents a Python <a
    * href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
    *
