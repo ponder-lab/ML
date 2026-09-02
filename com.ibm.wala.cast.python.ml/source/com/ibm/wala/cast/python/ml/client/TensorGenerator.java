@@ -4805,6 +4805,41 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns whether the argument at the given position or keyword name is SYNTACTICALLY supplied at
+   * the call site, independent of whether its value resolves to anything.
+   *
+   * <p>This is deliberately a question about the program text rather than about the points-to set,
+   * because the two answer different things and conflating them is a defect this class has carried
+   * (wala/ML#865). An argument that is absent has a correct API default; an argument that is
+   * present but whose value could not be resolved has no evidence at all, and giving it the default
+   * asserts a guess with the authority of a specification. A points-to set cannot tell those apart:
+   * it is empty in both cases.
+   *
+   * <p>Works on both anchoring paths. For a source-based generator the invoke instruction is
+   * available directly; for a manual or {@code read_data} anchor there is no invoke, so presence is
+   * read from the caller walk, which is why {@link
+   * #isKeywordArgumentPresent(PropagationCallGraphBuilder, String)} and {@link
+   * #getNumberOfPossiblePositionalArguments(PropagationCallGraphBuilder)} are consulted rather than
+   * the local IR. That matters because {@link #getArgumentValueNumber(PropagationCallGraphBuilder,
+   * int, String, boolean)} returns a sentinel for {@code read_data} nodes precisely to bypass its
+   * own absence check, so absence on that path is invisible to a value number and only this test
+   * can see it.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The 0-based positional index of the argument, or a negative value if it has no
+   *     positional form.
+   * @param paramName The keyword name of the argument, or {@code null}.
+   * @return {@code true} iff some call site supplies the argument positionally or by keyword.
+   */
+  protected boolean isArgumentSupplied(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    if (paramName != null && this.isKeywordArgumentPresent(builder, paramName)) return true;
+
+    return this.getNumberOfPossiblePositionalArguments(builder).stream()
+        .anyMatch(n -> n > paramPos);
+  }
+
+  /**
    * Returns whether every member of the given points-to set is a {@code null} {@link ConstantKey},
    * i.e., the value is statically an explicit Python {@code None}. Consumers of optional arguments
    * use this to treat an explicit {@code None} the same as an omitted argument, since the shape and
@@ -5640,17 +5675,28 @@ public abstract class TensorGenerator {
         this.getArgumentPointsToSet(
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
-    // If the argument dtype is not specified.
-    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
+    // An empty points-to set is NOT evidence that the argument was omitted, so it cannot decide
+    // between the API default and ⊤ on its own (wala/ML#865). Absence is a fact about the program
+    // text, so ask the call sites: an argument nobody supplies takes the API default, which is
+    // correct and is what `getDefaultDTypes` is named for. An argument that IS supplied but whose
+    // value did not resolve has no evidence, and answering with the default would assert a guess
+    // with the authority of a specification.
+    if (pointsToSet == null || pointsToSet.isEmpty())
+      return this.isArgumentSupplied(
+              builder, this.getDTypeParameterPosition(), this.getDTypeParameterName())
+          ? EnumSet.of(DType.UNKNOWN)
+          : this.getDefaultDTypes(builder);
 
-    // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
+    // The dtype points-to set is non-empty, so the argument was supplied.
     Set<DType> fromArgument = this.getDTypesFromDTypeArgument(builder, pointsToSet);
 
-    // An argument none of whose members could be read is indistinguishable, for this value, from
-    // one that was never supplied: the dtype is unknown either way. Returning the empty set would
-    // say something stronger and wrong — that the value is not a tensor at all — which is the
-    // lattice mistake the class Javadoc warns about (wala/ML#860).
-    return fromArgument.isEmpty() ? this.getDefaultDTypes(builder) : fromArgument;
+    // Reaching here means the argument was supplied, no member could be read, and no member was an
+    // explicit `None` (which `getDTypesFromDTypeArgument` returns the default for, correctly, since
+    // `dtype=None` really does mean "use the default"). So there is no absence reading available
+    // and the dtype is simply unknown. Returning the empty set would say something stronger and
+    // wrong, that the value is not a tensor at all, which is the lattice mistake the class Javadoc
+    // warns about (wala/ML#860); returning the default would assert one (wala/ML#865).
+    return fromArgument.isEmpty() ? EnumSet.of(DType.UNKNOWN) : fromArgument;
   }
 
   /**
@@ -8745,13 +8791,7 @@ public abstract class TensorGenerator {
       }
     }
 
-    Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
-
-    boolean keywordPresent =
-        (paramName != null && this.isKeywordArgumentPresent(builder, paramName));
-    boolean positionalPresent = numArgs.stream().anyMatch(n -> n > paramPos);
-
-    if (!positionalPresent && !keywordPresent)
+    if (!this.isArgumentSupplied(builder, paramPos, paramName))
       if (optional) return -1;
       else
         throw new IllegalStateException(
