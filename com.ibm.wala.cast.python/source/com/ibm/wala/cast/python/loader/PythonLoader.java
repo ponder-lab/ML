@@ -279,6 +279,17 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
     private final Collection<Annotation> annotations;
 
+    /**
+     * The call-form decorators with their mined argument names (wala/ML#868). A parallel channel
+     * beside {@link #getAnnotations()} rather than named arguments on the {@link Annotation}s
+     * themselves, deliberately: {@link Annotation} equality includes its arguments, so enriching
+     * the instances would silently break any consumer matching annotations by {@code
+     * Annotation.make(type)} equality (e.g., name-keyed decorator detection) the moment a decorator
+     * carries arguments. This channel is additive; the name-only annotations above are
+     * byte-identical to their pre-wala/ML#868 form.
+     */
+    private final List<com.ibm.wala.cast.python.util.Util.DecoratorCall> decoratorCalls;
+
     public DynamicMethodBody(
         TypeReference codeName,
         TypeReference parent,
@@ -291,7 +302,6 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       this.container = container;
 
       // fill in the decorators.
-      // FIXME: Process annotations with parameters.
       this.annotations =
           getNames(entity.getAnnotations()).stream()
               .map(s -> "L" + s)
@@ -299,6 +309,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
               .map(tn -> TypeReference.findOrCreate(pythonLoader, tn))
               .map(Annotation::make)
               .collect(toList());
+
+      this.decoratorCalls =
+          com.ibm.wala.cast.python.util.Util.getDecoratorCalls(entity.getAnnotations());
     }
 
     public IClass getContainer() {
@@ -308,6 +321,19 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     @Override
     public Collection<Annotation> getAnnotations() {
       return this.annotations;
+    }
+
+    /**
+     * Returns the decorators applied to this function with their mined argument names, in
+     * declaration order (wala/ML#868). A bare decorator appears with an empty argument list (the
+     * front end normalizes bare application to a zero-argument call in the CAst). Note that
+     * decoration is not applied in IR at all (the decorator is never invoked and the raw function
+     * is bound to its name), so this metadata is the only place a decorator's arguments survive to.
+     *
+     * @return The decorator applications, empty when there are none.
+     */
+    public List<com.ibm.wala.cast.python.util.Util.DecoratorCall> getDecoratorCalls() {
+      return this.decoratorCalls;
     }
   }
 
