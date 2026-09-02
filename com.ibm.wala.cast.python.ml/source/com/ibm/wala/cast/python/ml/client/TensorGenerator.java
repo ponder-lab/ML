@@ -4818,12 +4818,15 @@ public abstract class TensorGenerator {
    * <p>THREE-VALUED, following {@code ConvolutionCall}'s constructor-argument detection
    * (wala/ML#843 family), because a third state exists and the unmarked case is the one that
    * borrows confidence: {@code TRUE} when a reachable call site visibly supplies the argument,
-   * {@code FALSE} only when every consulted site was readable, none supplies it, and none carries a
-   * starred unpack that could (positional alignment past a star is unreliable, wala/ML#751), and
-   * {@code null} when the detection cannot tell. Presence is evaluated PER CALL SITE: a
-   * source-based anchor reads its one invoke exactly, and a caller-walk anchor folds the per-site
-   * answers rather than testing an aggregated arity set, whose ANY-site reading reports an argument
-   * supplied at one site as supplied at all of them.
+   * {@code FALSE} only when every consulted site was readable, none supplies it, and none carries
+   * an unpack that could: neither a starred positional unpack (alignment past a star is unreliable,
+   * wala/ML#751) nor a keyword ({@code **}) spread (surfaced by the Python 3 front end as a keyword
+   * named per {@link #KEYWORD_SPREAD_NAME}; the Python 2 front end drops call-site spreads
+   * entirely, so absence claims are only as strong as that front end's encoding). {@code null}
+   * means the detection cannot tell. Presence is evaluated PER CALL SITE: a source-based anchor
+   * reads its one invoke exactly, and a caller-walk anchor folds the per-site answers rather than
+   * testing an aggregated arity set, whose ANY-site reading reports an argument supplied at one
+   * site as supplied at all of them.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param paramPos The 0-based positional index of the argument, or a negative value if it has no
@@ -4858,6 +4861,18 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * The keyword-parameter name under which the Python 3 front end records a call-site {@code **}
+   * spread. The parser receives the spread as a {@code keyword} whose name is {@code null} (the
+   * CPython AST convention for {@code f(**d)}) and makes a {@code null} name constant of it, which
+   * the CAst-to-IR translator stringifies via {@code String.valueOf}, so the spread surfaces in
+   * {@link PythonInvokeInstruction#getKeywords()} as a keyword literally named {@code "null"}. A
+   * program's own keyword argument named {@code null} (a legal Python identifier) is
+   * indistinguishable from a spread under this encoding; both are treated as a spread, which errs
+   * toward indeterminacy rather than toward a fabricated absence.
+   */
+  private static final String KEYWORD_SPREAD_NAME = String.valueOf((Object) null);
+
+  /**
    * Returns whether the given invoke supplies the argument at the given position or keyword name:
    * the per-call-site half of {@link #isArgumentSyntacticallySupplied(PropagationCallGraphBuilder,
    * int, String)}.
@@ -4867,13 +4882,15 @@ public abstract class TensorGenerator {
    *     positional form.
    * @param paramName The keyword name of the argument, or {@code null}.
    * @return {@code TRUE} if the invoke supplies the argument by keyword or position, {@code null}
-   *     if it carries a starred unpack that could, and {@code FALSE} otherwise.
+   *     if it carries a starred unpack or a keyword ({@code **}) spread that could (see {@link
+   *     #KEYWORD_SPREAD_NAME}), and {@code FALSE} otherwise.
    */
   private static Boolean invokeSuppliesArgument(
       PythonInvokeInstruction call, int paramPos, String paramName) {
     if (paramName != null && call.getKeywords().contains(paramName)) return true;
     if (paramPos >= 0 && call.getNumberOfPositionalParameters() - 1 > paramPos) return true;
     if (call.getStarredPositions().length > 0) return null;
+    if (call.getKeywords().contains(KEYWORD_SPREAD_NAME)) return null;
     return false;
   }
 
@@ -4899,8 +4916,11 @@ public abstract class TensorGenerator {
    * <p>UNWITNESSED CONTRACT GUARD: the non-empty-but-unreadable arm (a points-to member that is
    * neither a {@code None} constant nor anything {@code getDTypesFromDTypeArgument} could map, e.g.
    * a skipped non-allocation key) has no exercising fixture on this corpus; the witnessed arms are
-   * absent (default), supplied-with-empty-set (degrade), explicit {@code None} (default), and
-   * starred-indeterminate (degrade), all pinned by {@code TestDTypeAbsentVersusUnresolved}.
+   * absent (default), supplied-with-empty-set (degrade), explicit {@code None} (default), and the
+   * starred and keyword-spread indeterminates (degrade), all pinned by {@code
+   * TestDTypeAbsentVersusUnresolved} (which also pins a positionally supplied resolvable dtype, a
+   * case that resolves before reaching this helper but would land in it wrongly if the positional
+   * offset broke).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param apiDefault The API's documented default dtypes for an absent argument.

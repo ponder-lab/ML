@@ -35,13 +35,15 @@ import org.junit.Test;
 public class TestDTypeAbsentVersusUnresolved extends TestPythonMLCallGraphShape {
 
   /**
-   * The four states a dtype argument can be in, each asserted separately.
+   * The states a dtype argument can be in, each asserted separately: absent, supplied and
+   * resolvable (by keyword and positionally), supplied but unresolved, explicit {@code None}, and
+   * the two indeterminate call shapes (a starred unpack and a keyword spread).
    *
-   * <p>Three of the four must NOT move, and they are the reason this is a four-way assertion rather
-   * than one. Fixing the unresolved case by degrading every empty points-to set to ⊤ would break
-   * {@code absent}, where the default is correct, and {@code supplied_none}, where an explicit
-   * {@code None} genuinely does mean "use the default". A test that pinned only the defect would
-   * pass for a change that traded it for those two regressions.
+   * <p>The must-not-move states are the reason this is a multi-way assertion rather than one.
+   * Fixing the unresolved case by degrading every empty points-to set to ⊤ would break {@code
+   * absent}, where the default is correct, and {@code supplied_none}, where an explicit {@code
+   * None} genuinely does mean "use the default". A test that pinned only the defect would pass for
+   * a change that traded it for those regressions.
    *
    * <p>Verified as a pair rather than only in the passing direction: with the fix reverted, {@code
    * supplied_but_unresolved} reads {@code float64}, which is exactly the reported defect and is
@@ -80,6 +82,18 @@ public class TestDTypeAbsentVersusUnresolved extends TestPythonMLCallGraphShape 
             + " re-open the defect for exactly the shapes least likely to have witnesses.",
         Set.of("unknown"),
         returnedCellTypes(analysis, "supplied_through_star"));
+    assertEquals(
+        "A positionally supplied dtype decides, exercising the positional half of the presence"
+            + " read: a wrong positional offset would make this look determinately absent and"
+            + " take the API default, the change's own defect through the other spelling.",
+        Set.of("int32"),
+        returnedCellTypes(analysis, "supplied_positionally"));
+    assertEquals(
+        "A keyword spread makes presence INDETERMINATE, exactly like a starred unpack: the spread"
+            + " could carry the dtype (at runtime here it does), so the default must not be"
+            + " asserted and the value does not resolve.",
+        Set.of("unknown"),
+        returnedCellTypes(analysis, "supplied_through_kwargs"));
   }
 
   /**

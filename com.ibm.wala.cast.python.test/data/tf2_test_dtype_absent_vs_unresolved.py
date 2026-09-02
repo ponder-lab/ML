@@ -23,7 +23,25 @@ def supplied_but_unresolved():
     # Supplied, but spelled with an attribute the model file carries no field for, so nothing
     # resolves. There is no evidence, and float64 here would be the defect: it is indistinguishable
     # downstream from a dtype that genuinely resolved to float64.
+    #
+    # `np.int` is the spelling the defect was reported with, kept deliberately: it is deprecated
+    # since NumPy 1.20 and removed in 1.24, so this fixture runs under NumPy < 1.24 (with a
+    # DeprecationWarning), matching the vendored subjects' era.
     return np.ones([2, 3], dtype=np.int)
+
+
+def supplied_positionally():
+    # Supplied positionally rather than by keyword (`shape` is positional 0, `dtype` positional 1),
+    # exercising the positional half of the syntactic-presence read: a wrong offset there would
+    # make a positionally supplied dtype look determinately absent and take the API default.
+    return np.ones([2, 3], np.int32)
+
+
+def supplied_through_kwargs(kw):
+    # A call-site `**` spread could carry a dtype the call shape cannot show, so presence is
+    # INDETERMINATE and the default must not be asserted. (At runtime this particular spread DOES
+    # carry the dtype, so the runtime truth is int32; the analysis honestly reports unknown.)
+    return np.ones([2, 3], **kw)
 
 
 def supplied_none():
@@ -45,3 +63,5 @@ assert supplied_and_resolvable().dtype == np.int32
 assert supplied_but_unresolved().dtype == np.int_
 assert supplied_none().dtype == np.float64
 assert supplied_through_star(([2, 3],)).dtype == np.float64
+assert supplied_positionally().dtype == np.int32
+assert supplied_through_kwargs({"dtype": np.int32}).dtype == np.int32
