@@ -31,6 +31,13 @@ def identity(f):
     return f
 
 
+class Holder:
+    # A namespace attribute, standing in for the module-attribute spelling real
+    # subjects use (importing a module and referring to classes through it), so
+    # the dotted-argument mining has a witness.
+    C = B
+
+
 class T:
     @params(A, B, None)
     def m(self, cls):
@@ -50,8 +57,15 @@ class T:
     def p(self):
         return 2
 
+    # A dotted (attribute-chain) argument, the spelling real subjects use when
+    # the classes are referred to through an imported module.
+    @params(Holder.C)
+    def q(self, cls):
+        return cls()
+
 
 t = T()
 t.m()
 t.n()
 assert t.p() == 2
+t.q()

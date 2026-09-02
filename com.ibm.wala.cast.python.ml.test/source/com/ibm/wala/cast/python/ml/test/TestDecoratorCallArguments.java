@@ -26,13 +26,15 @@ import org.junit.Test;
  * place a decorator's arguments survive to; layer two's entrypoint modeling is its intended
  * consumer, and until that lands this channel is deliberately unread.
  *
- * <p>The three decorated members pin the three argument situations: {@code m} carries identifiers
- * and an explicit {@code None} (mined in order, {@code None} included, because a consumer binding
+ * <p>The decorated members pin the argument situations: {@code m} carries identifiers and an
+ * explicit {@code None} (mined in order, {@code None} included, because a consumer binding
  * per-argument invocations needs the argument COUNT the program has); {@code n} carries a call
  * expression, which mines to the explicit unmineable marker rather than silently vanishing; {@code
  * p} is decorated bare, appearing with an empty argument list (the front end normalizes bare
  * application to a zero-argument call in the CAst) while its name-only annotation is unchanged,
- * which pins the no-behavior-change claim for everything that reads annotations today.
+ * which pins the no-behavior-change claim for everything that reads annotations today; and {@code
+ * q} carries a dotted attribute-chain argument, the spelling real subjects use when classes are
+ * referred to through an imported module.
  */
 public class TestDecoratorCallArguments extends TestPythonMLCallGraphShape {
 
@@ -67,6 +69,14 @@ public class TestDecoratorCallArguments extends TestPythonMLCallGraphShape {
         "Expecting the bare decorator's name-only annotation channel unchanged.",
         List.of(Annotation.make(TypeReference.findOrCreate(PythonTypes.pythonLoader, "Lidentity"))),
         List.copyOf(p.getAnnotations()));
+
+    DynamicMethodBody q = functionClass(cha, "q");
+    assertEquals(
+        "Expecting a dotted (attribute-chain) argument mined through the OBJECT_REF chain: the"
+            + " spelling real subjects use when classes are referred to through an imported"
+            + " module.",
+        List.of(new Util.DecoratorCall("params", List.of("Holder.C"))),
+        q.getDecoratorCalls());
   }
 
   /**
