@@ -32,7 +32,16 @@ def supplied_none():
     return np.ones([2, 3], dtype=None)
 
 
+def supplied_through_star(args):
+    # A starred unpack could carry a dtype the call shape cannot show, and positional alignment
+    # past a star is unreliable, so presence is INDETERMINATE. The default must not be asserted on
+    # a call shape that cannot show whether the argument is there; only determinate absence earns
+    # it. (At runtime this particular unpack carries no dtype, so float64 is what actually runs.)
+    return np.ones(*args)
+
+
 assert absent().dtype == np.float64
 assert supplied_and_resolvable().dtype == np.int32
 assert supplied_but_unresolved().dtype == np.int_
 assert supplied_none().dtype == np.float64
+assert supplied_through_star(([2, 3],)).dtype == np.float64

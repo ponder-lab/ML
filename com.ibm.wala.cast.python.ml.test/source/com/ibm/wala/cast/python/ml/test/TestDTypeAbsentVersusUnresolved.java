@@ -74,6 +74,12 @@ public class TestDTypeAbsentVersusUnresolved extends TestPythonMLCallGraphShape 
         "An explicit `None` really does mean \"use the default\", so this one must not degrade.",
         Set.of("float64"),
         returnedCellTypes(analysis, "supplied_none"));
+    assertEquals(
+        "A starred unpack makes presence INDETERMINATE, and indeterminate declines the default:"
+            + " asserting it on a call shape that cannot show whether the argument is there would"
+            + " re-open the defect for exactly the shapes least likely to have witnesses.",
+        Set.of("unknown"),
+        returnedCellTypes(analysis, "supplied_through_star"));
   }
 
   /**

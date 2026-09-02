@@ -40,22 +40,22 @@ public class NpOnes extends Ones {
   /**
    * {@inheritDoc}
    *
-   * <p>NumPy defaults to {@code float64} when no {@code dtype} argument is supplied.
+   * <p>NumPy defaults to {@code float64} when no {@code dtype} argument is supplied, and that
+   * default is emitted only for a determinately absent (or explicit {@code None}) argument: a
+   * supplied {@code dtype} whose value nothing could read degrades to {@link DType#UNKNOWN} rather
+   * than borrowing the default's authority (wala/ML#865).
    *
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
-   * @return A singleton set containing the default NumPy dtype, {@code float64}.
+   * @return A singleton set containing the default NumPy dtype, {@code float64}, or {@link
+   *     DType#UNKNOWN} for a supplied-but-unresolvable argument.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    LOGGER.fine(
-        () ->
-            "No dtype specified for source: "
-                + describe(source)
-                + ". Using NumPy default dtype of: "
-                + FLOAT64
-                + ".");
+    Set<DType> ret = this.dTypeApiDefaultOrUnknown(builder, EnumSet.of(FLOAT64));
 
-    return EnumSet.of(FLOAT64);
+    LOGGER.fine(() -> "Default dtypes for source: " + describe(source) + " are: " + ret + ".");
+
+    return ret;
   }
 
   /**
