@@ -272,16 +272,25 @@ public class Range extends TensorGenerator {
             this.getArgumentPointsToSet(
                 builder, getDeltaParameterPosition(), getDeltaParameterName()));
 
-    if (argPts.isEmpty()) return EnumSet.of(DType.INT32);
+    Set<DType> result;
 
-    Set<DType> derived = this.getDTypesOfValue(builder, argPts);
-    if (derived == null || derived.isEmpty()) return EnumSet.of(DType.INT32);
+    if (argPts.isEmpty()) result = EnumSet.of(DType.INT32);
+    else {
+      Set<DType> derived = this.getDTypesOfValue(builder, argPts);
 
-    // TF's runtime promotion: any float operand promotes the entire result to float32, dropping
-    // integer dtypes from the mix. E.g., `tf.range(0, 5.0)` → float32, not {INT32, FLOAT32}.
-    if (derived.contains(DType.FLOAT32) || derived.contains(DType.FLOAT64))
-      return EnumSet.of(DType.FLOAT32);
-    return derived;
+      if (derived == null || derived.isEmpty()) result = EnumSet.of(DType.INT32);
+      // TF's runtime promotion: any float operand promotes the entire result to float32, dropping
+      // integer dtypes from the mix. E.g., `tf.range(0, 5.0)` → float32, not {INT32, FLOAT32}.
+      else if (derived.contains(DType.FLOAT32) || derived.contains(DType.FLOAT64))
+        result = EnumSet.of(DType.FLOAT32);
+      else result = derived;
+    }
+
+    // A supplied `dtype=` wins over operand inference at runtime, so the operand-derived result
+    // (and its int32 floor) is a valid default only when the dtype argument is determinately
+    // absent or an explicit `None`; a supplied argument nothing could read degrades to UNKNOWN
+    // instead of a guess (wala/ML#865).
+    return this.dTypeApiDefaultOrUnknown(builder, result);
   }
 
   /**

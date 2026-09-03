@@ -95,8 +95,28 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
                 FLOAT_32,
                 asList(new NumericDim(16), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
             new TensorType(
-                FLOAT_32,
-                asList(new NumericDim(16), new NumericDim(100), UnresolvedDim.INSTANCE))));
+                FLOAT_32, asList(new NumericDim(16), new NumericDim(100), UnresolvedDim.INSTANCE)),
+            // Unknown-dtype twins of the mask-fed shapes (wala/ML#865): the subject's allocator
+            // sites supply their dtype tokens explicitly, and in the contexts where the token's
+            // points-to set is empty the allocator now degrades to an unknown dtype instead of
+            // patching its float32 default, so the union carries both variants. See
+            // TestCorpusFixtures#testNlpgnnFullDense3dInput's twin comment.
+            new TensorType(UNKNOWN, asList(new NumericDim(2), UnresolvedDim.INSTANCE)),
+            new TensorType(UNKNOWN, asList(new NumericDim(6), UnresolvedDim.INSTANCE)),
+            new TensorType(UNKNOWN, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
+            new TensorType(UNKNOWN, asList(new NumericDim(16), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                UNKNOWN, asList(new NumericDim(2), new NumericDim(4), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                UNKNOWN, asList(new NumericDim(2), new NumericDim(10), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                UNKNOWN, asList(new NumericDim(6), new NumericDim(128), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                UNKNOWN, asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                UNKNOWN, asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                UNKNOWN, asList(new NumericDim(16), new NumericDim(100), UnresolvedDim.INSTANCE))));
 
     expected.put(
         4,
