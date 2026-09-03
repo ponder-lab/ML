@@ -76,15 +76,18 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
       return fromDTypeAttribute;
     }
 
-    LOGGER.fine(
-        "No dtype specified for source: "
-            + describe(source)
-            + ". Using default dtype of: "
-            + FLOAT32
-            + " .");
+    // The float32 API default is emitted only for a determinately absent (or explicit `None`)
+    // dtype argument; a supplied argument that neither the points-to walk nor the `.dtype`
+    // recovery above could read degrades to UNKNOWN rather than borrowing the default's authority
+    // (wala/ML#865). WITNESSED for `tf.ones` and `tf.zeros`; the family's other non-overriding
+    // inheritors (`FixedLenFeature`, `VarLenFeature`, `Gamma`, `Poisson`, `Eye`, `SparseEye`,
+    // `AddWeight`, `RandomDistribution`) inherit the arm WITHOUT a witness and are listed here so
+    // they do not borrow the witnessed surfaces' verification.
+    Set<DType> ret = this.dTypeApiDefaultOrUnknown(builder, EnumSet.of(FLOAT32));
 
-    // Use the default dtype of float32.
-    return EnumSet.of(FLOAT32);
+    LOGGER.fine(() -> "Default dtypes for source: " + describe(source) + " are: " + ret + ".");
+
+    return ret;
   }
 
   /**

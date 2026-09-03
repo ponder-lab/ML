@@ -4929,6 +4929,12 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> dTypeApiDefaultOrUnknown(
       PropagationCallGraphBuilder builder, Set<DType> apiDefault) {
+    // A generator whose modeled API has no dtype parameter at all cannot have one supplied, so
+    // the default is unconditionally correct; without this guard, a starred call site would read
+    // as indeterminate for an argument that cannot exist.
+    if (this.getDTypeParameterPosition() < 0 && this.getDTypeParameterName() == null)
+      return apiDefault;
+
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
