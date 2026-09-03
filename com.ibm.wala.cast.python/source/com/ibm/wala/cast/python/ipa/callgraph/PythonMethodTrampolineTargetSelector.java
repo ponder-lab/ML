@@ -120,7 +120,7 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
    * @param call The {@link PythonInvokeInstruction} whose layout the trampoline is generated for.
    * @return The name of the trampoline method for the given call's positional/keyword layout.
    */
-  private String getTrampolineName(PythonInvokeInstruction call) {
+  protected String getTrampolineName(PythonInvokeInstruction call) {
     return TRAMPOLINE_METHOD_NAME
         + call.getNumberOfPositionalParameters()
         + call.getKeywords().stream().sorted().map(k -> "$" + k).collect(joining());
