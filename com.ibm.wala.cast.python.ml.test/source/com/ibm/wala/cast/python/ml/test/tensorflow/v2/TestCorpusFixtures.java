@@ -464,16 +464,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(8),
                         new NumericDim(100),
                         UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                // Unknown-dtype twins of the mask-fed shapes (wala/ML#865); see
-                // testNlpgnnFullDense3dInput's twin comment for the mechanism.
-                new TensorType(UNKNOWN, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    UNKNOWN,
-                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    UNKNOWN,
-                    asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE))),
+                        UnresolvedDim.INSTANCE))),
             3,
             Set.of(
                 new TensorType(
@@ -536,21 +527,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(8),
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                // Unknown-dtype twins of the mask-fed shapes (wala/ML#865): allocator sites in
-                // the subject supply their dtype tokens explicitly, and in the contexts where the
-                // token's points-to set is empty the allocator now degrades to an unknown dtype
-                // instead of patching its float32 default, so the union carries both the resolved
-                // and the degraded variant. The same emission previously stamped float32 on the
-                // masks BERT builds with dtype=tf.int32, which was the confidently-wrong class
-                // this degradation exists to prevent.
-                new TensorType(UNKNOWN, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    UNKNOWN,
-                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    UNKNOWN,
-                    asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)))));
+                        UnresolvedDim.INSTANCE)))));
   }
 
   /**
