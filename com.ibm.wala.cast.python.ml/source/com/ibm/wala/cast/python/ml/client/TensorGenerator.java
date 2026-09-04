@@ -5616,8 +5616,11 @@ public abstract class TensorGenerator {
         // the field-identity walk above cannot see it and the `D_TYPE` degrade below would take
         // it: a call result is not a module field. Detected here by the ALLOCATING method's
         // declaring class, before that degrade, exactly as the `tf.constant` arm below detects its
-        // result by its containing method. `floatx()` is the default float precision, which the
-        // corpus never changes from `float32`.
+        // result by its containing method. `float32` is the documented default of `floatx()`.
+        // ASSUMPTION: `tf.keras.backend.set_floatx` can change that default program-wide, and this
+        // arm does not read whether it is reachable, so a program that calls it makes this arm
+        // confidently wrong rather than unknown (wala/ML#871): the wala/ML#865 class at one site,
+        // worse than the unknown it replaces only when the default was overridden.
         LOGGER.fine(
             () ->
                 "Found dtype: "
