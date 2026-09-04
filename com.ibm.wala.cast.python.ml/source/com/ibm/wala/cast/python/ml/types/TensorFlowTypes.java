@@ -572,6 +572,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ZEROS_LIKE_SIGNATURE = "tf.zeros_like()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/ones_like. */
+  public static final MethodReference ONES_LIKE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/ones_like")),
+          AstMethodReference.fnSelector);
+
+  private static final String ONES_LIKE_SIGNATURE = "tf.ones_like()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/fill. */
   public static final MethodReference FILL =
       MethodReference.findOrCreate(
@@ -2360,6 +2370,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(NORMAL.getDeclaringClass(), NORMAL_SIGNATURE),
           Map.entry(TRUNCATED_NORMAL.getDeclaringClass(), TRUNCATED_NORMAL_SIGNATURE),
           Map.entry(ZEROS_LIKE.getDeclaringClass(), ZEROS_LIKE_SIGNATURE),
+          Map.entry(ONES_LIKE.getDeclaringClass(), ONES_LIKE_SIGNATURE),
           Map.entry(FILL.getDeclaringClass(), FILL_SIGNATURE),
           Map.entry(LINSPACE.getDeclaringClass(), LINSPACE_SIGNATURE),
           Map.entry(BROADCAST_TO.getDeclaringClass(), BROADCAST_TO_SIGNATURE),

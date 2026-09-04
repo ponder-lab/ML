@@ -152,6 +152,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NOT_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES_LIKE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
@@ -721,6 +722,8 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(Where::new, Where::new);
     if (isType(type, ZEROS_LIKE.getDeclaringClass()))
       return anchor.makeGenerator(ZerosLike::new, ZerosLike::new);
+    if (isType(type, ONES_LIKE.getDeclaringClass()))
+      return anchor.makeGenerator(OnesLike::new, OnesLike::new);
 
     if (isType(type, UNSORTED_SEGMENT_SUM.getDeclaringClass())
         || isType(type, UNSORTED_SEGMENT_MAX.getDeclaringClass())
