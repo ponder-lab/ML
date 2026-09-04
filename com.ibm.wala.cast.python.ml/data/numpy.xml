@@ -23,6 +23,40 @@
         <putfield class="LRoot" field="bool" fieldType="LRoot" ref="x" value="bool"/>
         <new def="bool_" class="Lnumpy/bool_"/>
         <putfield class="LRoot" field="bool_" fieldType="LRoot" ref="x" value="bool_"/>
+        <!-- wala/ML#865 (remainder): the rest of the dtype-token spellings representable with existing `DType`s. Each spelling gets its OWN allocation and its OWN `FIELD_REFERENCE_TO_DTYPE` entry, mirroring the bare-`bool` token above; the dtype-argument resolver then matches each token in its own name-keyed field, deterministically, rather than by a cross-field identity match that is subject to the wala/ML#753 collection-order nondeterminism. The canonical `str_`/`object_`/`complex64`/`complex128` scalar types additionally get callable classes (the `np.complex64(2)` role); the removed-alias spellings need only the dtype-token role. Spellings whose dtypes have no `DType` yet (`int16`, `int8`, `uint16`, `uint`, `float16`/`half`, `short`, `byte`) are deliberately absent pending an enum extension. -->
+        <new def="str_" class="Lnumpy/str_"/>
+        <putfield class="LRoot" field="str_" fieldType="LRoot" ref="x" value="str_"/>
+        <!-- float64 aliases: the removed-in-1.24 builtin alias, the trailing-underscore spelling, and the C-double name. -->
+        <new def="tok_float" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="float" fieldType="LRoot" ref="x" value="tok_float"/>
+        <new def="tok_float_" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="float_" fieldType="LRoot" ref="x" value="tok_float_"/>
+        <new def="tok_double" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="double" fieldType="LRoot" ref="x" value="tok_double"/>
+        <!-- float32 alias. -->
+        <new def="tok_single" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="single" fieldType="LRoot" ref="x" value="tok_single"/>
+        <!-- int64 aliases (64-bit platforms: `int_`, `intp` and `longlong` are all 64-bit). -->
+        <new def="tok_int" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="int" fieldType="LRoot" ref="x" value="tok_int"/>
+        <new def="tok_long" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="long" fieldType="LRoot" ref="x" value="tok_long"/>
+        <new def="tok_int_" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="int_" fieldType="LRoot" ref="x" value="tok_int_"/>
+        <new def="tok_longlong" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="longlong" fieldType="LRoot" ref="x" value="tok_longlong"/>
+        <new def="tok_intp" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="intp" fieldType="LRoot" ref="x" value="tok_intp"/>
+        <!-- int32 alias (C int). -->
+        <new def="tok_intc" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="intc" fieldType="LRoot" ref="x" value="tok_intc"/>
+        <!-- string aliases. -->
+        <new def="tok_str" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="str" fieldType="LRoot" ref="x" value="tok_str"/>
+        <new def="tok_unicode" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="unicode" fieldType="LRoot" ref="x" value="tok_unicode"/>
+        <new def="tok_unicode_" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="unicode_" fieldType="LRoot" ref="x" value="tok_unicode_"/>
         <!-- https://numpy.org/doc/stable/reference/random/legacy.html -->
         <!-- `np.random`, the legacy module-level random surface, modeled as a plain module object (the pattern `tensorflow.xml` uses for `tf.random`) whose fields hold the per-function classes. The module-alias form `rng = np.random` reaches the same fields, since the alias copies the reference. wala/ML#827. -->
         <new def="random" class="Lobject"/>
@@ -144,6 +178,13 @@
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
           <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- The `str_` string scalar type (wala/ML#865): same two-role shape as `float32` above. -->
+      <class name="str_" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
           <return value="ret"/>
         </method>
       </class>

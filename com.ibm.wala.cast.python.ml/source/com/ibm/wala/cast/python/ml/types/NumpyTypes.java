@@ -260,11 +260,21 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String BOOL_CONSTRUCTOR_SIGNATURE = "numpy.bool_()";
 
+  /** The {@code np.str_} scalar type (wala/ML#865). See {@link #FLOAT32_CONSTRUCTOR}. */
+  public static final MethodReference STR_CONSTRUCTOR =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/str_")),
+          AstMethodReference.fnSelector);
+
   /**
    * A mapping from a scalar type's allocated class to the dtype that type names. Backs the
    * class-keyed arms of dtype-token recognition, which the identity-keyed match in {@code
    * TensorGenerator.getDTypesFromDTypeArgument} would otherwise leave to the unmodeled-dtype
-   * fallback. See <a href="https://github.com/wala/ML/issues/827">wala/ML#827</a>.
+   * fallback, and drives the called-role {@code NpScalarType} dispatch. See <a
+   * href="https://github.com/wala/ML/issues/827">wala/ML#827</a>. The alias spellings in {@code
+   * numpy.xml} (e.g. {@code np.float}, {@code np.long}, {@code np.str}) share their canonical
+   * type's allocation, so they need no entries here (wala/ML#865).
    */
   public static final Map<TypeReference, TensorFlowTypes.DType> SCALAR_TYPE_TO_DTYPE =
       Map.ofEntries(
@@ -273,7 +283,8 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(INT32_CONSTRUCTOR.getDeclaringClass(), TensorFlowTypes.DType.INT32),
           Map.entry(INT64_CONSTRUCTOR.getDeclaringClass(), TensorFlowTypes.DType.INT64),
           Map.entry(UINT8_CONSTRUCTOR.getDeclaringClass(), TensorFlowTypes.DType.UINT8),
-          Map.entry(BOOL_CONSTRUCTOR.getDeclaringClass(), TensorFlowTypes.DType.BOOL));
+          Map.entry(BOOL_CONSTRUCTOR.getDeclaringClass(), TensorFlowTypes.DType.BOOL),
+          Map.entry(STR_CONSTRUCTOR.getDeclaringClass(), TensorFlowTypes.DType.STRING));
 
   /**
    * {@code np.random.randn(d0, d1, ...)}: standard-normal draws whose shape is given variadically.

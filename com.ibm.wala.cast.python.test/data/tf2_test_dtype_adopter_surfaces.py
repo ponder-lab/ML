@@ -28,7 +28,11 @@ def eye_absent():
 
 
 def eye_unreadable():
-    return np.eye(3, dtype=np.int)
+    # np.int became RESOLVABLE when the wala/ML#865 field list grew, so this arm
+    # now uses np.int16: unrepresentable BY DESIGN (no DType for it yet), which
+    # keeps the arm stable until the enum grows and makes this witness fail
+    # loudly at exactly that point.
+    return np.eye(3, dtype=np.int16)
 
 
 def range_absent():
@@ -44,6 +48,6 @@ assert ones_unreadable().dtype == tf.float64
 assert zeros_absent().dtype == tf.float32
 assert zeros_unreadable().dtype == tf.float64
 assert eye_absent().dtype == np.float64
-assert eye_unreadable().dtype == np.int_
+assert eye_unreadable().dtype == np.int16
 assert range_absent().dtype == tf.int32
 assert range_unreadable().dtype == tf.float32
