@@ -463,6 +463,17 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/constant")),
           AstMethodReference.fnSelector);
 
+  /**
+   * https://www.tensorflow.org/api_docs/python/tf/keras/backend/floatx. Its {@code do} node
+   * allocates the {@code DType} token the dtype-argument resolver recognizes as {@code float32}
+   * (wala/ML#870).
+   */
+  public static final MethodReference FLOATX =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/floatx")),
+          AstMethodReference.fnSelector);
+
   private static final String CONSTANT_SIGNATURE = "tf.constant()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/keras/Input. */

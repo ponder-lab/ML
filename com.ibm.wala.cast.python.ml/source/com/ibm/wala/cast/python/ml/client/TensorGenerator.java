@@ -11,6 +11,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOATX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
@@ -5605,6 +5606,28 @@ public abstract class TensorGenerator {
                     + describe(instanceKey)
                     + ".");
         ret.add(scalarTypeDType);
+      } else if (asin != null
+          && asin.getNode()
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(FLOATX.getDeclaringClass())) {
+        // A `tf.keras.backend.floatx()` result (wala/ML#870). Its class is the generic `DType`, so
+        // the field-identity walk above cannot see it and the `D_TYPE` degrade below would take
+        // it: a call result is not a module field. Detected here by the ALLOCATING method's
+        // declaring class, before that degrade, exactly as the `tf.constant` arm below detects its
+        // result by its containing method. `floatx()` is the default float precision, which the
+        // corpus never changes from `float32`.
+        LOGGER.fine(
+            () ->
+                "Found dtype: "
+                    + FLOAT32
+                    + " for source: "
+                    + describe(this.getSource())
+                    + " from a tf.keras.backend.floatx() result: "
+                    + describe(instanceKey)
+                    + ".");
+        ret.add(FLOAT32);
       } else if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         // An unmodeled dtype: a `tf.DType` instance with no entry in `FIELD_REFERENCE_TO_DTYPE`
         // (e.g. a half-precision or quantized dtype not yet enumerated). Degrade to UNKNOWN (the ⊤

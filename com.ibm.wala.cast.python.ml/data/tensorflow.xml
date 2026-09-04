@@ -942,6 +942,9 @@
         <putfield class="LRoot" field="one_hot" fieldType="LRoot" ref="backend" value="one_hot"/>
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="backend" value="gather"/>
         <putfield class="LRoot" field="dropout" fieldType="LRoot" ref="backend" value="pass_through"/>
+        <!-- `tf.keras.backend.floatx()` returns the default float dtype token (`float32` unless the backend precision is changed, which the corpus never does). It is a CALL, not a module field, so the dtype-argument resolver's field-identity match cannot see it; the paired resolver arm recognizes a `DType` allocated in this function's node as `float32` (wala/ML#870). -->
+        <new def="floatx" class="Ltensorflow/functions/floatx"/>
+        <putfield class="LRoot" field="floatx" fieldType="LRoot" ref="backend" value="floatx"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
         <new def="expand_dims" class="Ltensorflow/functions/expand_dims"/>
         <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="expand_dims"/>
@@ -2487,6 +2490,13 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype is the explicit `dtype` argument, including a `.dtype` attribute target resolved through the attribute route (wala/ML#481). The historical `pass_through` alias that once bypassed this dispatch (wala/ML#509) is gone. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- `tf.keras.backend.floatx()` (wala/ML#870): allocates a `DType` token that the dtype-argument resolver recognizes as `float32` by this function's node, since a call result is not a module field and so the field-identity match cannot resolve it. -->
+      <class name="floatx" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="res" class="Ltensorflow/dtypes/DType"/>
           <return value="res"/>
         </method>
       </class>
