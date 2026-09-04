@@ -20,14 +20,15 @@ def supplied_and_resolvable():
 
 
 def supplied_but_unresolved():
-    # Supplied, but spelled with an attribute the model file carries no field for, so nothing
-    # resolves. There is no evidence, and float64 here would be the defect: it is indistinguishable
+    # Supplied, but spelled with a dtype the model file carries no field for, so nothing resolves.
+    # There is no evidence, and float64 here would be the defect: it is indistinguishable
     # downstream from a dtype that genuinely resolved to float64.
     #
-    # `np.int` is the spelling the defect was reported with, kept deliberately: it is deprecated
-    # since NumPy 1.20 and removed in 1.24, so this fixture runs under NumPy < 1.24 (with a
-    # DeprecationWarning), matching the vendored subjects' era.
-    return np.ones([2, 3], dtype=np.int)
+    # `np.int16` is used because it is a current scalar type with no `DType` yet, so it stays
+    # unrepresentable BY DESIGN. The originally-reported `np.int` became RESOLVABLE when the
+    # wala/ML#865 field list grew; this arm needs a spelling that is genuinely unreadable, and
+    # int16's absence is the enforced one until the `DType` enum is extended.
+    return np.ones([2, 3], dtype=np.int16)
 
 
 def supplied_positionally():
@@ -60,7 +61,7 @@ def supplied_through_star(args):
 
 assert absent().dtype == np.float64
 assert supplied_and_resolvable().dtype == np.int32
-assert supplied_but_unresolved().dtype == np.int_
+assert supplied_but_unresolved().dtype == np.int16
 assert supplied_none().dtype == np.float64
 assert supplied_through_star(([2, 3],)).dtype == np.float64
 assert supplied_positionally().dtype == np.int32

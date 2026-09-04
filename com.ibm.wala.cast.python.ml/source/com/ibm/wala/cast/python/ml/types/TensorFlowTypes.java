@@ -2650,6 +2650,27 @@ public class TensorFlowTypes extends PythonTypes {
   public static final FieldReference BOOL_ALIAS_FIELD =
       FieldReference.findOrCreate(PythonTypes.Root, findOrCreateAsciiAtom("bool_"), D_TYPE);
 
+  /**
+   * The {@code str_} string scalar type's field: numpy's modern string spelling ({@code np.str_}).
+   * The removed-alias spellings ({@code np.str}, {@code np.unicode}) share its allocation in {@code
+   * numpy.xml}, so this one entry resolves them all by identity (wala/ML#865).
+   */
+  public static final FieldReference STR_ALIAS_FIELD =
+      FieldReference.findOrCreate(PythonTypes.Root, findOrCreateAsciiAtom("str_"), D_TYPE);
+
+  /**
+   * A {@code Root}-declared, {@code D_TYPE}-typed field of the given name: the shape every
+   * dtype-token module field takes. Factored out because the wala/ML#865 alias spellings each need
+   * one, keyed by their own name so the dtype-argument resolver matches every token in its own
+   * field deterministically (wala/ML#753) rather than by a cross-field identity match.
+   *
+   * @param name The field's name.
+   * @return The field reference.
+   */
+  private static FieldReference dtypeField(String name) {
+    return FieldReference.findOrCreate(PythonTypes.Root, findOrCreateAsciiAtom(name), D_TYPE);
+  }
+
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
       Map.ofEntries(
@@ -2662,7 +2683,22 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOL_ALIAS_FIELD, BOOL),
           Map.entry(COMPLEX_64, COMPLEX64),
           Map.entry(COMPLEX_128, COMPLEX128),
-          Map.entry(STRING, DType.STRING));
+          Map.entry(STRING, DType.STRING),
+          Map.entry(STR_ALIAS_FIELD, DType.STRING),
+          // wala/ML#865 alias spellings, each in its own name-keyed field.
+          Map.entry(dtypeField("float"), FLOAT64),
+          Map.entry(dtypeField("float_"), FLOAT64),
+          Map.entry(dtypeField("double"), FLOAT64),
+          Map.entry(dtypeField("single"), FLOAT32),
+          Map.entry(dtypeField("int"), INT64),
+          Map.entry(dtypeField("long"), INT64),
+          Map.entry(dtypeField("int_"), INT64),
+          Map.entry(dtypeField("longlong"), INT64),
+          Map.entry(dtypeField("intp"), INT64),
+          Map.entry(dtypeField("intc"), INT32),
+          Map.entry(dtypeField("str"), DType.STRING),
+          Map.entry(dtypeField("unicode"), DType.STRING),
+          Map.entry(dtypeField("unicode_"), DType.STRING));
 
   private TensorFlowTypes() {}
 }
