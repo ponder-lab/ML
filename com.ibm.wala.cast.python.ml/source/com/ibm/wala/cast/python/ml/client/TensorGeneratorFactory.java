@@ -1755,6 +1755,39 @@ public class TensorGeneratorFactory {
           return containerGenerator;
         }
 
+        // A non-constant subscript member with its own tensor-producing generator is a FANCY
+        // index (integer-array or boolean-mask indexing), not an element read: `a[idx]` with
+        // `idx` an ndarray replaces the receiver's leading axis with the index's shape rather
+        // than peeling it (wala/ML#866). The scalar spelling `a[0]` keeps element semantics via
+        // the constant `propertyIndex` above: the two spellings produce the same output on a
+        // rank-2 receiver and only the peel is wrong for the array one, so the discrimination
+        // must live here. A member with no tensor evidence also keeps element semantics: a
+        // loop-counter subscript's index is int-valued and often carries no points-to evidence
+        // at all (a binop-defined counter mints no instance keys, wala/ML#805), and peeling is
+        // correct for it; this positive-evidence gate is therefore a deliberate residual, not an
+        // oversight — an index that IS an array but resolves no generator stays wrongly peeled.
+        if (propertyIndex == null
+            && propertyName == null
+            && containerGenerator != null
+            && !(containerGenerator instanceof DatasetGenerator)) {
+          PointsToSetVariable memberSrc = getPointsToSetVariable(memberRefKey, builder);
+
+          if (memberSrc != null) {
+            TensorGenerator indexGenerator = tryGetGenerator(memberSrc, builder, visited);
+
+            if (indexGenerator != null) {
+              LOGGER.fine(
+                  () ->
+                      "Dispatching fancy-index generator for source: "
+                          + describe(source)
+                          + " with index generator: "
+                          + indexGenerator
+                          + " (wala/ML#866).");
+              return new FancyIndexGenerator(source, containerGenerator, indexGenerator);
+            }
+          }
+        }
+
         if (containerGenerator != null
             && (propertyName == null || !isNonTensorAttribute(propertyName))) {
           return (containerGenerator instanceof DatasetGenerator)
