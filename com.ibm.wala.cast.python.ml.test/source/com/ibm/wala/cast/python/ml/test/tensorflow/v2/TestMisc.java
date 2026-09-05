@@ -869,6 +869,26 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Positional {@code -1} reshape fold (crf.py group): the input {@code (None, 10, 46)} has a
+   * non-constant leading axis, so the product rule declines (it needs the total) and the {@code -1}
+   * placeholder would survive as {@code (8, 10, ?)}. The target's other axes correspond
+   * positionally to the input's, so the {@code -1} equals the input's extent at its position,
+   * {@code 46}, with no total. The assertion is on the exact member SET: the fold must REPLACE the
+   * placeholder, not add a member beside it, since the specification surface wildcards an axis
+   * where a concrete extent and its placeholder twin disagree.
+   */
+  @Test
+  public void testReshapePositionalFold()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_positional.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 46))));
+  }
+
+  /**
    * A {@code dtype} argument whose value is a test function's PARAMETER, which is the shape that
    * ended a whole project's analysis (<a
    * href="https://github.com/wala/ML/issues/860">wala/ML#860</a>).

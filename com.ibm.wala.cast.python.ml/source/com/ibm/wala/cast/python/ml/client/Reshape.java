@@ -183,6 +183,16 @@ public class Reshape extends TensorGenerator {
                       : -1;
               if (inferredDim >= 0 && inferredDim <= Integer.MAX_VALUE) {
                 refinedShape.set(unknownIndex, new NumericDim((int) inferredDim));
+              } else if (inputShape.size() == shape.size()
+                  && inputShape.get(unknownIndex) instanceof NumericDim positional
+                  && positional.value() >= 0) {
+                // Positional fold (crf.py group): the product rule needs the input's total, which a
+                // non-constant leading axis denies. When the target has the same rank as the input
+                // and its other axes correspond positionally, the single `-1` equals the input's
+                // extent at its own position, with no total and no requirement that the leading
+                // extents be constant. It fires only here, where the product rule has already
+                // declined, so it is strictly additive.
+                refinedShape.set(unknownIndex, positional);
               } else {
                 refinedShape.set(unknownIndex, new SymbolicDim("?"));
               }
