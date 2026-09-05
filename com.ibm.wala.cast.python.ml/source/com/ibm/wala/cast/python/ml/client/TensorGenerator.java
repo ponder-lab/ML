@@ -6590,7 +6590,14 @@ public abstract class TensorGenerator {
     PASS_THROUGH,
 
     /** The two operands' member shapes broadcast pairwise (element-wise semantics). */
-    BROADCAST
+    BROADCAST,
+
+    /**
+     * The two operands' member shapes compose as a matrix product: {@code (..., m, k)} and {@code
+     * (..., k, n)} yield {@code (..., m, n)}. Unlike {@link #BROADCAST} this is order-sensitive, so
+     * the composition reads the operands in their declared order (wala/ML#877).
+     */
+    MATMUL
   }
 
   /**
