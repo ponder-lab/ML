@@ -704,8 +704,10 @@ public class TestShapeOps extends AbstractTensorTest {
    * Probes wala/ML#661's indexed sub-layer call shape ({@code self.container[i](x)}). The
    * comprehension-built {@code inner_layers} dispatch materializes {@code Inner.call} (<a
    * href="https://github.com/wala/ML/issues/773">wala/ML#773</a>); the runtime {@code (4, 4)}
-   * matmul result is present, alongside an unknown-shape member from the matmul over the loop-phi's
-   * union.
+   * matmul result resolves. The matmul over the loop-phi's union previously left an unknown-shape
+   * member, since its operand's type lived only in dataflow state the PTS-based walk could not see;
+   * the {@code MatMul} type feed (<a href="https://github.com/wala/ML/issues/877">wala/ML#877</a>)
+   * now composes it from that state, so the union collapses to the resolved {@code (4, 4)}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -715,12 +717,7 @@ public class TestShapeOps extends AbstractTensorTest {
   @Test
   public void testIndexedLayerCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_indexed_layer_call.py",
-        "consume",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_4_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_indexed_layer_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**

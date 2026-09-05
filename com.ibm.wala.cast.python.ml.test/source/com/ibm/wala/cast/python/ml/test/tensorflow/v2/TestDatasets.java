@@ -1387,10 +1387,11 @@ public class TestDatasets extends AbstractTensorTest {
    * Pins the gpt-2 decoder-stack shape in miniature (wala/ML#618): layers built by a list
    * comprehension, iterated with {@code zip} against a {@code [None] * n} list, each call's tuple
    * result destructured and the hidden state carried through the loop. The runtime {@code (4, 4)}
-   * resolves; the ⊤-shape member is the loop-carried hidden state's unknown remainder, which the
-   * exact operand reads surface instead of silently dropping (wala/ML#716, wala/ML#718) — the
-   * loop's later iterations consume the stack's own unresolved output, so a fully resolved union
-   * cannot be claimed.
+   * resolves. The loop-carried hidden state previously left a ⊤-shape member, since the matmul over
+   * it read an operand typed only in dataflow state the PTS-based walk could not see; the {@code
+   * MatMul} type feed (<a href="https://github.com/wala/ML/issues/877">wala/ML#877</a>) now
+   * composes that member from the operand's converged state, so the union collapses to the resolved
+   * {@code (4, 4)}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1405,7 +1406,7 @@ public class TestDatasets extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**

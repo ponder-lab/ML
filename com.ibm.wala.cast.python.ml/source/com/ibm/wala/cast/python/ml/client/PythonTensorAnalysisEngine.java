@@ -2115,7 +2115,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // A dtype fill always fills from any located operand, since only the dtype is borrowed.
         if (feedSources.isEmpty()
             || (mode != TensorTypeAnalysis.FeedMode.DTYPE_FILL
-                && feed.kind() == TensorGenerator.TypeFeedKind.BROADCAST
+                && (feed.kind() == TensorGenerator.TypeFeedKind.BROADCAST
+                    || feed.kind() == TensorGenerator.TypeFeedKind.MATMUL)
                 && feedSources.size() != 2)) continue;
         for (PointsToSetVariable operand : feedSources) {
           if (!dataflow.containsNode(operand)) dataflow.addNode(operand);
