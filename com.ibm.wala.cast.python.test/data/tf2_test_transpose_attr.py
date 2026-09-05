@@ -8,5 +8,15 @@ def consume(x):
     pass
 
 
+def consume_round_trip(x):
+    pass
+
+
 e = np.eye(2, 4).astype(np.float32)
 consume(e.T)
+
+# Round trip: `.T` reads a value produced by ANOTHER generator (the `np.transpose`
+# result), not a direct allocation, exercising the receiver read through a computed
+# base. np.transpose((2, 4)) is (4, 2), and its `.T` is (2, 4). This is the shape
+# the sbcnm driver's `permutation(eye.T).T` takes.
+consume_round_trip(np.transpose(e).T)

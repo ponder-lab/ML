@@ -886,6 +886,24 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Round-trip arm of {@link #testTransposeAttribute()} (wala/ML#880): the {@code .T} attribute
+   * reads a value produced by another generator, {@code np.transpose(e)}, rather than a direct
+   * allocation, exercising the receiver read through a computed base. {@code np.transpose((2, 4))}
+   * is {@code (4, 2)} and its {@code .T} is {@code (2, 4)}, the shape the {@code
+   * permutation(eye.T).T} driver takes.
+   */
+  @Test
+  public void testTransposeAttributeRoundTrip()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_attr.py",
+        "consume_round_trip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
    * A {@code dtype} argument whose value is a test function's PARAMETER, which is the shape that
    * ended a whole project's analysis (<a
    * href="https://github.com/wala/ML/issues/860">wala/ML#860</a>).
