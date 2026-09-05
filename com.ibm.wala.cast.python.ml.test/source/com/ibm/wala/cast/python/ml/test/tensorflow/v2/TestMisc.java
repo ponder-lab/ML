@@ -28,6 +28,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -866,6 +867,27 @@ public class TestMisc extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(INT_64, 2, 4))));
+  }
+
+  /**
+   * A shape-composing op recovers an operand's rank through a type feed when the operand is typed
+   * only in dataflow state that PTS-based resolution cannot see (<a
+   * href="https://github.com/wala/ML/issues/877">wala/ML#877</a>). A rank-2 {@code (?, 4)} tensor
+   * reaches {@code tf.matmul} through a tuple-unpack, so {@code matmul}'s operand walk finds
+   * nothing and its result would floor to unknown rank; the {@code MatMul} type feed replaces that
+   * unresolved seed with a synthetic dataflow edge from the operands, composing {@code (?, 4)} with
+   * {@code (4, 10)} into {@code (?, 10)}. Before the feed the parameter was unknown-rank float32.
+   */
+  @Test
+  public void testMatMulTypeFeedThroughUnpack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tuple_unpack_rank.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(10))))));
   }
 
   /**
