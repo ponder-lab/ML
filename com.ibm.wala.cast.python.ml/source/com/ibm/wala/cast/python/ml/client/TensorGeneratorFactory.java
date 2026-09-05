@@ -1669,6 +1669,15 @@ public class TensorGeneratorFactory {
           return new ModelWeightsGenerator(source, (Model) effectiveGenerator);
         }
 
+        // The `.T` attribute reverses the axes of a tensor or ndarray, the same operation as the
+        // `transpose` method and function, which are already routed to `NpTranspose`. As a bare
+        // property read it is not a call, so it would otherwise fall through to the element-read
+        // path below and collapse the rank; route it to the transpose generator's attribute form
+        // (wala/ML#880).
+        if ("T".equals(propertyName) && containerGenerator != null) {
+          return new NpTranspose(source, false, true);
+        }
+
         if (effectiveGenerator instanceof DatasetEnumerateGenerator) {
           DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) effectiveGenerator;
           boolean isFirstElement = propertyIndex != null && propertyIndex == 0;

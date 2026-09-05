@@ -870,6 +870,41 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for wala/ML#880: the numpy {@code .T} transpose attribute reverses the axes like the
+   * {@code transpose} method, rather than collapsing the rank. {@code np.eye(2, 4).T} is {@code (4,
+   * 2)}; before the fix the bare property read fell through to the element-read path and resolved
+   * to {@code (4,)}.
+   */
+  @Test
+  public void testTransposeAttribute()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_attr.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 2))));
+  }
+
+  /**
+   * Round-trip arm of {@link #testTransposeAttribute()} (wala/ML#880): the {@code .T} attribute
+   * reads a value produced by another generator, {@code np.transpose(e)}, rather than a direct
+   * allocation, exercising the receiver read through a computed base. {@code np.transpose((2, 4))}
+   * is {@code (4, 2)} and its {@code .T} is {@code (2, 4)}, the shape the {@code
+   * permutation(eye.T).T} driver takes.
+   */
+  @Test
+  public void testTransposeAttributeRoundTrip()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_attr.py",
+        "consume_round_trip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
    * A shape-composing op recovers an operand's rank through a type feed when the operand is typed
    * only in dataflow state that PTS-based resolution cannot see (<a
    * href="https://github.com/wala/ML/issues/877">wala/ML#877</a>). A rank-2 {@code (?, 4)} tensor
