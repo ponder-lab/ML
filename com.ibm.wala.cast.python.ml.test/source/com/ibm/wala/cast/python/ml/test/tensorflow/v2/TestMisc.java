@@ -869,6 +869,23 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for wala/ML#880: the numpy {@code .T} transpose attribute reverses the axes like the
+   * {@code transpose} method, rather than collapsing the rank. {@code np.eye(2, 4).T} is {@code (4,
+   * 2)}; before the fix the bare property read fell through to the element-read path and resolved
+   * to {@code (4,)}.
+   */
+  @Test
+  public void testTransposeAttribute()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_attr.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 2))));
+  }
+
+  /**
    * A {@code dtype} argument whose value is a test function's PARAMETER, which is the shape that
    * ended a whole project's analysis (<a
    * href="https://github.com/wala/ML/issues/860">wala/ML#860</a>).

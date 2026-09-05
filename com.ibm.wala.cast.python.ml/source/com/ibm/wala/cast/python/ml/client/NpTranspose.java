@@ -8,6 +8,7 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
@@ -55,24 +56,49 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
   /** Whether this instance serves the {@code ndarray.transpose} method form. */
   private final boolean methodForm;
 
+  /**
+   * Whether this instance serves the {@code ndarray.T} attribute form (wala/ML#880): a bare
+   * property read, not a call, so it takes its input from the read's own object and always reverses
+   * the axes.
+   */
+  private final boolean attributeForm;
+
   public NpTranspose(PointsToSetVariable source, boolean methodForm) {
     super(source);
     this.methodForm = methodForm;
+    this.attributeForm = false;
   }
 
   public NpTranspose(CGNode node, boolean methodForm) {
     super(node);
     this.methodForm = methodForm;
+    this.attributeForm = false;
+  }
+
+  public NpTranspose(PointsToSetVariable source, boolean methodForm, boolean attributeForm) {
+    super(source);
+    this.methodForm = methodForm;
+    this.attributeForm = attributeForm;
+  }
+
+  /**
+   * Whether the input is read from a receiver rather than an argument slot: the method form's
+   * {@code self}, or the attribute form's object (wala/ML#880).
+   *
+   * @return {@code true} for the method and attribute forms.
+   */
+  private boolean usesReceiver() {
+    return this.methodForm || this.attributeForm;
   }
 
   @Override
   protected int getInputParameterPosition() {
-    return this.methodForm ? RECEIVER_PARAMETER_POSITION : 0;
+    return this.usesReceiver() ? RECEIVER_PARAMETER_POSITION : 0;
   }
 
   @Override
   protected String getInputParameterName() {
-    return this.methodForm ? SELF : "a";
+    return this.usesReceiver() ? SELF : "a";
   }
 
   /** The position of the {@code axes} argument in this form's frame, {@code self} excluded. */
@@ -177,7 +203,7 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    if (!this.methodForm) {
+    if (!this.usesReceiver()) {
       int inputVn = this.inputValueNumber(builder);
       if (inputVn > 0) {
         Set<DType> dTypes = getDTypesOrSSAChain(builder, this.getNode(), inputVn);
@@ -206,7 +232,7 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
    *     thereby proven a non-tensor.
    */
   private ShapeResult inputShapes(PropagationCallGraphBuilder builder) {
-    if (!this.methodForm) {
+    if (!this.usesReceiver()) {
       int inputVn = this.inputValueNumber(builder);
       if (inputVn > 0) {
         ShapeResult viaArgument = this.getShapeResult(builder, this.getNode(), inputVn, true);
@@ -237,6 +263,18 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
    */
   private List<Pair<CGNode, Integer>> receiverValueNumbers(PropagationCallGraphBuilder builder) {
     List<Pair<CGNode, Integer>> ret = new ArrayList<>();
+    if (this.attributeForm) {
+      // The attribute form is a bare property read `x.T`, not a call: the input is the read's own
+      // object, read off the source value's defining property read (wala/ML#880).
+      if (this.getSource() != null
+          && this.getSource().getPointerKey() instanceof LocalPointerKey lpk
+          && lpk.getNode().getDU() != null) {
+        SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+        if (def instanceof PythonPropertyRead read)
+          ret.add(Pair.make(lpk.getNode(), read.getObjectRef()));
+      }
+      return ret;
+    }
     SSAAbstractInvokeInstruction localInvoke = this.getInvokeInstruction();
     if (localInvoke != null) {
       CGNode node = this.getNode();
@@ -278,6 +316,8 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
    * @return The resolution.
    */
   private AxesResolution resolveAxes(PropagationCallGraphBuilder builder) {
+    // The attribute form `x.T` takes no axes and always reverses (wala/ML#880).
+    if (this.attributeForm) return new AxesResolution(AxesKind.ABSENT_OR_NONE, null);
     OrdinalSet<InstanceKey> axesPts =
         this.getArgumentPointsToSet(builder, this.getAxesPosition(), "axes");
     if (axesPts == null || axesPts.isEmpty())
