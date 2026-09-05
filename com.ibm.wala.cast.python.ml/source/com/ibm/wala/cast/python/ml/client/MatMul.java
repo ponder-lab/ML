@@ -152,6 +152,33 @@ public class MatMul extends TensorGenerator {
     return this.getArgumentDTypesViaCallers(builder, paramPos, paramName);
   }
 
+  /**
+   * Declares a {@link TypeFeedKind#MATMUL} feed over both operands (wala/ML#877). When an operand's
+   * shape lives only in {@code TensorTypeAnalysis} dataflow state that the PTS-based operand walk
+   * cannot see (for example an operand bound by tuple-unpacking), {@link #getDefaultShapeResult}
+   * seeds an unresolved ⊤ member; the feed replaces it with a synthetic dataflow edge from each
+   * operand, composing {@code (..., m, k)} and {@code (..., k, n)} into {@code (..., m, n)} exactly
+   * as {@link #getDefaultShapeResult} does. Its sparse cousin {@code SparseMatrixDot} already
+   * declares a feed; this closes the twin-operation gap.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The matmul feed over operands {@code a} and {@code b}, or {@code null} when either
+   *     operand cannot be located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    CGNode node = this.getNode();
+    if (node == null || node.getIR() == null) return null;
+    int aVn = this.getArgumentValueNumber(builder, 0, "a", true);
+    int bVn = this.getArgumentValueNumber(builder, 1, "b", true);
+    if (aVn <= 0 || bVn <= 0) return null;
+    return new TypeFeed(
+        TypeFeedKind.MATMUL,
+        List.of(
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, aVn),
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, bVn)));
+  }
+
   @Override
   protected int getShapeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
