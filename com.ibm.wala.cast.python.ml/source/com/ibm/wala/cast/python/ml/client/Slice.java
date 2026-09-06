@@ -315,6 +315,6 @@ public class Slice extends PassThroughUnaryTensorGenerator {
    */
   @Override
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
-    return this.getTypeFeed(builder, TypeFeedKind.DTYPE_ONLY);
+    return this.getTypeFeed(builder, TypeFeedKind.RANK_PRESERVING);
   }
 }

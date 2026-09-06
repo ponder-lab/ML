@@ -6673,6 +6673,19 @@ public abstract class TensorGenerator {
      */
     SHAPE_ONLY,
 
+    /**
+     * Each operand member's dtype AND RANK are lifted, with every extent degraded: the operation
+     * preserves its input's rank but recomputes its extents from values the analysis cannot read
+     * (wala/ML#876). Weaker than {@link #PASS_THROUGH}, which keeps the extents too, and stronger
+     * than {@link #DTYPE_ONLY}, which discards the rank a rank-preserving operation guarantees.
+     *
+     * <p>The distinction matters because a generator whose {@code getDefaultShapes} preserves rank
+     * must not declare {@link #DTYPE_ONLY}: the two paths would then disagree about the same
+     * operation, and the fed answer would be strictly weaker than the computed one on exactly the
+     * values the feed exists to serve.
+     */
+    RANK_PRESERVING,
+
     /** Each operand member forwards unchanged (the operation preserves its input's type). */
     PASS_THROUGH,
 
