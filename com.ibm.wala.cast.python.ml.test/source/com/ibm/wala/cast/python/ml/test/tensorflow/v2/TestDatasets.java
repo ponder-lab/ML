@@ -1476,10 +1476,17 @@ public class TestDatasets extends AbstractTensorTest {
    * rank-3-dominated tensor union. Receiver-keyed trampoline contexts (wala/ML#679) removed the
    * spurious {@code (?, ?, 4)}/{@code (?, ?, 12)} constructor-collapse members, and the wala/ML#739
    * operand-walk repairs with parameter defaults materializing (wala/ML#743) recover the
-   * runtime-true logits member fully concrete: {@code (2, 3, 10)} float32, alongside the {@code (?,
-   * ?, 10)} partial from the fit-path contexts. The wala/ML#680 {@code unknown}-dtype phantom is
-   * gone: with the decoder-stack output resolving, {@code OutputLayer.call}'s dead {@code
-   * self.porj_weights} arm no longer contributes a member.
+   * runtime-true logits member fully concrete: {@code (2, 3, 10)} float32. The wala/ML#680 {@code
+   * unknown}-dtype phantom is gone: with the decoder-stack output resolving, {@code
+   * OutputLayer.call}'s dead {@code self.porj_weights} arm no longer contributes a member.
+   *
+   * <p>The former {@code (?, ?, 10)} partial is gone with <a
+   * href="https://github.com/wala/ML/issues/885">wala/ML#885</a>'s longer feasibility walk. It came
+   * from {@code Gpt2.call}'s {@code self.output_layer(hidden_states)} arm, which is dead: {@code
+   * rev_embedding_projection} defaults to {@code True} and is never written otherwise, so the guard
+   * that assigns {@code self.output_layer} never runs and that arm would raise {@code
+   * AttributeError} if it were reachable. Its member was spurious, and the shape asserted here is
+   * the one the probe's own {@code assert} states.
    *
    * <p>The former {@code (2, 3, 8, 8)} member, the {@code mode="projection"} call's rank-3 input
    * crossing into the embedding-mode lookup, is gone: <a
@@ -1508,13 +1515,7 @@ public class TestDatasets extends AbstractTensorTest {
         "gpt2_vendored",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 3, 10),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 10))));
   }
 
   /**

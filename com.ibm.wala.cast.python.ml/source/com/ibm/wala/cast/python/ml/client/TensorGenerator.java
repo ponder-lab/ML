@@ -3142,7 +3142,26 @@ public abstract class TensorGenerator {
     for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(armPred); it.hasNext(); )
       armPredPreds.add(it.next());
     if (armPredPreds.size() != 1) return null;
-    return decideEdgeFromBranchBlock(builder, node, cfg, armPredPreds.get(0), armPred);
+
+    // Beyond a triangle or diamond the governing branch can sit further back, separated from the
+    // arm by blocks that impose no choice of their own: a goto, or an invoke whose exception edge
+    // splits the block (wala/ML#885). Walk back while each block has exactly one predecessor, since
+    // that edge is then the only way in and an infeasible edge anywhere along the chain makes the
+    // arm unreachable. Stop at the first block that decides, at a fork, or at a repeat.
+    ISSABasicBlock successor = armPred;
+    ISSABasicBlock current = armPredPreds.get(0);
+    Set<ISSABasicBlock> visited = HashSetFactory.make();
+    while (visited.add(current)) {
+      Boolean decided = decideEdgeFromBranchBlock(builder, node, cfg, current, successor);
+      if (decided != null) return decided;
+      List<ISSABasicBlock> currentPreds = new ArrayList<>();
+      for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(current); it.hasNext(); )
+        currentPreds.add(it.next());
+      if (currentPreds.size() != 1) return null;
+      successor = current;
+      current = currentPreds.get(0);
+    }
+    return null;
   }
 
   /**
