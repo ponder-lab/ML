@@ -27,6 +27,7 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
@@ -639,6 +640,36 @@ public class TestMisc extends AbstractTensorTest {
         TensorType.of(FLOAT32, 2, 3));
     assertEquals(new TensorType(FLOAT_32, asList(new NumericDim(3))), TensorType.of(FLOAT_32, 3));
     assertTrue(TensorType.of(FLOAT32, 2, 2).asSparse().isSparse());
+  }
+
+  /**
+   * The {@code Dynamic} half of {@link #testSliceKeepsRankThroughTypeFeed()}. A decoded JPEG has no
+   * static extents, so its axes carry run-time {@code None}-evidence and are {@code Dynamic} rather
+   * than {@code Unresolved} (<a href="https://github.com/wala/ML/issues/721">wala/ML#721</a>).
+   * Slicing it degrades the extents, and the degradation must PRESERVE that distinction rather than
+   * flattening both sentinels to one: an axis that was {@code Dynamic} stays {@code Dynamic}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceKeepsDynamicSentinelThroughTypeFeed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_decoded",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
   }
 
   /**

@@ -31,5 +31,18 @@ def transform_image(image):
     return image
 
 
+def consume_decoded(image):
+    pass
+
+
+def decoded_chain():
+    # A decoded JPEG has no static extents, so its axes carry run-time None-evidence and are
+    # Dynamic rather than Unresolved. Slicing it must PRESERVE that distinction through the feed
+    # (the wala/ML#721 convention), not flatten both sentinels together.
+    decoded = tf.image.decode_jpeg(tf.constant("bytes"))
+    consume_decoded(distorted_random_crop(decoded))
+
+
 direct = random_flip_left_right(img_array)
 chained = transform_image(img_array)
+decoded_chain()
