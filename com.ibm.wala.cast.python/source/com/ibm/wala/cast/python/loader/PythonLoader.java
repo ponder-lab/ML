@@ -274,10 +274,15 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     return shell;
   }
 
-  public class DynamicMethodBody extends DynamicCodeBody {
-    private final IClass container;
-
-    private final Collection<Annotation> annotations;
+  /**
+   * A source-defined function body that mines its call-form decorators' argument names
+   * (wala/ML#868, <a href="https://github.com/wala/ML/issues/886">wala/ML#886</a>). Both a
+   * top-level function (constructed by {@link #makeCodeBodyType}) and a method ({@link
+   * DynamicMethodBody}, a subtype) are this type, so the mining exists in one place and covers
+   * every decorated function regardless of scope. Before wala/ML#886 the mining lived only on
+   * {@link DynamicMethodBody}, so a decorator on a top-level function was never mined.
+   */
+  public class PythonCodeBody extends DynamicCodeBody {
 
     /**
      * The call-form decorators with their mined argument names (wala/ML#868). A parallel channel
@@ -285,10 +290,41 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
      * themselves, deliberately: {@link Annotation} equality includes its arguments, so enriching
      * the instances would silently break any consumer matching annotations by {@code
      * Annotation.make(type)} equality (e.g., name-keyed decorator detection) the moment a decorator
-     * carries arguments. This channel is additive; the name-only annotations above are
-     * byte-identical to their pre-wala/ML#868 form.
+     * carries arguments. This channel is additive; the name-only annotations are byte-identical to
+     * their pre-wala/ML#868 form.
      */
     private final List<com.ibm.wala.cast.python.util.Util.DecoratorCall> decoratorCalls;
+
+    public PythonCodeBody(
+        TypeReference codeName,
+        TypeReference parent,
+        IClassLoader loader,
+        Position sourcePosition,
+        CAstEntity entity,
+        WalkContext context) {
+      super(codeName, parent, loader, sourcePosition, entity, context);
+      this.decoratorCalls =
+          com.ibm.wala.cast.python.util.Util.getDecoratorCalls(entity.getAnnotations());
+    }
+
+    /**
+     * Returns the decorators applied to this function with their mined argument names, in
+     * declaration order (wala/ML#868). A bare decorator appears with an empty argument list (the
+     * front end normalizes bare application to a zero-argument call in the CAst). Note that
+     * decoration is not applied in IR at all (the decorator is never invoked and the raw function
+     * is bound to its name), so this metadata is the only place a decorator's arguments survive to.
+     *
+     * @return The decorator applications, empty when there are none.
+     */
+    public List<com.ibm.wala.cast.python.util.Util.DecoratorCall> getDecoratorCalls() {
+      return this.decoratorCalls;
+    }
+  }
+
+  public class DynamicMethodBody extends PythonCodeBody {
+    private final IClass container;
+
+    private final Collection<Annotation> annotations;
 
     public DynamicMethodBody(
         TypeReference codeName,
@@ -309,9 +345,6 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
               .map(tn -> TypeReference.findOrCreate(pythonLoader, tn))
               .map(Annotation::make)
               .collect(toList());
-
-      this.decoratorCalls =
-          com.ibm.wala.cast.python.util.Util.getDecoratorCalls(entity.getAnnotations());
     }
 
     public IClass getContainer() {
@@ -321,19 +354,6 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     @Override
     public Collection<Annotation> getAnnotations() {
       return this.annotations;
-    }
-
-    /**
-     * Returns the decorators applied to this function with their mined argument names, in
-     * declaration order (wala/ML#868). A bare decorator appears with an empty argument list (the
-     * front end normalizes bare application to a zero-argument call in the CAst). Note that
-     * decoration is not applied in IR at all (the decorator is never invoked and the raw function
-     * is bound to its name), so this metadata is the only place a decorator's arguments survive to.
-     *
-     * @return The decorator applications, empty when there are none.
-     */
-    public List<com.ibm.wala.cast.python.util.Util.DecoratorCall> getDecoratorCalls() {
-      return this.decoratorCalls;
     }
   }
 
@@ -527,7 +547,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       CAstSourcePositionMap.Position sourcePosition,
       CAstEntity entity,
       WalkContext context) {
-    return new DynamicCodeBody(
+    return new PythonCodeBody(
         TypeReference.findOrCreate(PythonTypes.pythonLoader, TypeName.string2TypeName(name)),
         P,
         this,

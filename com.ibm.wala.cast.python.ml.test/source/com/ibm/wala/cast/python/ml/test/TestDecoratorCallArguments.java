@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.loader.PythonLoader.DynamicMethodBody;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonCodeBody;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
@@ -77,6 +78,50 @@ public class TestDecoratorCallArguments extends TestPythonMLCallGraphShape {
             + " module.",
         List.of(new Util.DecoratorCall("params", List.of("Holder.C"))),
         q.getDecoratorCalls());
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/886">wala/ML#886</a>: a call-form
+   * decorator on a TOP-LEVEL function has its argument names mined, exactly as a method's are. The
+   * top-level function's body is a {@link PythonCodeBody} that is not a {@link DynamicMethodBody};
+   * before wala/ML#886 the mining lived only on {@link DynamicMethodBody}, so a top-level
+   * function's decorators were never seen and this channel was empty.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTopLevelDecoratorArgumentsSurviveToTheLoader() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(Collections.<File>emptyList(), "test_decorated_function_arguments.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    IClassHierarchy cha = builder.getClassHierarchy();
+
+    PythonCodeBody topfn = topLevelFunctionClass(cha, "topfn");
+    assertEquals(
+        "Expecting a top-level function's decorator arguments mined in call order (wala/ML#886).",
+        List.of(new Util.DecoratorCall("params", List.of("A", "B"))),
+        topfn.getDecoratorCalls());
+  }
+
+  /**
+   * Looks up the {@link PythonCodeBody} for the top-level fixture function of the given name.
+   *
+   * @param cha The class hierarchy of the analyzed fixture.
+   * @param function The function's name.
+   * @return Its function-object class.
+   */
+  private static PythonCodeBody topLevelFunctionClass(IClassHierarchy cha, String function) {
+    TypeReference reference =
+        TypeReference.findOrCreate(
+            PythonTypes.pythonLoader, "Lscript test_decorated_function_arguments.py/" + function);
+    IClass klass = cha.lookupClass(reference);
+    assertNotNull("Expecting the fixture function's class: " + reference, klass);
+    assertTrue(
+        "Expecting a loader-defined code body carrying decorator metadata; got: "
+            + klass.getClass().getName(),
+        klass instanceof PythonCodeBody);
+    return (PythonCodeBody) klass;
   }
 
   /**
