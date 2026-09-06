@@ -3356,6 +3356,17 @@ public abstract class TensorGenerator {
       return outcome == null ? null : (outcome ? 1 : 0);
     }
 
+    // A rank predicate `x.shape.ndims` / `x.shape.rank` folds to the base tensor's statically-known
+    // rank (wala/ML#882): guards like `if x.shape.ndims == 2:` decide when `x`'s rank is known, and
+    // the infeasible arm otherwise contributes a spurious member. This reads the rank from the
+    // operand node-intrinsically, so it serves both the wala/ML#746 return-arm fold and the
+    // wala/ML#763 phi-arm fold; the latter is what removes the spurious member (the crf-layer group
+    // of wala/ML#876).
+    if (def instanceof PythonPropertyRead) {
+      Integer rank = resolveRankPredicate(builder, node, (PythonPropertyRead) def);
+      if (rank != null) return rank;
+    }
+
     // A receiver-field read folds when every instance holds the same single constant in the
     // field (wala/ML#761): guards like `if self.use_einsum:` compare a configuration constant
     // the local points-to set cannot see.
@@ -3440,6 +3451,82 @@ public abstract class TensorGenerator {
     Object folded = constant;
     LOGGER.fine(() -> "ATTR-FOLD " + fn + " => " + folded + " in " + describe(node) + ".");
     return constant;
+  }
+
+  /**
+   * Resolves a rank predicate operand — {@code x.shape.ndims} or {@code x.shape.rank} — to the base
+   * tensor's statically-known rank (wala/ML#882). The operand's def is a property read of {@code
+   * ndims}/{@code rank} whose object is itself a {@code shape} property read; the base tensor's
+   * rank is the common rank of its resolved shapes, read node-intrinsically through the same {@link
+   * TensorGeneratorFactory#getGenerator} path the shape machinery uses. Being env-free, it serves
+   * both the wala/ML#746 return-arm fold and the wala/ML#763 phi-arm fold; the phi-arm fold is what
+   * removes the spurious member a rank guard's infeasible arm contributes.
+   *
+   * <p>Declines (returns {@code null}) unless every resolved shape member is present and all agree
+   * on rank. That agreement is load-bearing in the field: a single embedding parameter resolves to
+   * seven different shapes across call contexts — {@code (8,10)}, {@code (16,100)}, {@code
+   * (1,512)}, {@code (2,10)}, {@code (6,128)}, {@code (2,4)}, {@code (8,100)} — all rank 2.
+   * Reducing to the shared rank decides; a design carrying the shape would find seven disagreeing
+   * values and give up. Reducing rather than carrying the shape is what makes the fold fire on the
+   * real site.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for shape resolution.
+   * @param node The {@link CGNode} whose IR defines the operand.
+   * @param outer The {@code ndims}/{@code rank} property read.
+   * @return The base tensor's rank, or {@code null} when the operand is not a rank predicate or the
+   *     base's rank is not statically and unambiguously known.
+   */
+  private static Integer resolveRankPredicate(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead outer) {
+    String outerName = resolvePropertyName(builder, node, outer);
+    if (!"ndims".equals(outerName) && !"rank".equals(outerName)) return null;
+    SSAInstruction innerDef = node.getDU().getDef(outer.getObjectRef());
+    if (!(innerDef instanceof PythonPropertyRead)) return null;
+    PythonPropertyRead inner = (PythonPropertyRead) innerDef;
+    if (!"shape".equals(resolvePropertyName(builder, node, inner))) return null;
+    int baseVn = inner.getObjectRef();
+    if (baseVn <= 0) return null;
+    PointerKey basePK =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, baseVn);
+    if (builder.getPropagationSystem().isImplicit(basePK)) return null;
+    PointsToSetVariable baseVar = builder.getPropagationSystem().findOrCreatePointsToSet(basePK);
+    if (baseVar == null) return null;
+    Set<List<Dimension<?>>> shapes;
+    try {
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(baseVar, builder);
+      if (generator == null) return null;
+      shapes = generator.getShapes(builder);
+    } catch (RuntimeException e) {
+      return null;
+    }
+    if (shapes == null || shapes.isEmpty()) return null;
+    Integer rank = null;
+    for (List<Dimension<?>> member : shapes) {
+      if (member == null) return null;
+      if (rank == null) rank = member.size();
+      else if (rank != member.size()) return null;
+    }
+    return rank;
+  }
+
+  /**
+   * Resolves a property read's member name to a constant string, reading the {@link String} {@link
+   * ConstantKey} the member reference points to.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to lookup.
+   * @param node The {@link CGNode} whose IR contains the read.
+   * @param read The property read.
+   * @return The member name, or {@code null} when it is not a resolvable string constant.
+   */
+  private static String resolvePropertyName(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (InstanceKey ik :
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef()))) {
+      if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String)
+        return (String) ((ConstantKey<?>) ik).getValue();
+    }
+    return null;
   }
 
   /**
