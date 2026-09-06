@@ -443,11 +443,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32,
                     asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
                 // The wala/ML#737 partial composition proves the rank-4 attention form's batch
-                // axis even when the remaining operand axes stay unresolved. Its wholly unresolved
-                // (8, ?, ?, ?) companion is gone with wala/ML#885's longer feasibility walk, which
-                // proves the arms carrying it unreachable here: `MultiAttentionLayer` is
-                // constructed once, with `do_return_2d_tensor=True`, and `use_einsum` is True at
-                // every call site. The two members below keep the composition guarded.
+                // axis even when the remaining operand axes stay unresolved.
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(
@@ -513,17 +516,18 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
-                // The rank-4 attention-form member that formerly pinned wala/ML#737's partial
-                // composition here is gone with wala/ML#885's longer feasibility walk. It reached
-                // this parameter only through arms that walk proves unreachable in this fixture:
-                // `MultiAttentionLayer` is constructed once, with `do_return_2d_tensor=True`, so
-                // its rank-3 reshape arm is dead, and `use_einsum` is True at every call site, so
-                // `einsum_via_matmul` is dead. wala/ML#737's composition is still guarded by the
-                // rank-4 member in testNlpgnnFullEinsumViaMatmul's live einsum form.
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                // The wala/ML#737 partial composition proves the rank-4 attention form's batch
+                // axis even when the remaining operand axes stay unresolved.
                 new TensorType(
                     FLOAT_32,
                     asList(
-                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                        new NumericDim(8),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -873,16 +877,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             3,
             Set.of(TensorType.of(INT_32, 2, 2)),
             4,
-            // Only the (2, 2) int32 call-site union with the label tensor. The former (?, ?, 100)
-            // unknown member came from `Gpt2.call`'s dead `self.output_layer(hidden_states)` arm,
-            // which wala/ML#885's longer feasibility walk now prunes: `rev_embedding_projection`
-            // defaults to True and no call site overrides it, so the guard assigning
-            // `self.output_layer` never runs and that arm would raise `AttributeError` if it were
-            // reachable. Removing it leaves the forward output with no member at all here, because
-            // the live `mode="projection"` arm does not type in this fixture (it does in
-            // `gpt2_vendored`, see TestDatasets#testCollectionProbeVendoredForward). The dead arm
-            // was masking that gap. TODO: Recover the live arm's member per wala/ML#889.
-            Set.of(TensorType.of(INT_32, 2, 2))));
+            // The model forward output: rank 3 with the vocab dimension recovered as the
+            // constant 100; the dtype is refinable once `add_weight` consumes its `dtype`
+            // argument. The (2, 2) int32 member is the call-site union with the label tensor.
+            Set.of(
+                new TensorType(
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
+                TensorType.of(INT_32, 2, 2))));
   }
 
   /**
@@ -951,12 +953,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(INT_32, asList(new NumericDim(32), DynamicDim.INSTANCE)),
                 new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE))),
             4,
-            // The former (?, ?, 10) member came from `Gpt2.call`'s dead
-            // `self.output_layer(hidden_states)` arm, pruned by wala/ML#885's longer feasibility
-            // walk: `rev_embedding_projection` defaults to True and no call site overrides it, so
-            // the guard assigning `self.output_layer` never runs and that arm would raise
-            // `AttributeError` if it were reachable. The two live members remain.
             Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
@@ -1001,16 +1001,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             3,
             Set.of(TensorType.of(INT_32, 2, 2)),
             4,
-            // Only the (2, 2) int32 call-site union with the label tensor. The former (?, ?, 100)
-            // unknown member came from `Gpt2.call`'s dead `self.output_layer(hidden_states)` arm,
-            // which wala/ML#885's longer feasibility walk now prunes: `rev_embedding_projection`
-            // defaults to True and no call site overrides it, so the guard assigning
-            // `self.output_layer` never runs and that arm would raise `AttributeError` if it were
-            // reachable. Removing it leaves the forward output with no member at all here, because
-            // the live `mode="projection"` arm does not type in this fixture (it does in
-            // `gpt2_vendored`, see TestDatasets#testCollectionProbeVendoredForward). The dead arm
-            // was masking that gap. TODO: Recover the live arm's member per wala/ML#889.
-            Set.of(TensorType.of(INT_32, 2, 2))));
+            // The model forward output: rank 3 with the vocab dimension recovered as the
+            // constant 100; the dtype is refinable once `add_weight` consumes its `dtype`
+            // argument. The (2, 2) int32 member is the call-site union with the label tensor.
+            Set.of(
+                new TensorType(
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
+                TensorType.of(INT_32, 2, 2))));
   }
 
   /**
