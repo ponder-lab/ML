@@ -960,4 +960,52 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
   }
+
+  /**
+   * A rank predicate over a statically-known rank folds so only the feasible branch arm survives
+   * (<a href="https://github.com/wala/ML/issues/882">wala/ML#882</a>). {@code guarded(x)} wraps
+   * {@code tf.expand_dims(x, -1)} in {@code if x.shape.ndims == 2}; called with a rank-2 {@code
+   * tf.ones([8, 10])}, the predicate is determinately true, so the result is {@code (8, 10, 1)}
+   * alone. Before the fold both arms survived and {@code consume} saw the spurious rank-2 {@code
+   * (8, 10)} beside it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNdimsFold()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ndims_fold.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_8_10_1_FLOAT32)));
+  }
+
+  /**
+   * The rank-predicate fold resolves {@code x.shape.ndims} in both directions (<a
+   * href="https://github.com/wala/ML/issues/882">wala/ML#882</a>): here {@code guarded} is called
+   * with a rank-3 {@code tf.ones([8, 10, 1])}, so {@code x.shape.ndims == 2} is determinately false
+   * and the ideal result is {@code (8, 10, 1)} alone. The expand arm is nevertheless not pruned,
+   * because its governing branch sits three blocks back — behind the {@code expand_dims} invoke's
+   * block split — past the two-level walk in {@code computePhiArmFeasibility}, so {@code consume}
+   * still sees the spurious rank-4 {@code (8, 10, 1, 1)} beside {@code (8, 10, 1)}. That is a
+   * distinct, pre-existing phi-arm-feasibility limitation, not a gap in the fold: the fold resolves
+   * the rank correctly in this direction too, and leaving the arm undecided is an
+   * over-approximation rather than a wrong answer. The guard-true direction, where the spurious
+   * member sits on the skip arm that does leave directly from the branch block, is pruned and is
+   * covered by {@link #testNdimsFold()}.
+   *
+   * <p>TODO: Flip to a plain {@code @Test} asserting {@code (8, 10, 1)} alone once the phi-arm walk
+   * reaches a governing branch behind an invoke-split arm, tracked by <a
+   * href="https://github.com/wala/ML/issues/885">wala/ML#885</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNdimsFoldRank3Control()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ndims_fold_rank3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_8_10_1_FLOAT32)));
+  }
 }
