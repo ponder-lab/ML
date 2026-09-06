@@ -64,8 +64,17 @@ class T:
         return cls()
 
 
+# A top-level (module-scope) decorated function, not a method. Its decorator
+# arguments must be mined the same way a method's are (wala/ML#886); before that
+# fix a top-level function's decorators were never seen by the mining channel.
+@params(A, B)
+def topfn(receiver, cls):
+    return cls()
+
+
 t = T()
 t.m()
 t.n()
 assert t.p() == 2
 t.q()
+topfn(None)
