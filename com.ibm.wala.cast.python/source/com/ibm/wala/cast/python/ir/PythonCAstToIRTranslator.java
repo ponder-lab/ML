@@ -32,6 +32,8 @@ import com.ibm.wala.cast.python.parser.AbstractParser.PythonGlobalsEntity;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
+import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstControlFlowMap;
 import com.ibm.wala.cast.tree.CAstEntity;
 import com.ibm.wala.cast.tree.CAstNode;
@@ -73,6 +75,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -280,7 +283,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             hasMonitorOp,
             lexicalInfo,
             debugInfo,
-            N.getArgumentDefaults().length,
+            N.getArgumentDefaults().length + materializableClickDefaults(N).size(),
             numberOfTrailingNonDefaultableParameters(N));
   }
 
@@ -536,6 +539,18 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         doGlobalWrite(cc, "L" + fnName + "_" + i, PythonTypes.Root, cc.getValue(dflt));
       }
     }
+
+    // Materialize the @click.option defaults as parameter defaults, through the same globals, at
+    // the
+    // parameter indices they bind (wala/ML#875, wala/ML#886). The count passed to
+    // defineCodeBodyCode admits exactly these, so the reader's trailing range covers them;
+    // non-contiguous options have already declined to an empty map.
+    for (Map.Entry<Integer, CAstNode> click : materializableClickDefaults(n).entrySet()) {
+      WalkContext cc = context.codeContext();
+      visitor.visit(click.getValue(), cc, visitor);
+      doGlobalWrite(
+          cc, "L" + fnName + "_" + click.getKey(), PythonTypes.Root, cc.getValue(click.getValue()));
+    }
   }
 
   /**
@@ -557,6 +572,146 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       if (e.getOriginal() == e) break;
     }
     return 0;
+  }
+
+  /**
+   * The {@code @click.option} defaults that can be materialized as parameter defaults for the given
+   * entity (<a href="https://github.com/wala/ML/issues/875">wala/ML#875</a>, <a
+   * href="https://github.com/wala/ML/issues/886">wala/ML#886</a>), keyed by the receiving
+   * parameter's index, each mapping to the default's CAst node.
+   *
+   * <p>A {@code @click.command} supplies each unpassed option's default at its call, so from the
+   * analysis's view the option's default IS the parameter's default. It is materialized through the
+   * same {@code <fn>_defaults_<i>} globals the Python-default machinery uses (<a
+   * href="https://github.com/wala/ML/issues/743">wala/ML#743</a>), which are read back positionally
+   * as the trailing default parameters. That positional read is the constraint: the materialized
+   * defaults must be a CONTIGUOUS trailing block of parameters, immediately below any Python
+   * defaults. When the mined options do not form such a block -- a {@code @click.argument}, which
+   * has no default, sits among them and breaks contiguity -- the whole function DECLINES (returns
+   * empty) rather than materialize, because a positional read against a non-contiguous set would
+   * bind a default to the WRONG parameter, and a wrong integer is indistinguishable from a right
+   * one downstream. Each option is matched to its parameter by NAME, click's rule (the long {@code
+   * --like-this} spelling, dashes to underscores), never by position: decorators apply bottom-up,
+   * so their source order is the reverse of the parameter order.
+   *
+   * @param n The function entity.
+   * @return The materializable click defaults keyed by parameter index, contiguous and trailing;
+   *     empty when there are none or when the mined options are non-contiguous (a decline).
+   */
+  private static Map<Integer, CAstNode> materializableClickDefaults(CAstEntity n) {
+    Collection<CAstAnnotation> annotations = n.getAnnotations();
+    if (annotations == null || annotations.isEmpty()) return Collections.emptyMap();
+
+    String[] argumentNames = n.getArgumentNames();
+    Map<Integer, CAstNode> byIndex = new LinkedHashMap<>();
+    for (CAstAnnotation annotation : annotations) {
+      Optional<String> decorator = Util.getName(annotation);
+      if (decorator.isEmpty() || !isClickOptionDecorator(decorator.get())) continue;
+
+      CAstNode call = (CAstNode) annotation.getArguments().get(Util.DYNAMIC_ANNOTATION_KEY);
+      if (call == null || call.getKind() != CAstNode.CALL) continue;
+
+      // The CALL node's children are the callee, the empty receiver slot, then the arguments; a
+      // keyword argument arrives as an ARRAY_LITERAL of its name constant and its value expression.
+      List<String> optionSpellings = new ArrayList<>();
+      CAstNode defaultValue = null;
+      for (int i = 2; i < call.getChildCount(); i++) {
+        CAstNode argument = call.getChild(i);
+        if (argument.getKind() == CAstNode.ARRAY_LITERAL) {
+          if ("default".equals(argument.getChild(0).getValue()))
+            defaultValue = argument.getChild(1);
+        } else if (argument.getKind() == CAstNode.CONSTANT
+            && argument.getValue() instanceof String) {
+          optionSpellings.add((String) argument.getValue());
+        }
+      }
+      if (defaultValue == null) continue;
+
+      String parameter = clickOptionParameterName(optionSpellings);
+      int index = parameter == null ? -1 : indexOf(argumentNames, parameter);
+      if (index >= 0) byIndex.put(index, defaultValue);
+    }
+    if (byIndex.isEmpty()) return Collections.emptyMap();
+
+    int last = n.getArgumentCount() - numberOfTrailingNonDefaultableParameters(n);
+    int pythonDefaults = n.getArgumentDefaults() == null ? 0 : n.getArgumentDefaults().length;
+    Map<Integer, CAstNode> block = contiguousTrailingBlock(byIndex, last, pythonDefaults);
+    if (block.isEmpty())
+      LOGGER.fine(
+          "Declining to materialize non-contiguous @click.option defaults for "
+              + n.getName()
+              + "; a @click.argument likely breaks the trailing block.");
+    return block;
+  }
+
+  /**
+   * The subset of {@code byIndex} that forms a contiguous block of parameter indices ending just
+   * below the {@code pythonDefaults} innermost defaults (that is, immediately below index {@code
+   * last - pythonDefaults}), or an empty map when the keys do not all fall in such a block.
+   *
+   * <p>This is the wala/ML#743 contiguity constraint isolated from the mining, so it can be tested
+   * without an entity: the default globals are read back positionally as the trailing default
+   * parameters, so a set of indices that is not a contiguous trailing block cannot be materialized
+   * without binding a default to the wrong parameter, and the whole set is declined (empty) rather
+   * than partially materialized.
+   *
+   * @param <T> The value type (the default nodes, irrelevant to the decision).
+   * @param byIndex The candidate defaults keyed by parameter index.
+   * @param last One past the last positionally-defaultable parameter (the argument count less the
+   *     trailing non-defaultable formals).
+   * @param pythonDefaults The count of Python defaults already occupying the innermost trailing
+   *     positions, below which this block must sit.
+   * @return {@code byIndex} when its keys form the contiguous trailing block, else an empty map.
+   */
+  static <T> Map<Integer, T> contiguousTrailingBlock(
+      Map<Integer, T> byIndex, int last, int pythonDefaults) {
+    if (byIndex.isEmpty()) return Collections.emptyMap();
+    int top = last - pythonDefaults;
+    int floor = top;
+    while (floor - 1 >= 0 && byIndex.containsKey(floor - 1)) floor--;
+    for (int index : byIndex.keySet())
+      if (index < floor || index >= top) return Collections.emptyMap();
+    return byIndex;
+  }
+
+  /**
+   * Whether the given (possibly dotted) decorator name is a {@code click.option} application, under
+   * any import spelling ({@code @option}, {@code @click.option}, an aliased module).
+   *
+   * @param decorator The decorator's mined name.
+   * @return {@code true} when its last segment is {@code option}.
+   */
+  private static boolean isClickOptionDecorator(String decorator) {
+    return decorator.equals("option") || decorator.endsWith(".option");
+  }
+
+  /**
+   * The parameter name a {@code @click.option} binds, by click's rule: the first long ({@code
+   * --like-this}) spelling with its leading dashes stripped and inner dashes turned to underscores,
+   * falling back to the first short ({@code -x}) spelling. Matching is by name, never by position.
+   *
+   * @param spellings The option's positional string spellings, in source order.
+   * @return The parameter name, or {@code null} when no spelling looks like an option flag.
+   */
+  static String clickOptionParameterName(List<String> spellings) {
+    for (String spelling : spellings)
+      if (spelling.startsWith("--")) return spelling.substring(2).replace('-', '_');
+    for (String spelling : spellings)
+      if (spelling.startsWith("-") && spelling.length() > 1)
+        return spelling.substring(1).replace('-', '_');
+    return null;
+  }
+
+  /**
+   * The index of the given name in the array, or {@code -1} when absent.
+   *
+   * @param names The names to search.
+   * @param name The name to find.
+   * @return Its index, or {@code -1}.
+   */
+  private static int indexOf(String[] names, String name) {
+    for (int i = 0; i < names.length; i++) if (name.equals(names[i])) return i;
+    return -1;
   }
 
   private final Stack<PythonGlobalsEntity> globalsStack = new Stack<>();
