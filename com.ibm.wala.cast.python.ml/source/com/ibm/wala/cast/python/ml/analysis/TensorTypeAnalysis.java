@@ -18,8 +18,10 @@ import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ml.util.TensorShapeUtil;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.util.SourceBuffer;
@@ -818,6 +820,28 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                     case DTYPE_ONLY:
                       for (TensorType t : rhs.state)
                         changed |= lhs.state.add(new TensorType(t.getDType(), null));
+                      break;
+                    case RANK_PRESERVING:
+                      // The operation guarantees its input's RANK and recomputes the extents from
+                      // values the analysis cannot read, so the fed member keeps the rank with
+                      // every axis degraded, mirroring what the computed path already does when
+                      // its bounds do not resolve (wala/ML#876). Degrading to `Dynamic` where the
+                      // operand's axis carried `None`-evidence and to `Unresolved` otherwise is
+                      // the wala/ML#721 convention.
+                      for (TensorType t : rhs.state) {
+                        List<Dimension<?>> inDims = t.getDims();
+                        if (inDims == null) {
+                          changed |= lhs.state.add(new TensorType(t.getDType(), null));
+                          continue;
+                        }
+                        List<Dimension<?>> degraded = new ArrayList<>(inDims.size());
+                        for (Dimension<?> d : inDims)
+                          degraded.add(
+                              d instanceof DynamicDim
+                                  ? DynamicDim.INSTANCE
+                                  : UnresolvedDim.INSTANCE);
+                        changed |= lhs.state.add(TensorType.of(t.getDType(), degraded, t.layout()));
+                      }
                       break;
                     case SHAPE_ONLY:
                       // The mirror: take the shape, never the dtype. This is how a cast whose

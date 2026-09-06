@@ -88,6 +88,14 @@
       "dtype": "float32",
       "shape": "8 3",
       "attribution": "fixture: deliberately concrete against the Dynamic batch axis to exercise the kept conflict"
+    },
+    {
+      "module": "driver_image.py",
+      "function": "",
+      "variable": "img_array",
+      "dtype": "uint8",
+      "shape": "4830 2900 3",
+      "attribution": "fixture: mirrors the decoded-JPEG entry of the wala/ML#876 subject"
     }
   ]
 }

@@ -29,6 +29,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -638,6 +639,41 @@ public class TestMisc extends AbstractTensorTest {
         TensorType.of(FLOAT32, 2, 3));
     assertEquals(new TensorType(FLOAT_32, asList(new NumericDim(3))), TensorType.of(FLOAT_32, 3));
     assertTrue(TensorType.of(FLOAT32, 2, 2).asSparse().isSparse());
+  }
+
+  /**
+   * A {@code tf.slice} whose input is typed only by dataflow keeps its input's RANK (<a
+   * href="https://github.com/wala/ML/issues/876">wala/ML#876</a>). An augmentation helper is
+   * reached by two paths, directly with a sidecar-typed array and through a distorted random crop
+   * whose {@code tf.slice} bounds come from {@code sample_distorted_bounding_box} and so are
+   * genuinely dynamic. The crop's extents are correctly unknown, but its RANK is guaranteed, and
+   * {@code Slice.getDefaultShapes} already preserves it. The type feed did not: it declared {@code
+   * DTYPE_ONLY}, so on the values the feed exists to serve the fed answer was strictly weaker than
+   * the computed one and the parameter lost its rank entirely. The union is now rank-homogeneous.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceKeepsRankThroughTypeFeed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(UINT_8, 4830, 2900, 3),
+                new TensorType(
+                    UINT_8,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**
