@@ -1008,4 +1008,31 @@ public class TestMisc extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_ndims_fold_rank3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_8_10_1_FLOAT32)));
   }
+
+  /**
+   * The rank-predicate fold declines, and keeps both arms, when the rank is not statically known
+   * (<a href="https://github.com/wala/ML/issues/882">wala/ML#882</a>). Here {@code guarded}'s
+   * argument is drawn from a list of a rank-2 and a rank-3 tensor, so {@code x} carries both ranks
+   * and {@code x.shape.ndims} has no single value. The fold reduces the operand's shapes to their
+   * common rank and declines on disagreement, so the guard does not fold and both arms survive: the
+   * skip arm contributes {@code (8, 10)} and {@code (8, 10, 1)}, and the expand arm contributes
+   * {@code (8, 10, 1)} and {@code (8, 10, 1, 1)}. The rank-2 {@code (8, 10)} member is present only
+   * because the skip arm was not pruned; its presence pins the soundness property that a
+   * not-statically-known rank keeps both arms rather than folding to a picked rank.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNdimsFoldDeclinesOnUnresolvedRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ndims_fold_unresolved.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_8_10_FLOAT32, TENSOR_8_10_1_FLOAT32, TENSOR_8_10_1_1_FLOAT32)));
+  }
 }
