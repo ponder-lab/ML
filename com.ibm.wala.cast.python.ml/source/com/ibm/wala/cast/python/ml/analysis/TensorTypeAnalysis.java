@@ -823,25 +823,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                       break;
                     case RANK_PRESERVING:
                       // The operation guarantees its input's RANK and recomputes the extents from
-                      // values the analysis cannot read, so the fed member keeps the rank with
-                      // every axis degraded, mirroring what the computed path already does when
-                      // its bounds do not resolve (wala/ML#876). Degrading to `Dynamic` where the
-                      // operand's axis carried `None`-evidence and to `Unresolved` otherwise is
-                      // the wala/ML#721 convention.
-                      for (TensorType t : rhs.state) {
-                        List<Dimension<?>> inDims = t.getDims();
-                        if (inDims == null) {
-                          changed |= lhs.state.add(new TensorType(t.getDType(), null));
-                          continue;
-                        }
-                        List<Dimension<?>> degraded = new ArrayList<>(inDims.size());
-                        for (Dimension<?> d : inDims)
-                          degraded.add(
-                              d instanceof DynamicDim
-                                  ? DynamicDim.INSTANCE
-                                  : UnresolvedDim.INSTANCE);
-                        changed |= lhs.state.add(TensorType.of(t.getDType(), degraded, t.layout()));
-                      }
+                      // values the analysis cannot read (wala/ML#876). Shares its rule with the
+                      // shape-composing path, so the two cannot drift apart.
+                      for (TensorType composed : this.rankPreservingMembers(rhs))
+                        changed |= lhs.state.add(composed);
                       break;
                     case SHAPE_ONLY:
                       // The mirror: take the shape, never the dtype. This is how a cast whose
@@ -874,6 +859,41 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             }
 
             /**
+             * Lifts each operand member's dtype and RANK with every extent degraded, per the <a
+             * href="https://github.com/wala/ML/issues/721">wala/ML#721</a> convention: {@code
+             * Dynamic} where the axis carried run-time {@code None}-evidence and {@code Unresolved}
+             * otherwise. A member with no rank stays rankless.
+             *
+             * <p>Shared by the replacing and the shape-composing paths so that one operation cannot
+             * get two answers depending on which resolved it.
+             *
+             * @param rhs The incoming operand's variable.
+             * @return The rank-preserving members.
+             */
+            private Set<TensorType> rankPreservingMembers(TensorVariable rhs) {
+              Set<TensorType> ret = HashSetFactory.make();
+
+              for (TensorType t : rhs.state) {
+                List<Dimension<?>> inDims = t.getDims();
+
+                if (inDims == null) {
+                  ret.add(new TensorType(t.getDType(), null));
+                  continue;
+                }
+
+                List<Dimension<?>> degraded = new ArrayList<>(inDims.size());
+
+                for (Dimension<?> d : inDims)
+                  degraded.add(
+                      d instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+
+                ret.add(TensorType.of(t.getDType(), degraded, t.layout()));
+              }
+
+              return ret;
+            }
+
+            /**
              * Composes the incoming operand state into result members per the declared kind: {@code
              * PASS_THROUGH} forwards each member, {@code BROADCAST} pairs each incoming member with
              * the other operand's current members (empty until both operands carry state), and
@@ -898,6 +918,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   // (SHAPE_FILL keeps a proven seed dtype, and no dtype-borrowing mode is ever
                   // installed for SHAPE_ONLY).
                   composed.addAll(rhs.state);
+                  break;
+                case RANK_PRESERVING:
+                  // Reached when a rank-preserving feed is installed in a shape-composing mode.
+                  // Delegates to the same rule the REPLACE arm uses, so one operation cannot get
+                  // two answers depending on which path resolved it (wala/ML#876).
+                  composed.addAll(this.rankPreservingMembers(rhs));
                   break;
                 case BROADCAST:
                   PointsToSetVariable other =
