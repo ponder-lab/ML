@@ -242,6 +242,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               + (entry.function().isEmpty() ? "" : "." + entry.function())
               + ".do()LRoot;";
       boolean matched = false;
+      // An entry that binds nothing is as silent as one that binds usefully, so a correctly formed
+      // entry beside a correct-looking result reads as having produced it (wala/ML#887). Counted
+      // per entry rather than per binding: an entry that fills one definition and is inert at
+      // another has done its job, and only an entry that changed NOTHING is worth reporting.
+      boolean applied = false;
+      int boundCount = 0;
+      int inertCount = 0;
+      int conflictCount = 0;
       for (CGNode node : builder.getCallGraph()) {
         if (!node.getMethod().getSignature().equals(target)) continue;
         IR ir = node.getIR();
@@ -274,6 +282,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           }
           PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
           matched = true;
+          boundCount++;
           Set<TensorType> inferred = init.get(var);
           if (inferred != null && !inferred.isEmpty()) {
             // Fill-only, per axis (wala/ML#771): the annotation refines exactly the axes where
@@ -291,9 +300,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       + "; the annotation is not applied (wala/ML#370)"
                       + entry.attributionSuffix()
                       + ".");
+              conflictCount++;
               continue;
             }
-            if (merged == inferred) continue; // The annotation adds no information.
+            if (merged == inferred) {
+              // Inert at this binding: the value is already typed and the annotation refines none
+              // of its axes. Reported per entry below rather than here, since being inert at one
+              // definition says nothing about the entry as a whole.
+              inertCount++;
+              continue;
+            }
             init.put(var, HashSetFactory.make(merged));
             EnumSet<TensorOrigin> origins = EnumSet.of(TensorOrigin.ANNOTATION);
             Set<TensorOrigin> priorOrigins = initOrigins.get(var);
@@ -320,6 +336,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                         + " (wala/ML#771)"
                         + entry.attributionSuffix()
                         + ".");
+            applied = true;
             continue;
           }
           if (!dataflow.containsNode(var)) dataflow.addNode(var);
@@ -344,6 +361,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       + " (wala/ML#370)"
                       + entry.attributionSuffix()
                       + ".");
+          applied = true;
         }
       }
       if (!matched)
@@ -351,6 +369,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             "Type annotation "
                 + entry.anchor()
                 + " matched no analyzed binding; check the module path and names (wala/ML#370).");
+      else if (!applied) {
+        int bound = boundCount;
+        int inert = inertCount;
+        int conflicted = conflictCount;
+        LOGGER.warning(
+            "Type annotation "
+                + entry.anchor()
+                + " = "
+                + entry.type()
+                + " matched "
+                + bound
+                + " binding(s) but contributed nothing: "
+                + inert
+                + " already typed and refined by none of its axes, "
+                + conflicted
+                + " in conflict. The entry is inert, so a result that looks correct beside it was"
+                + " not produced by it (wala/ML#887)"
+                + entry.attributionSuffix()
+                + ".");
+      }
     }
   }
 

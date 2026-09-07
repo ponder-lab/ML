@@ -96,6 +96,14 @@
       "dtype": "uint8",
       "shape": "4830 2900 3",
       "attribution": "fixture: mirrors the decoded-JPEG entry of the wala/ML#876 subject"
+    },
+    {
+      "module": "driver_inert.py",
+      "function": "",
+      "variable": "t",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "fixture: deliberately restates what inference already knows, so the entry is inert and must be reported (wala/ML#887)"
     }
   ]
 }

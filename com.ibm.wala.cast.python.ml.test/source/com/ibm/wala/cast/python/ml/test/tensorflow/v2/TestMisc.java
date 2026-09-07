@@ -42,9 +42,15 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.junit.Test;
 
 /**
@@ -705,6 +711,57 @@ public class TestMisc extends AbstractTensorTest {
                     UINT_8,
                     asList(
                         UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/887">wala/ML#887</a>: an entry that
+   * binds nothing is reported.
+   *
+   * <p>The fixture's {@code t} is fully typed by inference, and its sidecar entry restates that
+   * same type, so it refines no axis and contributes nothing. The type assertion pins that the
+   * entry really is inert rather than quietly applying; the captured warning pins that the analysis
+   * now says so. Before this, the two conditions were indistinguishable: a correctly formed entry
+   * beside a correct-looking result read as having produced it.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testInertTypeAnnotationIsReported() throws Exception {
+    Logger logger = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
+    List<String> warnings = new ArrayList<>();
+    Handler handler =
+        new Handler() {
+          @Override
+          public void publish(LogRecord record) {
+            if (record.getLevel().intValue() >= Level.WARNING.intValue())
+              warnings.add(record.getMessage());
+          }
+
+          @Override
+          public void flush() {}
+
+          @Override
+          public void close() {}
+        };
+    logger.addHandler(handler);
+    try {
+      test(
+          new String[] {"sidecar_proj/driver_inert.py"},
+          "driver_inert.py",
+          "consume",
+          "sidecar_proj",
+          1,
+          1,
+          Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+    } finally {
+      logger.removeHandler(handler);
+    }
+
+    assertTrue(
+        "Expecting an inert type-annotation entry to be reported (wala/ML#887). Warnings: "
+            + warnings,
+        warnings.stream()
+            .anyMatch(w -> w.contains("driver_inert.py") && w.contains("contributed nothing")));
   }
 
   /**
