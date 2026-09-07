@@ -1457,6 +1457,51 @@ public class TestElementwiseOps extends AbstractTensorTest {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/805">wala/ML#805</a>: a consumer that
+   * reaches an operator result through the HEAP rather than by walking the SSA chain.
+   *
+   * <p>{@code shifted = rows - 1} over a real {@code np.array} allocation, then {@code shifted[0]}.
+   * The subscript resolves its receiver through the receiver's points-to set, which before
+   * wala/ML#805 was empty, because a binary operator's result had no allocation site. The existing
+   * binop guards ({@code testBinopTupleStore}, {@code testBinopThroughDataset}) both pass without
+   * an allocation because their consumers fall back to an SSA-chain walk; this one does not.
+   *
+   * <p>Paired with {@link #testBinopResultSubscriptControl()}, which is the SAME subscript with no
+   * operator between the allocation and the read and which PASSES. The pair is what makes this a
+   * report about wala/ML#805 rather than about subscript resolution: the only difference between
+   * them is the operator.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#805 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testBinopResultSubscriptReceiver()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_binop_pts_consumer.py",
+        "consume_row",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 3))));
+  }
+
+  /** Control for {@link #testBinopResultSubscriptReceiver()}: the same subscript, no operator. */
+  @Test
+  public void testBinopResultSubscriptControl()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_binop_pts_consumer.py",
+        "consume_control",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 3))));
+  }
+
+  /**
    * Isolated repro for wala/ML#398 (binop drops PA allocation, bites through dataset). Python
    * {@code c = a + b; from_tensor_slices((c, y)); for x, _ in ds: consume(x)} — the binop result
    * {@code c} has no PA allocation and the tuple's field-0 PTS is empty. Passes without allocation
