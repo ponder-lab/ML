@@ -945,8 +945,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   TensorVariable otherState = outAccessor.get().apply(otherOperand);
                   if (otherState == null || otherState.state == null) break;
                   for (TensorType t : rhs.state)
-                    for (TensorType u : otherState.state)
-                      composed.add(sourceIsA ? this.matmulMembers(t, u) : this.matmulMembers(u, t));
+                    for (TensorType u : otherState.state) {
+                      TensorType m =
+                          sourceIsA ? this.matmulMembers(t, u) : this.matmulMembers(u, t);
+                      // A null member is an operand pair that cannot compose at run time, so it
+                      // contributes nothing rather than an unknown (wala/ML#878).
+                      if (m != null) composed.add(m);
+                    }
                   break;
                 case DTYPE_ONLY:
                   break;
@@ -956,10 +961,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
             /**
              * Composes one matmul member pair: {@code (..., m, k)} and {@code (..., k, n)} yield
-             * {@code (..., m, n)}, mirroring {@code MatMul.getDefaultShapeResult}. The batch
-             * dimensions are taken from the higher-rank operand. A member of rank below 2 or with
-             * an unknown shape composes to an unknown shape. The dtype is the pair's proven one,
-             * taken from {@code a} first since the runtime requires the operands to agree.
+             * {@code (..., m, n)}, through the same {@code TensorShapeUtil.matmulShape} the
+             * generator calls, so one operation cannot get two answers depending on which path
+             * resolved it (wala/ML#877, wala/ML#878). The batch dimensions BROADCAST pairwise from
+             * the right. A member of rank below 2, with an unknown shape, or with batch prefixes
+             * that would fail to broadcast at run time composes to an unknown shape. The dtype is
+             * the pair's proven one, taken from {@code a} first since the runtime requires the
+             * operands to agree.
              *
              * @param a The first operand's member.
              * @param b The second operand's member.
@@ -969,13 +977,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               DType dtype = a.getDType() != DType.UNKNOWN ? a.getDType() : b.getDType();
               List<Dimension<?>> aDims = a.getDims();
               List<Dimension<?>> bDims = b.getDims();
-              if (aDims == null || bDims == null || aDims.size() < 2 || bDims.size() < 2)
-                return new TensorType(dtype, null);
-              List<Dimension<?>> batched = aDims.size() >= bDims.size() ? aDims : bDims;
-              List<Dimension<?>> newShape = new ArrayList<>(batched.subList(0, batched.size() - 2));
-              newShape.add(aDims.get(aDims.size() - 2));
-              newShape.add(bDims.get(bDims.size() - 1));
-              return new TensorType(dtype, newShape);
+              if (aDims == null || bDims == null) return new TensorType(dtype, null);
+              List<Dimension<?>> newShape = TensorShapeUtil.matmulShape(aDims, bDims);
+              return newShape == null ? null : new TensorType(dtype, newShape);
             }
 
             /**

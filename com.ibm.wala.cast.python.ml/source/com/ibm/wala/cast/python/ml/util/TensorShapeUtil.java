@@ -96,4 +96,70 @@ public class TensorShapeUtil {
 
     return ret;
   }
+
+  /**
+   * Composes a matmul result's shape: {@code (..., m, k)} and {@code (..., k, n)} yield {@code
+   * (..., m, n)}, with the leading batch axes BROADCAST pairwise from the right rather than taken
+   * from one operand (<a href="https://github.com/wala/ML/issues/878">wala/ML#878</a>).
+   *
+   * <p>Taking the higher-rank operand's prefix is wrong wherever TensorFlow would broadcast. Equal
+   * rank is the case it is least safe for, not the most: {@code (3, 1, m, k)} and {@code (1, 5, k,
+   * n)} are both rank 4 and broadcast to {@code (3, 5, m, n)}, where taking the first operand's
+   * prefix yields {@code (3, 1, m, n)}, a wrong extent on two axes rather than an unknown one.
+   *
+   * <p>This is the single implementation both the generator and the type-feed composition call, so
+   * one operation cannot get two answers depending on which path resolved it. That mirroring was
+   * introduced deliberately (wala/ML#877) and sharing the rule keeps it exact rather than
+   * by-inspection.
+   *
+   * @param aDims The first operand's dimensions.
+   * @param bDims The second operand's dimensions.
+   * @return The composed dimensions, or {@code null} when the operation cannot be composed: either
+   *     operand below rank two, or batch prefixes that are not broadcastable, which would fail at
+   *     run time and so is declined rather than resolved to one side.
+   */
+  public static List<Dimension<?>> matmulShape(List<Dimension<?>> aDims, List<Dimension<?>> bDims) {
+    if (aDims == null || bDims == null || aDims.size() < 2 || bDims.size() < 2) return null;
+    List<Dimension<?>> aBatch = aDims.subList(0, aDims.size() - 2);
+    List<Dimension<?>> bBatch = bDims.subList(0, bDims.size() - 2);
+    List<Dimension<?>> ret = new java.util.ArrayList<>();
+    // Equal prefixes need no broadcasting and compose to themselves whatever their dimension
+    // kinds are. Taking this first keeps every shape that already resolved resolving: the defect
+    // this rule fixes is prefixes that DIFFER, and a pairwise rule that cannot decide some kind
+    // must not degrade the identical case on the way past.
+    if (aBatch.equals(bBatch)) ret.addAll(aBatch);
+    else {
+      int aRank = aBatch.size();
+      int bRank = bBatch.size();
+      int rank = max(aRank, bRank);
+      for (int i = 0; i < rank; i++) {
+        Dimension<?> x = i < rank - aRank ? null : aBatch.get(i - (rank - aRank));
+        Dimension<?> y = i < rank - bRank ? null : bBatch.get(i - (rank - bRank));
+        // A missing axis on the shorter side behaves as 1, so the other side wins outright.
+        if (x == null) ret.add(y);
+        else if (y == null) ret.add(x);
+        else if (x.equals(y)) ret.add(x);
+        else if (x instanceof NumericDim && y instanceof NumericDim) {
+          int xSize = ((NumericDim) x).value();
+          int ySize = ((NumericDim) y).value();
+          if (xSize == 1) ret.add(y);
+          else if (ySize == 1) ret.add(x);
+          // Two unequal extents, neither of them 1, would fail at run time. Declining is the
+          // honest result; picking a side is what made this rule confidently wrong.
+          else return null;
+        }
+        // Neither side decides: one axis carries a marker or a kind the pairwise rule cannot
+        // compare. Degrade that axis rather than guess, keeping the wider unknown when the two
+        // markers differ, in the wala/ML#544/#545/#721/#741 dominance order.
+        else if (x instanceof RaggedDim || y instanceof RaggedDim)
+          ret.add(x instanceof RaggedDim ? x : y);
+        else if (x instanceof DynamicDim || y instanceof DynamicDim)
+          ret.add(x instanceof DynamicDim ? x : y);
+        else ret.add(UnresolvedDim.INSTANCE);
+      }
+    }
+    ret.add(aDims.get(aDims.size() - 2));
+    ret.add(bDims.get(bDims.size() - 1));
+    return ret;
+  }
 }
