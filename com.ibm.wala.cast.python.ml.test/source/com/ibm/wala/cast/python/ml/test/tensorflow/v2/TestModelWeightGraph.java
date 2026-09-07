@@ -176,4 +176,40 @@ public class TestModelWeightGraph extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
   }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>'s weights half: a
+   * Sequential-built model resolves NO weight shapes.
+   *
+   * <p>The same two-layer network as {@link #testModelAttributes2()}, with the same weights, built
+   * from a layer LIST rather than from {@code inputs}/{@code outputs}. That test is the control: it
+   * resolves all four shapes, so the only difference here is how the model was constructed. This
+   * one resolves nothing at all, not even a tensor parameter, because the weight machinery anchors
+   * on the {@code outputs} constructor argument and a Sequential frame has none.
+   *
+   * <p>Three of the four shapes are determined by the layer list alone and need no call site: every
+   * bias is {@code (units,)}, and every kernel after the first is {@code (units[i-1], units[i])}.
+   * Only {@code (3, 4)} depends on the width the model is fed, and the {@code Dense} summary has no
+   * {@code input_shape} parameter, so that one is genuinely unavailable and should be omitted
+   * rather than guessed.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#832's weights half is fixed,
+   * and expect the three list-determined shapes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSequentialResolvesNoWeightShapes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_weights.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_4_FLOAT32, TENSOR_4_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
 }
