@@ -410,8 +410,12 @@ public class TestEinsum extends AbstractTensorTest {
             2,
             Set.of(
                 TensorType.of(FLOAT_32, 2, 4, 3, 5),
-                TensorType.of(FLOAT_32, 2, 4, 15),
-                TensorType.of(FLOAT_32, 2, 4, 5))));
+                // The former (2, 4, 5) member is gone with wala/ML#878's batch broadcasting. It
+                // came from crossing the input with the UNRESHAPED `w`, a matmul of (2, 4, 6) by
+                // (6, 3, 5) whose batch extents are 2 and 6: unequal and neither of them 1, so it
+                // fails at run time and is not an execution this program can have. Composing it by
+                // taking one operand's prefix invented a member for an impossible pairing.
+                TensorType.of(FLOAT_32, 2, 4, 15))));
   }
 
   /**
@@ -467,5 +471,51 @@ public class TestEinsum extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/878">wala/ML#878</a>: a matmul's BATCH
+   * axes broadcast, rather than being taken from the higher-rank operand.
+   *
+   * <p>Equal rank is the case the old rule was least safe for, not the most: {@code (3, 1, 2, 4)}
+   * and {@code (1, 5, 4, 6)} are both rank 4, so the tie went to the first operand and produced
+   * {@code (3, 1, 2, 6)} where TensorFlow produces {@code (3, 5, 2, 6)}. That is a wrong extent on
+   * two axes presented as a resolved one, which a consumer cannot tell from a correct answer.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMatMulBatchBroadcast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_batch_broadcast.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 5, 2, 6))));
+  }
+
+  /**
+   * The unequal-rank form of <a href="https://github.com/wala/ML/issues/878">wala/ML#878</a>: the
+   * shorter operand's batch axis widens the longer one's {@code 1} rather than being dropped.
+   * {@code (1, 2, 4)} against {@code (7, 4, 6)} yields {@code (7, 2, 6)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMatMulBatchBroadcastUnequalRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_batch_broadcast.py",
+        "consume_unequal_rank",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 7, 2, 6))));
   }
 }

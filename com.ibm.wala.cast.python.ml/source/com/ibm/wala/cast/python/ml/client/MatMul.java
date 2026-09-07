@@ -2,13 +2,13 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.util.TensorShapeUtil;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -49,17 +49,16 @@ public class MatMul extends TensorGenerator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> aShape : aShapes.members()) {
       for (List<Dimension<?>> bShape : bShapes.members()) {
-        if (aShape.size() >= 2 && bShape.size() >= 2) {
-          // Batched semantics: the leading (batch) dimensions carry through and the trailing two
-          // compose as the matrix product, so the rank is preserved rather than collapsing to two
-          // (wala/ML#718). The batch dimensions are taken from the higher-rank operand, a sound
-          // simplification of TensorFlow's batch broadcasting for the common equal-rank case.
-          List<Dimension<?>> batched = aShape.size() >= bShape.size() ? aShape : bShape;
-          List<Dimension<?>> newShape = new ArrayList<>(batched.subList(0, batched.size() - 2));
-          newShape.add(aShape.get(aShape.size() - 2));
-          newShape.add(bShape.get(bShape.size() - 1));
-          ret.add(newShape);
-        }
+        // Batched semantics: the leading (batch) dimensions BROADCAST and the trailing two compose
+        // as the matrix product, so the rank is preserved rather than collapsing to two
+        // (wala/ML#718, wala/ML#878). Shared with the type-feed composition so one operation
+        // cannot get two answers depending on which path resolved it.
+        List<Dimension<?>> newShape = TensorShapeUtil.matmulShape(aShape, bShape);
+        // A pair that cannot compose contributes NO member. Batch extents that are unequal and
+        // neither of them 1 would fail at run time, so the pair is not an execution the program
+        // can have: it is a spurious crossing of union members that never co-occur, and turning
+        // it into an unknown member would lose precision to describe something impossible.
+        if (newShape != null) ret.add(newShape);
       }
     }
     return ret.isEmpty()
