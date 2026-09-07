@@ -690,6 +690,17 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    * --like-this}) spelling with its leading dashes stripped and inner dashes turned to underscores,
    * falling back to the first short ({@code -x}) spelling. Matching is by name, never by position.
    *
+   * <p>This covers the common spellings, not all of click's rule. Two forms it does not follow: the
+   * explicit-name form {@code @click.option("-v", "--verbose", "verbosity")}, where click takes the
+   * trailing non-dashed argument as the parameter name and this returns {@code verbose}; and the
+   * longest-of-several-longs rule, where click picks the longest long spelling and this picks the
+   * first. Both degrade to a miss rather than a mismatch: the derived name simply does not match a
+   * parameter, so the caller's {@code indexOf} returns {@code -1} and the option contributes no
+   * default. That either leaves a gap, which the contiguity check declines the whole function on,
+   * or it sits outside the block and the remaining options still bind at their correct indices. The
+   * failure direction is therefore under-approximation or decline, never a default bound to the
+   * wrong parameter, so extend this only with that invariant in mind.
+   *
    * @param spellings The option's positional string spellings, in source order.
    * @return The parameter name, or {@code null} when no spelling looks like an option flag.
    */
