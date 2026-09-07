@@ -59,6 +59,31 @@ public class TestFloatxDType extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/871">wala/ML#871</a>: when {@code
+   * tf.keras.backend.set_floatx} is reachable, {@code floatx()}'s value is not statically knowable,
+   * so a {@code dtype=floatx()} token degrades to the unknown dtype rather than assuming the {@code
+   * float32} default, which would be confidently wrong for a program that overrode it. {@link
+   * #testFloatxResolvesToFloat32} is the control: without a reachable {@code set_floatx}, the
+   * documented default still holds.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testFloatxDegradesWhenSetFloatxReachable() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(Collections.<File>emptyList(), "tf2_test_floatx_set_floatx.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    assertNotNull(builder.makeCallGraph(builder.getOptions()));
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+    assertEquals(
+        "Expecting floatx() to degrade to the unknown dtype when set_floatx is reachable, rather"
+            + " than assuming the float32 default (wala/ML#871).",
+        Set.of("unknown"),
+        returnedCellTypes(analysis, "via_floatx_call"));
+  }
+
+  /**
    * The cell types carried by the named function's return value, unioned over its context-sensitive
    * nodes.
    *

@@ -474,6 +474,18 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/floatx")),
           AstMethodReference.fnSelector);
 
+  /**
+   * https://www.tensorflow.org/api_docs/python/tf/keras/backend/set_floatx. Changes the backend
+   * default float dtype program-wide, so its reachability makes {@code floatx()}'s value statically
+   * unknowable (wala/ML#871).
+   */
+  public static final MethodReference SET_FLOATX =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/set_floatx")),
+          AstMethodReference.fnSelector);
+
   private static final String CONSTANT_SIGNATURE = "tf.constant()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/keras/Input. */

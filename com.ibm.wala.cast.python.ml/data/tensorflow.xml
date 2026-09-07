@@ -946,6 +946,9 @@
         <!-- `tf.keras.backend.floatx()` returns the backend's default float dtype, documented as `float32`. It is a CALL, not a module field, so the dtype-argument resolver's field-identity match cannot see it; the paired resolver arm recognizes a `DType` allocated in this function's node as `float32` (wala/ML#870). `tf.keras.backend.set_floatx` can change that default program-wide, which this arm does not yet read (wala/ML#871). -->
         <new def="floatx" class="Ltensorflow/functions/floatx"/>
         <putfield class="LRoot" field="floatx" fieldType="LRoot" ref="backend" value="floatx"/>
+        <!-- `tf.keras.backend.set_floatx(value)` changes the backend default float dtype program-wide. Modeled only so a call to it is resolved and appears in the call graph; the `floatx()` resolver arm reads its reachability and declines to the unknown dtype rather than assuming the `float32` default (wala/ML#871). -->
+        <new def="set_floatx" class="Ltensorflow/functions/set_floatx"/>
+        <putfield class="LRoot" field="set_floatx" fieldType="LRoot" ref="backend" value="set_floatx"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
         <new def="expand_dims" class="Ltensorflow/functions/expand_dims"/>
         <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="expand_dims"/>
@@ -2506,6 +2509,12 @@
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="res" class="Ltensorflow/dtypes/DType"/>
           <return value="res"/>
+        </method>
+      </class>
+      <!-- `tf.keras.backend.set_floatx(value)` (wala/ML#871): modeled only so its call resolves and appears in the call graph, which the `floatx()` resolver arm reads to decline. Returns its argument; the result is unused. -->
+      <class name="set_floatx" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <return value="value"/>
         </method>
       </class>
       <class name="max_pool" allocatable="true">
