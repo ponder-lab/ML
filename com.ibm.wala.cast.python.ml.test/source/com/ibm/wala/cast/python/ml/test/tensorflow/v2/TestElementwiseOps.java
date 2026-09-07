@@ -1798,17 +1798,17 @@ public class TestElementwiseOps extends AbstractTensorTest {
    * floating-point-ness rather than numeric-ness here would send complex operands to the {@code
    * float32} fallback and lose the imaginary part.
    *
-   * <p>TODO: Flip to a plain {@code @Test} when <a
-   * href="https://github.com/wala/ML/issues/816">wala/ML#816</a> lands. The promotion rule here is
-   * already correct for complex operands; the operand never arrives as one, because {@code
-   * np.zeros(..., dtype=np.complex64)} is itself typed {@code float64}.
+   * <p>The complex operand now arrives as one: <a
+   * href="https://github.com/wala/ML/issues/816">wala/ML#816</a> landed the complex dtype fields,
+   * so {@code np.zeros(..., dtype=np.complex64)} types as {@code complex64} and the promotion rule
+   * carries it through the division.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testNumpyComplexDividedByFloatLiteral()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

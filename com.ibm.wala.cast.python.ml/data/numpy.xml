@@ -23,9 +23,14 @@
         <putfield class="LRoot" field="bool" fieldType="LRoot" ref="x" value="bool"/>
         <new def="bool_" class="Lnumpy/bool_"/>
         <putfield class="LRoot" field="bool_" fieldType="LRoot" ref="x" value="bool_"/>
-        <!-- wala/ML#865 (remainder): the rest of the dtype-token spellings representable with existing `DType`s. Each spelling gets its OWN allocation and its OWN `FIELD_REFERENCE_TO_DTYPE` entry, mirroring the bare-`bool` token above; the dtype-argument resolver then matches each token in its own name-keyed field, deterministically, rather than by a cross-field identity match that is subject to the wala/ML#753 collection-order nondeterminism. The canonical `str_`/`object_`/`complex64`/`complex128` scalar types additionally get callable classes (the `np.complex64(2)` role); the removed-alias spellings need only the dtype-token role. Spellings whose dtypes have no `DType` yet (`int16`, `int8`, `uint16`, `uint`, `float16`/`half`, `short`, `byte`) are deliberately absent pending an enum extension. -->
+        <!-- wala/ML#865 (remainder): the rest of the dtype-token spellings representable with existing `DType`s. Each spelling gets its OWN allocation and its OWN `FIELD_REFERENCE_TO_DTYPE` entry, mirroring the bare-`bool` token above; the dtype-argument resolver then matches each token in its own name-keyed field, deterministically, rather than by a cross-field identity match that is subject to the wala/ML#753 collection-order nondeterminism. The canonical `str_` scalar type additionally gets a callable class; `complex64`/`complex128` get the dtype-token role only (wala/ML#816, their callable `np.complex64(2)` role and `object_` still deferred); the removed-alias spellings need only the dtype-token role. Spellings whose dtypes have no `DType` yet (`int16`, `int8`, `uint16`, `uint`, `float16`/`half`, `short`, `byte`) are deliberately absent pending an enum extension. -->
         <new def="str_" class="Lnumpy/str_"/>
         <putfield class="LRoot" field="str_" fieldType="LRoot" ref="x" value="str_"/>
+        <!-- The complex scalar types (wala/ML#816): the dtype-token role only, so `dtype=np.complex64` resolves rather than degrading to the unknown dtype. Their `FIELD_REFERENCE_TO_DTYPE` entries (`COMPLEX_64`, `COMPLEX_128`) already existed; only these fields were missing, so the token degraded to unknown for want of an allocation to match. The callable `np.complex64(2)` construction role is not modeled here. -->
+        <new def="complex64" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="complex64" fieldType="LRoot" ref="x" value="complex64"/>
+        <new def="complex128" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="complex128" fieldType="LRoot" ref="x" value="complex128"/>
         <!-- float64 aliases: the removed-in-1.24 builtin alias, the trailing-underscore spelling, and the C-double name. -->
         <new def="tok_float" class="Ltensorflow/dtypes/DType"/>
         <putfield class="LRoot" field="float" fieldType="LRoot" ref="x" value="tok_float"/>
