@@ -476,10 +476,35 @@ public class NpArray extends TensorGenerator {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(getNode(), sourceVn);
       OrdinalSet<InstanceKey> sourcePTS = pa.getPointsToSet(pk);
-      Set<DType> inferred = numpyPromotedDTypes(builder, sourcePTS);
+      boolean[] partialUnionDrop = {false};
+      Set<DType> inferred = numpyPromotedDTypes(builder, sourcePTS, partialUnionDrop);
       if (!inferred.isEmpty() && !(inferred.size() == 1 && inferred.contains(DType.UNKNOWN))) {
         LOGGER.fine(() -> "Inferred " + inferred + " from the content argument's leaves.");
         return inferred;
+      }
+
+      // The primary leaf walk found a tensor leaf whose producer could not resolve a dtype, sitting
+      // beside a resolved sibling: a partial union. The SSA-chain fallback below would recover a
+      // single dtype only by dropping that unresolvable member, contradicting the conclusion the
+      // leaf walk already reached, so floor to ⊤ rather than trusting it (wala/ML#893). This is
+      // scoped to the with-a-sibling case on purpose: a content that is a *single* unresolvable
+      // tensor leaves the signal unset above, and the chain — a legitimate alternate route to the
+      // same value via a dtype-preserving op — still runs. The wider representational hole that a
+      // short dtype union reads as complete is wala/ML#862; this only stops one component
+      // trusting a fallback that disagrees with its own primary path.
+      //
+      // Invariant this ordering relies on: `numpyPromotedDTypes` only sets `partialUnionDrop` on a
+      // path that returns ⊤, so when the flag is set the concrete-`inferred` check above cannot
+      // have
+      // fired first. If a future change ever set the flag alongside a concrete `inferred`, that
+      // check would return the confident dtype and this decline would be dead — a silently wrong
+      // dtype, not a compile error. Keep the flag and the ⊤ return paired at their source.
+      if (partialUnionDrop[0]) {
+        LOGGER.fine(
+            () ->
+                "np.array content is a partial union (an unresolvable tensor leaf beside a resolved"
+                    + " sibling); flooring to ⊤ rather than trusting the SSA-chain recovery.");
+        return EnumSet.of(DType.UNKNOWN);
       }
 
       // The content's leaves resolve to nothing or only the ⊤ floor (e.g. a rebased element whose
@@ -537,13 +562,29 @@ public class NpArray extends TensorGenerator {
    * @return The promoted dtype, an {@code {UNKNOWN}} floor, or the empty set.
    */
   private Set<DType> numpyPromotedDTypes(
-      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> sourcePTS) {
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> sourcePTS,
+      boolean[] partialUnionDrop) {
     if (sourcePTS == null || sourcePTS.isEmpty()) return Set.of();
     LOGGER.fine(() -> "numpyPromotedDTypes: walking " + describe(sourcePTS) + ".");
 
     EnumSet<DType> leaves = EnumSet.noneOf(DType.class);
-    if (!collectNumpyLeaves(builder, sourcePTS, leaves, new HashSet<>()))
+    boolean[] sawUnresolvableTensorLeaf = {false};
+    if (!collectNumpyLeaves(builder, sourcePTS, leaves, new HashSet<>(), sawUnresolvableTensorLeaf))
       return Set.of(DType.UNKNOWN);
+
+    if (sawUnresolvableTensorLeaf[0]) {
+      // A tensor leaf's producer could not resolve a dtype, so no definite promotion exists and
+      // the sound floor is ⊤. If a resolved sibling was also collected, the content is a partial
+      // union: signal the caller so it does not trust an SSA-chain recovery that would only reach
+      // a single dtype by dropping the unresolvable member. With no resolved sibling the content
+      // is a single unresolvable value the chain may legitimately recover, so leave the signal
+      // unset. Order-independent by construction: collectNumpyLeaves records the unresolvable leaf
+      // and continues rather than short-circuiting, so this decision cannot depend on the order in
+      // which leaves happened to be walked.
+      if (!leaves.isEmpty()) partialUnionDrop[0] = true;
+      return Set.of(DType.UNKNOWN);
+    }
 
     // A single leaf kind needs no promotion: this covers dtype preservation from an existing
     // array/tensor element (wala/ML#796), whose non-literal dtype (e.g. int32) the ladder below
@@ -574,15 +615,23 @@ public class NpArray extends TensorGenerator {
    *     FLOAT64}, {@code COMPLEX128}, {@code STRING}).
    * @param visited The instance keys already descended through, guarding against points-to cycles
    *     among container allocations (wala/ML#796).
+   * @param sawUnresolvableTensorLeaf A one-element flag set to {@code true} when an existing
+   *     array/tensor leaf is encountered whose producer cannot resolve a definite dtype. Unlike a
+   *     structurally non-collectable element, this does not short-circuit the walk: it is recorded
+   *     and collection continues, so the caller can decide over the whole walk whether a resolved
+   *     sibling also exists (a partial union) independent of leaf traversal order (wala/ML#893).
    * @return {@code true} if every element was a literal scalar, a nested list/tuple of literals, or
-   *     an existing array/tensor whose producer resolves a definite dtype (preservation,
-   *     wala/ML#796); {@code false} otherwise, in which case the caller floors to ⊤.
+   *     an existing array/tensor leaf (whether or not its producer resolved a definite dtype — an
+   *     unresolvable one is reported via {@code sawUnresolvableTensorLeaf}); {@code false} only for
+   *     a structurally non-collectable element (an unrecognized scalar or one with no allocation
+   *     site), in which case the caller floors to ⊤.
    */
   private boolean collectNumpyLeaves(
       PropagationCallGraphBuilder builder,
       OrdinalSet<InstanceKey> pts,
       EnumSet<DType> leaves,
-      Set<InstanceKey> visited) {
+      Set<InstanceKey> visited,
+      boolean[] sawUnresolvableTensorLeaf) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
 
     for (InstanceKey ik : pts) {
@@ -628,8 +677,15 @@ public class NpArray extends TensorGenerator {
                       + " preserved "
                       + preserved
                       + ".");
-          if (preserved == null || preserved.isEmpty() || preserved.contains(DType.UNKNOWN))
-            return false;
+          if (preserved == null || preserved.isEmpty() || preserved.contains(DType.UNKNOWN)) {
+            // The producer could not resolve a definite dtype for this tensor leaf. Record it and
+            // continue rather than short-circuiting, so that whether a resolved sibling also exists
+            // (making this a partial union) is decided over the whole walk, independent of the
+            // order the leaves were visited (wala/ML#893). The caller still floors to ⊤ whenever
+            // this flag is set; recording it does not weaken that.
+            sawUnresolvableTensorLeaf[0] = true;
+            continue;
+          }
           leaves.addAll(preserved);
           continue;
         }
@@ -650,7 +706,8 @@ public class NpArray extends TensorGenerator {
 
           OrdinalSet<InstanceKey> fieldPTS =
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
-          if (!collectNumpyLeaves(builder, fieldPTS, leaves, visited)) return false;
+          if (!collectNumpyLeaves(builder, fieldPTS, leaves, visited, sawUnresolvableTensorLeaf))
+            return false;
         }
       }
     }

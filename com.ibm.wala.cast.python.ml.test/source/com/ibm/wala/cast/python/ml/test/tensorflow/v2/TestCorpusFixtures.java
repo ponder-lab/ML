@@ -531,6 +531,48 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   }
 
   /**
+   * Regression guard for wala/ML#893: {@code NpArray} must not emit a confident dtype for an {@code
+   * np.array} whose content is a partial union &mdash; an unresolvable tensor leaf sitting beside a
+   * resolved sibling. In the vendored NLPGNN subject, {@code merge_batch_graph} ({@code
+   * nlpgnn/gnn/utils.py}) builds {@code edge_index} from {@code [np.array(item) for item in
+   * edge_index]}, where one member of {@code item} is a comprehension-object leaf the producer
+   * cannot type. Before the fix, {@code NpArray}'s primary leaf walk correctly floored to ⊤, but
+   * its SSA-chain fallback recovered a single {@code INT32} by dropping that member and {@code
+   * NpArray} trusted it &mdash; a confident {@code INT32} the element-wise {@code w + strips[i]}
+   * then propagated into {@code edge_index} and onward to {@code GraphSAGE.call} via {@code
+   * model(x, edge_index, batch)} in {@code train_graphsage.py}. The fix makes {@code NpArray}
+   * decline the recovery that contradicts its own primary path, so the {@code np.array} result
+   * carries ⊤ rather than a confident {@code INT32}.
+   *
+   * <p>Asserts an INTERNAL value, not a parameter: this pins the {@code np.array} result inside
+   * {@code merge_batch_graph}'s {@code edge_index} comprehension ({@code comprehension13}, value
+   * number 3), because no function parameter cleanly carries the flip. The affected value does
+   * reach {@code GraphSAGE.call}'s {@code edge_indexs}, but there it unions with other callers'
+   * feeds and already carries ⊤ for unrelated reasons, so a parameter assertion there does not fail
+   * without the fix (verified) and would not guard it. The internal value flips cleanly: ⊤ present
+   * with the fix, a confident {@code INT32} without it. It is therefore a mechanism pin, not an
+   * emission guarantee about what any consumer ultimately sees. Only the dtype axis is checked; the
+   * value's shape and its resolved {@code INT32} member are incidental. The wider representational
+   * hole &mdash; that a short dtype union reads as complete &mdash; is wala/ML#862 and is not
+   * closed by this guard.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullMergeBatchGraphEdgeIndexPartialUnion()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    assertValueDTypeContainsUnknown(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/gnn/utils.py",
+        "merge_batch_graph.comprehension13",
+        "nlpgnn_full_proj",
+        3);
+  }
+
+  /**
    * In-vivo anchor for the wala/ML#766 GNN entry feed: the vendored NLPGNN {@code GCNLayer.call}'s
    * {@code node_embeddings}, whose only runtime feed is the {@code Planetoid} loader's
    * row-normalized features. With {@code norm=True} constant at every {@code Planetoid} site, the
