@@ -25,6 +25,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
@@ -610,9 +611,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * agrees when equal; an inferred {@link UnresolvedDim} accepts the annotation's {@link
    * NumericDim}, since {@code Unresolved} asserts precisely that the size is a fixed runtime
    * integer the analysis could not compute, which is the fact the annotation supplies (the
-   * wala/ML#721 criterion). Every other disagreement conflicts: a {@link TensorType.DynamicDim}
-   * carries runtime-{@code None} evidence a concrete size would contradict, and numeric or symbolic
-   * disagreements are definite-vs-definite.
+   * wala/ML#721 criterion). A {@link TensorType.DynamicDim} accepts one as well (wala/ML#888): its
+   * runtime-{@code None} evidence says the size is FEED-DEPENDENT rather than unknowable, so an
+   * author recording what their program is actually run with supplies a fact the analysis cannot
+   * reach instead of contradicting one it holds. Every other disagreement still conflicts, numeric
+   * and symbolic ones being definite-vs-definite.
+   *
+   * <p>Rank mismatch remains a conflict under any rule. Filling an extent is recoverable; changing
+   * a value's rank on a stale entry is not, and it is the change most likely to produce a shape no
+   * execution can produce.
    *
    * @param inferred The inferred member's dims.
    * @param annotated The annotation's dims.
@@ -627,6 +634,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Dimension<?> ann = annotated.get(i);
       if (inf.equals(ann)) out.add(inf);
       else if (inf instanceof UnresolvedDim && ann instanceof NumericDim) out.add(ann);
+      // A `Dynamic` axis accepts a concrete extent too (wala/ML#888). `Dynamic` records that
+      // TensorFlow's own static shape reports `None` there, which says the size is FEED-DEPENDENT,
+      // not that it is unknowable: an author who knows what their program is run with is supplying
+      // a fact the analysis cannot reach rather than contradicting one it holds. Refusing this was
+      // the reason an annotation could not tighten any axis of a modeled content-dependent read.
+      else if (inf instanceof DynamicDim && ann instanceof NumericDim) out.add(ann);
       else return null;
     }
     return out;

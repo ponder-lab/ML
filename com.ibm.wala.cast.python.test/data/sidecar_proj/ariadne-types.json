@@ -87,7 +87,7 @@
       "variable": "batch",
       "dtype": "float32",
       "shape": "8 3",
-      "attribution": "fixture: deliberately concrete against the Dynamic batch axis to exercise the kept conflict"
+      "attribution": "fixture: the batch size this program is run with, recorded against the feed-dependent Dynamic axis; refines it since wala/ML#888"
     },
     {
       "module": "driver_image.py",
@@ -120,6 +120,14 @@
       "dtype": "float32",
       "shape": "4 3",
       "attribution": "fixture: agrees with the float32 arm and genuinely disagrees with the int32 arm; both are terminal, so the conflict is true and must keep being reported (wala/ML#890)"
+    },
+    {
+      "module": "driver_dynamic_extent.py",
+      "function": "",
+      "variable": "inp",
+      "dtype": "float32",
+      "shape": "8 4",
+      "attribution": "fixture: the batch size this program is run with, recorded against the feed-dependent leading axis (wala/ML#888)"
     }
   ]
 }
