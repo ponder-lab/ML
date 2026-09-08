@@ -1019,6 +1019,33 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/898">wala/ML#898</a>: a
+   * receiver-positioned generator whose seeded type leaves an axis unproven, so the engine requests
+   * a type feed. The receiver is named by a sentinel sharing the position channel with real
+   * argument indices, and the arity guard cannot screen it, since both sides of the comparison
+   * shift together; the walk indexed the use list at -1 and threw rather than degrading.
+   *
+   * <p>{@link #testTransposeAttribute()} does not reach that path: its receiver resolves fully, and
+   * a fully-resolved seed returns before the feed is ever requested. The starred unpacking here is
+   * what leaves the extent unproven.
+   *
+   * <p>What this pins is that the analysis <em>completes</em>. The parameter carries an unknown
+   * rank with its dtype intact, which is the degradation the throwing path skipped; recovering the
+   * extent through the starred unpacking is a separate matter and not what this guards. Without the
+   * fix this test errors rather than fails.
+   */
+  @Test
+  public void testTransposeAttributeUnprovenAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_attr_unproven.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Round-trip arm of {@link #testTransposeAttribute()} (wala/ML#880): the {@code .T} attribute
    * reads a value produced by another generator, {@code np.transpose(e)}, rather than a direct
    * allocation, exercising the receiver read through a computed base. {@code np.transpose((2, 4))}
