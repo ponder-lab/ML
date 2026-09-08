@@ -804,6 +804,63 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * Regression guard from the <a href="https://github.com/wala/ML/issues/875">wala/ML#875</a>
+   * diagnosis: a local name bound first by a {@code Dense} call and then by a {@code tf.reshape}
+   * carrying a {@code -1}, passed to a helper after the rebind. The argument feed carries the live
+   * binding alone &mdash; the overwritten {@code Dense} result does not arrive alongside it &mdash;
+   * and the {@code -1} folds exactly, so the parameter is a single concrete member. Two members
+   * here would mean the feed had unioned both bindings of the name.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReshapeRebindTwin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_rebind_twin.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(8), new NumericDim(10), new NumericDim(46))))));
+  }
+
+  /**
+   * Regression guard from the <a href="https://github.com/wala/ML/issues/875">wala/ML#875</a>
+   * diagnosis: {@link com.ibm.wala.cast.python.ml.client.Reshape} resolves a {@code -1} once per
+   * input member, and the target vector's other axes pass through literally, so the leading axes
+   * come from the target rather than from the input. Both call sites reach the fold with a
+   * fully-numeric input &mdash; the second through a {@code tf.shape}-derived extent, which the
+   * analysis folds &mdash; so the parameter carries one exact member. A {@code SymbolicDim} here
+   * would mean the fold lost an input it could have divided.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReshapeMixedInputMembers()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_mixed_input_members.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(8), new NumericDim(10), new NumericDim(46))))));
+  }
+
+  /**
    * Pins <a href="https://github.com/wala/ML/issues/741">wala/ML#741</a>: a reshape target mixing
    * an {@code Unresolved} leading element with the literal {@code -1} placeholder surfaces the
    * placeholder as the symbolic unknown-size dimension rather than a fixed size of {@code -1}, so
