@@ -11,6 +11,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_RAGGED_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_32_28_28_1_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_INT64;
@@ -1158,5 +1159,103 @@ public class TestMisc extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_8_10_FLOAT32, TENSOR_8_10_1_FLOAT32, TENSOR_8_10_1_1_FLOAT32)));
+  }
+
+  /**
+   * Captures the sidecar warnings a run raises for one driver, so a test can assert what the
+   * analysis SAYS about an entry rather than only what it binds.
+   *
+   * @param driver The driver module under {@code sidecar_proj}.
+   * @param function The sink whose parameter the harness checks.
+   * @param expected The expected parameter types.
+   * @return The warnings mentioning that driver.
+   * @throws Exception On analysis error.
+   */
+  private List<String> sidecarWarnings(
+      String driver, String function, Map<Integer, Set<TensorType>> expected) throws Exception {
+    Logger logger = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
+    List<String> warnings = new ArrayList<>();
+    Handler handler =
+        new Handler() {
+          @Override
+          public void publish(LogRecord record) {
+            if (record.getLevel().intValue() >= Level.WARNING.intValue()
+                && String.valueOf(record.getMessage()).contains(driver))
+              warnings.add(record.getMessage());
+          }
+
+          @Override
+          public void flush() {}
+
+          @Override
+          public void close() {}
+        };
+    logger.addHandler(handler);
+    try {
+      test(
+          new String[] {"sidecar_proj/" + driver},
+          driver,
+          function,
+          "sidecar_proj",
+          1,
+          1,
+          expected);
+    } finally {
+      logger.removeHandler(handler);
+    }
+    return warnings;
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/890">wala/ML#890</a>: an entry is not
+   * judged against a binding that is OVERWRITTEN before the method returns.
+   *
+   * <p>{@code v} is bound to a string and then to a tensor on the same straight-line path, so the
+   * string is not a value {@code v} holds at the end and an entry describing the tensor was never
+   * about it. Before this, the entry was judged against both and the string produced a conflict
+   * report about a disagreement that says nothing.
+   *
+   * <p>Paired with {@link #testBranchArmConflictIsReported()}, which is the case that must NOT be
+   * filtered. The pair is what makes this a report about overwritten bindings rather than about
+   * multiply-bound names generally.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testOverwrittenBindingIsNotJudged() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_rebind.py", "consume_reassigned", Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
+    assertTrue(
+        "The overwritten string binding must not be judged against the entry (wala/ML#890)."
+            + " Warnings: "
+            + warnings,
+        warnings.stream().noneMatch(w -> w.contains("reassigned") && w.contains("of string")));
+  }
+
+  /**
+   * The case {@link #testOverwrittenBindingIsNotJudged()} must not break: a variable assigned in
+   * MUTUALLY EXCLUSIVE branches has a terminal binding per arm, so an entry agreeing with one
+   * genuinely disagrees with the other and that conflict is a true statement about a reachable path
+   * (<a href="https://github.com/wala/ML/issues/890">wala/ML#890</a>).
+   *
+   * <p>Suppressing it would hide a correct result, and selecting the textually last arm would do so
+   * by an accident of how the front end orders them.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testBranchArmConflictIsReported() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_rebind.py",
+            "consume_branched",
+            // Both arms reach the sink, which is the point: each is a terminal binding of `w`.
+            Map.of(2, Set.of(TENSOR_4_3_FLOAT32, TensorType.of(INT_32, 4, 3))));
+    assertTrue(
+        "A disagreement with a branch arm's terminal binding must keep being reported"
+            + " (wala/ML#890). Warnings: "
+            + warnings,
+        warnings.stream().anyMatch(w -> w.contains("branched") && w.contains("of int32")));
   }
 }
