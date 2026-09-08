@@ -46,3 +46,19 @@ def decoded_chain():
 direct = random_flip_left_right(img_array)
 chained = transform_image(img_array)
 decoded_chain()
+
+
+# wala/ML#901 negative case: a tensor parameter fed a value that never flows from the annotated
+# `img_array`, so its evidence does not rest on the annotation. Its origins must read `{PARAMETER}`
+# ALONE, with no `ANNOTATION`, distinguishing "the marker crosses where the evidence is" from "the
+# marker crosses onto every parameter". A dedicated sink keeps it off the annotated path's union.
+def plain_consume(t):
+    pass
+
+
+def unannotated_transform(plain_image):
+    plain_consume(plain_image)
+
+
+plain = tf.ones((2, 3))
+unannotated_transform(plain)

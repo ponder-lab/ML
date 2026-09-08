@@ -196,6 +196,64 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The {@link TensorOrigin#ANNOTATION} provenance marker crosses the parameter barrier
+   * (wala/ML#901), exactly where the evidence is and no further. In {@code driver_image.py} the
+   * module-level {@code img_array} is sidecar-typed and carries {@code {NUMPY, ANNOTATION}}, and it
+   * flows into the {@code image} parameter of every augmentation function it reaches. Three
+   * assertions pin the fix from three sides, and each fails on a different regression:
+   *
+   * <ul>
+   *   <li><b>Positive</b>: the four parameters downstream of {@code img_array} read {@code
+   *       {PARAMETER, ANNOTATION}}. Fails if the marker stops crossing (verified: it reads {@code
+   *       {PARAMETER}} alone with {@code crossAnnotation} neutered).
+   *   <li><b>Negative</b>: {@code unannotated_transform}'s parameter, fed a plain {@code tf.ones}
+   *       that never flows from {@code img_array}, reads {@code {PARAMETER}} alone. Fails if the
+   *       marker crosses onto every parameter rather than only where an annotation reaches it.
+   *   <li><b>Selective</b>: {@code NUMPY} does NOT appear in the positive case, though {@code
+   *       img_array} carries it. Fails if the barrier is opened generally rather than only to
+   *       {@code ANNOTATION}, so it shows wala/ML#726's producing-library invariant is intact.
+   * </ul>
+   *
+   * <p>This covers {@code driver_image.py}'s four; the real subject has seven such parameters. The
+   * fixture is the fast in-module witness; the paired run (the marker present with the sidecar,
+   * absent without) is the acceptance, and the negative direction is the same discriminator at the
+   * subject level.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test files cannot be read.
+   */
+  @Test
+  public void testAnnotationCrossesParameterBarrier()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> mo =
+        getMethodOrigins(
+            "sidecar_proj",
+            new String[] {"sidecar_proj/driver_image.py"},
+            "random_flip_left_right",
+            "transform_image",
+            "distorted_random_crop",
+            ".consume.do(",
+            "unannotated_transform");
+    // Positive and selective: parameters downstream of the annotated img_array carry ANNOTATION
+    // alongside PARAMETER, and NUMPY (which img_array also carries) does not cross.
+    for (String fragment :
+        List.of(
+            "random_flip_left_right", "transform_image", "distorted_random_crop", ".consume.do(")) {
+      MethodOrigins m = mo.get(fragment);
+      assertEquals(
+          "parameter origins for " + fragment,
+          Map.of(EnumSet.of(TensorOrigin.PARAMETER, TensorOrigin.ANNOTATION), 1L),
+          census(m.parameters()));
+    }
+    // Negative: a parameter fed a value that never flows from the annotation reads PARAMETER alone.
+    assertEquals(
+        "negative-case parameter origins (unannotated_transform)",
+        Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L),
+        census(mo.get("unannotated_transform").parameters()));
+  }
+
+  /**
    * The wala/ML#729 pin: a def derived by {@code enumerate}-iterating a numpy-fed tensor parameter
    * reads numpy-only origins. Iterating a symbolic tensor raises under {@code tf.function} tracing,
    * so an iteration product is an eager-only value of the fed data: the PA aliases it with its
