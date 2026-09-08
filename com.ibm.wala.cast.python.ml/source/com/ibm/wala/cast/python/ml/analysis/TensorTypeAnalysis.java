@@ -262,12 +262,36 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
+   * Crosses the {@link TensorOrigin#ANNOTATION} provenance marker from an inflow value into a
+   * parameter destination whose barrier otherwise blocks origin inflow (wala/ML#726, wala/ML#901).
+   * ANNOTATION records that a fact rests on a user-supplied annotation rather than on inference,
+   * and crossing a parameter boundary does not change that; it is already a boundary-crossing
+   * additive marker elsewhere in this file ({@link TypeFeedOp} unions it from an operand; {@code
+   * RefineShapeOp} crosses it for non-parameter destinations), so the parameter barrier's blanket
+   * origin block was an inconsistency with the file's own handling rather than a deliberate
+   * provenance invariant. Only ANNOTATION crosses, so wala/ML#726's invariant is preserved intact:
+   * a symbolic parameter still does not inherit its eager feeds' producing-library origins ({@link
+   * TensorOrigin#NUMPY}/{@link TensorOrigin#TENSORFLOW}), which is what that barrier exists to
+   * block.
+   *
+   * @param lhs The parameter destination variable.
+   * @param rhs The inflow variable.
+   * @return Whether {@code lhs}'s origins changed.
+   */
+  private static boolean crossAnnotation(TensorVariable lhs, TensorVariable rhs) {
+    if (rhs == null || rhs.origins == null || !rhs.origins.contains(TensorOrigin.ANNOTATION))
+      return false;
+    return lhs.origins.add(TensorOrigin.ANNOTATION);
+  }
+
+  /**
    * A transfer function for parameter destinations (wala/ML#726): tensor types flow through
-   * unchanged, but the origins union is skipped, so a parameter keeps its seeded {@link
-   * TensorOrigin#PARAMETER} instead of inheriting its call sites' origins. Mirrors the plain node
-   * transfer's state handling minus the provenance; in particular a ⊤-state (unknown tensor)
-   * predecessor contributes nothing here, since its only contribution in the plain transfer is its
-   * origins.
+   * unchanged, and the producing-library origins union is skipped, so a parameter keeps its seeded
+   * {@link TensorOrigin#PARAMETER} instead of inheriting its call sites' eager origins. The {@link
+   * TensorOrigin#ANNOTATION} provenance marker crosses regardless (wala/ML#901; see {@link
+   * #crossAnnotation}), since it is not an eager producing library. Otherwise mirrors the plain
+   * node transfer's state handling minus the producer provenance; a ⊤-state (unknown tensor)
+   * predecessor contributes only its ANNOTATION, if any.
    */
   static final class ParameterBarrierOp extends UnaryOperator<TensorVariable> {
     static final ParameterBarrierOp INSTANCE = new ParameterBarrierOp();
@@ -276,12 +300,16 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
-      if (lhs.state == null) {
-        lhs.state = HashSetFactory.make(rhs.state);
-        return CHANGED;
+      if (lhs == null || rhs == null) return NOT_CHANGED;
+      boolean changed = false;
+      if (rhs.state != null) {
+        if (lhs.state == null) {
+          lhs.state = HashSetFactory.make(rhs.state);
+          changed = true;
+        } else changed = lhs.state.addAll(rhs.state);
       }
-      return lhs.state.addAll(rhs.state) ? CHANGED : NOT_CHANGED;
+      changed |= crossAnnotation(lhs, rhs);
+      return changed ? CHANGED : NOT_CHANGED;
     }
 
     @Override
@@ -361,7 +389,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * that construction is rare and unmodeled, and the runtime evidence is what would catch it.
    *
    * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
-   * destination is a parameter and this operator replaces rather than supplements that barrier.
+   * destination is a parameter and this operator replaces rather than supplements that barrier; the
+   * {@link TensorOrigin#ANNOTATION} provenance marker crosses regardless (wala/ML#901, {@link
+   * #crossAnnotation}), as it does at that barrier.
    */
   static final class ComputeDTypeCastOp extends UnaryOperator<TensorVariable> {
     static final ComputeDTypeCastOp INSTANCE = new ComputeDTypeCastOp();
@@ -373,14 +403,14 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
-      if (lhs.state == null) {
-        lhs.state = HashSetFactory.make();
-        for (TensorType t : rhs.state) lhs.state.add(cast(t));
-        return CHANGED;
-      }
+      if (lhs == null || rhs == null) return NOT_CHANGED;
       boolean changed = false;
-      for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
+      if (rhs.state != null) {
+        if (lhs.state == null) lhs.state = HashSetFactory.make();
+        for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
+      }
+      changed |=
+          crossAnnotation(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
       return changed ? CHANGED : NOT_CHANGED;
     }
 
@@ -438,7 +468,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * and consumers already parse.
    *
    * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
-   * destination is a parameter and this operator replaces rather than supplements that barrier.
+   * destination is a parameter and this operator replaces rather than supplements that barrier; the
+   * {@link TensorOrigin#ANNOTATION} provenance marker crosses regardless (wala/ML#901, {@link
+   * #crossAnnotation}), as it does at that barrier.
    */
   static final class CoerceDTypeOp extends UnaryOperator<TensorVariable> {
 
@@ -460,12 +492,17 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
-      // Materializing a null state is itself a change, even from an empty rhs.
-      boolean changed = lhs.state == null;
-      if (changed) lhs.state = HashSetFactory.make();
-      for (TensorType t : rhs.state)
-        for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
+      if (lhs == null || rhs == null) return NOT_CHANGED;
+      boolean changed = false;
+      if (rhs.state != null) {
+        // Materializing a null state is itself a change, even from an empty rhs.
+        changed = lhs.state == null;
+        if (changed) lhs.state = HashSetFactory.make();
+        for (TensorType t : rhs.state)
+          for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
+      }
+      changed |=
+          crossAnnotation(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
       return changed ? CHANGED : NOT_CHANGED;
     }
 

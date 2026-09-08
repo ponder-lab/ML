@@ -715,6 +715,41 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Precondition guard for the parameter-origin stamp in {@code PythonTensorAnalysisEngine}
+   * (wala/ML#901): an annotation anchor cannot name a parameter, so the unconditional {@code
+   * initOrigins.put(p, {PARAMETER})} there cannot clobber an {@code ANNOTATION}. The anchor
+   * resolver matches only variables DEFINED by an SSA instruction, and a parameter is the IR's
+   * entry value, defined by none, so {@code driver_param.py}'s entry anchored on {@code
+   * transform}'s parameter {@code image} matches nothing (measured: {@code matched=false}, {@code
+   * boundCount=0}) and {@code image} stays untyped, leaving {@code transform} with zero tensor
+   * parameters.
+   *
+   * <p>The assertion is a proxy for "the anchor matched nothing": it checks that the parameter is
+   * untyped, which holds iff nothing was seeded, EXCEPT in the remote case where a future grammar
+   * change lands a match on an implicit pointer key, whose seeding declines with a warning and
+   * continues without typing the parameter. Barring that, if the anchor grammar ever gains
+   * parameter support this test flips to one tensor parameter and fails, pointing back at the
+   * safety comment at that {@code put}, which must then become a merge.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationCannotAnchorOnParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_param.py"},
+        "driver_param.py",
+        "transform",
+        "sidecar_proj",
+        0,
+        0,
+        Map.of());
+  }
+
+  /**
    * Witness for <a href="https://github.com/wala/ML/issues/887">wala/ML#887</a>: an entry that
    * binds nothing is reported.
    *

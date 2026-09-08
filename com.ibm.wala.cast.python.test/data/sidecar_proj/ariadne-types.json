@@ -98,6 +98,14 @@
       "attribution": "fixture: mirrors the decoded-JPEG entry of the wala/ML#876 subject"
     },
     {
+      "module": "driver_param.py",
+      "function": "transform",
+      "variable": "image",
+      "dtype": "uint8",
+      "shape": "4 5 3",
+      "attribution": "wala/ML#901 precondition guard: an anchor naming a parameter matches nothing (a parameter has no defining instruction), so this entry is inert; testTypeAnnotationCannotAnchorOnParameter pins that"
+    },
+    {
       "module": "driver_inert.py",
       "function": "",
       "variable": "t",

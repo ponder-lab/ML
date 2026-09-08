@@ -2363,6 +2363,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             && ((LocalPointerKey) v.getPointerKey()).getNode().getMethod() instanceof AstMethod)
           parameters.add(v);
       LOGGER.fine(() -> "wala/ML#726 parameter destinations: " + parameters.size());
+      // A plain put, not a merge: it cannot clobber an annotation's ANNOTATION origin, because an
+      // annotation anchor can never name a parameter. The anchor resolver
+      // (seedTypeAnnotationSidecar
+      // Entries) matches only variables DEFINED by an SSA instruction, and a parameter is the IR's
+      // entry value, defined by no instruction, so an entry naming a parameter matches nothing
+      // (measured: matched=false, boundCount=0). This must become a merge if the anchor grammar
+      // ever
+      // gains parameter support; TestMisc.testTypeAnnotationCannotAnchorOnParameter is the tripwire
+      // that fails at that point and refers back here (wala/ML#901).
       for (PointsToSetVariable p : parameters)
         initOrigins.put(p, EnumSet.of(TensorOrigin.PARAMETER));
 
