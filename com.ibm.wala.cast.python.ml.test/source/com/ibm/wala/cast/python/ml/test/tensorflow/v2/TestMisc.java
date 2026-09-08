@@ -888,13 +888,20 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * The kept-conflict direction of {@link #testTypeAnnotationSidecarFillsUnresolvedAxis()}: a
-   * {@code Dynamic} axis carries runtime-{@code None} evidence a concrete annotated size would
-   * contradict, so the annotation is reported as a conflict and not applied, and the inferred type
-   * stands (<a href="https://github.com/wala/ML/issues/800">wala/ML#800</a>). The {@code (None, 3)}
-   * pin is the ceiling, not a concession: a batch-size-less {@code tf.keras.Input}'s runtime static
-   * shape is {@code [None, 3]} (the fixture asserts it), so {@code Dynamic} is the faithful
-   * representation per the wala/ML#721 criterion and any concrete batch axis here would be wrong.
+   * A {@code Dynamic} axis now ACCEPTS a concrete annotated extent (<a
+   * href="https://github.com/wala/ML/issues/888">wala/ML#888</a>). This test previously pinned the
+   * opposite, and the reversal is deliberate rather than a relaxation that slipped through.
+   *
+   * <p>The prior argument was sound and is worth keeping in view: a batch-size-less {@code
+   * tf.keras.Input}'s runtime static shape really is {@code [None, 3]}, the fixture asserts it, and
+   * {@code Dynamic} is the faithful representation of that per the wala/ML#721 criterion. So the
+   * emitted extent is no longer a statement about what the PROGRAM guarantees.
+   *
+   * <p>What changed is whose fact it is. {@code Dynamic} records that the size is FEED-DEPENDENT,
+   * not that it is unknowable, and an author recording the batch size their program is actually run
+   * with is supplying a fact about the workload that the analysis cannot reach. The applied member
+   * carries {@code ANNOTATION} origin and the entry carries its attribution, which is what keeps a
+   * user-supplied extent distinguishable from a derived one.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -902,7 +909,7 @@ public class TestMisc extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    */
   @Test
-  public void testTypeAnnotationSidecarKeepsDynamicConflict()
+  public void testTypeAnnotationSidecarRefinesDynamicAxis()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {"sidecar_proj/driver_unresolved.py"},
@@ -911,7 +918,7 @@ public class TestMisc extends AbstractTensorTest {
         "sidecar_proj",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_NONE_3_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 3))));
   }
 
   /**
@@ -1257,5 +1264,32 @@ public class TestMisc extends AbstractTensorTest {
             + " (wala/ML#890). Warnings: "
             + warnings,
         warnings.stream().anyMatch(w -> w.contains("branched") && w.contains("of int32")));
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/888">wala/ML#888</a>: an annotation's
+   * concrete extent refines an axis inference holds as {@code Dynamic}.
+   *
+   * <p>{@code tf.keras.Input(shape=(4,))} is rank 2 with a feed-dependent leading axis. {@code
+   * Dynamic} records that TensorFlow's own static shape reports {@code None} there, which says the
+   * size is feed-dependent rather than unknowable, so an author recording what their program is
+   * actually run with supplies a fact the analysis cannot reach instead of contradicting one it
+   * holds. Before this the entry conflicted and was discarded, leaving the axis open.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testAnnotationRefinesDynamicAxis() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_dynamic_extent.py",
+            "consume",
+            Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 4))));
+    assertTrue(
+        "A concrete extent must refine a Dynamic axis rather than conflicting with it"
+            + " (wala/ML#888). Warnings: "
+            + warnings,
+        warnings.stream()
+            .noneMatch(w -> w.contains("driver_dynamic_extent") && w.contains("conflicts")));
   }
 }
