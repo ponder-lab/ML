@@ -861,6 +861,38 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * Probe for the kind collapse in {@code Slice.sliceShape} found while diagnosing <a
+   * href="https://github.com/wala/ML/issues/875">wala/ML#875</a>. A full-axis slice ({@code begin}
+   * 0, {@code size} -1) is the identity on shape, so every input dimension could be carried through
+   * verbatim. Asserts that the {@code SymbolicDim} on axis 1 survives; it currently comes out as
+   * {@code Unresolved}, which asserts a fixed runtime size the placeholder never claimed.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/899">wala/ML#899</a>. Flip to a
+   * plain {@code @Test} and drop this note once the {@code size == -1} arm carries a zero-{@code
+   * begin} axis through verbatim.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSliceFullAxisSymbolic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_full_axis_symbolic.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
+  }
+
+  /**
    * Pins <a href="https://github.com/wala/ML/issues/741">wala/ML#741</a>: a reshape target mixing
    * an {@code Unresolved} leading element with the literal {@code -1} placeholder surfaces the
    * placeholder as the symbolic unknown-size dimension rather than a fixed size of {@code -1}, so
