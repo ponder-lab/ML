@@ -281,7 +281,15 @@ public class Slice extends PassThroughUnaryTensorGenerator {
           // A `begin` past the axis would yield a negative (invalid) extent; degrade to ⊤.
           if (extent < 0) return null;
           out.add(new NumericDim(extent));
-        } else
+        } else if (beginDim instanceof NumericDim && ((NumericDim) beginDim).value() == 0)
+          // Taking the axis in full from offset zero leaves the extent exactly as it arrived, so
+          // the dimension carries through verbatim whatever kind it has (wala/ML#899). Degrading
+          // it here relabelled a `Symbolic` reshape placeholder as `Unresolved`, which asserts a
+          // fixed runtime size the placeholder never claimed, and which `mergeAnnotationDims`
+          // treats as an extent an annotation may fill. `SliceBuiltinOperation.sliceExtent`
+          // already returns the receiver's dimension untouched for the equivalent bare `:`.
+          out.add(inDim);
+        else
           // Keep the rank. The remaining extent of a `None` axis is itself `None` at run time;
           // otherwise it is a fixed size the analysis could not compute (wala/ML#721).
           out.add(inDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
