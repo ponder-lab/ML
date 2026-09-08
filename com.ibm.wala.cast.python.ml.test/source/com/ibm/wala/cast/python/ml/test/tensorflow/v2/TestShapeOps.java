@@ -861,22 +861,23 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * Probe for the kind collapse in {@code Slice.sliceShape} found while diagnosing <a
-   * href="https://github.com/wala/ML/issues/875">wala/ML#875</a>. A full-axis slice ({@code begin}
-   * 0, {@code size} -1) is the identity on shape, so every input dimension could be carried through
-   * verbatim. Asserts that the {@code SymbolicDim} on axis 1 survives; it currently comes out as
-   * {@code Unresolved}, which asserts a fixed runtime size the placeholder never claimed.
+   * Pins <a href="https://github.com/wala/ML/issues/899">wala/ML#899</a>: a full-axis slice ({@code
+   * begin} 0, {@code size} -1) is the identity on shape, so every input dimension carries through
+   * verbatim and the {@code SymbolicDim} on axis 1 survives.
    *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/899">wala/ML#899</a>. Flip to a
-   * plain {@code @Test} and drop this note once the {@code size == -1} arm carries a zero-{@code
-   * begin} axis through verbatim.
+   * <p>Degrading it asserted a fixed runtime size the reshape placeholder never claimed, and did so
+   * on an operation that computed nothing. It also handed {@link
+   * com.ibm.wala.cast.python.ml.client.Slice} a kind that {@code mergeAnnotationDims} accepts as a
+   * fillable extent, so an annotation could tighten an axis the analysis had not resolved. {@code
+   * SliceBuiltinOperation.sliceExtent} already returns the receiver's dimension untouched for the
+   * equivalent bare {@code :}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testSliceFullAxisSymbolic()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
