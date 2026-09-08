@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -157,6 +159,15 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    * shape-transforming subclasses that keep the operand walk but demote the feed to {@link
    * TypeFeedKind#DTYPE_ONLY} (wala/ML#682).
    *
+   * <p>An input taken from the receiver resolves through {@link
+   * com.ibm.wala.cast.python.util.Util#getReceiverValueNumber} rather than by positional index
+   * (wala/ML#898). The {@code position} channel carries sentinels alongside real indices, and the
+   * arity guard below cannot screen a negative one: both of its sides shift together, so {@code
+   * position + 2} is non-positive exactly when {@code position + 1} is an invalid use index. A
+   * receiver-positioned generator therefore reached {@code getUse(-1)} and threw, rather than
+   * degrading. Mirrors the guarded structure {@link TensorGenerator} already uses when resolving an
+   * argument by position.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param kind The composition kind to declare.
    * @return The feed over the caller-side input keys, or {@code null} when none is located or the
@@ -170,12 +181,22 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
         getCallerInvokes(builder, this.getNode())) {
       if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
       PythonInvokeInstruction invoke = (PythonInvokeInstruction) callerInvoke.snd;
-      if (invoke.getNumberOfPositionalParameters() < position + 2) continue;
+      int argValueNumber;
+      if (position == RECEIVER_PARAMETER_POSITION) {
+        argValueNumber = getReceiverValueNumber(callerInvoke.fst, invoke);
+        if (argValueNumber < 0) continue; // The callee is not a method or attribute read.
+      } else {
+        // Any other negative position names no argument; a non-negative one starts at use 1,
+        // since use 0 is the function object.
+        if (position < 0) continue;
+        if (invoke.getNumberOfPositionalParameters() < position + 2) continue;
+        argValueNumber = invoke.getUse(position + 1);
+      }
       ret.add(
           builder
               .getPointerAnalysis()
               .getHeapModel()
-              .getPointerKeyForLocal(callerInvoke.fst, invoke.getUse(position + 1)));
+              .getPointerKeyForLocal(callerInvoke.fst, argValueNumber));
     }
     return ret.isEmpty() ? null : new TypeFeed(kind, new ArrayList<>(ret));
   }
