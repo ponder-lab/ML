@@ -104,6 +104,22 @@
       "dtype": "float32",
       "shape": "4 3",
       "attribution": "fixture: deliberately restates what inference already knows, so the entry is inert and must be reported (wala/ML#887)"
+    },
+    {
+      "module": "driver_rebind.py",
+      "function": "reassigned",
+      "variable": "v",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "fixture: describes the tensor binding; the overwritten string binding is not a terminal value and must not be judged against it (wala/ML#890)"
+    },
+    {
+      "module": "driver_rebind.py",
+      "function": "branched",
+      "variable": "w",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "fixture: agrees with the float32 arm and genuinely disagrees with the int32 arm; both are terminal, so the conflict is true and must keep being reported (wala/ML#890)"
     }
   ]
 }

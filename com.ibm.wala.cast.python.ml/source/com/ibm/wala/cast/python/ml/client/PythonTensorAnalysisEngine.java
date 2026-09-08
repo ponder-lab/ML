@@ -63,6 +63,7 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
@@ -89,6 +90,7 @@ import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -255,7 +257,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IR ir = node.getIR();
         if (ir == null) continue;
         SSAInstruction[] instructions = ir.getInstructions();
-        Set<Integer> valueNumbers = new LinkedHashSet<>();
+        // Every instruction index defining the named variable, kept beside its value number: the
+        // index is what decides whether a binding survives to exit (wala/ML#890).
+        Map<Integer, Integer> definitionIndices = new LinkedHashMap<>();
         for (int i = 0; i < instructions.length; i++) {
           SSAInstruction instruction = instructions[i];
           if (instruction == null) continue;
@@ -265,11 +269,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (names == null) continue;
             for (String name : names)
               if (entry.variable().equals(name)) {
-                valueNumbers.add(def);
+                definitionIndices.putIfAbsent(def, i);
                 break;
               }
           }
         }
+        Set<Integer> valueNumbers = terminalBindings(ir, definitionIndices);
         for (int vn : valueNumbers) {
           PointerKey pk =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
@@ -424,6 +429,93 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       merged.add(mergedMember);
     }
     return changed ? merged : inferred;
+  }
+
+  /**
+   * Filters a named variable's definitions to its TERMINAL ones: those that reach the method's exit
+   * without being redefined (<a href="https://github.com/wala/ML/issues/890">wala/ML#890</a>).
+   *
+   * <p>An entry names a variable, and a variable can be bound more than once, so matching every
+   * definition of the name judges the entry against values it was never about. A binding that is
+   * OVERWRITTEN before the method returns is not a value the variable holds at the end; it is an
+   * intermediate the entry cannot have described.
+   *
+   * <p>This deliberately keeps ALL terminal bindings rather than selecting one. Where a variable is
+   * assigned in mutually exclusive branches, each arm's definition reaches exit on its own path, so
+   * each is a value the variable genuinely holds and a disagreement with any of them is a true
+   * statement about a reachable path. Selecting the textually last would suppress a correct
+   * conflict, and would do it by an accident of how the front end orders the arms.
+   *
+   * <p>Fails OPEN: an absent or unreadable control-flow graph returns every definition, which is
+   * the behaviour before this filter existed.
+   *
+   * @param ir The IR of the method containing the definitions.
+   * @param definitionIndices Each definition's value number, mapped to the instruction index
+   *     defining it.
+   * @return The value numbers of the terminal definitions.
+   */
+  private static Set<Integer> terminalBindings(IR ir, Map<Integer, Integer> definitionIndices) {
+    if (definitionIndices.size() < 2) return new LinkedHashSet<>(definitionIndices.keySet());
+    SSACFG cfg = ir.getControlFlowGraph();
+    if (cfg == null) return new LinkedHashSet<>(definitionIndices.keySet());
+
+    // The blocks that redefine the name, and the last redefining index within each.
+    Map<ISSABasicBlock, Integer> lastDefinitionInBlock = HashMapFactory.make();
+    for (int index : definitionIndices.values()) {
+      ISSABasicBlock block = cfg.getBlockForInstruction(index);
+      if (block == null) return new LinkedHashSet<>(definitionIndices.keySet());
+      Integer prior = lastDefinitionInBlock.get(block);
+      if (prior == null || index > prior) lastDefinitionInBlock.put(block, index);
+    }
+
+    Set<Integer> ret = new LinkedHashSet<>();
+    for (Map.Entry<Integer, Integer> definition : definitionIndices.entrySet()) {
+      int index = definition.getValue();
+      ISSABasicBlock block = cfg.getBlockForInstruction(index);
+      // Killed within its own block by a later definition of the same name.
+      if (lastDefinitionInBlock.get(block) > index) continue;
+      // Otherwise terminal when the exit is reachable without crossing a redefinition. A block
+      // that redefines the name is a barrier: any path through it leaves the variable holding
+      // that block's value instead.
+      if (reachesExitWithoutRedefinition(cfg, block, lastDefinitionInBlock.keySet()))
+        ret.add(definition.getKey());
+    }
+    return ret.isEmpty() ? new LinkedHashSet<>(definitionIndices.keySet()) : ret;
+  }
+
+  /**
+   * Whether the exit is reachable from the given block without passing through a block that
+   * redefines the variable (<a href="https://github.com/wala/ML/issues/890">wala/ML#890</a>).
+   *
+   * @param cfg The control-flow graph.
+   * @param from The block holding the definition under test.
+   * @param redefiningBlocks The blocks that define the same name, which act as barriers.
+   * @return {@code true} when some path from {@code from} reaches the exit un-redefined.
+   */
+  private static boolean reachesExitWithoutRedefinition(
+      SSACFG cfg, ISSABasicBlock from, Set<ISSABasicBlock> redefiningBlocks) {
+    Set<ISSABasicBlock> visited = HashSetFactory.make();
+    Deque<ISSABasicBlock> queue = new ArrayDeque<>();
+    queue.add(from);
+    visited.add(from);
+    while (!queue.isEmpty()) {
+      ISSABasicBlock current = queue.poll();
+      if (current.equals(cfg.exit())) return true;
+      // NORMAL successors only. An invoke splits its block and carries an exception edge, so
+      // following exceptional edges would let a binding reach the exit by the path where the very
+      // call that overwrites it threw, and every overwritten binding would count as terminal. An
+      // annotation describes the value the variable holds on normal completion.
+      for (Iterator<ISSABasicBlock> it = cfg.getNormalSuccessors(current).iterator();
+          it.hasNext(); ) {
+        ISSABasicBlock next = it.next();
+        // A successor that redefines the name ends this path: past it the variable holds the
+        // redefinition, not the value under test. The block the walk STARTS from is exempt,
+        // since its own definition is the one being tested.
+        if (redefiningBlocks.contains(next)) continue;
+        if (visited.add(next)) queue.add(next);
+      }
+    }
+    return false;
   }
 
   /**
