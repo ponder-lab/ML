@@ -39,14 +39,19 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
    * 10)}, {@code (8, 100)}, {@code (6, 128)}, and {@code (16, 100)} leading pairs from the entry
    * scripts' {@code model.build} contracts (wala/ML#717) through the embedding's output reshape,
    * each trailing hidden dimension a config-derived {@link UnresolvedDim} (wala/ML#721) &mdash;
-   * plus each pair's loop-carried degraded-rank siblings ({@code (batch, U)} and {@code (batch, U,
-   * U)} from the {@code reshape_to_matrix}/{@code reshape_from_matrix} round trip's non-entry
-   * contexts) and the fully-unresolved rank-2/rank-3 members, plus the unknown-rank {@code float32}
-   * member the restored {@code reshape_from_matrix} opaque-operand pin contributes (wala/ML#765):
-   * that reshape's result is generator-⊥ here, so the pin is its only tensor evidence, and its
-   * conservative unknown-rank type joins the loop-carried union. The {@code mask} (value number 4)
-   * union is the attention mask's {@code (batch, seq, seq)} broadcast per the same six entry
-   * pipelines.
+   * plus each pair's loop-carried rank-3 degraded sibling {@code (batch, U, U)} from the {@code
+   * reshape_to_matrix}/{@code reshape_from_matrix} round trip's non-entry contexts, and the
+   * fully-unresolved rank-2/rank-3 members, plus the unknown-rank {@code float32} member the
+   * restored {@code reshape_from_matrix} opaque-operand pin contributes (wala/ML#765): that
+   * reshape's result is generator-⊥ here, so the pin is its only tensor evidence, and its
+   * conservative unknown-rank type joins the loop-carried union. The rank-2 {@code (batch, U)}
+   * sibling this union formerly carried per entry pair &mdash; the embedding guard-φ's pre-{@code
+   * expand_dims} phantom, reaching the encoder through {@code reshape_from_matrix}'s {@code
+   * get_shape_list} &mdash; is gone with wala/ML#900, which resolves that {@code get_shape_list}
+   * parameter through its caller argument so φ feasibility prunes the pre-{@code expand_dims} arm;
+   * a reappearance of any {@code (batch, U)} member is a wala/ML#900 regression. The {@code mask}
+   * (value number 4) union is the attention mask's {@code (batch, seq, seq)} broadcast per the same
+   * six entry pipelines.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -65,10 +70,6 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
         Set.of(
             new TensorType(FLOAT_32, null),
             new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(new NumericDim(6), UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(new NumericDim(16), UnresolvedDim.INSTANCE)),
             new TensorType(
                 FLOAT_32,
                 asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),

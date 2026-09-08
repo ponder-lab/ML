@@ -386,21 +386,25 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * whose pipelines reach this layer, each with the trailing {@code input_shape[-1] *
    * self.embedding_size} element unresolved, since the factor comes from a checkpoint config the
    * analysis cannot read — a fixed runtime size of unknown value ({@link UnresolvedDim},
-   * wala/ML#721), not a runtime-{@code None} axis. The rank-2 {@code (8, D)} member is the
-   * embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims} member). The {@code
-   * tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return descent for
-   * layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D, D)}, {@code (8,
-   * D, D)}): the einsum body's own reshapes now compute generator-side through the {@code
-   * get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The rank-4
-   * {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj} contexts'
-   * inputs (the attention's return value): the worklist engine converges the loop-carried union
-   * from its non-cyclic base and all four proj contexts carry them (wala/ML#365 Phase 3 resolved
-   * the fourth, the wala/ML#718 residual under the retired round-based resolution). The formerly
-   * shape-⊤ members carry equation-proven ranks since the einsum-operand refinement (wala/ML#704):
-   * {@code DenseLayer3d.call}'s {@code use_einsum} arm makes its input an operand of the rank-3
-   * {@code "BFH"} term and {@code DenseLayer3dProj.call}'s of the rank-4 {@code "BFND"} term, and
-   * the refined parameter states transport through the call boundary into this helper; the
-   * dead-site rank-2/3 matmul artifacts are gone with the caller-walk filtering (wala/ML#763).
+   * wala/ML#721), not a runtime-{@code None} axis. The rank-2 {@code (8, D)} member that this layer
+   * formerly carried — the embedding guard-φ's path-insensitive phantom, the pre-{@code
+   * expand_dims} member — is gone: wala/ML#900 resolves the {@code get_shape_list} parameter
+   * through its caller argument, whose φ feasibility prunes the pre-{@code expand_dims} arm that
+   * the raw points-to union retained as an allocation. This layer is one of the manifestations the
+   * einsum entry exercises, not wala/ML#900's named subject (the {@code bert_ner_crf} sequence
+   * output). The {@code tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return
+   * descent for layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D,
+   * D)}, {@code (8, D, D)}): the einsum body's own reshapes now compute generator-side through the
+   * {@code get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The
+   * rank-4 {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj}
+   * contexts' inputs (the attention's return value): the worklist engine converges the loop-carried
+   * union from its non-cyclic base and all four proj contexts carry them (wala/ML#365 Phase 3
+   * resolved the fourth, the wala/ML#718 residual under the retired round-based resolution). The
+   * formerly shape-⊤ members carry equation-proven ranks since the einsum-operand refinement
+   * (wala/ML#704): {@code DenseLayer3d.call}'s {@code use_einsum} arm makes its input an operand of
+   * the rank-3 {@code "BFH"} term and {@code DenseLayer3dProj.call}'s of the rank-4 {@code "BFND"}
+   * term, and the refined parameter states transport through the call boundary into this helper;
+   * the dead-site rank-2/3 matmul artifacts are gone with the caller-walk filtering (wala/ML#763).
    * Every proven axis stays {@link UnresolvedDim} in vivo, since {@code w}'s extents are
    * config-derived; the union is dtype-homogeneous {@code float32} since the dtype feed
    * (wala/ML#736) replaced the attention path's pure-⊤ seeds. The {@code w} parameter keeps rank 3
@@ -432,7 +436,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)),
-                new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
@@ -491,6 +494,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * either the caller walks or the dataflow φs. The {@code (8, ?, ?, ?)} member is the legitimate
    * wala/ML#737 partial.
    *
+   * <p>The rank-2 {@code (8, D)} member this input formerly carried &mdash; the embedding guard-φ's
+   * pre-{@code expand_dims} phantom, reaching here downstream of the token embedding &mdash; is
+   * gone with wala/ML#900, which resolves the {@code get_shape_list} parameter through its caller
+   * argument so the φ feasibility prunes the arm the raw points-to union retained as an allocation.
+   * This input is a manifestation of that shared origin, not wala/ML#900's named subject (the
+   * {@code bert_ner_crf} sequence output). A reappearance of {@code (8, D)} here is a wala/ML#900
+   * regression.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -509,7 +520,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         Map.of(
             3,
             Set.of(
-                new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
@@ -1256,5 +1266,46 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         0,
         0,
         Map.of());
+  }
+
+  /**
+   * Canary for wala/ML#900 in miniature, isolating the phantom the whole-project einsum and Dense3d
+   * tests observe on the real subject. In {@code tf2_test_ml900_embedding_guard.py}, {@code
+   * embed}'s {@code input_ids} is a φ over a conditional {@code expand_dims}; a rank-2 input makes
+   * the guard fire, so the φ's runtime value is rank 3 and the reshape reading {@code
+   * get_shape_list(input_ids)} yields a rank-3 result. Without the fix the {@code get_shape_list}
+   * parameter's raw points-to union retains the pre-{@code expand_dims} (rank-2) allocation,
+   * minting a spurious rank-2 member on the reshape output; the fix resolves the parameter through
+   * its caller argument, whose φ feasibility prunes that arm, leaving only {@code (16, 100, 8)}.
+   *
+   * <p>This is a coverage canary for the phantom, not a guard for the two-part fix as a pair. The
+   * necessity matrix run against it shows it reintroduces the rank-2 member when Part 1 (the
+   * caller-argument resolution) is removed, but stays clean when Fix A (the φ-merge identity fix)
+   * is removed — because the minimal case does not trigger the def-use/IR snapshot mismatch Fix A
+   * addresses, so its merge lookup succeeds either way. The pair-necessity claim therefore lives
+   * with the whole-project {@link #testNlpgnnFullEinsumViaMatmul()} and its matrix, where the real
+   * subject exercises both. What this canary adds is a dedicated, fast, single-assertion guard for
+   * the phantom's non-return, immune to the unrelated expectation edits that could quietly rewrite
+   * it back into the whole-project tests' large member sets.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMl900EmbeddingGuardCanary()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ml900_embedding_guard.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(16), new NumericDim(100), new NumericDim(8))))));
   }
 }
