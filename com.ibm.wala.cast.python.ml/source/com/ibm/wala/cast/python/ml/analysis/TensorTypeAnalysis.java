@@ -406,7 +406,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       if (lhs == null || rhs == null) return NOT_CHANGED;
       boolean changed = false;
       if (rhs.state != null) {
-        if (lhs.state == null) lhs.state = HashSetFactory.make();
+        // Materializing a null state is itself a change, even from an empty rhs.
+        changed = lhs.state == null;
+        if (changed) lhs.state = HashSetFactory.make();
         for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
       }
       changed |=
