@@ -988,6 +988,70 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
     }
   }
 
+  /**
+   * Runs the tensor-type analysis over {@code projectFilenames} and asserts that the value {@code
+   * valueNumber} of {@code functionName} carries the ⊤ dtype ({@code DType.UNKNOWN}) somewhere in
+   * the union of its types across all calling contexts.
+   *
+   * <p>Unlike {@link #test(String[], String, String, String, int, int, Map)}, this pins only the
+   * DTYPE axis of one value rather than an exact {@link TensorType} set, and it does not require
+   * the value to be a parameter. It is for a regression whose property under test is solely that an
+   * unknown remainder is present alongside any resolved members — a confident single dtype would be
+   * the defect — where the value's shape and its other (legitimately resolved) dtype members are
+   * incidental.
+   *
+   * @param projectFilenames The script module file names making up the project.
+   * @param filename The file declaring the function under test.
+   * @param functionName The function (or nested synthetic body, e.g. a comprehension) whose value
+   *     dtype is checked.
+   * @param pythonPath The Python path root for module resolution.
+   * @param valueNumber The value number to check within that function's body.
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test files.
+   */
+  protected void assertValueDTypeContainsUnknown(
+      String[] projectFilenames,
+      String filename,
+      String functionName,
+      String pythonPath,
+      int valueNumber)
+      throws ClassHierarchyException, CancelException, IOException {
+    List<File> pathFiles = this.getPathFiles(pythonPath);
+    PythonTensorAnalysisEngine engine =
+        makeEngine(
+            PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, pathFiles, projectFilenames);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(builder);
+    builder.makeCallGraph(builder.getOptions());
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+    String functionSignature =
+        "script " + filename.replace('/', '.') + "." + functionName + ".do()LRoot;";
+
+    Set<TensorType> union = new HashSet<>();
+    analysis.forEach(
+        pt -> {
+          PointerKey pointerKey = pt.fst;
+          if (!(pointerKey instanceof LocalPointerKey)) return;
+          LocalPointerKey lpk = (LocalPointerKey) pointerKey;
+          if (lpk.getValueNumber() != valueNumber) return;
+          if (!lpk.getNode().getMethod().getSignature().equals(functionSignature)) return;
+          TensorVariable tensorVariable = pt.snd;
+          if (tensorVariable != null && tensorVariable.getTypes() != null)
+            union.addAll(tensorVariable.getTypes());
+        });
+
+    assertTrue(
+        "Expected value vn="
+            + valueNumber
+            + " of "
+            + functionSignature
+            + " to carry an unknown (⊤) dtype in its cross-context union, but got: "
+            + union,
+        union.stream().anyMatch(t -> "unknown".equals(t.getCellType())));
+  }
+
   /** Matches the script-relative method identifiers a Python {@link Context} chain mentions. */
   private static final Pattern CONTEXT_METHOD_PATTERN =
       Pattern.compile("(?:tests|nlpgnn|src|proj[0-9]*)/[A-Za-z0-9_/.-]+\\.py/[A-Za-z0-9_]+");
