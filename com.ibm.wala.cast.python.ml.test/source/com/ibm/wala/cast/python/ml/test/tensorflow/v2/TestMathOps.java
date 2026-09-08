@@ -1585,12 +1585,16 @@ public class TestMathOps extends AbstractTensorTest {
 
   /**
    * NLPGNN's {@code WDEmbedding} in miniature (wala/ML#711, wala/ML#717): the output reshape's
-   * target slices the rank-conditional {@code tf.expand_dims} guard's φ, so the composition
-   * cross-products the two source shapes per position: four members, including the runtime {@code
-   * (2, 2, 8)}, with the trailing dimension static in every member. The mixed-pairing members are
-   * the cross-product's sound over-approximation; pairing the evaluation per φ member would drop
-   * them. The embedding table's {@code float32} survives through both the {@code gather} arm and
-   * the {@code one_hot}/{@code matmul} arm.
+   * target reads {@code get_shape_list(input_ids)} over the rank-conditional {@code tf.expand_dims}
+   * guard's φ. The single member {@code (2, 2, 8)} is the runtime shape, matching the fixture's own
+   * {@code assert out.shape == (2, 2, 8)}. Previously this value also carried three phantom members
+   * &mdash; {@code (2, 16)}, {@code (2, 8)}, and {@code (2, 2, 16)} &mdash; the cross-product of
+   * the φ's pre- and post-{@code expand_dims} source shapes, sound but imprecise. wala/ML#900
+   * removes them: it resolves the {@code get_shape_list} parameter through its caller argument,
+   * whose φ feasibility prunes the pre-{@code expand_dims} arm that the raw points-to union
+   * retained as an allocation, leaving only the runtime-exact rank-3 member. A reappearance of any
+   * rank-2 member here is a wala/ML#900 regression. The embedding table's {@code float32} survives
+   * through both the {@code gather} arm and the {@code one_hot}/{@code matmul} arm.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1605,22 +1609,18 @@ public class TestMathOps extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 16),
-                TensorType.of(FLOAT_32, 2, 8),
-                TensorType.of(FLOAT_32, 2, 2, 16),
-                TensorType.of(FLOAT_32, 2, 2, 8))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2, 8))));
   }
 
   /**
    * Opaque-size variant of {@link #testEmbeddingOutput()} (wala/ML#717), mirroring the vendored
    * NLPGNN embedding, whose table size comes from a checkpoint config the analysis cannot read. The
    * output reshape's trailing element {@code input_shape[-1] * self.embedding_size} then has an
-   * unresolvable factor, but arithmetic over a shape-vector subscript is one scalar dimension, so
-   * the value degrades to dynamic while the rank and the leading dimensions survive, per guard-φ
-   * member.
+   * unresolvable factor, so it degrades to dynamic while the rank and the leading dimensions
+   * survive: the single member {@code (2, 2, ?)}, whose rank-3 shape matches the fixture's {@code
+   * assert out.shape == (2, 2, 8)} with the trailing extent unresolved. The former rank-2 {@code
+   * (2, ?)} member was the pre-{@code expand_dims} phantom, removed with wala/ML#900 (as in {@link
+   * #testEmbeddingOutput()}); its reappearance here is a regression.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1638,7 +1638,6 @@ public class TestMathOps extends AbstractTensorTest {
         Map.of(
             2,
             Set.of(
-                new TensorType(FLOAT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(2), new NumericDim(2), UnresolvedDim.INSTANCE)))));

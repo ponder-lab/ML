@@ -3115,11 +3115,19 @@ public abstract class TensorGenerator {
     if (ir == null) return null;
     SSACFG cfg = ir.getControlFlowGraph();
 
-    // Locate the φ's merge block.
+    // Locate the φ's merge block. Match by def value number rather than object identity: the φ
+    // handed in may be a distinct instance from the one in this IR's blocks (it can arrive from a
+    // DefUse built over a different IR snapshot for the same node), and an identity compare then
+    // silently misses, leaving merge null and reporting a lookup failure as undecidability
+    // (wala/ML#900). Regression coverage for this match is thin: the minimal in-module fixtures do
+    // not reproduce the snapshot mismatch (their DefUse and IR agree), so the ONLY test that fails
+    // if this reverts to `== phi` is the whole-project testNlpgnnFullEinsumViaMatmul, which runs in
+    // a sharded job rather than the main build. Do not revert this to identity on the strength of a
+    // green module run.
     ISSABasicBlock merge = null;
     for (ISSABasicBlock block : cfg) {
       for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); )
-        if (it.next() == phi) {
+        if (it.next().getDef() == phi.getDef()) {
           merge = block;
           break;
         }
@@ -7242,6 +7250,98 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Distinct ranks among a resolution's members. Two or more signals a rank-heterogeneous parameter
+   * — the only shape an infeasible φ arm retained in the points-to union can produce, and the gate
+   * that keeps the caller walk off the hot path for ordinary single-rank reads (wala/ML#900).
+   *
+   * @param result The resolution whose members are counted.
+   * @return The number of distinct ranks among the ranked members.
+   */
+  private static int distinctRankCount(ShapeResult result) {
+    Set<Integer> ranks = HashSetFactory.make();
+    for (List<Dimension<?>> member : result.members()) if (member != null) ranks.add(member.size());
+    return ranks.size();
+  }
+
+  /**
+   * The {@code (node, value)} parameters whose shape is currently being resolved through callers,
+   * per thread. {@link #getShapeResult} threads no visited set, so a caller-argument hop can
+   * re-enter this resolution for the same parameter through it; a parameter-threaded guard would
+   * not see that re-entry, but this stack-scoped set does. The analysis solve is single-threaded,
+   * so the thread-local isolates one solve's stack (wala/ML#900).
+   */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> PARAMETER_CALLER_STACK =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  /**
+   * Resolves a tensor parameter's shape as the union over all callers of the shape of the actual
+   * argument each passes (wala/ML#900). A parameter's runtime value is some caller's argument, so
+   * the union over every caller covers every execution, and each argument's own resolution applies
+   * φ feasibility — pruning the arms the raw points-to union retains as allocations. The result
+   * therefore narrows the raw resolution soundly.
+   *
+   * <p>Returns {@code null}, leaving the caller on the raw points-to resolution, unless the caller
+   * walk is complete: at least one caller; no predecessor whose IR or def-use is unavailable (an
+   * uninspectable caller whose argument cannot be verified); every reachable call's argument
+   * mappable to a positional value; and every argument fully resolved with no unknown remainder.
+   * Any incompleteness would let the union under-approximate a caller's contribution, so the
+   * fallback is always to change nothing. Recursive re-entry for the same parameter also returns
+   * {@code null}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and shape
+   *     resolution.
+   * @param node The callee {@link CGNode} whose parameter is resolved.
+   * @param paramVn The parameter value number.
+   * @param exact Whether an unresolvable argument marks the unknown remainder.
+   * @return The caller-union shape, or {@code null} when the walk is not soundly complete.
+   */
+  private ShapeResult shapeResultOfTensorParameterViaCallers(
+      PropagationCallGraphBuilder builder, CGNode node, int paramVn, boolean exact) {
+    int paramPos = parameterPosition(node, paramVn);
+    if (paramPos < 0) return null; // Not a parameter.
+    Pair<CGNode, Integer> key = Pair.make(node, paramVn);
+    Set<Pair<CGNode, Integer>> stack = PARAMETER_CALLER_STACK.get();
+    if (!stack.add(key)) return null; // Recursive re-entry for this parameter; keep raw.
+    try {
+      // An uninspectable predecessor makes the enumeration incomplete: silently dropping it would
+      // report an under-approximation as complete, the silent-skip class of wala/ML#900. The
+      // completeness guards below (this one, the unmappable-argument bail, and the
+      // unresolved-argument bail) are currently unexercised by the corpus — the rank-heterogeneity
+      // gate at the call site does all the observed filtering — so their correctness rests on the
+      // reasoning here rather than on execution: keep them, they are the protection if such a
+      // caller
+      // ever appears, but do not assume they are battle-tested.
+      boolean anyPred = false;
+      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
+        CGNode pred = it.next();
+        anyPred = true;
+        if (pred.getIR() == null || pred.getDU() == null) return null;
+      }
+      if (!anyPred) return null;
+      Set<List<Dimension<?>>> combined = HashSetFactory.make();
+      boolean any = false;
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+          getCallerInvokes(builder, node)) {
+        int argVn = callerArgumentValueNumber(callerInvoke.snd, paramPos);
+        if (argVn == AMBIGUOUS_ARGUMENT || argVn <= 0) return null; // Unmappable argument.
+        // Reading each argument through getShapeResult is load-bearing for order-invariance: it is
+        // an engine-keyed read that registers a dependency edge, so the worklist re-evaluates this
+        // resolution once the argument converges and the post-fixpoint sweep makes the result a
+        // function of the argument's canonical value (wala/ML#900). A refactor that bypassed
+        // getShapeResult for speed would silently drop that protection.
+        ShapeResult argResult = this.getShapeResult(builder, callerInvoke.fst, argVn, exact);
+        if (argResult.isBottom() || argResult.hasUnknown() || argResult.members().isEmpty())
+          return null; // A caller we cannot fully resolve; the union would under-approximate it.
+        combined.addAll(argResult.members());
+        any = true;
+      }
+      return any ? ShapeResult.of(combined) : null;
+    } finally {
+      stack.remove(key);
+    }
+  }
+
+  /**
    * Core of {@link #getShapeResultOfShapeVector(PropagationCallGraphBuilder, CGNode, int)}
    * threading the set of nodes already on the walk — callees entered through helper returns and
    * callers entered through parameter arguments — guarding recursive chains (wala/ML#706).
@@ -7371,10 +7471,27 @@ public abstract class TensorGenerator {
       int memberVn = read.getMemberRef();
       if (st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn))) {
         try {
+          int objVn = read.getObjectRef();
           // The walk's folds assert per-member facts (subscripts, slices, products), so the
           // source must be the complete set of possibilities; a partially resolvable source
           // keeps its members with the remainder marked (wala/ML#716, wala/ML#718).
-          return this.getShapeResult(builder, node, read.getObjectRef(), true);
+          ShapeResult raw = this.getShapeResult(builder, node, objVn, true);
+          // A tensor parameter's raw points-to union retains every arm of a caller's φ, including
+          // an arm the governing branch makes infeasible, because the points-to substrate holds
+          // the allocation the dataflow's feasibility never removes (wala/ML#900). When the raw
+          // resolution is rank-heterogeneous — the only case an infeasible arm can produce —
+          // resolve
+          // the parameter through the actual argument each caller passes instead, which routes
+          // through the caller-frame φ resolution that feasibility can prune. The heterogeneity
+          // gate
+          // keeps the caller union off the hot path for ordinary single-rank reads; the walk falls
+          // back to the raw resolution whenever it is not complete enough to be sound.
+          if (node.getDU().getDef(objVn) == null && distinctRankCount(raw) >= 2) {
+            ShapeResult viaCallers =
+                this.shapeResultOfTensorParameterViaCallers(builder, node, objVn, true);
+            if (viaCallers != null) return viaCallers;
+          }
+          return raw;
         } catch (IllegalArgumentException e) {
           LOGGER.log(
               Level.FINE,
