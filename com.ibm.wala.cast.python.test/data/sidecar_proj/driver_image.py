@@ -43,6 +43,50 @@ def decoded_chain():
     consume_decoded(distorted_random_crop(decoded))
 
 
+literal_array = np.ones((640, 480, 3), dtype=np.uint8)
+
+
+def consume_crop_literal(t):
+    pass
+
+
+def crop_chain_literal():
+    # The control for wala/ML#905: the same crop over an input inference can see for itself, rather
+    # than one whose shape is supplied. If the channel survives here and nowhere else, what defeats
+    # the crop contract is where the input's shape comes from.
+    consume_crop_literal(distorted_random_crop(literal_array))
+
+
+def consume_crop_from_param(t):
+    pass
+
+
+def crop_chain_param(image):
+    # The contrast for wala/ML#905: the SAME return, bound at a caller, differing only in whether
+    # the crop's argument is this function's parameter or a module-scope global.
+    consume_crop_from_param(distorted_random_crop(image))
+
+
+def consume_cast(t):
+    pass
+
+
+def consume_crop(t):
+    pass
+
+
+def cast_chain():
+    # wala/ML#905: the crop's own result is read on its way into the cast, so the operand the cast
+    # degrades is pinned separately rather than inferred from the other sink's union.
+    cropped = distorted_random_crop(img_array)
+    consume_crop(cropped)
+    consume_cast(tf.cast(cropped, tf.float32))
+
+
+cast_chain()
+crop_chain_param(img_array)
+crop_chain_literal()
+
 direct = random_flip_left_right(img_array)
 chained = transform_image(img_array)
 decoded_chain()
@@ -62,3 +106,24 @@ def unannotated_transform(plain_image):
 
 plain = tf.ones((2, 3))
 unannotated_transform(plain)
+
+
+def consume_subscript_annotated(t):
+    pass
+
+
+def consume_subscript_literal(t):
+    pass
+
+
+def subscript_chain():
+    # wala/ML#905, second arm: a SUBSCRIPT rather than the crop, over the same pair of inputs. If
+    # the annotated one loses extents the inferred one keeps, the invisibility is not specific to
+    # the crop contract.
+    consume_subscript_annotated(img_array[:, 100:, :])
+    narrowed = literal_array[:, 100:, :]
+    assert narrowed.shape == (640, 380, 3), narrowed.shape
+    consume_subscript_literal(narrowed)
+
+
+subscript_chain()

@@ -1354,4 +1354,199 @@ public class TestMisc extends AbstractTensorTest {
         warnings.stream()
             .noneMatch(w -> w.contains("driver_dynamic_extent") && w.contains("conflicts")));
   }
+
+  /**
+   * A {@code tf.slice} keeps an axis it takes in full, but only when it can see the input's shape
+   * for itself. The crop's bounds come from {@code sample_distorted_bounding_box}, whose documented
+   * contract makes the channel axis fully taken, and the wala/ML#844 arm keeps that axis from the
+   * input. Over an input whose shape arrives from a type annotation the arm has no input shape to
+   * keep and the axis degrades with the rest.
+   *
+   * <p>The discriminator is the input, not the crop: {@link
+   * #testSliceKeepsFullyTakenAxisWhenInputIsInferred()} runs the same call on an input inference
+   * can read and recovers the channel.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/905">wala/ML#905</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSliceKeepsFullyTakenAxis() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_crop",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The positive control for {@link #testSliceKeepsFullyTakenAxis()}: the same crop, in the same
+   * file, over an input inference can read for itself. The channel survives, so the crop contract
+   * is not broken and the bounds are not at fault. What the blocked test above measures is the
+   * arm's inability to reach a shape that arrives by annotation rather than by inference.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testSliceKeepsFullyTakenAxisWhenInputIsInferred() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_crop_literal",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The companion to {@link #testSliceKeepsFullyTakenAxis()}, pinning the other side of the cast. A
+   * cast changes the dtype and nothing else, so its result must carry its operand's shape exactly.
+   * It does, which is what exonerates the cast: both sides are equally degraded and the loss is
+   * upstream of it.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testCastPreservesOperandShape() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_cast",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The control for {@link #testSliceKeepsFullyTakenAxis()}: the same crop reached through a
+   * parameter rather than a module-scope global degrades identically. Without this the blocked test
+   * above would be equally consistent with a caller-side or argument-origin cause, and the
+   * degradation would look positional when it is not.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testSliceDegradesIdenticallyThroughParameter() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_crop_from_param",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A subscript narrows the axis it slices. Over a receiver whose shape arrives from a type
+   * annotation the arm emits the RECEIVER's extent instead: {@code (4830, 2900, 3)} where the
+   * program produces {@code (4830, 2800, 3)}. Concrete and wrong, which a consumer will act on,
+   * rather than an honest unknown.
+   *
+   * <p>The rule itself is implemented correctly, which {@link
+   * #testSubscriptComputesSlicedExtentOverInferredShape()} pins on the same expression over an
+   * inferred receiver. Only the annotated path is wrong, and a single-input program cannot show
+   * that: with no correct neighbour the wrong extent is indistinguishable from a right one.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/906">wala/ML#906</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSubscriptNarrowsAnnotatedShape() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_subscript_annotated",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4830, 2800, 3))));
+  }
+
+  /**
+   * The positive control for {@link #testSubscriptNarrowsAnnotatedShape()}: the same expression
+   * over a receiver inference can read for itself subtracts the offset and gets {@code 380}. So the
+   * subscript rule is right and the annotated path is what breaks it.
+   *
+   * <p>This also bounds wala/ML#905. A subscript reaches the annotated shape and emits concrete
+   * dims from it, so an annotated shape is not invisible to every arm, and whatever defeats the
+   * crop contract is narrower than that.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testSubscriptComputesSlicedExtentOverInferredShape() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_subscript_literal",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 640, 380, 3))));
+  }
+
+  /**
+   * An array round-tripped through a Python list and rebuilt by {@code np.array} keeps its element
+   * kind and its rank. A {@code float64} source comes back {@code float64}, an {@code int64} source
+   * comes back {@code int64}, and both stay rank 2 because the nesting depth is unchanged.
+   *
+   * <p>This is a negative result kept as a guard. The round-trip was proposed as an explanation for
+   * a confident-but-wrong dtype paired with an unknown rank, on the theory that a reconstructed
+   * nested list is typed element-wise and cannot be counted. It is not: the reduction below gets
+   * every part right, so whatever produces that pairing elsewhere is not this.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testToListRoundTripKeepsElementKindAndRank() throws Exception {
+    test(
+        "tf2_test_tolist_roundtrip.py",
+        "consume_float_source",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 2))));
+    test(
+        "tf2_test_tolist_roundtrip.py",
+        "consume_float_roundtrip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 2))));
+    test(
+        "tf2_test_tolist_roundtrip.py",
+        "consume_int_roundtrip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 2, 2))));
+  }
 }
