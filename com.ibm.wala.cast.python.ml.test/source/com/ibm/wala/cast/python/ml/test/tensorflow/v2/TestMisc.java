@@ -1231,6 +1231,35 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * A two-arm phi arm decided taken suppresses its sibling's dataflow edge (<a
+   * href="https://github.com/wala/ML/issues/902">wala/ML#902</a>). {@code f(x)} calls {@code
+   * consume(x)} on the guard phi and is called with a rank-2 and a rank-3 argument, so 1-CFA splits
+   * it; in the rank-3 context the skip arm is decidably taken and the expand arm is merely
+   * undecidable (its governing branch behind the {@code expand_dims} invoke split, wala/ML#885).
+   * The wala/ML#763 FALSE-only phi suppression leaves the undecidable expand arm live, so before
+   * this fix {@code consume} saw the spurious rank-4 {@code (8, 10, 4, 1)} beside {@code (8, 10,
+   * 4)} and {@code (16, 100, 1)}; suppressing the sibling of the taken arm at the dataflow layer
+   * removes it. The neighbouring rank-3 single-call witness {@link #testNdimsFoldRank3Control()}
+   * stays a wala/ML#885 known failure, since no arm decides there — this change is narrow to the
+   * decidably-taken case.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testPhiArmTaken()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_phi_arm_taken.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_16_100_1_FLOAT32, TENSOR_8_10_4_FLOAT32)));
+  }
+
+  /**
    * Captures the sidecar warnings a run raises for one driver, so a test can assert what the
    * analysis SAYS about an entry rather than only what it binds.
    *

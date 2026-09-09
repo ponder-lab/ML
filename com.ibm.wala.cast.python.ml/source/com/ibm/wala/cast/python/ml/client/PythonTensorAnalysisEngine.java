@@ -2643,16 +2643,49 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           if (phiVar == null) continue;
           List<PointsToSetVariable> infeasible = new ArrayList<>();
           boolean liveArm = false;
-          for (int i = 0; i < phi.getNumberOfUses(); i++) {
+          int uses = phi.getNumberOfUses();
+          Boolean[] feas = new Boolean[uses];
+          PointsToSetVariable[] armVars = new PointsToSetVariable[uses];
+          for (int i = 0; i < uses; i++) {
             int useVn = phi.getUse(i);
-            PointsToSetVariable armVar =
+            armVars[i] =
                 useVn > 0 ? flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, useVn)) : null;
-            if (Boolean.FALSE.equals(
-                TensorGenerator.computePhiArmFeasibility(
-                    builder, node, (SSAPhiInstruction) phi, i))) {
-              if (armVar != null && dataflow.hasEdge(armVar, phiVar)) infeasible.add(armVar);
+            feas[i] =
+                TensorGenerator.computePhiArmFeasibility(builder, node, (SSAPhiInstruction) phi, i);
+            if (Boolean.FALSE.equals(feas[i])) {
+              if (armVars[i] != null && dataflow.hasEdge(armVars[i], phiVar))
+                infeasible.add(armVars[i]);
             } else {
               liveArm = true;
+            }
+          }
+          // wala/ML#902: on a two-arm phi, an arm decided TRUE (decidably taken) implies its
+          // sibling
+          // is infeasible, since exactly one of the merge block's predecessor edges is taken at
+          // runtime. computePhiArmFeasibility already yields that TRUE here; the #763 FALSE-only
+          // pass
+          // above leaves the sibling live when it is merely undecidable (its governing branch out
+          // of
+          // the two-level walk's reach, wala/ML#885). Suppressing the sibling's edge removes the
+          // leak
+          // the FALSE pass cannot see. Two-arm-only (mutual exclusivity needs more care beyond two
+          // edges) and add-pruning-only. A folded two-way branch yields at most one TRUE arm; the
+          // exactly-one guard is defensive against a contradictory double-TRUE, which would
+          // otherwise
+          // suppress both edges and leave the phi baseless.
+          if (uses == 2) {
+            int takenArm = -1;
+            boolean contradiction = false;
+            for (int i = 0; i < 2; i++)
+              if (Boolean.TRUE.equals(feas[i])) {
+                if (takenArm >= 0) contradiction = true;
+                takenArm = i;
+              }
+            if (takenArm >= 0 && !contradiction) {
+              PointsToSetVariable sibling = armVars[1 - takenArm];
+              if (sibling != null
+                  && dataflow.hasEdge(sibling, phiVar)
+                  && !infeasible.contains(sibling)) infeasible.add(sibling);
             }
           }
           if (!liveArm || infeasible.isEmpty()) continue;
