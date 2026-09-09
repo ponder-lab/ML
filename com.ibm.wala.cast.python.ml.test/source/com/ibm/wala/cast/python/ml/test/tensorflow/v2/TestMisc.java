@@ -1464,4 +1464,55 @@ public class TestMisc extends AbstractTensorTest {
                     asList(
                         UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * A subscript narrows the axis it slices. Over a receiver whose shape arrives from a type
+   * annotation the arm emits the RECEIVER's extent instead: {@code (4830, 2900, 3)} where the
+   * program produces {@code (4830, 2800, 3)}. Concrete and wrong, which a consumer will act on,
+   * rather than an honest unknown.
+   *
+   * <p>The rule itself is implemented correctly, which {@link
+   * #testSubscriptComputesSlicedExtentOverInferredShape()} pins on the same expression over an
+   * inferred receiver. Only the annotated path is wrong, and a single-input program cannot show
+   * that: with no correct neighbour the wrong extent is indistinguishable from a right one.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/906">wala/ML#906</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSubscriptNarrowsAnnotatedShape() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_subscript_annotated",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4830, 2800, 3))));
+  }
+
+  /**
+   * The positive control for {@link #testSubscriptNarrowsAnnotatedShape()}: the same expression
+   * over a receiver inference can read for itself subtracts the offset and gets {@code 380}. So the
+   * subscript rule is right and the annotated path is what breaks it.
+   *
+   * <p>This also bounds wala/ML#905. A subscript reaches the annotated shape and emits concrete
+   * dims from it, so an annotated shape is not invisible to every arm, and whatever defeats the
+   * crop contract is narrower than that.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testSubscriptComputesSlicedExtentOverInferredShape() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_subscript_literal",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 640, 380, 3))));
+  }
 }

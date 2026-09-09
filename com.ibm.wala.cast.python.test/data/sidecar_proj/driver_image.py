@@ -106,3 +106,24 @@ def unannotated_transform(plain_image):
 
 plain = tf.ones((2, 3))
 unannotated_transform(plain)
+
+
+def consume_subscript_annotated(t):
+    pass
+
+
+def consume_subscript_literal(t):
+    pass
+
+
+def subscript_chain():
+    # wala/ML#905, second arm: a SUBSCRIPT rather than the crop, over the same pair of inputs. If
+    # the annotated one loses extents the inferred one keeps, the invisibility is not specific to
+    # the crop contract.
+    consume_subscript_annotated(img_array[:, 100:, :])
+    narrowed = literal_array[:, 100:, :]
+    assert narrowed.shape == (640, 380, 3), narrowed.shape
+    consume_subscript_literal(narrowed)
+
+
+subscript_chain()
