@@ -6,9 +6,9 @@ import tensorflow as tf
 
 
 class ReassignLayer(tf.keras.layers.Layer):
-    def call(self, x, y):
+    def call(self, x):
         x = tf.reshape(x, [40])
         return x
 
 
-ReassignLayer()(tf.ones((2, 20)), tf.ones((2, 20)))
+ReassignLayer()(tf.ones((2, 20)))

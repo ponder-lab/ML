@@ -1549,4 +1549,126 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(INT_64, 2, 2))));
   }
+
+  /**
+   * A numpy array crossing a Keras {@code Layer.__call__} boundary reaches the {@code call}
+   * parameter fully typed. This was proposed as the cause of <a
+   * href="https://github.com/wala/ML/issues/907">wala/ML#907</a>, where four parameters carry no
+   * rank, and it is not: the parameter resolves to its literal shape.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testLayerNumpyArgumentResolvesCallParameter() throws Exception {
+    test(
+        "tf2_test_layer_numpy_arg.py",
+        "consume_numpy_call",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The control for {@link #testLayerNumpyArgumentResolvesCallParameter()}: the same layer reached
+   * with {@code tf.constant} arguments instead of numpy ones resolves identically, so nothing about
+   * the numpy conversion distinguishes the two paths.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testLayerConstantArgumentResolvesCallParameter() throws Exception {
+    test(
+        "tf2_test_layer_numpy_arg.py",
+        "consume_const_call",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * What the {@code call} parameter hands to a module-level helper is typed too. The four
+   * parameters of <a href="https://github.com/wala/ML/issues/907">wala/ML#907</a> include a helper
+   * pair that inherits from the call pair, so a rank lost at the boundary would show here; it does
+   * not.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testLayerNumpyArgumentResolvesHelperParameter() throws Exception {
+    test(
+        "tf2_test_layer_numpy_arg.py",
+        "consume_numpy_helper",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The constant-argument control for {@link #testLayerNumpyArgumentResolvesHelperParameter()}.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testLayerConstantArgumentResolvesHelperParameter() throws Exception {
+    test(
+        "tf2_test_layer_numpy_arg.py",
+        "consume_const_helper",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * Rebinding a parameter's name to a differently-shaped value does not union that value into the
+   * PARAMETER's type set. The reshape to {@code (40,)} is deliberately distinguishable from the
+   * argument's {@code (2, 20)}, so a union would be visible; the parameter stays its own shape.
+   *
+   * <p>This was proposed as the producer of the unranked member in <a
+   * href="https://github.com/wala/ML/issues/907">wala/ML#907</a> and it is not.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testReassignedParameterKeepsItsOwnType() throws Exception {
+    test(
+        "tf2_test_reassign_param.py",
+        "reassign_fn",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The control for {@link #testReassignedParameterKeepsItsOwnType()}: the same body without the
+   * rebinding. The two differ in exactly one thing, which is what lets the pair attribute anything
+   * at all; separately, neither says more than that its own parameter resolved.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnreassignedParameterKeepsItsOwnType() throws Exception {
+    test(
+        "tf2_test_reassign_param.py",
+        "plain_fn",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The rebinding test in the frame the subject's rebinding lives in: inside a Keras {@code
+   * Layer}'s {@code call}, reached through {@code __call__}. A null result in a plain function
+   * would not have cleared the mechanism, since it would have been tested outside that frame.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testReassignedLayerParameterKeepsItsOwnType() throws Exception {
+    test(
+        "tf2_test_reassign_layer.py",
+        "ReassignLayer.call",
+        1,
+        2,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
 }
