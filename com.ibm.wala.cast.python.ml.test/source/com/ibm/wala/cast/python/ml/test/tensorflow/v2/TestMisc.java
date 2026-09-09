@@ -1515,4 +1515,38 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 640, 380, 3))));
   }
+
+  /**
+   * An array round-tripped through a Python list and rebuilt by {@code np.array} keeps its element
+   * kind and its rank. A {@code float64} source comes back {@code float64}, an {@code int64} source
+   * comes back {@code int64}, and both stay rank 2 because the nesting depth is unchanged.
+   *
+   * <p>This is a negative result kept as a guard. The round-trip was proposed as an explanation for
+   * a confident-but-wrong dtype paired with an unknown rank, on the theory that a reconstructed
+   * nested list is typed element-wise and cannot be counted. It is not: the reduction below gets
+   * every part right, so whatever produces that pairing elsewhere is not this.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testToListRoundTripKeepsElementKindAndRank() throws Exception {
+    test(
+        "tf2_test_tolist_roundtrip.py",
+        "consume_float_source",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 2))));
+    test(
+        "tf2_test_tolist_roundtrip.py",
+        "consume_float_roundtrip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 2))));
+    test(
+        "tf2_test_tolist_roundtrip.py",
+        "consume_int_roundtrip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 2, 2))));
+  }
 }
