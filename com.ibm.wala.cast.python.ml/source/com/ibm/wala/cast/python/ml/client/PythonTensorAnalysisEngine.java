@@ -2209,11 +2209,19 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // seeds under it stay untouched.
         if (types == null) continue;
         boolean anyProvenDType = types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN);
-        // wala/ML#904 PROPOSAL, gate 1 of 2. The question this serves is "does any member have
-        // an UNPROVEN axis", and the test asks "does any member have unknown RANK". An
-        // all-`Unresolved` member is ranked, so it reads as proven and no feed is requested.
-        // Flipping this alone is INERT: the SHAPE_FILL transfer applies the same wrong test.
-        boolean anyTopShape =
+        // wala/ML#904 PROPOSAL, gate 1 of 2. One predicate was serving two decisions that ask
+        // different questions, and only one of them wants "unknown RANK".
+        //
+        // The REPLACE arm below discards the seed's dims wholesale, so it must fire only for a
+        // member that has no dims to lose: that arm keeps the rank test verbatim. The SHAPE_FILL
+        // arm fills what the generator could not compute, and an all-`Unresolved` member is
+        // ranked but computes nothing — under the rank test it reads as proven and no feed is
+        // ever requested. That arm wants the axis test.
+        //
+        // Widening the axis test alone is INERT: the SHAPE_FILL transfer applies the rank test a
+        // second time and keeps the seed regardless.
+        boolean anyTopRank = types.stream().anyMatch(t -> t.getDims() == null);
+        boolean anyUnprovenAxis =
             types.stream()
                 .anyMatch(
                     t ->
@@ -2229,10 +2237,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           mode = TensorTypeAnalysis.FeedMode.REPLACE;
         else if (!anyProvenDType)
           mode =
-              types.size() == 1 && anyTopShape
+              types.size() == 1 && anyTopRank
                   ? TensorTypeAnalysis.FeedMode.REPLACE
                   : TensorTypeAnalysis.FeedMode.DTYPE_FILL;
-        else if (anyTopShape) mode = TensorTypeAnalysis.FeedMode.SHAPE_FILL;
+        else if (anyUnprovenAxis) mode = TensorTypeAnalysis.FeedMode.SHAPE_FILL;
         else continue; // Both axes proven on every member: nothing to fill.
         TensorGenerator generator;
         try {

@@ -43,6 +43,18 @@ def decoded_chain():
     consume_decoded(distorted_random_crop(decoded))
 
 
+def consume_cast(t):
+    pass
+
+
+def cast_chain():
+    # wala/ML#904 probe: the cast's own seed knows the channel count and nothing else, while its
+    # operand carries the annotated extents. Neither shape dominates the other.
+    consume_cast(tf.cast(distorted_random_crop(img_array), tf.float32))
+
+
+cast_chain()
+
 direct = random_flip_left_right(img_array)
 chained = transform_image(img_array)
 decoded_chain()

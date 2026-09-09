@@ -1354,4 +1354,37 @@ public class TestMisc extends AbstractTensorTest {
         warnings.stream()
             .noneMatch(w -> w.contains("driver_dynamic_extent") && w.contains("conflicts")));
   }
+
+  /**
+   * A {@code tf.cast} must not change its operand's shape. Casting the distorted crop, whose
+   * extents are genuinely dynamic but whose channel count is not, currently degrades the resolved
+   * channel axis along with the rest, so a fact the analysis held one instruction earlier is lost
+   * across a dtype change.
+   *
+   * <p>The cast's own seed is {@code (Unresolved, Unresolved, Unresolved)}: uninformative, but
+   * ranked. The mode selection asks for unknown RANK, reads every axis as proven, and never
+   * requests the feed that would consult the better-resolved operand. The cast declares exactly the
+   * right channel ({@code SHAPE_ONLY}) and is never asked to use it.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/905">wala/ML#905</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testCastKeepsResolvedAxis() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_cast",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
 }

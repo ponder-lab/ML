@@ -835,9 +835,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 case SHAPE_FILL:
                   for (TensorType composed : this.composeOperandMembers(rhs))
                     for (TensorType s : this.plan.seedMembers()) {
-                      // wala/ML#904 PROPOSAL, gate 2 of 2. Keep the seed only when every axis is
-                      // PROVEN; a seed carrying uninformative-but-ranked dims previously won here
-                      // and the operand's shape was discarded.
+                      // wala/ML#904 PROPOSAL, gate 2 of 2. The choice is per AXIS, not per member:
+                      // a seed like (Unresolved, Unresolved, 3) is neither wholly proven nor
+                      // wholly unproven, and both whole-member answers lose evidence. Keeping it
+                      // discards the operand's resolutions on the first two axes; replacing it
+                      // discards the seed's own 3 on the third. Merge instead, preferring the
+                      // seed's proven axis and falling back to the operand's, so the fill can
+                      // only ever add evidence.
                       if (s.getDims() != null
                           && s.getDims().stream()
                               .allMatch(d -> d instanceof TensorType.NumericDim)) {
@@ -856,7 +860,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                                   : composed.getDType();
                       changed |=
                           lhs.state.add(
-                              TensorType.of(dtype, composed.getDims(), composed.layout()));
+                              TensorType.of(
+                                  dtype, mergeProvenAxes(s, composed), composed.layout()));
                     }
                   break;
                 case REPLACE:
@@ -900,6 +905,51 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   changed |= lhs.origins.add(TensorOrigin.ANNOTATION);
               }
               return changed ? CHANGED : NOT_CHANGED;
+            }
+
+            /**
+             * Merges a suppressed seed member's shape with the composed operand's, axis by axis,
+             * for <a href="https://github.com/wala/ML/issues/904">wala/ML#904</a>.
+             *
+             * <p>A seed is rarely wholly proven or wholly unproven. {@code (Unresolved, Unresolved,
+             * 3)} sliced from an image knows its channel count and nothing else, and either
+             * whole-member answer throws evidence away: keeping the seed discards whatever the
+             * operand resolved on the leading axes, replacing it discards the channel. Merging
+             * loses neither.
+             *
+             * <p>The seed holds every axis it did not give up on. A feed exists to supply what the
+             * generator could not compute, so the operand is consulted exactly where the seed says
+             * {@code Unresolved} and nowhere else. {@code Dynamic} is not a gap under that rule: it
+             * records run-time {@code None}-evidence (<a
+             * href="https://github.com/wala/ML/issues/721">wala/ML#721</a>) and an operand extent
+             * must not overwrite it. Neither is {@code Symbolic}, which names a reshape placeholder
+             * the operand knows nothing about.
+             *
+             * <p>Two shapes that cannot be paired axis-wise are not merged, and the more
+             * informative one is kept whole. A rankless operand yields to the seed rather than
+             * erasing it; disagreeing ranks describe different things, and pairing them by position
+             * would invent a correspondence the operation never asserted.
+             *
+             * @param seed The suppressed seed member.
+             * @param composed The composed operand member.
+             * @return The merged dims.
+             */
+            private List<Dimension<?>> mergeProvenAxes(TensorType seed, TensorType composed) {
+              List<Dimension<?>> seedDims = seed.getDims();
+              List<Dimension<?>> operandDims = composed.getDims();
+
+              if (seedDims == null) return operandDims;
+              if (operandDims == null || seedDims.size() != operandDims.size()) return seedDims;
+
+              List<Dimension<?>> merged = new ArrayList<>(seedDims.size());
+
+              for (int i = 0; i < seedDims.size(); i++) {
+                Dimension<?> seedDim = seedDims.get(i);
+                merged.add(
+                    seedDim instanceof TensorType.UnresolvedDim ? operandDims.get(i) : seedDim);
+              }
+
+              return merged;
             }
 
             /**
