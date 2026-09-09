@@ -1356,11 +1356,15 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * A {@code tf.slice} whose bounds are genuinely dynamic still knows its channel count, and that
-   * axis must survive being returned from the function that computes it. Read inside the callee the
-   * crop is {@code (Unresolved, Unresolved, 3)}; read at the caller, bound from the same function's
-   * return, every axis is {@code Unresolved}. The slice is not the problem and neither is the cast
-   * downstream of it, whose operand arrives already degraded.
+   * A {@code tf.slice} degrades an axis it cannot have changed. The crop's bounds come from {@code
+   * sample_distorted_bounding_box}, so the two spatial extents are genuinely unknowable, but the
+   * channel axis is taken in full and its size is fixed by the operand. Every axis comes back
+   * {@code Unresolved} regardless.
+   *
+   * <p>The degradation is uniform rather than positional: the same {@code Unresolved} triple is
+   * read at the callee's own sink, at a caller binding the return to a local, and at a caller
+   * passing a parameter through. No route preserves the channel, so nothing about the
+   * interprocedural return is implicated.
    *
    * <p>TODO: Remove the expected {@link AssertionError} once <a
    * href="https://github.com/wala/ML/issues/905">wala/ML#905</a> is fixed.
@@ -1368,7 +1372,7 @@ public class TestMisc extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   @Test(expected = AssertionError.class)
-  public void testSliceKeepsResolvedAxisAcrossReturn() throws Exception {
+  public void testSliceKeepsFullyTakenAxis() throws Exception {
     test(
         new String[] {"sidecar_proj/driver_image.py"},
         "driver_image.py",
@@ -1385,10 +1389,10 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * The companion to {@link #testSliceKeepsResolvedAxisAcrossReturn()}, pinning the other side of
-   * the cast. A cast changes the dtype and nothing else, so its result must carry its operand's
-   * shape exactly. It does, which is what exonerates the cast: both sides are equally degraded and
-   * the loss is upstream of it.
+   * The companion to {@link #testSliceKeepsFullyTakenAxis()}, pinning the other side of the cast. A
+   * cast changes the dtype and nothing else, so its result must carry its operand's shape exactly.
+   * It does, which is what exonerates the cast: both sides are equally degraded and the loss is
+   * upstream of it.
    *
    * @throws Exception On analysis error.
    */
@@ -1406,6 +1410,32 @@ public class TestMisc extends AbstractTensorTest {
             Set.of(
                 new TensorType(
                     FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The control for {@link #testSliceKeepsFullyTakenAxis()}: the same crop reached through a
+   * parameter rather than a module-scope global degrades identically. Without this the blocked test
+   * above would be equally consistent with a caller-side or argument-origin cause, and the
+   * degradation would look positional when it is not.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testSliceDegradesIdenticallyThroughParameter() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_crop_from_param",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
                     asList(
                         UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }

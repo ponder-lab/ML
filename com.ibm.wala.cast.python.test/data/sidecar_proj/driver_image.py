@@ -43,6 +43,16 @@ def decoded_chain():
     consume_decoded(distorted_random_crop(decoded))
 
 
+def consume_crop_from_param(t):
+    pass
+
+
+def crop_chain_param(image):
+    # The contrast for wala/ML#905: the SAME return, bound at a caller, differing only in whether
+    # the crop's argument is this function's parameter or a module-scope global.
+    consume_crop_from_param(distorted_random_crop(image))
+
+
 def consume_cast(t):
     pass
 
@@ -60,6 +70,7 @@ def cast_chain():
 
 
 cast_chain()
+crop_chain_param(img_array)
 
 direct = random_flip_left_right(img_array)
 chained = transform_image(img_array)
