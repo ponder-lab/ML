@@ -1356,15 +1356,11 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * A {@code tf.cast} must not change its operand's shape. Casting the distorted crop, whose
-   * extents are genuinely dynamic but whose channel count is not, currently degrades the resolved
-   * channel axis along with the rest, so a fact the analysis held one instruction earlier is lost
-   * across a dtype change.
-   *
-   * <p>The cast's own seed is {@code (Unresolved, Unresolved, Unresolved)}: uninformative, but
-   * ranked. The mode selection asks for unknown RANK, reads every axis as proven, and never
-   * requests the feed that would consult the better-resolved operand. The cast declares exactly the
-   * right channel ({@code SHAPE_ONLY}) and is never asked to use it.
+   * A {@code tf.slice} whose bounds are genuinely dynamic still knows its channel count, and that
+   * axis must survive being returned from the function that computes it. Read inside the callee the
+   * crop is {@code (Unresolved, Unresolved, 3)}; read at the caller, bound from the same function's
+   * return, every axis is {@code Unresolved}. The slice is not the problem and neither is the cast
+   * downstream of it, whose operand arrives already degraded.
    *
    * <p>TODO: Remove the expected {@link AssertionError} once <a
    * href="https://github.com/wala/ML/issues/905">wala/ML#905</a> is fixed.
@@ -1372,7 +1368,32 @@ public class TestMisc extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   @Test(expected = AssertionError.class)
-  public void testCastKeepsResolvedAxis() throws Exception {
+  public void testSliceKeepsResolvedAxisAcrossReturn() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_crop",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The companion to {@link #testSliceKeepsResolvedAxisAcrossReturn()}, pinning the other side of
+   * the cast. A cast changes the dtype and nothing else, so its result must carry its operand's
+   * shape exactly. It does, which is what exonerates the cast: both sides are equally degraded and
+   * the loss is upstream of it.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testCastPreservesOperandShape() throws Exception {
     test(
         new String[] {"sidecar_proj/driver_image.py"},
         "driver_image.py",
@@ -1385,6 +1406,7 @@ public class TestMisc extends AbstractTensorTest {
             Set.of(
                 new TensorType(
                     FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 }

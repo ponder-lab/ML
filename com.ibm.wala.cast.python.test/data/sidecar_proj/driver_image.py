@@ -47,10 +47,16 @@ def consume_cast(t):
     pass
 
 
+def consume_crop(t):
+    pass
+
+
 def cast_chain():
-    # wala/ML#904 probe: the cast's own seed knows the channel count and nothing else, while its
-    # operand carries the annotated extents. Neither shape dominates the other.
-    consume_cast(tf.cast(distorted_random_crop(img_array), tf.float32))
+    # wala/ML#905: the crop's own result is read on its way into the cast, so the operand the cast
+    # degrades is pinned separately rather than inferred from the other sink's union.
+    cropped = distorted_random_crop(img_array)
+    consume_crop(cropped)
+    consume_cast(tf.cast(cropped, tf.float32))
 
 
 cast_chain()
