@@ -1356,15 +1356,15 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * A {@code tf.slice} degrades an axis it cannot have changed. The crop's bounds come from {@code
-   * sample_distorted_bounding_box}, so the two spatial extents are genuinely unknowable, but the
-   * channel axis is taken in full and its size is fixed by the operand. Every axis comes back
-   * {@code Unresolved} regardless.
+   * A {@code tf.slice} keeps an axis it takes in full, but only when it can see the input's shape
+   * for itself. The crop's bounds come from {@code sample_distorted_bounding_box}, whose documented
+   * contract makes the channel axis fully taken, and the wala/ML#844 arm keeps that axis from the
+   * input. Over an input whose shape arrives from a type annotation the arm has no input shape to
+   * keep and the axis degrades with the rest.
    *
-   * <p>The degradation is uniform rather than positional: the same {@code Unresolved} triple is
-   * read at the callee's own sink, at a caller binding the return to a local, and at a caller
-   * passing a parameter through. No route preserves the channel, so nothing about the
-   * interprocedural return is implicated.
+   * <p>The discriminator is the input, not the crop: {@link
+   * #testSliceKeepsFullyTakenAxisWhenInputIsInferred()} runs the same call on an input inference
+   * can read and recovers the channel.
    *
    * <p>TODO: Remove the expected {@link AssertionError} once <a
    * href="https://github.com/wala/ML/issues/905">wala/ML#905</a> is fixed.
@@ -1377,6 +1377,31 @@ public class TestMisc extends AbstractTensorTest {
         new String[] {"sidecar_proj/driver_image.py"},
         "driver_image.py",
         "consume_crop",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * The positive control for {@link #testSliceKeepsFullyTakenAxis()}: the same crop, in the same
+   * file, over an input inference can read for itself. The channel survives, so the crop contract
+   * is not broken and the bounds are not at fault. What the blocked test above measures is the
+   * arm's inability to reach a shape that arrives by annotation rather than by inference.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testSliceKeepsFullyTakenAxisWhenInputIsInferred() throws Exception {
+    test(
+        new String[] {"sidecar_proj/driver_image.py"},
+        "driver_image.py",
+        "consume_crop_literal",
         "sidecar_proj",
         1,
         1,

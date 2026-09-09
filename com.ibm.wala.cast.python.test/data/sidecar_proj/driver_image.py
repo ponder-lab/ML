@@ -43,6 +43,20 @@ def decoded_chain():
     consume_decoded(distorted_random_crop(decoded))
 
 
+literal_array = np.ones((640, 480, 3), dtype=np.uint8)
+
+
+def consume_crop_literal(t):
+    pass
+
+
+def crop_chain_literal():
+    # The control for wala/ML#905: the same crop over an input inference can see for itself, rather
+    # than one whose shape is supplied. If the channel survives here and nowhere else, what defeats
+    # the crop contract is where the input's shape comes from.
+    consume_crop_literal(distorted_random_crop(literal_array))
+
+
 def consume_crop_from_param(t):
     pass
 
@@ -71,6 +85,7 @@ def cast_chain():
 
 cast_chain()
 crop_chain_param(img_array)
+crop_chain_literal()
 
 direct = random_flip_left_right(img_array)
 chained = transform_image(img_array)
