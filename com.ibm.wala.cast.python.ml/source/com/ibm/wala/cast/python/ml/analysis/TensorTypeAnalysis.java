@@ -835,7 +835,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 case SHAPE_FILL:
                   for (TensorType composed : this.composeOperandMembers(rhs))
                     for (TensorType s : this.plan.seedMembers()) {
-                      if (s.getDims() != null) {
+                      // wala/ML#904 PROPOSAL, gate 2 of 2. Keep the seed only when every axis is
+                      // PROVEN; a seed carrying uninformative-but-ranked dims previously won here
+                      // and the operand's shape was discarded.
+                      if (s.getDims() != null
+                          && s.getDims().stream()
+                              .allMatch(d -> d instanceof TensorType.NumericDim)) {
                         changed |= lhs.state.add(s);
                         continue;
                       }

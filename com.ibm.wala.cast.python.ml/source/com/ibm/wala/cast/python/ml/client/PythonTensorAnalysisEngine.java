@@ -2209,7 +2209,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // seeds under it stay untouched.
         if (types == null) continue;
         boolean anyProvenDType = types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN);
-        boolean anyTopShape = types.stream().anyMatch(t -> t.getDims() == null);
+        // wala/ML#904 PROPOSAL, gate 1 of 2. The question this serves is "does any member have
+        // an UNPROVEN axis", and the test asks "does any member have unknown RANK". An
+        // all-`Unresolved` member is ranked, so it reads as proven and no feed is requested.
+        // Flipping this alone is INERT: the SHAPE_FILL transfer applies the same wrong test.
+        boolean anyTopShape =
+            types.stream()
+                .anyMatch(
+                    t ->
+                        t.getDims() == null
+                            || t.getDims().stream().anyMatch(d -> !(d instanceof NumericDim)));
         TensorTypeAnalysis.FeedMode mode;
         if (types.isEmpty())
           // A ⊥ seed (nothing provable at evaluation time) still registers its declared feed:
