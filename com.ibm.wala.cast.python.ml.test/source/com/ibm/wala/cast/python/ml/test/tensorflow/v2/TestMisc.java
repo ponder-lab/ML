@@ -1354,4 +1354,77 @@ public class TestMisc extends AbstractTensorTest {
         warnings.stream()
             .noneMatch(w -> w.contains("driver_dynamic_extent") && w.contains("conflicts")));
   }
+
+  /**
+   * A resolvable argument outranks the declaration. Where inference can read the call site it gets
+   * the concrete {@code (4, 7)}, which is strictly better than the declared {@code (None, None)},
+   * so a declaration must never overwrite it.
+   *
+   * <p>The positive control for the two blocked tests below: in the same file and the same frame,
+   * parameters the analysis types completely.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testResolvableArgumentOutranksDeclaredSignature() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_declared",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4, 7))));
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_helper",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4, 7))));
+  }
+
+  /**
+   * A declared {@code input_signature} pins its parameter's RANK. Where the argument is
+   * unresolvable the declaration is the only source of one, and it is not consulted: the parameter
+   * comes back rankless carrying only its dtype.
+   *
+   * <p>The recoverable fact is rank 2 with both axes carrying run-time {@code None} evidence, which
+   * is {@code Dynamic} under the <a href="https://github.com/wala/ML/issues/721">wala/ML#721</a>
+   * convention. Concrete extents are NOT recoverable here, so a fix that produces them has done
+   * something other than read the declaration.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/810">wala/ML#810</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDeclaredSignatureGivesRankToOpaqueArgument() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_opaque_declared",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The rank a declaration supplies must reach what the decorated function hands on. That is the
+   * whole point: the parameters this is filed for are one hop downstream of the decorated one, not
+   * the decorated one itself.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/810">wala/ML#810</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDeclaredSignatureRankReachesCallee() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_opaque_helper",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+  }
 }
