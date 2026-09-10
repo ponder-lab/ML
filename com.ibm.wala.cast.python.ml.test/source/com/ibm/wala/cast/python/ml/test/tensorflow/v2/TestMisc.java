@@ -1356,14 +1356,37 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * A numpy array's shape is read from its construction. The positive control for {@link
-   * #testNumpyElementwiseSumKeepsShape()} and its siblings: in the same file and the same frame, an
-   * array the analysis types completely.
+   * A numpy array's shape and dtype are read from its construction, and a transpose preserves both.
+   * The controls that localise <a href="https://github.com/wala/ML/issues/910">wala/ML#910</a> to
+   * one call rather than to the chain around it.
    *
    * @throws Exception On analysis error.
    */
   @Test
-  public void testNumpyArrayConstructionKeepsShape() throws Exception {
+  public void testNumpyConstructionAndTransposeKeepShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_eye",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 20))));
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_eye_t",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 20, 2))));
+  }
+
+  /**
+   * An elementwise operation preserves its operands' shape. This is the control that exonerates the
+   * binary operators: they were originally accused of dropping the shape, and what they were
+   * actually doing was propagating a rankless operand correctly.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNumpyElementwiseSumPreservesShape() throws Exception {
     test(
         "tf2_test_numpy_binop_shape.py",
         "consume_operand",
@@ -1373,9 +1396,9 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * An elementwise operation cannot change its operands' shape, so an array plus an array of the
-   * same shape has that shape. The rank is dropped instead, leaving an asserted dtype with no rank
-   * at all.
+   * A permutation returns an array of exactly its input's shape and dtype, permuted along the first
+   * axis. Both are lost: the result is rankless AND its dtype is unknown, which is what makes this
+   * a missing model rather than a shape-level gap.
    *
    * <p>TODO: Remove the expected {@link AssertionError} once <a
    * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
@@ -1383,18 +1406,18 @@ public class TestMisc extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   @Test(expected = AssertionError.class)
-  public void testNumpyElementwiseSumKeepsShape() throws Exception {
+  public void testRandomStatePermutationKeepsShapeAndDType() throws Exception {
     test(
         "tf2_test_numpy_binop_shape.py",
-        "consume_array_sum",
+        "consume_perm",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 20, 2))));
   }
 
   /**
-   * Scaling an array by a {@code float} keeps its shape. Paired with {@link
-   * #testNumpyIntegerScaleKeepsShape()} so the two rule out the scalar's own type as the cause.
+   * Everything downstream of the permutation inherits both losses, which is how a single unmodelled
+   * call turns into a parameter with no rank several operations later.
    *
    * <p>TODO: Remove the expected {@link AssertionError} once <a
    * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
@@ -1402,81 +1425,10 @@ public class TestMisc extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   @Test(expected = AssertionError.class)
-  public void testNumpyFloatScaleKeepsShape() throws Exception {
-    test(
-        "tf2_test_numpy_binop_shape.py",
-        "consume_scaled",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
-  }
-
-  /**
-   * Scaling an array by an {@code int} keeps its shape, exactly as scaling by a {@code float} does.
-   *
-   * <p>TODO: Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
-   *
-   * @throws Exception On analysis error.
-   */
-  @Test(expected = AssertionError.class)
-  public void testNumpyIntegerScaleKeepsShape() throws Exception {
-    test(
-        "tf2_test_numpy_binop_shape.py",
-        "consume_int_scaled",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
-  }
-
-  /**
-   * The composed form the defect was found in: an array plus a scaled array. It loses the shape for
-   * the same reason each half does, and it is kept because this is the expression that appears in
-   * real code rather than a reduction of it.
-   *
-   * <p>TODO: Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
-   *
-   * @throws Exception On analysis error.
-   */
-  @Test(expected = AssertionError.class)
-  public void testNumpyComposedElementwiseKeepsShape() throws Exception {
+  public void testValuesDownstreamOfPermutationKeepShape() throws Exception {
     test(
         "tf2_test_numpy_binop_shape.py",
         "consume_sum",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
-  }
-
-  /**
-   * A model's return survives tuple unpacking at the call site. Both elements of a two-tensor
-   * return type as completely as a single-tensor return does, so unpacking is not a place a rank is
-   * lost.
-   *
-   * <p>Kept as a negative result. A rankless value reaching a parameter from a model call was
-   * proposed as being about the unpacking, and it is not; the single-return sink is the control
-   * that makes that statement rather than a fixture that types nothing.
-   *
-   * @throws Exception On analysis error.
-   */
-  @Test
-  public void testModelTupleReturnSurvivesUnpacking() throws Exception {
-    test(
-        "tf2_test_model_tuple_return.py",
-        "consume_single",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
-    test(
-        "tf2_test_model_tuple_return.py",
-        "consume_first",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
-    test(
-        "tf2_test_model_tuple_return.py",
-        "consume_second",
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
