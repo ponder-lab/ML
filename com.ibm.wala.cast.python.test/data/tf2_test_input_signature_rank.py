@@ -59,3 +59,29 @@ assert opaque.shape == (4, 7)
 
 out2 = opaque_step(opaque, opaque)
 assert out2.shape == (4, 7)
+
+
+# A SECOND decorated function with a DIFFERENT declared rank, also called on an unresolvable
+# argument. The two declarations differ (rank 2 vs rank 3), so a recognizer that keyed on anything
+# shared — the signature list, or "some input_signature in the file" — would hand one function the
+# other's rank. Under per-function keying each gets its own, which rank 2 vs rank 3 makes unmissable.
+other_signature = [
+    tf.TensorSpec(shape=(None, None, None), dtype=tf.int32, name="Volume"),
+]
+
+
+def consume_other(a):
+    pass
+
+
+@tf.function(input_signature=other_signature)
+def other_step(x):
+    consume_other(x)
+    return x
+
+
+opaque3 = tf.constant(rng.permutation(np.ones((4, 5, 6)).T), dtype=tf.int32)
+assert opaque3.shape == (6, 5, 4)
+
+out3 = other_step(opaque3)
+assert out3.shape == (6, 5, 4)

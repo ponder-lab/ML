@@ -1391,12 +1391,9 @@ public class TestMisc extends AbstractTensorTest {
    * convention. Concrete extents are NOT recoverable here, so a fix that produces them has done
    * something other than read the declaration.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/810">wala/ML#810</a> is fixed.
-   *
    * @throws Exception On analysis error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDeclaredSignatureGivesRankToOpaqueArgument() throws Exception {
     test(
         "tf2_test_input_signature_rank.py",
@@ -1412,12 +1409,9 @@ public class TestMisc extends AbstractTensorTest {
    * whole point: the parameters this is filed for are one hop downstream of the decorated one, not
    * the decorated one itself.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/810">wala/ML#810</a> is fixed.
-   *
    * @throws Exception On analysis error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDeclaredSignatureRankReachesCallee() throws Exception {
     test(
         "tf2_test_input_signature_rank.py",
@@ -1426,5 +1420,32 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(
             2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The declaration a parameter receives is its OWN function's, never a sibling's. Two decorated
+   * functions declare different ranks (rank 2 and rank 3) through separate {@code input_signature}
+   * lists, both called on unresolvable arguments; each parameter must come back at its own declared
+   * rank. A recognizer that keyed on anything shared would hand one function the other's rank,
+   * which this catches as rank 3 where rank 2 is expected (and vice versa in {@link
+   * #testDeclaredSignatureGivesRankToOpaqueArgument}). The witness in {@code
+   * testDeclaredSignatureGivesRankToOpaqueArgument} cannot see this: its two functions share one
+   * declaration, so a mis-keyed recognizer reaching the wrong one still produces the right rank.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testDeclaredSignatureRankIsPerFunction() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_other",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    INT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
   }
 }

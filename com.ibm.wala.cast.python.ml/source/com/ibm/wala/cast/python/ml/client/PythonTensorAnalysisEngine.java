@@ -18,6 +18,7 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonCodeBody;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -33,6 +34,7 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -866,6 +868,25 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointerKey pointerKey, TensorGenerator.ShapeUnresolutionCause cause) {}
 
   private final List<ShapeAnnotationCandidate> shapeAnnotationCandidates = new ArrayList<>();
+
+  /**
+   * Whether the given node's function is decorated with {@code @tf.function} (with or without an
+   * {@code input_signature}). A cheap name-level gate — the mined {@link Util.DecoratorCall}
+   * carries the decorator name even when its {@code input_signature} argument mines as unmineable —
+   * so the wala/ML#810 signature seed scans the call graph only for functions that could carry one.
+   *
+   * @param node The node whose declaring function is examined.
+   * @return {@code true} iff a {@code *.function} (or bare {@code function}) decorator is applied.
+   */
+  private static boolean isTfFunctionDecorated(CGNode node) {
+    if (!(node.getMethod().getDeclaringClass() instanceof PythonCodeBody)) return false;
+    for (Util.DecoratorCall decoratorCall :
+        ((PythonCodeBody) node.getMethod().getDeclaringClass()).getDecoratorCalls()) {
+      String name = decoratorCall.name();
+      if (name.equals("function") || name.endsWith(".function")) return true;
+    }
+    return false;
+  }
 
   /**
    * Identifies the dataflow sources for tensor analysis.
@@ -2374,6 +2395,64 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // that fails at that point and refers back here (wala/ML#901).
       for (PointsToSetVariable p : parameters)
         initOrigins.put(p, EnumSet.of(TensorOrigin.PARAMETER));
+
+      // A parameter of an `@tf.function(input_signature=...)`-decorated function is not a dataflow
+      // source (it has no defining instruction), so its declared-rank seed — resolved in getShapes
+      // when the runtime argument does not resolve (wala/ML#810) — would never reach the overlay.
+      // Seed it here. getTensorTypes fires the signature seed only on a provably-final rankless
+      // observation (the same gate the model.build contract uses), so a resolvable parameter
+      // re-seeds its own resolved type (harmless) and a rankless one receives the declared rank,
+      // which then propagates to the callees it is handed to.
+      for (PointsToSetVariable p : parameters) {
+        if (init.containsKey(p) || setCalls.containsKey(p)) continue;
+        LocalPointerKey lpk = (LocalPointerKey) p.getPointerKey();
+        if (!isTfFunctionDecorated(lpk.getNode())) continue;
+
+        // Pin only where the runtime argument did not resolve a rank. getTensorTypes here is the
+        // GENERATOR-QUERY resolution, settled by the wala/ML#365 worklist that runs BEFORE the
+        // TensorTypeAnalysis overlay is solved — NOT a post-fixpoint value. Every member ⊤-shaped
+        // means no caller supplied a rank the PA/SSA substrate can see, so the declaration applies;
+        // a ranked member means a caller did, and the declared `None` extents are looser than that,
+        // so leave it. Because this cannot see an overlay-only rank, a parameter whose only rank
+        // arrives through the overlay reads as ⊤ here and WOULD be pinned, and the SetShapeOp pin
+        // then replaces that overlay rank and blocks its restoration. So the safety of this arm is
+        // empirical, not structural: it rests on the corpus control set showing no such parameter
+        // moves (the wala/ML#810 residual), not on any bound from the mechanism. An empty/absent
+        // result carries no dtype to attach the declared shape to, so there is nothing to pin.
+        Set<TensorType> current = getTensorTypes(p, builder);
+        if (current == null || current.isEmpty()) continue;
+        if (!current.stream().allMatch(t -> t.getDims() == null)) continue;
+
+        TensorGenerator generator = getGenerator(p, builder);
+        if (generator == null) continue;
+        Set<List<Dimension<?>>> declaredShapes =
+            generator.signatureSeedForDecoratedParam(builder, lpk.getNode(), lpk.getValueNumber());
+        if (declaredShapes == null || declaredShapes.isEmpty()) continue;
+
+        // Pin via SetShapeOp (set_shapes), not a plain init union: the unresolvable argument still
+        // flows a ⊤ member into the parameter, and the declaration is authoritative for the rank
+        // the
+        // argument could not supply — so the pin replaces that ⊤ rather than coexisting with it
+        // (wala/ML#810). The declared shape (a `None`-extent rank, wala/ML#721) carries the dtype
+        // the
+        // analysis already resolved; the ⊤-shaped members hold it.
+        Set<TensorType> pinned = HashSetFactory.make();
+        for (List<Dimension<?>> shape : declaredShapes)
+          for (TensorType t : current) pinned.add(new TensorType(t.getCellType(), shape));
+        setCalls.put(p, pinned);
+        // Let the SetShapeOp edge transfer be the sole source of state and origin for the pinned
+        // parameter, as the receiver-stripping above does for the other set_shapes receivers.
+        init.remove(p);
+        initOrigins.remove(p);
+        Set<TensorType> logPinned = pinned;
+        LOGGER.fine(
+            () ->
+                "wala/ML#810 signature-pinned parameter: "
+                    + describe(p)
+                    + " -> "
+                    + logPinned
+                    + ".");
+      }
 
       // A Keras layer casts its first floating-point argument to the layer's compute dtype before
       // the body runs (wala/ML#821), so the caller's dtype is not the parameter's and propagating

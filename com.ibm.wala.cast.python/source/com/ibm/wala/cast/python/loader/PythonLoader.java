@@ -310,9 +310,13 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     /**
      * Returns the decorators applied to this function with their mined argument names, in
      * declaration order (wala/ML#868). A bare decorator appears with an empty argument list (the
-     * front end normalizes bare application to a zero-argument call in the CAst). Note that
-     * decoration is not applied in IR at all (the decorator is never invoked and the raw function
-     * is bound to its name), so this metadata is the only place a decorator's arguments survive to.
+     * front end normalizes bare application to a zero-argument call in the CAst). Decoration IS
+     * applied in IR: {@code PythonCAstToIRTranslator} invokes the decorator expression on the raw
+     * function object and rebinds the name to the result. So this metadata is a name-level
+     * convenience, not the sole survivor of a decorator's arguments &mdash; an argument that does
+     * not mine to a bare name (a keyword argument, a call expression) is recorded here as the
+     * unmineable marker and survives only in the IR, where wala/ML#810 reads
+     * {@code @tf.function(input_signature=...)} from the decoration invokes.
      *
      * @return The decorator applications, empty when there are none.
      */

@@ -310,6 +310,16 @@ public abstract class TensorGenerator {
       BUILD_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * Memo of the per-method declared {@code @tf.function(input_signature=[...])} shapes per builder
+   * (wala/ML#810). Element {@code i} of the payload is the declared shape set for the decorated
+   * function's {@code i}-th positional parameter. Like {@link #BUILD_CONTRACT_CACHE}, the
+   * recognizer scans the whole call graph, so the {@link Optional} caches the negative result too.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<IMethod, Optional<List<Set<List<Dimension<?>>>>>>>
+      SIGNATURE_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
    * Why an allocator's shape argument did not resolve, triaging the wala/ML#370 annotation worklist
    * (wala/ML#735). The "candidate for a wala/ML#370 shape annotation" suggestion is honest only for
    * {@link #CONTENT_DEPENDENT}: #370 recovers shapes that depend on runtime content (file loaders,
@@ -386,6 +396,7 @@ public abstract class TensorGenerator {
   public static void clearCaches(PropagationCallGraphBuilder builder) {
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
+    SIGNATURE_CONTRACT_CACHE.remove(builder);
     SHAPE_ANNOTATION_CANDIDATES.remove(builder);
   }
 
@@ -1294,6 +1305,173 @@ public abstract class TensorGenerator {
       cache.put(key, memo);
     }
     return memo.orElse(null);
+  }
+
+  /**
+   * Applies the declared {@code @tf.function(input_signature=[tf.TensorSpec(shape=...), ...])}
+   * contract seed when the given value is a parameter of the decorated function (wala/ML#810). The
+   * decorator pins each parameter's RANK: a declared {@code None} axis carries run-time
+   * none-evidence and is {@link TensorType.DynamicDim} (wala/ML#721), while its extents are not
+   * recoverable. It is a sound seed exactly where nothing else supplies a rank, so the callers gate
+   * it on a provably-final unresolved observation, exactly as with {@link
+   * #contractSeedForCallInput}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number being resolved.
+   * @return The declared shapes for this parameter, or {@code null} when the enclosing function is
+   *     not {@code input_signature}-decorated, the value is not a parameter, or none resolves.
+   */
+  public Set<List<Dimension<?>>> signatureSeedForDecoratedParam(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    if (node.getDU() == null || node.getIR() == null) return null;
+    if (node.getDU().getDef(valueNumber) != null) return null; // Not a parameter.
+
+    List<Set<List<Dimension<?>>>> perParameter = this.declaredSignatureShapes(builder, node);
+    if (perParameter == null) return null;
+
+    // input_signature declares the function's user parameters, which are the TRAILING formals: a
+    // free function has one leading slot (the function object), a method two (object and receiver).
+    // So element i is getParameter(numParams - k + i), where k is the signature length. Anchoring
+    // on
+    // the trailing formals handles both forms without assuming the leading count.
+    int numParameters = node.getIR().getNumberOfParameters();
+    int leading = numParameters - perParameter.size();
+    if (leading < 0) return null;
+    int paramIndex = -1;
+    for (int p = leading; p < numParameters; p++)
+      if (node.getIR().getParameter(p) == valueNumber) {
+        paramIndex = p - leading;
+        break;
+      }
+    if (paramIndex < 0) return null;
+    Set<List<Dimension<?>>> shapes = perParameter.get(paramIndex);
+    return (shapes == null || shapes.isEmpty()) ? null : shapes;
+  }
+
+  /**
+   * Resolves, memoized per method, the per-parameter shapes a {@code @tf.function(input_signature=
+   * [...])} decorator declares for the given decorated function body, or {@code null} when the body
+   * is not so decorated or the signature does not resolve. Element {@code i} of the result is the
+   * declared shape set for the function's {@code i}-th positional parameter.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The decorated function's code body.
+   * @return The per-parameter declared shapes, or {@code null}.
+   */
+  private List<Set<List<Dimension<?>>>> declaredSignatureShapes(
+      PropagationCallGraphBuilder builder, CGNode node) {
+    Map<IMethod, Optional<List<Set<List<Dimension<?>>>>>> cache =
+        SIGNATURE_CONTRACT_CACHE.computeIfAbsent(
+            builder, b -> Collections.synchronizedMap(new HashMap<>()));
+    IMethod key = node.getMethod();
+    Optional<List<Set<List<Dimension<?>>>>> memo = cache.get(key);
+    if (memo == null) {
+      cache.put(key, Optional.empty()); // Re-entry sentinel, mirroring contractSeedForCallInput.
+      List<Set<List<Dimension<?>>>> computed = this.explicitSignatureShapes(builder, node);
+      LOGGER.fine(
+          () -> "Signature contract consulted for " + describe(node) + " -> " + computed + ".");
+      memo = Optional.ofNullable(computed);
+      cache.put(key, memo);
+    }
+    return memo.orElse(null);
+  }
+
+  /**
+   * Recognizes the {@code @tf.function(input_signature=[...])} decoration of the given function
+   * body and resolves its declared per-parameter shapes. Decoration is applied in IR as two
+   * invokes: a {@code tf.function(input_signature=...)} factory call producing a holder, then a
+   * {@code holder(rawfunc)} application whose argument is the {@code new} of the function's own
+   * body class. Keying on the function's own body class makes the association one-to-one, so a
+   * signature list shared across two decorated functions does not conflate them.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The decorated function's code body.
+   * @return Element {@code i} = the declared shape set for positional parameter {@code i}, or
+   *     {@code null} when no such decoration resolves.
+   */
+  private List<Set<List<Dimension<?>>>> explicitSignatureShapes(
+      PropagationCallGraphBuilder builder, CGNode node) {
+    TypeReference functionBodyClass = node.getMethod().getDeclaringClass().getReference();
+    for (CGNode caller : builder.getCallGraph()) {
+      if (caller.getIR() == null || caller.getDU() == null) continue;
+      for (Iterator<SSAInstruction> it = caller.getIR().iterateAllInstructions(); it.hasNext(); ) {
+        SSAInstruction inst = it.next();
+        if (!(inst instanceof PythonInvokeInstruction)) continue;
+        PythonInvokeInstruction application = (PythonInvokeInstruction) inst;
+        // The decoration application `holder(rawfunc)`: use 0 is the holder, use 1 the raw
+        // function.
+        if (application.getNumberOfUses() < 2) continue;
+        SSAInstruction rawFunctionDef = caller.getDU().getDef(application.getUse(1));
+        if (!(rawFunctionDef instanceof SSANewInstruction)) continue;
+        if (!((SSANewInstruction) rawFunctionDef).getConcreteType().equals(functionBodyClass))
+          continue;
+
+        // use 0 is the holder; its def is the tf.function factory invoke carrying input_signature.
+        SSAInstruction holderDef = caller.getDU().getDef(application.getUse(0));
+        if (!(holderDef instanceof PythonInvokeInstruction)) continue;
+        int sigVn = ((PythonInvokeInstruction) holderDef).getUse("input_signature");
+        if (sigVn <= 0) continue;
+
+        List<Set<List<Dimension<?>>>> perParameter =
+            this.perParameterSpecShapes(builder, caller, sigVn);
+        if (perParameter != null) return perParameter;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Resolves an {@code input_signature} list, given the value number holding it in {@code caller},
+   * into per-parameter declared shapes: element {@code i} is the shape of the {@code i}-th list
+   * element's {@code tf.TensorSpec}. Each element is indexed and resolved separately (the
+   * parameters may declare different ranks), rather than aggregating the list as one shape.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param caller The node whose IR defines {@code signatureValueNumber}.
+   * @param signatureValueNumber The value number of the {@code input_signature} list.
+   * @return Per-parameter declared shapes, or {@code null} when the list does not resolve.
+   */
+  private List<Set<List<Dimension<?>>>> perParameterSpecShapes(
+      PropagationCallGraphBuilder builder, CGNode caller, int signatureValueNumber) {
+    PointerKey listKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(caller, signatureValueNumber);
+    OrdinalSet<InstanceKey> listPointsTo = builder.getPointerAnalysis().getPointsToSet(listKey);
+    if (listPointsTo == null || listPointsTo.isEmpty()) return null;
+
+    List<Set<List<Dimension<?>>>> perParameter = new ArrayList<>();
+    for (InstanceKey listIK : listPointsTo) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(listIK);
+      if (asin == null) continue;
+      OrdinalSet<InstanceKey> catalog =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+      int elementCount = integerCatalogSize(catalog);
+      for (int i = 0; i < elementCount; i++) {
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(Integer.toString(i)), Root);
+        IField field = builder.getClassHierarchy().resolveField(subscript);
+        if (field == null) continue;
+        OrdinalSet<InstanceKey> elementPointsTo =
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(builder.getPointerKeyForInstanceField(asin, field));
+        if (elementPointsTo == null || elementPointsTo.isEmpty()) continue;
+        Set<List<Dimension<?>>> specShapes =
+            this.getShapesFromShapeArgument(builder, elementPointsTo);
+        if (specShapes == null || specShapes.isEmpty()) continue;
+        while (perParameter.size() <= i) perParameter.add(null);
+        if (perParameter.get(i) == null) perParameter.set(i, HashSetFactory.make());
+        perParameter.get(i).addAll(specShapes);
+      }
+    }
+    return perParameter.isEmpty() ? null : perParameter;
   }
 
   /**
