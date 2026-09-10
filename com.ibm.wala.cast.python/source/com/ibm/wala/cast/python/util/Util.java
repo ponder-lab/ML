@@ -36,7 +36,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
@@ -241,7 +243,20 @@ public class Util {
    * @param argumentNames The mined argument names, in call order, one entry per positional
    *     argument; empty for a bare or zero-argument application.
    */
-  public record DecoratorCall(String name, List<String> argumentNames) {}
+  public record DecoratorCall(
+      String name, List<String> argumentNames, Map<String, String> keywordArgumentNames) {
+    /**
+     * A decorator with no keyword-argument names to record. The keyword map defaults to empty, so
+     * this stays equal to the canonical form for a decorator that genuinely has none — existing
+     * callers and expectations that predate the keyword channel (wala/ML#810) need no change.
+     *
+     * @param name The decorator's mined name.
+     * @param argumentNames The per-argument mined names.
+     */
+    public DecoratorCall(String name, List<String> argumentNames) {
+      this(name, argumentNames, Map.of());
+    }
+  }
 
   /**
    * The per-argument marker for a decorator argument that has no minable name: a call expression, a
@@ -260,7 +275,10 @@ public class Util {
    * #DYNAMIC_ANNOTATION_KEY}; {@link #getName(CAstAnnotation)} mines only the callee's name
    * segments, and this is its argument-side sibling. Only name-shaped arguments (identifiers,
    * dotted attributes) and the {@code None} constant mine to names; every other argument form
-   * yields {@link #UNMINEABLE_DECORATOR_ARGUMENT} in its position.
+   * yields {@link #UNMINEABLE_DECORATOR_ARGUMENT} in its position. A keyword argument additionally
+   * records its value's mined name in {@link DecoratorCall#keywordArgumentNames()}, keyed by the
+   * keyword, so a {@code keyword=name} binding can be resolved (wala/ML#810); the positional {@code
+   * argumentNames} are unchanged.
    *
    * @param annotations The {@link CAstAnnotation}s of a function entity, as the parser recorded
    *     them.
@@ -284,10 +302,27 @@ public class Util {
       // arguments; keyword and starred arguments arrive as ARRAY_LITERAL wrappers and mine to the
       // unmineable marker.
       List<String> argumentNames = new ArrayList<>();
-      for (int i = 2; i < node.getChildCount(); i++)
-        argumentNames.add(mineDecoratorArgumentName(node.getChild(i)));
+      Map<String, String> keywordArgumentNames = new LinkedHashMap<>();
+      for (int i = 2; i < node.getChildCount(); i++) {
+        CAstNode argument = node.getChild(i);
+        argumentNames.add(mineDecoratorArgumentName(argument));
 
-      ret.add(new DecoratorCall(name.get(), List.copyOf(argumentNames)));
+        // A keyword argument arrives as an ARRAY_LITERAL of its name constant and its value
+        // expression; capture the value's mined name keyed by the keyword, so a consumer can
+        // resolve a `keyword=name` binding (wala/ML#810). This is additive: the positional
+        // argumentNames above are unchanged (a keyword still mines to the unmineable marker there),
+        // so existing consumers see the same list and count.
+        if (argument.getKind() == CAstNode.ARRAY_LITERAL
+            && argument.getChildCount() >= 2
+            && argument.getChild(0).getValue() instanceof String)
+          keywordArgumentNames.put(
+              (String) argument.getChild(0).getValue(),
+              mineDecoratorArgumentName(argument.getChild(1)));
+      }
+
+      ret.add(
+          new DecoratorCall(
+              name.get(), List.copyOf(argumentNames), Map.copyOf(keywordArgumentNames)));
     }
 
     return ret;

@@ -1448,4 +1448,78 @@ public class TestMisc extends AbstractTensorTest {
                     INT_32,
                     asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
   }
+
+  /**
+   * A decorated METHOD receives its declared rank. A method's decorator is not applied in IR (the
+   * raw function is bound straight to the class member), so the recognizer reads the declaration
+   * from the decorator metadata, not an invoke. The control for {@link
+   * #testDeclaredSignatureResolvesModuleBindingOverAttribute}: a single signature, no name clash,
+   * so a red result there is a mis-resolution rather than the method recognizer failing to fire at
+   * all.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testDeclaredSignatureSeedsDecoratedMethod() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_simple_method",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The declaration a decorated METHOD reads is the one the decorator's name resolves to. A name is
+   * bound both at module scope (two specs, ranks 2 and 3) and as a same-named instance attribute
+   * (one spec, rank 1); the class-body decorator's bare name resolves to module scope, so the
+   * recognizer must read the two-spec module binding and index each parameter into it. Reading the
+   * one-spec attribute (or unioning both) would give the second parameter nothing and the first the
+   * wrong rank &mdash; a plausible wrong rank, not a crash. This also exercises a decorated method,
+   * whose leading formals (function object, receiver) the recognizer must skip.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testDeclaredSignatureResolvesModuleBindingOverAttribute() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_collide_a",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_collide_b",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    INT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * A name REBOUND in the module body is ambiguous — a name scan cannot tell which binding is live
+   * at the class-body decoration site — so the recognizer DECLINES rather than guess, and the
+   * parameter stays rankless. Picking a binding would write a guessed rank into a
+   * predecessor-blocking pin; declining leaves the parameter exactly as it is today. The sibling of
+   * {@link #testDeclaredSignatureResolvesModuleBindingOverAttribute}: module-versus-module, not
+   * module-versus-attribute. The expected ⊤ is what a mis-resolution would replace with a rank.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testDeclaredSignatureDeclinesReboundModuleName() throws Exception {
+    test(
+        "tf2_test_input_signature_rank.py",
+        "consume_rebound",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, null))));
+  }
 }

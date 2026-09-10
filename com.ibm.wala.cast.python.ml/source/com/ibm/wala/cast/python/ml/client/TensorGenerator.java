@@ -38,6 +38,7 @@ import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonCodeBody;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -54,6 +55,7 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -1368,9 +1370,25 @@ public abstract class TensorGenerator {
     Optional<List<Set<List<Dimension<?>>>>> memo = cache.get(key);
     if (memo == null) {
       cache.put(key, Optional.empty()); // Re-entry sentinel, mirroring contractSeedForCallInput.
-      List<Set<List<Dimension<?>>>> computed = this.explicitSignatureShapes(builder, node);
+      // A free function's decorator is applied in IR (an invoke to scan); a method's is not (the
+      // raw function is bound straight to the class member), so its declaration is read from the
+      // decorator metadata. Try both. If both resolve and DISAGREE, decline: two independent
+      // resolutions that differ are exactly the case where neither should feed a predecessor-
+      // blocking pin (wala/ML#810).
+      List<Set<List<Dimension<?>>>> fromInvoke = this.explicitSignatureShapes(builder, node);
+      List<Set<List<Dimension<?>>>> fromAnnotation =
+          this.signatureShapesFromAnnotation(builder, node);
+      List<Set<List<Dimension<?>>>> computed;
+      if (fromInvoke == null) computed = fromAnnotation;
+      else if (fromAnnotation == null || fromAnnotation.equals(fromInvoke)) computed = fromInvoke;
+      else {
+        LOGGER.fine(
+            () -> "Signature invoke/annotation disagree for " + describe(node) + "; declining.");
+        computed = null;
+      }
+      List<Set<List<Dimension<?>>>> logged = computed;
       LOGGER.fine(
-          () -> "Signature contract consulted for " + describe(node) + " -> " + computed + ".");
+          () -> "Signature contract consulted for " + describe(node) + " -> " + logged + ".");
       memo = Optional.ofNullable(computed);
       cache.put(key, memo);
     }
@@ -1422,6 +1440,100 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Resolves the {@code @tf.function(input_signature=NAME)} declaration through the decorator
+   * metadata, for the case where decoration is not applied in IR: a METHOD's decorator binds the
+   * raw function straight to the class member, leaving no invoke to scan (wala/ML#810). It fires
+   * ONLY on a bare-name value, resolved as a MODULE GLOBAL via a global-field key — the binding
+   * Python's scoping selects for a bare name in a class body, and one that cannot reach a
+   * same-named instance attribute (a different, instance-field pointer key) by construction. An
+   * {@code input_signature} that is not a bare name (an inline list, a call, or a dotted attribute
+   * of something else) DECLINES rather than resolving the nearest identifier into a
+   * predecessor-blocking pin.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The decorated function's code body.
+   * @return Element {@code i} = the declared shape set for positional parameter {@code i}, or
+   *     {@code null} when the declaration is not a resolvable bare-name module global.
+   */
+  private List<Set<List<Dimension<?>>>> signatureShapesFromAnnotation(
+      PropagationCallGraphBuilder builder, CGNode node) {
+    if (!(node.getMethod().getDeclaringClass() instanceof PythonCodeBody)) return null;
+    PythonCodeBody codeBody = (PythonCodeBody) node.getMethod().getDeclaringClass();
+    String valueName = null;
+    for (Util.DecoratorCall decoratorCall : codeBody.getDecoratorCalls()) {
+      String name = decoratorCall.name();
+      if (!name.equals("function") && !name.endsWith(".function")) continue;
+      String mined = decoratorCall.keywordArgumentNames().get("input_signature");
+      if (mined != null) {
+        valueName = mined;
+        break;
+      }
+    }
+    // Fire only on a bare name: an unmineable or dotted (attribute) value declines rather than
+    // resolving whatever identifier is nearest.
+    if (valueName == null
+        || valueName.equals(Util.UNMINEABLE_DECORATOR_ARGUMENT)
+        || valueName.indexOf('.') >= 0) return null;
+
+    // The bare name binds to module scope (the decorator runs in the class body, where `self` is
+    // unbound). Resolve it in the MODULE body: the value whose local variable name is the bare
+    // name.
+    // Scanning the module body is what enforces the scoping rule structurally — a same-named
+    // instance attribute is bound in `__init__`, a different node, so it is never reached here.
+    String className = node.getMethod().getDeclaringClass().getName().toString();
+    int slash = className.indexOf('/');
+    if (slash < 1) return null;
+    String moduleClassName = className.substring(0, slash);
+    String signatureName = valueName;
+    for (CGNode moduleNode : builder.getCallGraph()) {
+      IR ir = moduleNode.getIR();
+      if (ir == null
+          || !moduleNode
+              .getMethod()
+              .getDeclaringClass()
+              .getName()
+              .toString()
+              .equals(moduleClassName)) continue;
+      SSAInstruction[] instructions = ir.getInstructions();
+      Set<Integer> namedDefinitions = HashSetFactory.make();
+      for (int i = 0; i < instructions.length; i++) {
+        SSAInstruction inst = instructions[i];
+        if (inst == null || !inst.hasDef()) continue;
+        String[] names = ir.getLocalNames(i, inst.getDef());
+        if (names == null) continue;
+        for (String candidate : names)
+          if (signatureName.equals(candidate)) namedDefinitions.add(inst.getDef());
+      }
+      // A bare name bound more than once in the module body is ambiguous: which binding is live at
+      // the class-body decoration site is a control-flow fact a name scan cannot settle (the last
+      // in
+      // instruction order is a layout accident across mutually-exclusive branches), and picking the
+      // wrong one writes a wrong rank into a predecessor-blocking pin. Decline — the wala/ML#890
+      // reassigned-local hazard, met in a value read rather than a conflict check. Declining leaves
+      // the parameter exactly as rankless as it is today.
+      if (namedDefinitions.size() > 1) {
+        LOGGER.fine(
+            () ->
+                "Signature name "
+                    + signatureName
+                    + " is rebound in the module body; declining (wala/ML#810).");
+        return null;
+      }
+      if (namedDefinitions.isEmpty()) continue;
+      return this.perParameterSpecShapesFromPointsTo(
+          builder,
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(moduleNode, namedDefinitions.iterator().next())));
+    }
+    return null;
+  }
+
+  /**
    * Resolves an {@code input_signature} list, given the value number holding it in {@code caller},
    * into per-parameter declared shapes: element {@code i} is the shape of the {@code i}-th list
    * element's {@code tf.TensorSpec}. Each element is indexed and resolved separately (the
@@ -1439,7 +1551,22 @@ public abstract class TensorGenerator {
             .getPointerAnalysis()
             .getHeapModel()
             .getPointerKeyForLocal(caller, signatureValueNumber);
-    OrdinalSet<InstanceKey> listPointsTo = builder.getPointerAnalysis().getPointsToSet(listKey);
+    return this.perParameterSpecShapesFromPointsTo(
+        builder, builder.getPointerAnalysis().getPointsToSet(listKey));
+  }
+
+  /**
+   * Resolves an {@code input_signature} list's points-to set into per-parameter declared shapes:
+   * element {@code i} is the shape of the {@code i}-th list element's {@code tf.TensorSpec}. Each
+   * element is indexed and resolved separately (the parameters may declare different ranks), rather
+   * than aggregating the list as one shape.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param listPointsTo The points-to set of the {@code input_signature} list.
+   * @return Per-parameter declared shapes, or {@code null} when the list does not resolve.
+   */
+  private List<Set<List<Dimension<?>>>> perParameterSpecShapesFromPointsTo(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> listPointsTo) {
     if (listPointsTo == null || listPointsTo.isEmpty()) return null;
 
     List<Set<List<Dimension<?>>>> perParameter = new ArrayList<>();
