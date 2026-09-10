@@ -1354,4 +1354,98 @@ public class TestMisc extends AbstractTensorTest {
         warnings.stream()
             .noneMatch(w -> w.contains("driver_dynamic_extent") && w.contains("conflicts")));
   }
+
+  /**
+   * A numpy array's shape is read from its construction. The positive control for {@link
+   * #testNumpyElementwiseSumKeepsShape()} and its siblings: in the same file and the same frame, an
+   * array the analysis types completely.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNumpyArrayConstructionKeepsShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_operand",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * An elementwise operation cannot change its operands' shape, so an array plus an array of the
+   * same shape has that shape. The rank is dropped instead, leaving an asserted dtype with no rank
+   * at all.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNumpyElementwiseSumKeepsShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_array_sum",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * Scaling an array by a {@code float} keeps its shape. Paired with {@link
+   * #testNumpyIntegerScaleKeepsShape()} so the two rule out the scalar's own type as the cause.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNumpyFloatScaleKeepsShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * Scaling an array by an {@code int} keeps its shape, exactly as scaling by a {@code float} does.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNumpyIntegerScaleKeepsShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_int_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The composed form the defect was found in: an array plus a scaled array. It loses the shape for
+   * the same reason each half does, and it is kept because this is the expression that appears in
+   * real code rather than a reduction of it.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNumpyComposedElementwiseKeepsShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_sum",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
 }
