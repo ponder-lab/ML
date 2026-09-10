@@ -1448,4 +1448,37 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
   }
+
+  /**
+   * A model's return survives tuple unpacking at the call site. Both elements of a two-tensor
+   * return type as completely as a single-tensor return does, so unpacking is not a place a rank is
+   * lost.
+   *
+   * <p>Kept as a negative result. A rankless value reaching a parameter from a model call was
+   * proposed as being about the unpacking, and it is not; the single-return sink is the control
+   * that makes that statement rather than a fixture that types nothing.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testModelTupleReturnSurvivesUnpacking() throws Exception {
+    test(
+        "tf2_test_model_tuple_return.py",
+        "consume_single",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+    test(
+        "tf2_test_model_tuple_return.py",
+        "consume_first",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+    test(
+        "tf2_test_model_tuple_return.py",
+        "consume_second",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
 }
