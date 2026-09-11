@@ -1354,4 +1354,149 @@ public class TestMisc extends AbstractTensorTest {
         warnings.stream()
             .noneMatch(w -> w.contains("driver_dynamic_extent") && w.contains("conflicts")));
   }
+
+  /**
+   * A numpy array's shape and dtype are read from its construction, and a transpose preserves both.
+   * The controls that localise <a href="https://github.com/wala/ML/issues/910">wala/ML#910</a> to
+   * one call rather than to the chain around it.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNumpyConstructionAndTransposeKeepShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_eye",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 20))));
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_eye_t",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 20, 2))));
+  }
+
+  /**
+   * An elementwise operation preserves its operands' shape. This is the control that exonerates the
+   * binary operators: they were originally accused of dropping the shape, and what they were
+   * actually doing was propagating a rankless operand correctly.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNumpyElementwiseSumPreservesShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_operand",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * A permutation returns an array of exactly its input's shape and dtype, permuted along the first
+   * axis, so both are preserved. The argument here is a transpose result whose points-to set is
+   * empty, so the shape and dtype are recovered from the caller's frame (wala/ML#910).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testRandomStatePermutationKeepsShapeAndDType() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_perm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 20, 2))));
+  }
+
+  /**
+   * Everything downstream of the permutation inherits the recovered shape and dtype, which is how a
+   * single modelled call keeps a parameter well typed several operations later (wala/ML#910).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testValuesDownstreamOfPermutationKeepShape() throws Exception {
+    test(
+        "tf2_test_numpy_binop_shape.py",
+        "consume_sum",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 20))));
+  }
+
+  /**
+   * The positive control for the starred-unpack chain: {@code rng.uniform(size=logits_shape)} reads
+   * the tuple local through the {@code size=} keyword, not a starred unpack, so both its shape and
+   * its NumPy-default {@code float64} dtype resolve. The starred-eye tests below share this frame,
+   * so this pins that the surrounding machinery works here (wala/ML#910).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testStarredUniformSize() throws Exception {
+    test(
+        "tf2_test_permutation_starred.py",
+        "consume_uniform_size",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 20))));
+  }
+
+  /**
+   * {@code np.eye(*logits_shape)} unpacks a tuple local into {@code N} and {@code M}, so the shape
+   * resolves to {@code (2, 20)} rather than flooring to ⊤ (wala/ML#910). The dtype is ⊤ by design,
+   * not float64: a starred unpack could in principle supply the {@code dtype} positional, so its
+   * absence is indeterminate and the API default is not asserted (wala/ML#865). The dtype loss is
+   * invisible in the corpus idiom, where a downstream {@code .astype} pins it.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testStarredEye() throws Exception {
+    test(
+        "tf2_test_permutation_starred.py",
+        "consume_eye_starred",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2), new NumericDim(20))))));
+  }
+
+  /**
+   * The transpose of the starred eye keeps the recovered shape, swapping axes to {@code (20, 2)}
+   * (wala/ML#910). The dtype stays ⊤ for the reason in {@link #testStarredEye()}.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testStarredEyeTranspose() throws Exception {
+    test(
+        "tf2_test_permutation_starred.py",
+        "consume_eye_starred_t",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(20), new NumericDim(2))))));
+  }
+
+  /**
+   * The permutation of the starred eye's transpose keeps the recovered shape {@code (20, 2)}: the
+   * permutation reads its overlay-resolved argument in the caller's frame (wala/ML#910), and the
+   * shape now flows the whole chain np.eye(*shape) &rarr; transpose &rarr; permutation. This is the
+   * corpus construct, reproduced faithfully — the literal-dimension form does not exercise the
+   * starred-unpack loss. The dtype stays ⊤ for the reason in {@link #testStarredEye()}.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testStarredPermutation() throws Exception {
+    test(
+        "tf2_test_permutation_starred.py",
+        "consume_perm_starred",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(20), new NumericDim(2))))));
+  }
 }

@@ -95,11 +95,24 @@ public class NpPermutation extends TensorGenerator {
 
     // The array arm: the shape survives the draw unchanged.
     Set<List<Dimension<?>>> preserved = this.getShapesOfValue(builder, argumentPointsToSet);
-    LOGGER.fine(() -> "NpPermutation: array argument; preserved shapes " + preserved + ".");
+    if (preserved != null && !preserved.isEmpty()) {
+      LOGGER.fine(() -> "NpPermutation: array argument; preserved shapes " + preserved + ".");
+      return preserved;
+    }
 
-    // ⊤ when the argument does not resolve: the result is still an array shaped like its argument,
-    // never ⊥.
-    return preserved == null || preserved.isEmpty() ? null : preserved;
+    // The argument is frequently overlay-resolved (e.g. a transpose result) and carries no
+    // points-to allocation into the synthetic draw node, so its points-to set is empty even though
+    // the analysis has its shape. Read it in the caller's frame instead (the wala/ML#718
+    // caller-aware path, as in ElementWiseOperation), where the argument's value number resolves
+    // through its own generator.
+    Set<List<Dimension<?>>> viaCallers =
+        this.getArgumentShapeResultViaCallers(builder, X_PARAMETER_POSITION, X_PARAMETER_NAME)
+            .toLegacy();
+    LOGGER.fine(() -> "NpPermutation: array argument; caller-resolved shapes " + viaCallers + ".");
+
+    // ⊤ when the argument does not resolve anywhere: the result is still an array shaped like its
+    // argument, never ⊥.
+    return viaCallers == null || viaCallers.isEmpty() ? null : viaCallers;
   }
 
   @Override
@@ -117,8 +130,13 @@ public class NpPermutation extends TensorGenerator {
     if (isIntegralArgument(argumentPointsToSet)) return EnumSet.of(DType.INT64);
 
     Set<DType> preserved = this.getDTypesOfValue(builder, argumentPointsToSet);
+    if (preserved != null && !preserved.isEmpty()) return preserved;
 
-    return preserved == null || preserved.isEmpty() ? EnumSet.of(DType.UNKNOWN) : preserved;
+    // As with the shape, fall back to the caller frame when the argument's points-to set is empty
+    // (an overlay-resolved argument, e.g. a transpose result).
+    Set<DType> viaCallers =
+        this.getArgumentDTypesViaCallers(builder, X_PARAMETER_POSITION, X_PARAMETER_NAME);
+    return viaCallers == null || viaCallers.isEmpty() ? EnumSet.of(DType.UNKNOWN) : viaCallers;
   }
 
   /**
