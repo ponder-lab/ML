@@ -237,6 +237,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
@@ -270,6 +271,7 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -372,12 +374,8 @@ public class TensorGeneratorFactory {
           PointerKey funcKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, funcVn);
           for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(funcKey)) {
-            if (ik instanceof ConcreteTypeKey) {
-              return ((ConcreteTypeKey) ik).type().getReference();
-            }
-            if (ik instanceof AllocationSiteInNode) {
-              return ((AllocationSiteInNode) ik).concreteType().getReference();
-            }
+            TypeReference allocated = allocatedType(ik);
+            if (allocated != null) return allocated;
           }
         }
         return declaredClass;
@@ -1220,6 +1218,108 @@ public class TensorGeneratorFactory {
       if (operandHasTensorEvidence(operandVn, node, builder, visited)) return false;
     }
     return true;
+  }
+
+  /**
+   * Type-name roots of the modeled tensor-library namespaces, derived from the summary files
+   * (`tensorflow.xml` declares the `tensorflow` and `keras` packages, `numpy.xml` and `scipy.xml`
+   * their own): a value allocated under one of these is a library object, and a call on such a
+   * value may produce a tensor even when the callee itself is unmodeled (wala/ML#911).
+   */
+  private static final String[] TENSOR_LIBRARY_TYPE_ROOTS = {
+    "Ltensorflow", "Lkeras", "Lnumpy", "Lscipy"
+  };
+
+  /**
+   * Whether a value is the result of a call whose callee is an attribute read on a receiver that
+   * the points-to analysis places in a tensor-library namespace (wala/ML#911): {@code
+   * tf.some_unmodeled_op(...)}, where the receiver is the {@code tensorflow} module allocation, or
+   * {@code tensor.some_unmodeled_method(...)}, where it is a tensor allocation. Such a result may
+   * be a tensor although nothing in its own points-to set says so, because the callee is unmodeled
+   * and the result has no allocation site.
+   *
+   * <p>This is a question about PROVENANCE ("might this be a tensor, given where it came from"),
+   * deliberately distinct from {@link #operandHasTensorEvidence}'s question about EVIDENCE ("does
+   * anything say this is a tensor"), and it must stay out of that gate. Folding provenance into the
+   * evidence gate would dispatch an {@code ElementWiseOperation} on {@code [1] +
+   * tf.unmodeled(...)}, whose dtype path reads the literal's {@code int} as the result's dtype (the
+   * INT32 hazard the gate's own Javadoc records), replacing a confidently-wrong rank with a
+   * confidently-wrong dtype. The only consumer, {@link TensorGenerator}'s sequence-concatenation
+   * stage, uses it to DECLINE, which falls back to the prior bottom and asserts nothing; {@code
+   * testExpandDimsOfListPlusLostTensor} pins both the unknown shape and the unknown dtype of that
+   * outcome, so a merge of the two predicates would fail it.
+   *
+   * <p>The callee's attribute chain is walked to its root, because the summaries allocate a
+   * submodule such as {@code tf.image} as a plain object rather than under the library's namespace:
+   * {@code tf.image.rgb_to_grayscale} reads an attribute of an attribute of the {@code tensorflow}
+   * module, and only the module carries the namespace. A lexical read at any hop, such as the name
+   * a from-import binds ({@code from tensorflow import ensure_shape}: the module body bound it to
+   * an attribute read on the imported module), follows to its definers' written values through
+   * {@link TensorGenerator#lexicalDefiners} (the wala/ML#796 walk). The walk is bounded.
+   *
+   * <p>The predicate is a negative filter over an open universe and never reaches zero: an
+   * unmodeled library outside the modeled namespaces, a chain broken at an unmodeled hop ({@code x
+   * = tf.unmodeled_a(); x.unmodeled_b()} has an empty points-to set for {@code x} and no attribute
+   * chain past it), or a binding deeper than the walk's bound escapes it. It narrows the case
+   * rather than closing it.
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number.
+   * @param builder The propagation call graph builder, for the receiver's points-to set.
+   * @return {@code true} iff the value is such a call result.
+   */
+  static boolean isTensorLibraryCallResult(
+      CGNode node, int vn, PropagationCallGraphBuilder builder) {
+    if (!(node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction invoke)) return false;
+    return chainRootsAtTensorLibrary(node, invoke.getUse(0), builder, CHAIN_WALK_BOUND);
+  }
+
+  /** Hops of attribute reads and lexical bindings {@link #chainRootsAtTensorLibrary} follows. */
+  private static final int CHAIN_WALK_BOUND = 6;
+
+  /**
+   * Whether a value's attribute chain roots at a tensor-library allocation (the walking half of
+   * {@link #isTensorLibraryCallResult}): the value's own points-to set holds such an allocation, or
+   * the value is an attribute read whose receiver's chain does, or the value is a lexical read one
+   * of whose definers' written values' chain does.
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number.
+   * @param builder The propagation call graph builder, for the points-to sets.
+   * @param hops The remaining walk budget.
+   * @return {@code true} iff the chain roots at a tensor-library allocation within the budget.
+   */
+  private static boolean chainRootsAtTensorLibrary(
+      CGNode node, int vn, PropagationCallGraphBuilder builder, int hops) {
+    if (hops == 0) return false;
+    PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(key)) {
+      TypeReference type = allocatedType(ik);
+      if (type == null) continue; // A constant or an abstract key names no library object.
+      String typeName = type.getName().toString();
+      for (String root : TENSOR_LIBRARY_TYPE_ROOTS)
+        if (typeName.equals(root) || typeName.startsWith(root + "/")) return true;
+    }
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof PythonPropertyRead read)
+      return chainRootsAtTensorLibrary(node, read.getObjectRef(), builder, hops - 1);
+    if (def instanceof AstLexicalRead)
+      for (Pair<CGNode, Integer> definer : TensorGenerator.lexicalDefiners(builder, node, vn))
+        if (chainRootsAtTensorLibrary(definer.fst, definer.snd, builder, hops - 1)) return true;
+    return false;
+  }
+
+  /**
+   * The type an instance key allocates, for the two key kinds that name one.
+   *
+   * @param ik The instance key.
+   * @return The allocated type, or {@code null} for a constant or an abstract key.
+   */
+  private static TypeReference allocatedType(InstanceKey ik) {
+    if (ik instanceof ConcreteTypeKey) return ((ConcreteTypeKey) ik).type().getReference();
+    if (ik instanceof AllocationSiteInNode)
+      return ((AllocationSiteInNode) ik).concreteType().getReference();
+    return null;
   }
 
   /**

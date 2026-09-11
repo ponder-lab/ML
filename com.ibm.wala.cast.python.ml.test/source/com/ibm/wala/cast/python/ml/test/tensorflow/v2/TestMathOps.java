@@ -866,11 +866,13 @@ public class TestMathOps extends AbstractTensorTest {
    * sequence and the result as {@code (1, Unresolved)} instead. The wrong rank narrows what a
    * consumer accepts, so this is a confidently-wrong result, not an imprecise one. A tensor with no
    * evidence cannot be recovered, so the sound answer, and the one asserted here, is an unknown
-   * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#911 is fixed.
+   * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions. The stage now
+   * declines this caller by the callee's provenance (the receiver of {@code ensure_shape} is the
+   * {@code tensorflow} module), wala/ML#911. The assertion pins the dtype as unknown too: folding
+   * provenance into the element-wise dispatch gate instead would type this value through the
+   * broadcast path with the literal's {@code int} as its dtype, and this test would fail on it.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testExpandDimsOfListPlusLostTensor()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -879,6 +881,106 @@ public class TestMathOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The from-import form of {@link #testExpandDimsOfListPlusLostTensor()}: {@code from tensorflow
+   * import ensure_shape} binds the unmodeled callee to a name with no receiver read at the call, so
+   * the provenance predicate must reach the binding site to see the {@code tensorflow} module
+   * (wala/ML#911). Asserts the sound unknown shape, as the direct form does.
+   */
+  @Test
+  public void testExpandDimsOfListPlusLostTensorFromImport()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_from_import.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The submodule form of {@link #testExpandDimsOfListPlusLostTensor()}: {@code
+   * tf.image.rgb_to_grayscale} is an attribute of {@code tf.image}, which the summaries allocate as
+   * a plain object, so only the {@code tensorflow} module at the root of the chain carries the
+   * namespace (wala/ML#911). Asserts the sound unknown shape.
+   */
+  @Test
+  public void testExpandDimsOfListPlusLostTensorFromSubmodule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_submodule_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The method form of {@link #testExpandDimsOfListPlusLostTensor()}: an unmodeled {@code ndarray}
+   * method, {@code np.ones((2, 3)).cumsum()}, whose receiver is allocated under the {@code numpy}
+   * namespace (wala/ML#911). Asserts the sound unknown shape.
+   */
+  @Test
+  public void testExpandDimsOfListPlusLostNdarrayMethodResult()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_ndarray_method_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Control for the provenance rule (wala/ML#911): the opaque operand is a method result on a
+   * user-class object (a tokenizer whose method returns a list), the closest fixture form to the
+   * gpt-2 sampler's sentencepiece object. The receiver's chain roots at a script allocation, not a
+   * tensor library, so the stage proceeds and the result stays {@code (1, Unresolved)}.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenationWithUserObjectMethod()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_user_object_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Control for the provenance walk's bound (wala/ML#911): the opaque operand is reached through an
+   * attribute chain on a self-referential user object deeper than the walk follows, so the budget
+   * runs out without a library root and the stage proceeds, {@code (1, Unresolved)}. The bound is
+   * what keeps the walk finite over a cyclic chain.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenationWithDeepUserChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_deep_chain_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Control for the provenance walk's lexical hop (wala/ML#911): {@code from json import loads}
+   * binds a name from a module that is no tensor library, so the hop reaches a binding whose chain
+   * roots at no library allocation and the stage proceeds, {@code (1, Unresolved)}.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenationWithNonLibraryFromImport()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_from_import_user_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
   }
 
   /**
