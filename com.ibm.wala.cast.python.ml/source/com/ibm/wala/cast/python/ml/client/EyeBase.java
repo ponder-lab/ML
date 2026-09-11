@@ -1,12 +1,20 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -49,6 +57,13 @@ public abstract class EyeBase extends TensorTypeAllocator {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    // A starred unpack — `np.eye(*shape)` — lands the whole tuple in the num_rows slot instead of
+    // separate `N` and `M` scalars, so the per-argument integer read fails on it and the shape
+    // floors to ⊤. `np.eye(N, M)` has shape `(N, M)`, so the tuple's first two elements ARE the
+    // shape (`M` defaulting to `N`); read them from the tuple. wala/ML#910.
+    Set<List<Dimension<?>>> starred = this.getStarredShapes(builder);
+    if (starred != null) return starred;
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<Optional<Integer>> numRows = this.getNumberOfRows(builder);
     Set<Optional<Integer>> numColumns = this.getNumberOfColumns(builder);
@@ -83,6 +98,51 @@ public abstract class EyeBase extends TensorTypeAllocator {
     }
 
     return ret;
+  }
+
+  /**
+   * Resolves the shape when the identity-matrix call is a starred unpack of a sequence, e.g. {@code
+   * np.eye(*shape)} where {@code shape} is a tuple local. The unpack places the whole sequence in
+   * the {@code num_rows} slot rather than separate {@code N} and {@code M} scalars, so the scalar
+   * integer read on that slot cannot fold it and the shape floors to ⊤ (wala/ML#910). Since {@code
+   * np.eye(N, M)} produces a shape of exactly {@code (N, M)}, the sequence's first two elements are
+   * the shape, with {@code M} defaulting to {@code N} for a one-element sequence.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @return The resolved shapes, or {@code null} when the {@code num_rows} argument is not a
+   *     sequence (the ordinary scalar path applies) or the sequence's elements do not resolve.
+   */
+  private Set<List<Dimension<?>>> getStarredShapes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pts =
+        this.getArgumentPointsToSet(
+            builder, this.getNumRowsParameterPosition(), this.getNumRowsParameterName());
+    if (pts == null || pts.isEmpty()) return null;
+
+    // Only a sequence in the num_rows slot is a starred unpack; a scalar takes the ordinary path.
+    boolean isSequence = false;
+    for (InstanceKey instanceKey : pts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
+      if (asin == null) continue;
+      TypeReference reference = asin.concreteType().getReference();
+      if (reference.equals(list) || reference.equals(tuple)) {
+        isSequence = true;
+        break;
+      }
+    }
+    if (!isSequence) return null;
+
+    Set<List<Dimension<?>>> sequenceShapes = this.getShapesFromShapeArgument(builder, pts);
+    if (sequenceShapes == null || sequenceShapes.isEmpty()) return null;
+
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> dims : sequenceShapes) {
+      if (dims.isEmpty()) continue;
+      List<Dimension<?>> shape = new ArrayList<>();
+      shape.add(dims.get(0));
+      shape.add(dims.size() >= 2 ? dims.get(1) : dims.get(0));
+      ret.add(shape);
+    }
+    return ret.isEmpty() ? null : ret;
   }
 
   private Set<Optional<Integer>> getNumberOfRows(PropagationCallGraphBuilder builder) {
