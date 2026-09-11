@@ -122,11 +122,22 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
    * @return The set of composed output shapes, or {@code null} (⊤) if it can't be composed.
    */
   private Set<List<Dimension<?>>> composedShapes(PropagationCallGraphBuilder builder) {
+    Set<List<Dimension<?>>> inputShapes = null;
     OrdinalSet<InstanceKey> inputPts =
         this.getArgumentPointsToSet(
             builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
-    if (inputPts == null || inputPts.isEmpty()) return null;
-    Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    if (inputPts != null && !inputPts.isEmpty())
+      inputShapes = this.getShapesOfValue(builder, inputPts);
+    if (inputShapes == null || inputShapes.isEmpty())
+      // The input is frequently overlay-resolved (an elementwise binop, a transpose) and carries no
+      // points-to allocation at the synthetic top_k node, so its points-to set is empty even though
+      // the analysis has its shape. Read it in the caller's frame (the wala/ML#718 caller-aware
+      // path, as NpPermutation and ElementWiseOperation do). Only then is the rank genuinely
+      // unknown.
+      inputShapes =
+          this.getArgumentShapeResultViaCallers(
+                  builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName())
+              .toLegacy();
     if (inputShapes == null || inputShapes.isEmpty()) return null;
 
     // An unresolvable k loses only the last axis, not the rank: the output is
@@ -209,11 +220,17 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
     if (index != VALUES_INDEX)
       throw new IllegalArgumentException(
           "TopK has only 2 outputs (values, indices); got index " + index + ".");
+    Set<DType> dtypes = null;
     OrdinalSet<InstanceKey> inputPts =
         this.getArgumentPointsToSet(
             builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
-    if (inputPts == null || inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-    Set<DType> dtypes = this.getDTypesOfValue(builder, inputPts);
+    if (inputPts != null && !inputPts.isEmpty()) dtypes = this.getDTypesOfValue(builder, inputPts);
+    if (dtypes == null || dtypes.isEmpty())
+      // As with the shape, read the input's dtype in the caller's frame when its points-to set is
+      // empty (an overlay-resolved input such as an elementwise binop). wala/ML#718.
+      dtypes =
+          this.getArgumentDTypesViaCallers(
+              builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
   }
 

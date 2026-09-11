@@ -496,6 +496,42 @@ public class TestReductions extends AbstractTensorTest {
   }
 
   /**
+   * The top_k input is an elementwise binop (`logits + labels * MAX_FLOAT`), whose result is
+   * overlay-resolved and carries no points-to allocation at the synthetic top_k node. The input
+   * shape is read in the caller's frame (wala/ML#718) rather than from the empty points-to set, so
+   * the rank survives and {@code indices} composes to {@code (2, Dynamic)} int32 — the corpus form
+   * of the row (a plain-local input does not exercise this empty-substrate path).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTopkBinopInputIndices() throws Exception {
+    test(
+        "tf2_test_topk_binop_input.py",
+        "consume_indices",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The {@code values} companion of {@link #testTopkBinopInputIndices()}: same shape {@code (2,
+   * Dynamic)}, with the binop input's float32 dtype also read in the caller's frame.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTopkBinopInputValues() throws Exception {
+    test(
+        "tf2_test_topk_binop_input.py",
+        "consume_values",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
+  }
+
+  /**
    * Guards the unknown-input-shape path of the top_k composer (<a
    * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): when the input tensor's shape is
    * ⊤ (here {@code tf.ones(json.loads(...))}), {@code input.shape[:-1] + (k,)} can't be composed
