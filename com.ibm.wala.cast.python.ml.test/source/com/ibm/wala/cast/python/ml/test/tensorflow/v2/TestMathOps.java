@@ -951,6 +951,39 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * Control for the provenance walk's bound (wala/ML#911): the opaque operand is reached through an
+   * attribute chain on a self-referential user object deeper than the walk follows, so the budget
+   * runs out without a library root and the stage proceeds, {@code (1, Unresolved)}. The bound is
+   * what keeps the walk finite over a cyclic chain.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenationWithDeepUserChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_deep_chain_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Control for the provenance walk's lexical hop (wala/ML#911): {@code from json import loads}
+   * binds a name from a module that is no tensor library, so the hop reaches a binding whose chain
+   * roots at no library allocation and the stage proceeds, {@code (1, Unresolved)}.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenationWithNonLibraryFromImport()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_from_import_user_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.math.pow(x, y)}. Element-wise binary; output shape is the
    * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); output dtype
    * matches {@code x} (TF requires {@code x}/{@code y} to share dtype, so dtype-from-{@code x} is
