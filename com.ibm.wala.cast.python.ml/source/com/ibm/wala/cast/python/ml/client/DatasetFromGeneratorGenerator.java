@@ -11,7 +11,6 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -234,7 +233,9 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    * (wala/ML#903): the generator bodies reached from this {@code from_generator}'s node, their
    * {@code __content__}-stored tuples' field-{@code index} values, resolved in the generator's own
    * frame. Shares its two halves with the direct-call generator peel of wala/ML#796, so one reader
-   * serves both forms.
+   * serves both forms. Precondition, met by every caller: this anchor's node is the {@code
+   * from_generator} synthetic, so its call-graph successors are the summary's call to the generator
+   * argument.
    *
    * @param builder The propagation call graph builder.
    * @param index The component's index.
@@ -243,19 +244,14 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    */
   private Set<List<Dimension<?>>> shapesFromGeneratorYields(
       PropagationCallGraphBuilder builder, int index) {
-    // The from_generator synthetic node(s): this anchor's call targets for a source-based
-    // generator, or the node itself for a manual one. The summary's call to the generator sits
-    // inside them, and its targets reach the generator bodies through the shared walk.
-    Set<CGNode> synthetics = HashSetFactory.make();
-    PythonInvokeInstruction invoke = this.getInvokeInstruction();
-    if (invoke != null)
-      synthetics.addAll(
-          builder.getCallGraph().getPossibleTargets(this.getNode(), invoke.getCallSite()));
-    else synthetics.add(this.getNode());
+    // Every caller of this method anchors it at the from_generator synthetic node itself: the
+    // tuple-element delegation and the receiver walk both resolve to the synthetic, whether the
+    // anchor is manual or source-based over the synthetic's return value or allocation. The
+    // synthetic's call-graph successors are the summary's call to the generator argument, which
+    // the shared walk expands to the generator bodies, as DatasetMapGenerator does for map_func.
     Set<CGNode> targets = HashSetFactory.make();
-    for (CGNode synthetic : synthetics)
-      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(synthetic); it.hasNext(); )
-        targets.add(it.next());
+    for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(this.getNode()); it.hasNext(); )
+      targets.add(it.next());
     Set<CGNode> bodies = TensorGenerator.generatorBodiesReachedBy(builder, targets);
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (Pair<CGNode, Integer> store :
