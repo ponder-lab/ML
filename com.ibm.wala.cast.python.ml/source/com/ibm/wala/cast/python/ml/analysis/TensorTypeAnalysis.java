@@ -588,7 +588,27 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       FeedMode mode,
       List<PointsToSetVariable> operands,
       Set<TensorType> seedMembers,
-      Set<TensorOrigin> seedOrigins) {}
+      Set<TensorOrigin> seedOrigins,
+      TensorGenerator.ShapeTransform transform) {
+
+    /**
+     * A plan of a fixed kind, carrying no rule.
+     *
+     * @param kind The composition kind, never {@link TensorGenerator.TypeFeedKind#TRANSFORM}.
+     * @param mode The trusted-axes mode.
+     * @param operands The feeding operand variables, in operand order.
+     * @param seedMembers The suppressed seed's members.
+     * @param seedOrigins The suppressed seed's origins.
+     */
+    public FeedPlan(
+        TensorGenerator.TypeFeedKind kind,
+        FeedMode mode,
+        List<PointsToSetVariable> operands,
+        Set<TensorType> seedMembers,
+        Set<TensorOrigin> seedOrigins) {
+      this(kind, mode, operands, seedMembers, seedOrigins, null);
+    }
+  }
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
@@ -867,6 +887,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                       for (TensorType composed : this.rankPreservingMembers(rhs))
                         changed |= lhs.state.add(composed);
                       break;
+                    case TRANSFORM:
+                      // The generator's own rule, the one its substrate arm applies, over the
+                      // operand's dataflow state (wala/ML#905).
+                      for (TensorType composed : this.transformedMembers(rhs))
+                        changed |= lhs.state.add(composed);
+                      break;
                     case SHAPE_ONLY:
                       // The mirror: take the shape, never the dtype. This is how a cast whose
                       // input is typed only by dataflow still recovers its SHAPE (the wala/ML#796
@@ -933,6 +959,35 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             }
 
             /**
+             * Passes each operand member's shape through the plan's {@link
+             * TensorGenerator.ShapeTransform}, the generator's own rule, with the dtype forwarded
+             * (wala/ML#905). A rankless member stays rankless, and a member the rule cannot type
+             * keeps its dtype with an unknown shape rather than vanishing: the feed replaces a
+             * seed, so a dropped member would be a silently narrower union.
+             *
+             * <p>Shared by the replacing and the shape-composing paths so that one operation cannot
+             * get two answers depending on which resolved it.
+             *
+             * @param rhs The incoming operand's variable.
+             * @return The transformed members.
+             */
+            private Set<TensorType> transformedMembers(TensorVariable rhs) {
+              Set<TensorType> ret = HashSetFactory.make();
+              TensorGenerator.ShapeTransform rule = this.plan.transform();
+              for (TensorType t : rhs.state) {
+                List<Dimension<?>> inDims = t.getDims();
+                Set<List<Dimension<?>>> outs = inDims == null ? null : rule.apply(inDims);
+                if (outs == null) {
+                  ret.add(new TensorType(t.getDType(), null));
+                  continue;
+                }
+                for (List<Dimension<?>> out : outs)
+                  ret.add(TensorType.of(t.getDType(), out, t.layout()));
+              }
+              return ret;
+            }
+
+            /**
              * Composes the incoming operand state into result members per the declared kind: {@code
              * PASS_THROUGH} forwards each member, {@code BROADCAST} pairs each incoming member with
              * the other operand's current members (empty until both operands carry state), and
@@ -963,6 +1018,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   // Delegates to the same rule the REPLACE arm uses, so one operation cannot get
                   // two answers depending on which path resolved it (wala/ML#876).
                   composed.addAll(this.rankPreservingMembers(rhs));
+                  break;
+                case TRANSFORM:
+                  // Likewise delegates to the REPLACE arm's rule (wala/ML#905).
+                  composed.addAll(this.transformedMembers(rhs));
                   break;
                 case BROADCAST:
                   PointsToSetVariable other =
