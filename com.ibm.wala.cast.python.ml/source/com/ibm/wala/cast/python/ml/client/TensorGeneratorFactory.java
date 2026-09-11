@@ -374,12 +374,8 @@ public class TensorGeneratorFactory {
           PointerKey funcKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, funcVn);
           for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(funcKey)) {
-            if (ik instanceof ConcreteTypeKey) {
-              return ((ConcreteTypeKey) ik).type().getReference();
-            }
-            if (ik instanceof AllocationSiteInNode) {
-              return ((AllocationSiteInNode) ik).concreteType().getReference();
-            }
+            TypeReference allocated = allocatedType(ik);
+            if (allocated != null) return allocated;
           }
         }
         return declaredClass;
@@ -1253,17 +1249,19 @@ public class TensorGeneratorFactory {
    * testExpandDimsOfListPlusLostTensor} pins both the unknown shape and the unknown dtype of that
    * outcome, so a merge of the two predicates would fail it.
    *
-   * <p>A callee bound by a from-import ({@code from tensorflow import ensure_shape}) is a lexical
-   * read with no receiver at the call; the module body bound the name to an attribute read on the
-   * imported module, so the rule follows the read to its definers' written values ({@link
-   * TensorGenerator#lexicalDefiners}, the wala/ML#796 walk) and applies the receiver test there,
-   * one hop.
+   * <p>The callee's attribute chain is walked to its root, because the summaries allocate a
+   * submodule such as {@code tf.image} as a plain object rather than under the library's namespace:
+   * {@code tf.image.rgb_to_grayscale} reads an attribute of an attribute of the {@code tensorflow}
+   * module, and only the module carries the namespace. A lexical read at any hop, such as the name
+   * a from-import binds ({@code from tensorflow import ensure_shape}: the module body bound it to
+   * an attribute read on the imported module), follows to its definers' written values through
+   * {@link TensorGenerator#lexicalDefiners} (the wala/ML#796 walk). The walk is bounded.
    *
    * <p>The predicate is a negative filter over an open universe and never reaches zero: an
    * unmodeled library outside the modeled namespaces, a chain broken at an unmodeled hop ({@code x
-   * = tf.unmodeled_a(); x.unmodeled_b()} has an empty points-to set for {@code x}), or a binding
-   * reached through more than one lexical hop escapes it. It narrows the case rather than closing
-   * it.
+   * = tf.unmodeled_a(); x.unmodeled_b()} has an empty points-to set for {@code x} and no attribute
+   * chain past it), or a binding deeper than the walk's bound escapes it. It narrows the case
+   * rather than closing it.
    *
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number.
@@ -1272,47 +1270,56 @@ public class TensorGeneratorFactory {
    */
   static boolean isTensorLibraryCallResult(
       CGNode node, int vn, PropagationCallGraphBuilder builder) {
-    SSAInstruction def = node.getDU().getDef(vn);
-    if (!(def instanceof SSAAbstractInvokeInstruction invoke) || invoke.getNumberOfUses() == 0)
-      return false;
-    int calleeVn = invoke.getUse(0);
-    if (isAttributeOfTensorLibraryValue(node, calleeVn, builder)) return true;
-    if (!(node.getDU().getDef(calleeVn) instanceof AstLexicalRead)) return false;
-    for (Pair<CGNode, Integer> definer : TensorGenerator.lexicalDefiners(builder, node, calleeVn))
-      if (isAttributeOfTensorLibraryValue(definer.fst, definer.snd, builder)) return true;
-    return false;
+    if (!(node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction invoke)) return false;
+    return chainRootsAtTensorLibrary(node, invoke.getUse(0), builder, CHAIN_WALK_BOUND);
   }
 
+  /** Hops of attribute reads and lexical bindings {@link #chainRootsAtTensorLibrary} follows. */
+  private static final int CHAIN_WALK_BOUND = 6;
+
   /**
-   * Whether a value is defined by an attribute read whose receiver the points-to analysis places in
-   * a tensor-library namespace (the per-frame half of {@link #isTensorLibraryCallResult}).
+   * Whether a value's attribute chain roots at a tensor-library allocation (the walking half of
+   * {@link #isTensorLibraryCallResult}): the value's own points-to set holds such an allocation, or
+   * the value is an attribute read whose receiver's chain does, or the value is a lexical read one
+   * of whose definers' written values' chain does.
    *
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number.
-   * @param builder The propagation call graph builder, for the receiver's points-to set.
-   * @return {@code true} iff so.
+   * @param builder The propagation call graph builder, for the points-to sets.
+   * @param hops The remaining walk budget.
+   * @return {@code true} iff the chain roots at a tensor-library allocation within the budget.
    */
-  private static boolean isAttributeOfTensorLibraryValue(
-      CGNode node, int vn, PropagationCallGraphBuilder builder) {
-    if (node.getDU() == null) return false;
-    SSAInstruction calleeDef = node.getDU().getDef(vn);
-    if (!(calleeDef instanceof PythonPropertyRead read)) return false;
-    PointerKey receiver =
-        builder
-            .getPointerAnalysis()
-            .getHeapModel()
-            .getPointerKeyForLocal(node, read.getObjectRef());
-    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(receiver)) {
-      TypeReference type;
-      if (ik instanceof ConcreteTypeKey) type = ((ConcreteTypeKey) ik).type().getReference();
-      else if (ik instanceof AllocationSiteInNode)
-        type = ((AllocationSiteInNode) ik).concreteType().getReference();
-      else continue; // A constant or an abstract key names no library object.
+  private static boolean chainRootsAtTensorLibrary(
+      CGNode node, int vn, PropagationCallGraphBuilder builder, int hops) {
+    if (hops == 0) return false;
+    PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(key)) {
+      TypeReference type = allocatedType(ik);
+      if (type == null) continue; // A constant or an abstract key names no library object.
       String typeName = type.getName().toString();
       for (String root : TENSOR_LIBRARY_TYPE_ROOTS)
         if (typeName.equals(root) || typeName.startsWith(root + "/")) return true;
     }
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof PythonPropertyRead read)
+      return chainRootsAtTensorLibrary(node, read.getObjectRef(), builder, hops - 1);
+    if (def instanceof AstLexicalRead)
+      for (Pair<CGNode, Integer> definer : TensorGenerator.lexicalDefiners(builder, node, vn))
+        if (chainRootsAtTensorLibrary(definer.fst, definer.snd, builder, hops - 1)) return true;
     return false;
+  }
+
+  /**
+   * The type an instance key allocates, for the two key kinds that name one.
+   *
+   * @param ik The instance key.
+   * @return The allocated type, or {@code null} for a constant or an abstract key.
+   */
+  private static TypeReference allocatedType(InstanceKey ik) {
+    if (ik instanceof ConcreteTypeKey) return ((ConcreteTypeKey) ik).type().getReference();
+    if (ik instanceof AllocationSiteInNode)
+      return ((AllocationSiteInNode) ik).concreteType().getReference();
+    return null;
   }
 
   /**

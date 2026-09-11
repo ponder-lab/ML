@@ -901,6 +901,56 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * The submodule form of {@link #testExpandDimsOfListPlusLostTensor()}: {@code
+   * tf.image.rgb_to_grayscale} is an attribute of {@code tf.image}, which the summaries allocate as
+   * a plain object, so only the {@code tensorflow} module at the root of the chain carries the
+   * namespace (wala/ML#911). Asserts the sound unknown shape.
+   */
+  @Test
+  public void testExpandDimsOfListPlusLostTensorFromSubmodule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_submodule_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The method form of {@link #testExpandDimsOfListPlusLostTensor()}: an unmodeled {@code ndarray}
+   * method, {@code np.ones((2, 3)).cumsum()}, whose receiver is allocated under the {@code numpy}
+   * namespace (wala/ML#911). Asserts the sound unknown shape.
+   */
+  @Test
+  public void testExpandDimsOfListPlusLostNdarrayMethodResult()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_ndarray_method_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Control for the provenance rule (wala/ML#911): the opaque operand is a method result on a
+   * user-class object (a tokenizer whose method returns a list), the closest fixture form to the
+   * gpt-2 sampler's sentencepiece object. The receiver's chain roots at a script allocation, not a
+   * tensor library, so the stage proceeds and the result stays {@code (1, Unresolved)}.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenationWithUserObjectMethod()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_user_object_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.math.pow(x, y)}. Element-wise binary; output shape is the
    * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); output dtype
    * matches {@code x} (TF requires {@code x}/{@code y} to share dtype, so dtype-from-{@code x} is
