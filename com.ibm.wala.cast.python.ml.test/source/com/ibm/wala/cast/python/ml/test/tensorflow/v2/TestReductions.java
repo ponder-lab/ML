@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
@@ -14,7 +16,12 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_INT32_UNKNOWN_SHAPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
+import static java.util.Arrays.asList;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -465,8 +472,17 @@ public class TestReductions extends AbstractTensorTest {
   /**
    * Guards the non-constant-{@code k} path of the top_k composer (<a
    * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): when {@code k} is not a
-   * resolvable integer constant (here from {@code json.loads}), the shape can't be composed and
-   * degrades to ⊤ rather than guessing. The dtype stays precise (float32).
+   * resolvable integer constant (here from {@code json.loads}), the last axis of {@code
+   * input.shape[:-1] + (k,)} is unknown but the rank is not. The input is rank 1, so {@code values}
+   * is rank 1 with an {@link UnresolvedDim} extent — a fixed runtime integer the analysis could not
+   * compute (wala/ML#721), since a {@code json.loads} result is not a tensor and carries no {@code
+   * None}-evidence.
+   *
+   * <p>This assertion was changed from ⊤ (the previous "degrade rather than guess" reading). #609's
+   * refusal is about the VALUE of {@code k}; preserving {@code input.shape[:-1]} guesses nothing —
+   * it asserts only the input's rank, which the analysis holds, and marks the last axis unknown.
+   * Dropping the rank discarded a fact to avoid asserting a different one, and being strictly more
+   * permissive than ⊤ it can reject no caller that ⊤ accepted.
    */
   @Test
   public void testTopkNonConstantK()
@@ -476,7 +492,7 @@ public class TestReductions extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -634,5 +650,43 @@ public class TestReductions extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * The tensor-{@code k} path of the top_k composer: {@code k = tf.minimum(..., tf.shape(x)[1])} is
+   * a tensor, so it is not a resolvable constant, but the input is rank 2 and top_k's output is
+   * {@code input.shape[:-1] + (k,)}. The rank is preserved and only the last axis is unknown;
+   * because {@code k} is a tensor, TensorFlow's static shape reports {@code None} there, so it is
+   * {@link DynamicDim} — {@code (2, Dynamic)} int32 for {@code indices}. This is the construct that
+   * leaves a downstream parameter rankless when the rank is dropped instead (wala/ML#721,
+   * wala/ML#609).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTopkTensorKIndices() throws Exception {
+    test(
+        "tf2_test_topk_tensor_k.py",
+        "consume_indices",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The {@code values} companion of {@link #testTopkTensorKIndices()}: same shape {@code (2,
+   * Dynamic)}, the input's float32 dtype.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTopkTensorKValues() throws Exception {
+    test(
+        "tf2_test_topk_tensor_k.py",
+        "consume_values",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
   }
 }

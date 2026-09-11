@@ -1,10 +1,16 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -29,9 +35,11 @@ import java.util.Set;
  *
  * <p>The output shape {@code input.shape[:-1] + (k,)} is composed from the input tensor's shape and
  * the {@code k} argument (default {@code 1}); see {@code composedShapes} and <a
- * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>. It degrades to ⊤ when {@code k} is
- * not a resolvable constant or the input shape is unknown rank or rank-0. The per-element dtype
- * (FLOAT32 for values, INT32 for indices) is resolved independently.
+ * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>. An unresolvable {@code k} loses
+ * only the last axis: with the input's rank in hand, that axis becomes a sentinel (Dynamic for a
+ * tensor {@code k}, Unresolved otherwise) rather than dropping the whole shape; it degrades to ⊤
+ * only when the input shape is itself unknown rank or rank-0. The per-element dtype (FLOAT32 for
+ * values, INT32 for indices) is resolved independently.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/top_k">tf.math.top_k</a>
  * @see <a href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 5).
@@ -104,33 +112,66 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
 
   /**
    * Composes the top_k output shape: {@code input.shape[:-1] + (k,)}. Resolves the input tensor's
-   * shape and the {@code k} argument (default {@code 1}) and replaces the last axis with {@code k}.
-   * Returns ⊤ ({@code null}) if {@code k} is not a resolvable constant or any input shape is
-   * unknown rank or rank-0. See <a href="https://github.com/wala/ML/issues/609">wala/ML#609</a>.
+   * shape and the {@code k} argument (default {@code 1}) and replaces the last axis with {@code k},
+   * or with a sentinel ({@link #unresolvableKAxis}) when {@code k} is supplied but not a resolvable
+   * constant — the rank is still known from the input. Returns ⊤ ({@code null}) only when the input
+   * shape is itself unknown rank or rank-0, where there is no last axis to replace. See <a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The set of composed output shapes, or {@code null} (⊤) if it can't be composed.
    */
   private Set<List<Dimension<?>>> composedShapes(PropagationCallGraphBuilder builder) {
-    Integer k = this.resolveK(builder);
-    if (k == null) return null;
     OrdinalSet<InstanceKey> inputPts =
         this.getArgumentPointsToSet(
             builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
     if (inputPts == null || inputPts.isEmpty()) return null;
     Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
     if (inputShapes == null || inputShapes.isEmpty()) return null;
+
+    // An unresolvable k loses only the last axis, not the rank: the output is
+    // input.shape[:-1] + (k,), and the input's rank is in hand here, so replace the final extent
+    // with a sentinel rather than dropping the whole shape to ⊤ (wala/ML#609 refuses to guess k's
+    // VALUE; a rank-plus-wildcard guesses nothing, asserting only the rank the analysis already
+    // holds). The sentinel follows wala/ML#721: DYNAMIC when k is a tensor, since TensorFlow's
+    // static shape reports None for a tensor-valued k; UNRESOLVED otherwise, a fixed runtime
+    // integer the analysis could not compute.
+    Integer k = this.resolveK(builder);
+    Dimension<?> lastAxis = (k != null) ? new NumericDim(k) : this.unresolvableKAxis(builder);
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> in : inputShapes) {
       // Unknown rank (null) or a rank-0 scalar can't have its last axis replaced; degrade to ⊤.
       if (in == null || in.isEmpty()) return null;
       List<Dimension<?>> out = new ArrayList<>(in);
-      out.set(out.size() - 1, new NumericDim(k));
+      out.set(out.size() - 1, lastAxis);
       ret.add(out);
     }
     // inputShapes is non-empty and the loop returns ⊤ for any null/empty shape, so ret is
     // populated.
     return ret;
+  }
+
+  /**
+   * The last-axis sentinel for an unresolvable {@code k}. {@link DynamicDim} when {@code k} is a
+   * tensor — TensorFlow's static shape reports {@code None} for that axis (wala/ML#721) — and
+   * {@link UnresolvedDim} otherwise, a fixed runtime integer the analysis could not compute (e.g. a
+   * config value or an unmodeled Python scalar).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link DynamicDim#INSTANCE} when {@code k}'s points-to set holds a tensor allocation,
+   *     else {@link UnresolvedDim#INSTANCE}.
+   */
+  private Dimension<?> unresolvableKAxis(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> kPts =
+        this.getArgumentPointsToSet(builder, Parameters.K.getIndex(), Parameters.K.getName());
+    if (kPts != null)
+      for (InstanceKey instanceKey : kPts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
+        if (asin != null && asin.concreteType().getReference().equals(TENSOR_TYPE))
+          return DynamicDim.INSTANCE;
+      }
+    return UnresolvedDim.INSTANCE;
   }
 
   /**
