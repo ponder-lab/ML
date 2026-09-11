@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -10,6 +11,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -20,12 +22,15 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset.from_generator}.
@@ -34,6 +39,9 @@ import java.util.Set;
  */
 public class DatasetFromGeneratorGenerator extends DatasetGenerator
     implements TupleElementProvider {
+
+  private static final Logger LOGGER =
+      Logger.getLogger(DatasetFromGeneratorGenerator.class.getName());
 
   /** Parameter indices for {@code tf.data.Dataset.from_generator}. */
   protected enum Parameters {
@@ -210,8 +218,63 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
         return ret;
       }
     }
+    // Strategy 3: read the generator's own yields (wala/ML#903). The summary invokes the generator
+    // argument so its body is in the call graph; a `yield a, b` there stores a tuple on the
+    // generator's `__content__` field, and the component at `index` is that tuple's field store.
+    // Per index: a component whose yielded value does not resolve stays unknown for this index
+    // only, so a scalar label closes while an unmodelled sequence beside it does not.
+    Set<List<Dimension<?>>> fromYields = this.shapesFromGeneratorYields(builder, index);
+    if (fromYields != null) return fromYields;
 
     return this.getShapes(builder);
+  }
+
+  /**
+   * Reads the shapes of the {@code index}-th component of every tuple the generator argument yields
+   * (wala/ML#903): the generator bodies reached from this {@code from_generator}'s node, their
+   * {@code __content__}-stored tuples' field-{@code index} values, resolved in the generator's own
+   * frame. Shares its two halves with the direct-call generator peel of wala/ML#796, so one reader
+   * serves both forms.
+   *
+   * @param builder The propagation call graph builder.
+   * @param index The component's index.
+   * @return The component's shapes, or {@code null} (unknown) when no yielded value at that index
+   *     resolves.
+   */
+  private Set<List<Dimension<?>>> shapesFromGeneratorYields(
+      PropagationCallGraphBuilder builder, int index) {
+    // The from_generator synthetic node(s): this anchor's call targets for a source-based
+    // generator, or the node itself for a manual one. The summary's call to the generator sits
+    // inside them, and its targets reach the generator bodies through the shared walk.
+    Set<CGNode> synthetics = HashSetFactory.make();
+    PythonInvokeInstruction invoke = this.getInvokeInstruction();
+    if (invoke != null)
+      synthetics.addAll(
+          builder.getCallGraph().getPossibleTargets(this.getNode(), invoke.getCallSite()));
+    else synthetics.add(this.getNode());
+    Set<CGNode> targets = HashSetFactory.make();
+    for (CGNode synthetic : synthetics)
+      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(synthetic); it.hasNext(); )
+        targets.add(it.next());
+    Set<CGNode> bodies = TensorGenerator.generatorBodiesReachedBy(builder, targets);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (Pair<CGNode, Integer> store :
+        TensorGenerator.yieldTupleFieldStores(bodies, String.valueOf(index))) {
+      ShapeResult shapes = this.getShapeResult(builder, store.fst, store.snd, false);
+      ret.addAll(shapes.members());
+    }
+    LOGGER.fine(
+        () ->
+            "from_generator yields for index "
+                + index
+                + " of "
+                + describe(this.getSource())
+                + ": "
+                + bodies.size()
+                + " generator body(ies), members "
+                + ret
+                + " (wala/ML#903).");
+    return ret.isEmpty() ? null : ret;
   }
 
   /**
