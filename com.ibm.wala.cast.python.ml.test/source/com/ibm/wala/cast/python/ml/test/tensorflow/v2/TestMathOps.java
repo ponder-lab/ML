@@ -866,15 +866,34 @@ public class TestMathOps extends AbstractTensorTest {
    * sequence and the result as {@code (1, Unresolved)} instead. The wrong rank narrows what a
    * consumer accepts, so this is a confidently-wrong result, not an imprecise one. A tensor with no
    * evidence cannot be recovered, so the sound answer, and the one asserted here, is an unknown
-   * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#911 is fixed.
+   * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions. The stage now
+   * declines this caller by the callee's provenance (the receiver of {@code ensure_shape} is the
+   * {@code tensorflow} module), wala/ML#911. The assertion pins the dtype as unknown too: folding
+   * provenance into the element-wise dispatch gate instead would type this value through the
+   * broadcast path with the literal's {@code int} as its dtype, and this test would fail on it.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testExpandDimsOfListPlusLostTensor()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_list_concat_lost_tensor_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The from-import form of {@link #testExpandDimsOfListPlusLostTensor()}: {@code from tensorflow
+   * import ensure_shape} binds the unmodeled callee to a name with no receiver read at the call, so
+   * the provenance predicate must reach the binding site to see the {@code tensorflow} module
+   * (wala/ML#911). Asserts the sound unknown shape, as the direct form does.
+   */
+  @Test
+  public void testExpandDimsOfListPlusLostTensorFromImport()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_from_import.py",
         "f",
         1,
         1,

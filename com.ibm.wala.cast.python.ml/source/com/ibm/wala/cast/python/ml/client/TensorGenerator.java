@@ -3070,7 +3070,13 @@ public abstract class TensorGenerator {
    * <p>The stage declines ({@code null}) when the operator is not {@code +}, the value's pointer
    * key is implicit (the gate cannot run), either operand carries tensor evidence, no operand is a
    * scalar-sequence literal, or the other operand resolves to members of some rank other than 1 (a
-   * nested operand, whose conversion would raise; the ordinary pipeline's answer stands).
+   * nested operand, whose conversion would raise; the ordinary pipeline's answer stands). It also
+   * declines when a non-literal operand is the result of a call on a tensor-library value ({@link
+   * TensorGeneratorFactory#isTensorLibraryCallResult}, wala/ML#911): Python tries the tensor's
+   * {@code __radd__} before list concatenation, so {@code [1] + tf.unmodeled(...)} is a broadcast
+   * add whose rank is the tensor's, and the forced-rank argument does not hold. Declining leaves
+   * the prior bottom, which asserts nothing; that narrows the uncovered case to callers with no
+   * library provenance the engine can see and does not close it.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose IR defines the binary operator.
@@ -3097,6 +3103,8 @@ public abstract class TensorGenerator {
     for (int u = 0; u < 2; u++) {
       int operandVn = binop.getUse(u);
       boolean literal = isSequenceLiteral(node, operandVn);
+      if (!literal && TensorGeneratorFactory.isTensorLibraryCallResult(node, operandVn, builder))
+        return null;
       Set<List<Dimension<?>>> members =
           this.getShapeResult(builder, node, operandVn, exact).members();
       Set<Dimension<?>> operandLengths = null;
@@ -4308,7 +4316,7 @@ public abstract class TensorGenerator {
    * @param vn The lexical read's definition value number.
    * @return The definer (node, value number) pairs; empty if none resolve.
    */
-  private static Set<Pair<CGNode, Integer>> lexicalDefiners(
+  static Set<Pair<CGNode, Integer>> lexicalDefiners(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
     Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
     PointerKey pk = builder.getPointerKeyForLocal(node, vn);
