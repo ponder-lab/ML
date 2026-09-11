@@ -130,6 +130,19 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
 
   protected static final TensorType TENSOR_1_3_FLOAT32 = TensorType.of(FLOAT_32, 1, 3);
 
+  protected static final TensorType TENSOR_1_3_INT32 = TensorType.of(INT_32, 1, 3);
+
+  protected static final TensorType TENSOR_1_3_UNKNOWN_DTYPE =
+      new TensorType(UNKNOWN, asList(new NumericDim(1), new NumericDim(3)));
+
+  /**
+   * `tf.expand_dims` over a rank-1 list whose length the analysis cannot compute (wala/ML#907). The
+   * dtype is unknown: a list concatenation's element type is not fixed by a scalar literal operand
+   * (`[3] + [1.5]` converts to float32).
+   */
+  protected static final TensorType TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE =
+      new TensorType(UNKNOWN, asList(new NumericDim(1), UnresolvedDim.INSTANCE));
+
   protected static final TensorType TENSOR_3_1_FLOAT32 = TensorType.of(FLOAT_32, 3, 1);
 
   @SuppressWarnings("unused")

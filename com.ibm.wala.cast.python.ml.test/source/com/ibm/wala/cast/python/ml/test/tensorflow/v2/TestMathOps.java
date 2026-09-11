@@ -812,6 +812,76 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * Control for {@link #testExpandDimsOfListConcatenation()}: {@code tf.expand_dims} over a
+   * concrete scalar-list literal, {@code [1, 2, 3]}, resolves to {@code (1, 3)} int32 through the
+   * literal-list value path (wala/ML#907).
+   */
+  @Test
+  public void testExpandDimsOfListLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_literal_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_3_INT32)));
+  }
+
+  /**
+   * {@code tf.expand_dims(([bos] + self.sp.decode(context)), 0)}, the gpt-2 sampling construct
+   * (wala/ML#907): a scalar-list literal concatenated with an opaque call result. Python list
+   * {@code +} makes the value a rank-1 list whatever the opaque operand holds (a nested operand
+   * would make the tensor conversion raise), so the result is {@code (1, Unresolved)}: the batch
+   * axis is the constant 1 and only the length is unknown to the analysis.
+   */
+  @Test
+  public void testExpandDimsOfListConcatenation()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_UNRESOLVED_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Companion to {@link #testExpandDimsOfListConcatenation()}: both operands of the concatenation
+   * are scalar literals, {@code [bos] + [1, 2]} with {@code bos} defaulted, so the length is the
+   * sum of theirs and the result is {@code (1, 3)} (wala/ML#907). The dtype stays unknown, as on
+   * the opaque-operand form.
+   */
+  @Test
+  public void testExpandDimsOfLiteralListConcatenation()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_literal_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_3_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The caller the wala/ML#907 sequence-concatenation stage does not cover: {@code [1] + lost}
+   * where {@code lost} is a tensor the analysis has no evidence for (the result of an unmodeled
+   * API). Python tries the tensor's {@code __radd__} before list concatenation, so the runtime
+   * value is a broadcast add of shape {@code (2, 3)} and {@code tf.expand_dims} yields {@code (1,
+   * 2, 3)}; the stage, seeing no tensor evidence on either operand, types the value as a rank-1
+   * sequence and the result as {@code (1, Unresolved)} instead. The wrong rank narrows what a
+   * consumer accepts, so this is a confidently-wrong result, not an imprecise one. A tensor with no
+   * evidence cannot be recovered, so the sound answer, and the one asserted here, is an unknown
+   * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#911 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testExpandDimsOfListPlusLostTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.math.pow(x, y)}. Element-wise binary; output shape is the
    * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); output dtype
    * matches {@code x} (TF requires {@code x}/{@code y} to share dtype, so dtype-from-{@code x} is
