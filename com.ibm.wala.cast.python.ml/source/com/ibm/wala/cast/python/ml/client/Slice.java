@@ -87,48 +87,71 @@ public class Slice extends PassThroughUnaryTensorGenerator {
     Set<List<Dimension<?>>> inputShapes = super.getDefaultShapes(builder);
     if (inputShapes == null) return null;
 
+    ShapeTransform rule = this.sliceRule(builder);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> input : inputShapes) {
+      Set<List<Dimension<?>>> outs = rule.apply(input);
+      // A ⊤ (null) for any combination joins to ⊤ for the whole result: returning only the
+      // concrete subset would under-approximate the possible shapes.
+      if (outs == null) return null;
+      ret.addAll(outs);
+    }
+    return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * The {@code tf.slice} shape rule as a function of the {@code input_} shape alone, its {@code
+   * begin} (arg 1) and {@code size} (arg 2) bounds resolved once from the points-to substrate. One
+   * rule serves both arms: {@link #getDefaultShapes} applies it to the input's substrate shape and
+   * the {@link TypeFeedKind#TRANSFORM} feed applies it to the input's dataflow state, so an input
+   * typed only by dataflow (a sidecar annotation, wala/ML#905) gets the same answer as one the
+   * substrate resolves.
+   *
+   * <p>A slice never changes the rank at run time, so bounds that do not resolve degrade the
+   * extents and not the shape: the output keeps the input's rank with every axis degraded per the
+   * wala/ML#721 conventions. The historical whole-shape ⊤ there dropped the rank of every value
+   * downstream of a runtime-computed crop (a {@code tf.slice} over {@code
+   * tf.image.sample_distorted_bounding_box}'s outputs), which is how an augmentation chain's
+   * helpers lost their image parameters' ranks. The documented-contract crop keeps its channel
+   * extent (wala/ML#844): when both bounds are the destructured outputs of one {@code
+   * sample_distorted_bounding_box} call, {@code size} is documented as {@code [target_height,
+   * target_width, -1]} and {@code begin} as {@code [offset_height, offset_width, 0]}, so a rank-3
+   * input's channel extent survives verbatim while the spatial axes stay degraded.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The rule; it yields {@code null} for an input whose ranks disagree with a resolved
+   *     bound or whose resolved {@code size} entry is invalid.
+   */
+  private ShapeTransform sliceRule(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> beginLists = resolveConstantIntList(builder, 1, "begin");
     Set<List<Dimension<?>>> sizeLists = resolveConstantIntList(builder, 2, "size");
 
-    // A slice never changes the rank at run time, so bounds that do not resolve degrade the
-    // extents and not the shape: the output keeps the input's rank with every axis degraded per
-    // the wala/ML#721 conventions. The historical whole-shape ⊤ here dropped the rank of every
-    // value downstream of a runtime-computed crop (a `tf.slice` over
-    // `tf.image.sample_distorted_bounding_box`'s outputs), which is how an augmentation chain's
-    // helpers lost their image parameters' ranks.
     if (sizeLists == null) {
-      // The documented-contract crop keeps its channel extent (wala/ML#844): when both bounds are
-      // the destructured outputs of one `sample_distorted_bounding_box` call, `size` is documented
-      // as `[target_height, target_width, -1]` and `begin` as `[offset_height, offset_width, 0]`,
-      // so a rank-3 input's channel extent survives verbatim while the spatial axes stay degraded.
       boolean cropContract = this.boundsAreSampleDistortedBoundingBoxOutputs(builder);
-      Set<List<Dimension<?>>> ret = HashSetFactory.make();
-      for (List<Dimension<?>> input : inputShapes) {
+      return input -> {
         List<Dimension<?>> out = new ArrayList<>(input.size());
         for (int i = 0; i < input.size(); i++) {
           Dimension<?> inDim = input.get(i);
           if (cropContract && input.size() == 3 && i == 2) out.add(inDim);
           else out.add(inDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
         }
-        ret.add(out);
-      }
-      return ret.isEmpty() ? null : ret;
+        return Set.of(out);
+      };
     }
 
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> input : inputShapes)
+    return input -> {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (List<Dimension<?>> size : sizeLists)
         // An unresolvable `begin` alone does not lose the shape: only the size-of--1 axes need it,
         // and those degrade per axis inside the rule.
         for (List<Dimension<?>> begin :
             beginLists == null ? Collections.<List<Dimension<?>>>singleton(null) : beginLists) {
           List<Dimension<?>> out = sliceShape(input, begin, size);
-          // A ⊤ (null) for any combination joins to ⊤ for the whole result: returning only the
-          // concrete subset would under-approximate the possible shapes.
           if (out == null) return null;
           ret.add(out);
         }
-    return ret.isEmpty() ? null : ret;
+      return ret;
+    };
   }
 
   /** The producer whose bounds carry the documented crop contract (wala/ML#844). */
@@ -314,15 +337,18 @@ public class Slice extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * This generator transforms its input's shape, so forwarding operand shapes would overclaim; the
-   * feed carries dtype only (wala/ML#682).
+   * The feed carries this generator's own shape rule (wala/ML#905), so an input typed only by
+   * dataflow gets exactly the answer the substrate arm computes: the fully-taken channel of the
+   * documented crop survives, and constant bounds slice the fed shape as they slice a resolved one.
+   * The former {@link TypeFeedKind#RANK_PRESERVING} declaration degraded every fed axis, which is
+   * how an annotated image lost its channel through a crop that keeps it.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The dtype-only feed over the caller-side input keys, or {@code null} when none is
+   * @return The rule-carrying feed over the caller-side input keys, or {@code null} when none is
    *     located.
    */
   @Override
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
-    return this.getTypeFeed(builder, TypeFeedKind.RANK_PRESERVING);
+    return this.getTypeFeed(builder, this.sliceRule(builder));
   }
 }

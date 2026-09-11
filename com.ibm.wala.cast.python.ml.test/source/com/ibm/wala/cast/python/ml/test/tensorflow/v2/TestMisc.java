@@ -23,10 +23,12 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.TensorGenerator;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -650,6 +652,34 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * A {@code TypeFeed} carries a shape rule exactly when its kind is {@code TRANSFORM}
+   * (wala/ML#905): a rule-less {@code TRANSFORM} feed and a fixed-kind feed carrying a rule are
+   * both refused at construction, so a generator cannot declare a rule the transfer would never
+   * apply, or a kind the transfer would apply without one.
+   */
+  @Test
+  public void testTypeFeedCarriesRuleExactlyForTransformKind() {
+    TensorGenerator.ShapeTransform identity = input -> Set.of(input);
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new TensorGenerator.TypeFeed(TensorGenerator.TypeFeedKind.TRANSFORM, List.of(), null));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new TensorGenerator.TypeFeed(
+                TensorGenerator.TypeFeedKind.PASS_THROUGH, List.of(), identity));
+    assertEquals(
+        identity,
+        new TensorGenerator.TypeFeed(TensorGenerator.TypeFeedKind.TRANSFORM, List.of(), identity)
+            .transform());
+    assertEquals(
+        null,
+        new TensorGenerator.TypeFeed(TensorGenerator.TypeFeedKind.PASS_THROUGH, List.of())
+            .transform());
+  }
+
+  /**
    * The {@code Dynamic} half of {@link #testSliceKeepsRankThroughTypeFeed()}. A decoded JPEG has no
    * static extents, so its axes carry run-time {@code None}-evidence and are {@code Dynamic} rather
    * than {@code Unresolved} (<a href="https://github.com/wala/ML/issues/721">wala/ML#721</a>).
@@ -687,7 +717,9 @@ public class TestMisc extends AbstractTensorTest {
    * genuinely dynamic. The crop's extents are correctly unknown, but its RANK is guaranteed, and
    * {@code Slice.getDefaultShapes} already preserves it. The type feed did not: it declared {@code
    * DTYPE_ONLY}, so on the values the feed exists to serve the fed answer was strictly weaker than
-   * the computed one and the parameter lost its rank entirely. The union is now rank-homogeneous.
+   * the computed one and the parameter lost its rank entirely. The union is now rank-homogeneous,
+   * and since the feed carries the crop's own rule (wala/ML#905) the chain member also keeps the
+   * channel the crop takes in full: {@code (Unresolved, Unresolved, 3)}, not all three degraded.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -710,8 +742,66 @@ public class TestMisc extends AbstractTensorTest {
                 TensorType.of(UINT_8, 4830, 2900, 3),
                 new TensorType(
                     UINT_8,
-                    asList(
-                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * A {@code tf.slice} crop over an input typed only by a sidecar annotation keeps the channel axis
+   * it takes in full (<a href="https://github.com/wala/ML/issues/905">wala/ML#905</a>). The crop's
+   * bounds are the destructured outputs of {@code sample_distorted_bounding_box}, whose {@code
+   * size} is documented as {@code [h, w, -1]}, so the spatial extents are genuinely unknown while
+   * the channel survives verbatim: {@code (Unresolved, Unresolved, 3)} uint8. The fixture mirrors
+   * the subject's crop form exactly. Before the fix the sink read {@code (Unresolved, Unresolved,
+   * Unresolved)}: the annotated shape reaches the crop only through the type feed, whose
+   * rank-preserving kind degraded every axis, while the substrate arm that keeps the channel never
+   * saw the annotated input at all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceKeepsFullyTakenAxisOfAnnotatedInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_crop_channel.py"},
+        "driver_crop_channel.py",
+        "consume_crop",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UINT_8,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * Control for {@link #testSliceKeepsFullyTakenAxisOfAnnotatedInput()}: the crop's own parameter
+   * carries the annotation in full, {@code (4830, 2900, 3)} uint8, so a channel that fails to
+   * survive the crop failed inside the crop and not on the way in (wala/ML#905). The dtype is part
+   * of the assertion so a fix that recovers the axis for the wrong reason cannot pass on the shape
+   * alone.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAnnotatedInputReachesCropParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_crop_channel.py"},
+        "driver_crop_channel.py",
+        "distorted_random_crop",
+        "sidecar_proj",
+        1,
+        3,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4830, 2900, 3))));
   }
 
   /**

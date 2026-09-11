@@ -174,6 +174,37 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    *     input position is undefined.
    */
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder, TypeFeedKind kind) {
+    return this.feedOverInput(builder, kind, null);
+  }
+
+  /**
+   * Rule-carrying counterpart of {@link #getTypeFeed(PropagationCallGraphBuilder, TypeFeedKind)}
+   * (wala/ML#905): a {@link TypeFeedKind#TRANSFORM} feed over the same caller-side input keys,
+   * applying the generator's own per-input-shape rule to the input's dataflow state.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param transform The generator's rule, never {@code null}.
+   * @return The feed, or {@code null} when no input key is located or the input position is
+   *     undefined.
+   */
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder, ShapeTransform transform) {
+    return this.feedOverInput(builder, TypeFeedKind.TRANSFORM, transform);
+  }
+
+  /**
+   * The one construction path behind both {@code getTypeFeed} overloads: a feed of the given kind
+   * over the caller-side pointer keys of this generator's input argument, one per anchoring
+   * invocation, in caller order.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param kind The composition kind.
+   * @param transform The rule for {@link TypeFeedKind#TRANSFORM}, {@code null} for every other
+   *     kind.
+   * @return The feed, or {@code null} when no input key is located or the input position is
+   *     undefined.
+   */
+  private TypeFeed feedOverInput(
+      PropagationCallGraphBuilder builder, TypeFeedKind kind, ShapeTransform transform) {
     int position = getInputParameterPosition();
     if (position == UNDEFINED_PARAMETER_POSITION) return null;
     Set<PointerKey> ret = new LinkedHashSet<>();
@@ -198,7 +229,7 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               .getHeapModel()
               .getPointerKeyForLocal(callerInvoke.fst, argValueNumber));
     }
-    return ret.isEmpty() ? null : new TypeFeed(kind, new ArrayList<>(ret));
+    return ret.isEmpty() ? null : new TypeFeed(kind, new ArrayList<>(ret), transform);
   }
 
   /**

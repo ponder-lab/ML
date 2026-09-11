@@ -6832,6 +6832,20 @@ public abstract class TensorGenerator {
     /** Each operand member forwards unchanged (the operation preserves its input's type). */
     PASS_THROUGH,
 
+    /**
+     * Each operand member's shape passes through the generator's OWN per-input-shape rule, carried
+     * on the feed as a {@link ShapeTransform}, while the dtype forwards: the operation transforms
+     * its input's shape by a rule the generator can state as a function of that shape alone, its
+     * other arguments having been resolved from the points-to substrate when the feed was declared
+     * (wala/ML#905). This is the kind for a generator whose {@code getDefaultShapes} is such a rule
+     * over the input's substrate shape: declaring the same rule here applies it to the input's
+     * DATAFLOW state too, the state a sidecar annotation or a producer the substrate cannot see
+     * lives in, so one operation cannot get two answers depending on which path typed its input.
+     * The fixed kinds above cannot carry a rule, which is how a {@code tf.slice} that keeps a
+     * fully-taken axis in its substrate arm degraded that axis in its fed arm.
+     */
+    TRANSFORM,
+
     /** The two operands' member shapes broadcast pairwise (element-wise semantics). */
     BROADCAST,
 
@@ -6844,14 +6858,50 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * A generator's per-input-shape rule, carried on a {@link TypeFeedKind#TRANSFORM} feed
+   * (wala/ML#905): the output shapes for one input shape, or {@code null} when the rule cannot type
+   * that input (the fed member then keeps its dtype with an unknown shape). A rule may yield
+   * several outputs when its other arguments resolved to several candidates.
+   */
+  @FunctionalInterface
+  public interface ShapeTransform {
+    /**
+     * Applies the rule to one input shape.
+     *
+     * @param input The input's dimensions, never {@code null}.
+     * @return The output shapes, or {@code null} when the rule cannot type this input.
+     */
+    Set<List<Dimension<?>>> apply(List<Dimension<?>> input);
+  }
+
+  /**
    * A type-feed declaration (wala/ML#736, wala/ML#682): how the result composes from its operands
    * and where the operands live.
    *
    * @param kind The composition kind.
    * @param operands The operand pointer keys, in operand order; {@link TypeFeedKind#BROADCAST}
    *     requires exactly two.
+   * @param transform The generator's own shape rule for {@link TypeFeedKind#TRANSFORM}, and {@code
+   *     null} for every other kind (wala/ML#905).
    */
-  public record TypeFeed(TypeFeedKind kind, List<PointerKey> operands) {}
+  public record TypeFeed(TypeFeedKind kind, List<PointerKey> operands, ShapeTransform transform) {
+
+    public TypeFeed {
+      if ((kind == TypeFeedKind.TRANSFORM) != (transform != null))
+        throw new IllegalArgumentException(
+            "A shape transform is carried by exactly the TRANSFORM kind: " + kind + ".");
+    }
+
+    /**
+     * A feed of a fixed kind, carrying no rule.
+     *
+     * @param kind The composition kind, never {@link TypeFeedKind#TRANSFORM}.
+     * @param operands The operand pointer keys, in operand order.
+     */
+    public TypeFeed(TypeFeedKind kind, List<PointerKey> operands) {
+      this(kind, operands, null);
+    }
+  }
 
   /**
    * Declares the type feed that can replace this generator's unresolved seed. An unknown-shape seed

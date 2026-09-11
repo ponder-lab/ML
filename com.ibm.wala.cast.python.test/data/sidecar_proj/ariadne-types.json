@@ -136,6 +136,14 @@
       "dtype": "float32",
       "shape": "8 4",
       "attribution": "fixture: the batch size this program is run with, recorded against the feed-dependent leading axis (wala/ML#888)"
+    },
+    {
+      "module": "driver_crop_channel.py",
+      "function": "",
+      "variable": "img_array",
+      "dtype": "uint8",
+      "shape": "4830 2900 3",
+      "attribution": "fixture: mirrors the decoded-JPEG entry of the wala/ML#905 subject; the array is saved and reloaded in the same script"
     }
   ]
 }
