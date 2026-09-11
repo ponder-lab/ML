@@ -582,6 +582,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param seedOrigins The suppressed seed's origins, stamped on the fed result: the producing
    *     library is the modeled operation's, whatever produced the operand (wala/ML#724,
    *     wala/ML#772).
+   * @param transform The generator's own shape rule for {@link
+   *     TensorGenerator.TypeFeedKind#TRANSFORM}, and {@code null} for every other kind
+   *     (wala/ML#905).
    */
   public record FeedPlan(
       TensorGenerator.TypeFeedKind kind,
@@ -589,26 +592,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       List<PointsToSetVariable> operands,
       Set<TensorType> seedMembers,
       Set<TensorOrigin> seedOrigins,
-      TensorGenerator.ShapeTransform transform) {
-
-    /**
-     * A plan of a fixed kind, carrying no rule.
-     *
-     * @param kind The composition kind, never {@link TensorGenerator.TypeFeedKind#TRANSFORM}.
-     * @param mode The trusted-axes mode.
-     * @param operands The feeding operand variables, in operand order.
-     * @param seedMembers The suppressed seed's members.
-     * @param seedOrigins The suppressed seed's origins.
-     */
-    public FeedPlan(
-        TensorGenerator.TypeFeedKind kind,
-        FeedMode mode,
-        List<PointsToSetVariable> operands,
-        Set<TensorType> seedMembers,
-        Set<TensorOrigin> seedOrigins) {
-      this(kind, mode, operands, seedMembers, seedOrigins, null);
-    }
-  }
+      TensorGenerator.ShapeTransform transform) {}
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,

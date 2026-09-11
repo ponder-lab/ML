@@ -23,10 +23,12 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.TensorGenerator;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -647,6 +649,34 @@ public class TestMisc extends AbstractTensorTest {
         TensorType.of(FLOAT32, 2, 3));
     assertEquals(new TensorType(FLOAT_32, asList(new NumericDim(3))), TensorType.of(FLOAT_32, 3));
     assertTrue(TensorType.of(FLOAT32, 2, 2).asSparse().isSparse());
+  }
+
+  /**
+   * A {@code TypeFeed} carries a shape rule exactly when its kind is {@code TRANSFORM}
+   * (wala/ML#905): a rule-less {@code TRANSFORM} feed and a fixed-kind feed carrying a rule are
+   * both refused at construction, so a generator cannot declare a rule the transfer would never
+   * apply, or a kind the transfer would apply without one.
+   */
+  @Test
+  public void testTypeFeedCarriesRuleExactlyForTransformKind() {
+    TensorGenerator.ShapeTransform identity = input -> Set.of(input);
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new TensorGenerator.TypeFeed(TensorGenerator.TypeFeedKind.TRANSFORM, List.of(), null));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new TensorGenerator.TypeFeed(
+                TensorGenerator.TypeFeedKind.PASS_THROUGH, List.of(), identity));
+    assertEquals(
+        identity,
+        new TensorGenerator.TypeFeed(TensorGenerator.TypeFeedKind.TRANSFORM, List.of(), identity)
+            .transform());
+    assertEquals(
+        null,
+        new TensorGenerator.TypeFeed(TensorGenerator.TypeFeedKind.PASS_THROUGH, List.of())
+            .transform());
   }
 
   /**
