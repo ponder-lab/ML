@@ -858,6 +858,30 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * The caller the wala/ML#907 sequence-concatenation stage does not cover: {@code [1] + lost}
+   * where {@code lost} is a tensor the analysis has no evidence for (the result of an unmodeled
+   * API). Python tries the tensor's {@code __radd__} before list concatenation, so the runtime
+   * value is a broadcast add of shape {@code (2, 3)} and {@code tf.expand_dims} yields {@code (1,
+   * 2, 3)}; the stage, seeing no tensor evidence on either operand, types the value as a rank-1
+   * sequence and the result as {@code (1, Unresolved)} instead. The wrong rank narrows what a
+   * consumer accepts, so this is a confidently-wrong result, not an imprecise one. A tensor with no
+   * evidence cannot be recovered, so the sound answer, and the one asserted here, is an unknown
+   * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#911 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testExpandDimsOfListPlusLostTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_concat_lost_tensor_expand_dims.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.math.pow(x, y)}. Element-wise binary; output shape is the
    * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); output dtype
    * matches {@code x} (TF requires {@code x}/{@code y} to share dtype, so dtype-from-{@code x} is
