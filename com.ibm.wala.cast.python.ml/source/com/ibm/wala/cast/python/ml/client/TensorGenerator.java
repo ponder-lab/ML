@@ -2880,6 +2880,19 @@ public abstract class TensorGenerator {
     // No direct generator. Try tracing the definition or parameters.
     SSAInstruction def = node.getDU().getDef(valueNumber);
 
+    // A `+` the factory declined to dispatch as an element-wise operation, for want of tensor
+    // evidence on either operand, is Python's sequence concatenation. With a scalar list or tuple
+    // literal on either side, the value is a rank-1 sequence whose length is the one thing left
+    // unresolved; without this stage a binary-operator def that is neither an invoke, a φ, nor a
+    // parameter floors to ⊥ below, and a consumer converting the value to a tensor (the gpt-2
+    // sampler's `tf.expand_dims([bos] + sp.encode_as_ids(context), 0)`) loses its rank
+    // (wala/ML#907).
+    if (def instanceof SSABinaryOpInstruction binop) {
+      ShapeResult fromConcatenation =
+          this.shapeResultOfSequenceConcatenation(builder, node, binop, var, exact);
+      if (fromConcatenation != null) return fromConcatenation;
+    }
+
     // A value defined by an invoke that neither the points-to set nor the factory resolved is
     // typically a Python-callable result whose allocation the PA lost through a synthetic return
     // (e.g., a chained layer-call result in a `call` body). The callee's own return value still
@@ -3032,6 +3045,109 @@ public abstract class TensorGenerator {
                 + describe(node)
                 + "; flooring to ⊥ (not a tensor). wala/ML#620.");
     return ShapeResult.bottom();
+  }
+
+  /**
+   * Types a sequence concatenation, {@code literal + X} or {@code X + literal}, as a rank-1
+   * sequence (wala/ML#907). The stage applies only when the factory has declined an {@link
+   * ElementWiseOperation} dispatch for the binary operator because neither operand shows tensor
+   * evidence ({@link TensorGeneratorFactory#isBinopWithoutTensorOperand}), so the {@code +} is
+   * Python's list or tuple concatenation rather than a tensor op, and only when at least one
+   * operand is a list or tuple literal whose own value shape resolves to rank 1, that is, a literal
+   * of scalars.
+   *
+   * <p>The rank is forced by the scalar literal, not inferred from the other operand: a
+   * concatenation that succeeds is a sequence whose elements include the literal's scalars, and
+   * converting it to a tensor succeeds only if every element is a scalar, since a nested operand
+   * would make the sequence ragged and the conversion raise. Conditional on the program converting
+   * the value at all, the literal admits exactly one rank. The length is the sum of the operands'
+   * lengths when both resolve to constants and {@link UnresolvedDim} otherwise: it is a fixed
+   * runtime integer the analysis could not compute, never a runtime {@code None}. Recovering the
+   * rank narrows what a consumer accepts, since an unknown rank suppresses a signature entirely, so
+   * the claim must be true of every caller the program can make; it is, because any other value
+   * would have failed the conversion the consumer performs.
+   *
+   * <p>The stage declines ({@code null}) when the operator is not {@code +}, the value's pointer
+   * key is implicit (the gate cannot run), either operand carries tensor evidence, no operand is a
+   * scalar-sequence literal, or the other operand resolves to members of some rank other than 1 (a
+   * nested operand, whose conversion would raise; the ordinary pipeline's answer stands).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines the binary operator.
+   * @param binop The binary operator instruction.
+   * @param var The value's {@link PointsToSetVariable}, or {@code null} when its key is implicit.
+   * @param exact Whether operand reads mark an unknown remainder (wala/ML#716); the result itself
+   *     is never partial, since the rank is forced whatever the operand reads leave unresolved.
+   * @return The rank-1 sequence's shapes, or {@code null} when the stage does not apply.
+   */
+  private ShapeResult shapeResultOfSequenceConcatenation(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSABinaryOpInstruction binop,
+      PointsToSetVariable var,
+      boolean exact) {
+    if (binop.getOperator() != IBinaryOpInstruction.Operator.ADD || var == null) return null;
+    if (!TensorGeneratorFactory.isBinopWithoutTensorOperand(var, builder, HashSetFactory.make()))
+      return null;
+
+    // Per operand, the candidate lengths of a resolved rank-1 sequence, or null when the operand
+    // resolves to nothing. A literal operand must resolve; a non-literal one may not.
+    boolean anyScalarLiteral = false;
+    List<Set<Dimension<?>>> lengths = new ArrayList<>(2);
+    for (int u = 0; u < 2; u++) {
+      int operandVn = binop.getUse(u);
+      boolean literal = isSequenceLiteral(node, operandVn);
+      Set<List<Dimension<?>>> members =
+          this.getShapeResult(builder, node, operandVn, exact).members();
+      Set<Dimension<?>> operandLengths = null;
+      if (!members.isEmpty()) {
+        // A resolved operand of any rank but 1 is not a flat sequence: a literal one is not the
+        // scalar literal the rank argument needs, and any other one would make the conversion
+        // raise. Either way the stage declines.
+        for (List<Dimension<?>> member : members) if (member.size() != 1) return null;
+        operandLengths = HashSetFactory.make();
+        for (List<Dimension<?>> member : members) operandLengths.add(member.get(0));
+      } else if (literal) return null;
+      anyScalarLiteral |= literal;
+      lengths.add(operandLengths);
+    }
+    if (!anyScalarLiteral) return null;
+
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    if (lengths.get(0) != null && lengths.get(1) != null)
+      for (Dimension<?> left : lengths.get(0))
+        for (Dimension<?> right : lengths.get(1))
+          ret.add(
+              List.of(
+                  left instanceof NumericDim l && right instanceof NumericDim r
+                      ? new NumericDim(l.value() + r.value())
+                      : UnresolvedDim.INSTANCE));
+    else ret.add(List.of(UnresolvedDim.INSTANCE));
+    Set<List<Dimension<?>>> finalRet = ret;
+    LOGGER.fine(
+        () ->
+            "Sequence concatenation: vn="
+                + binop.getDef()
+                + " in "
+                + describe(node)
+                + " is a rank-1 sequence "
+                + finalRet
+                + " (wala/ML#907).");
+    return ShapeResult.of(ret);
+  }
+
+  /**
+   * Whether a value is defined by a list or tuple literal's allocation.
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number.
+   * @return {@code true} iff {@code vn}'s def allocates a {@code list} or {@code tuple}.
+   */
+  private static boolean isSequenceLiteral(CGNode node, int vn) {
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof SSANewInstruction alloc)) return false;
+    TypeReference allocated = alloc.getNewSite().getDeclaredType();
+    return allocated.equals(list) || allocated.equals(tuple);
   }
 
   /**

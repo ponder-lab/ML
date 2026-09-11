@@ -1201,8 +1201,12 @@ public class TensorGeneratorFactory {
    *     unchanged to {@link #tryGetGenerator} so operand-side recursion participates in the same
    *     cycle guard as the parent dispatch.
    * @return {@code true} iff {@code source} is binop-defined and no operand has tensor evidence.
+   * @apiNote Package-visible so {@link TensorGenerator}'s sequence-concatenation stage can require
+   *     the same absence of tensor evidence before reading a {@code +} as Python's list or tuple
+   *     concatenation (wala/ML#907): one definition of "no tensor operand" serves both the dispatch
+   *     gate and the fallback it leaves behind.
    */
-  private static boolean isBinopWithoutTensorOperand(
+  static boolean isBinopWithoutTensorOperand(
       PointsToSetVariable source,
       PropagationCallGraphBuilder builder,
       Set<PointsToSetVariable> visited) {
