@@ -1397,15 +1397,12 @@ public class TestMisc extends AbstractTensorTest {
 
   /**
    * A permutation returns an array of exactly its input's shape and dtype, permuted along the first
-   * axis. Both are lost: the result is rankless AND its dtype is unknown, which is what makes this
-   * a missing model rather than a shape-level gap.
-   *
-   * <p>TODO: Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
+   * axis, so both are preserved. The argument here is a transpose result whose points-to set is
+   * empty, so the shape and dtype are recovered from the caller's frame (wala/ML#910).
    *
    * @throws Exception On analysis error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testRandomStatePermutationKeepsShapeAndDType() throws Exception {
     test(
         "tf2_test_numpy_binop_shape.py",
@@ -1416,15 +1413,12 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * Everything downstream of the permutation inherits both losses, which is how a single unmodelled
-   * call turns into a parameter with no rank several operations later.
-   *
-   * <p>TODO: Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/910">wala/ML#910</a> is fixed.
+   * Everything downstream of the permutation inherits the recovered shape and dtype, which is how a
+   * single modelled call keeps a parameter well typed several operations later (wala/ML#910).
    *
    * @throws Exception On analysis error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testValuesDownstreamOfPermutationKeepShape() throws Exception {
     test(
         "tf2_test_numpy_binop_shape.py",
