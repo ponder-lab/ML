@@ -503,6 +503,145 @@
         <putfield class="LRoot" field="Sequential" fieldType="LRoot" ref="models" value="Sequential"/>
         <new def="ImageDataGenerator" class="Ltensorflow/keras/preprocessing/image/ImageDataGenerator"/>
         <putfield class="LRoot" field="ImageDataGenerator" fieldType="LRoot" ref="image" value="ImageDataGenerator"/>
+        <!-- `tf.keras.applications` (wala/ML#896): every constructor is reachable as `applications.<Name>` and as `applications.<module>.<Name>`, the two being one object in TensorFlow 2.9.3; `resnet50` aliases the `resnet` module. -->
+        <new def="applications" class="Lobject"/>
+        <putfield class="LRoot" field="applications" fieldType="LRoot" ref="keras" value="applications"/>
+        <new def="appmod_mobilenet" class="Lobject"/>
+        <putfield class="LRoot" field="mobilenet" fieldType="LRoot" ref="applications" value="appmod_mobilenet"/>
+        <new def="app_MobileNet" class="Ltensorflow/keras/applications/MobileNet"/>
+        <putfield class="LRoot" field="MobileNet" fieldType="LRoot" ref="applications" value="app_MobileNet"/>
+        <putfield class="LRoot" field="MobileNet" fieldType="LRoot" ref="appmod_mobilenet" value="app_MobileNet"/>
+        <new def="appmod_mobilenet_v2" class="Lobject"/>
+        <putfield class="LRoot" field="mobilenet_v2" fieldType="LRoot" ref="applications" value="appmod_mobilenet_v2"/>
+        <new def="app_MobileNetV2" class="Ltensorflow/keras/applications/MobileNetV2"/>
+        <putfield class="LRoot" field="MobileNetV2" fieldType="LRoot" ref="applications" value="app_MobileNetV2"/>
+        <putfield class="LRoot" field="MobileNetV2" fieldType="LRoot" ref="appmod_mobilenet_v2" value="app_MobileNetV2"/>
+        <new def="appmod_mobilenet_v3" class="Lobject"/>
+        <putfield class="LRoot" field="mobilenet_v3" fieldType="LRoot" ref="applications" value="appmod_mobilenet_v3"/>
+        <new def="app_MobileNetV3Small" class="Ltensorflow/keras/applications/MobileNetV3Small"/>
+        <putfield class="LRoot" field="MobileNetV3Small" fieldType="LRoot" ref="applications" value="app_MobileNetV3Small"/>
+        <putfield class="LRoot" field="MobileNetV3Small" fieldType="LRoot" ref="appmod_mobilenet_v3" value="app_MobileNetV3Small"/>
+        <new def="app_MobileNetV3Large" class="Ltensorflow/keras/applications/MobileNetV3Large"/>
+        <putfield class="LRoot" field="MobileNetV3Large" fieldType="LRoot" ref="applications" value="app_MobileNetV3Large"/>
+        <putfield class="LRoot" field="MobileNetV3Large" fieldType="LRoot" ref="appmod_mobilenet_v3" value="app_MobileNetV3Large"/>
+        <new def="appmod_resnet" class="Lobject"/>
+        <putfield class="LRoot" field="resnet" fieldType="LRoot" ref="applications" value="appmod_resnet"/>
+        <new def="app_ResNet50" class="Ltensorflow/keras/applications/ResNet50"/>
+        <putfield class="LRoot" field="ResNet50" fieldType="LRoot" ref="applications" value="app_ResNet50"/>
+        <putfield class="LRoot" field="ResNet50" fieldType="LRoot" ref="appmod_resnet" value="app_ResNet50"/>
+        <new def="app_ResNet101" class="Ltensorflow/keras/applications/ResNet101"/>
+        <putfield class="LRoot" field="ResNet101" fieldType="LRoot" ref="applications" value="app_ResNet101"/>
+        <putfield class="LRoot" field="ResNet101" fieldType="LRoot" ref="appmod_resnet" value="app_ResNet101"/>
+        <new def="app_ResNet152" class="Ltensorflow/keras/applications/ResNet152"/>
+        <putfield class="LRoot" field="ResNet152" fieldType="LRoot" ref="applications" value="app_ResNet152"/>
+        <putfield class="LRoot" field="ResNet152" fieldType="LRoot" ref="appmod_resnet" value="app_ResNet152"/>
+        <new def="appmod_resnet_v2" class="Lobject"/>
+        <putfield class="LRoot" field="resnet_v2" fieldType="LRoot" ref="applications" value="appmod_resnet_v2"/>
+        <new def="app_ResNet50V2" class="Ltensorflow/keras/applications/ResNet50V2"/>
+        <putfield class="LRoot" field="ResNet50V2" fieldType="LRoot" ref="applications" value="app_ResNet50V2"/>
+        <putfield class="LRoot" field="ResNet50V2" fieldType="LRoot" ref="appmod_resnet_v2" value="app_ResNet50V2"/>
+        <new def="app_ResNet101V2" class="Ltensorflow/keras/applications/ResNet101V2"/>
+        <putfield class="LRoot" field="ResNet101V2" fieldType="LRoot" ref="applications" value="app_ResNet101V2"/>
+        <putfield class="LRoot" field="ResNet101V2" fieldType="LRoot" ref="appmod_resnet_v2" value="app_ResNet101V2"/>
+        <new def="app_ResNet152V2" class="Ltensorflow/keras/applications/ResNet152V2"/>
+        <putfield class="LRoot" field="ResNet152V2" fieldType="LRoot" ref="applications" value="app_ResNet152V2"/>
+        <putfield class="LRoot" field="ResNet152V2" fieldType="LRoot" ref="appmod_resnet_v2" value="app_ResNet152V2"/>
+        <new def="appmod_vgg16" class="Lobject"/>
+        <putfield class="LRoot" field="vgg16" fieldType="LRoot" ref="applications" value="appmod_vgg16"/>
+        <new def="app_VGG16" class="Ltensorflow/keras/applications/VGG16"/>
+        <putfield class="LRoot" field="VGG16" fieldType="LRoot" ref="applications" value="app_VGG16"/>
+        <putfield class="LRoot" field="VGG16" fieldType="LRoot" ref="appmod_vgg16" value="app_VGG16"/>
+        <new def="appmod_vgg19" class="Lobject"/>
+        <putfield class="LRoot" field="vgg19" fieldType="LRoot" ref="applications" value="appmod_vgg19"/>
+        <new def="app_VGG19" class="Ltensorflow/keras/applications/VGG19"/>
+        <putfield class="LRoot" field="VGG19" fieldType="LRoot" ref="applications" value="app_VGG19"/>
+        <putfield class="LRoot" field="VGG19" fieldType="LRoot" ref="appmod_vgg19" value="app_VGG19"/>
+        <new def="appmod_inception_v3" class="Lobject"/>
+        <putfield class="LRoot" field="inception_v3" fieldType="LRoot" ref="applications" value="appmod_inception_v3"/>
+        <new def="app_InceptionV3" class="Ltensorflow/keras/applications/InceptionV3"/>
+        <putfield class="LRoot" field="InceptionV3" fieldType="LRoot" ref="applications" value="app_InceptionV3"/>
+        <putfield class="LRoot" field="InceptionV3" fieldType="LRoot" ref="appmod_inception_v3" value="app_InceptionV3"/>
+        <new def="appmod_inception_resnet_v2" class="Lobject"/>
+        <putfield class="LRoot" field="inception_resnet_v2" fieldType="LRoot" ref="applications" value="appmod_inception_resnet_v2"/>
+        <new def="app_InceptionResNetV2" class="Ltensorflow/keras/applications/InceptionResNetV2"/>
+        <putfield class="LRoot" field="InceptionResNetV2" fieldType="LRoot" ref="applications" value="app_InceptionResNetV2"/>
+        <putfield class="LRoot" field="InceptionResNetV2" fieldType="LRoot" ref="appmod_inception_resnet_v2" value="app_InceptionResNetV2"/>
+        <new def="appmod_xception" class="Lobject"/>
+        <putfield class="LRoot" field="xception" fieldType="LRoot" ref="applications" value="appmod_xception"/>
+        <new def="app_Xception" class="Ltensorflow/keras/applications/Xception"/>
+        <putfield class="LRoot" field="Xception" fieldType="LRoot" ref="applications" value="app_Xception"/>
+        <putfield class="LRoot" field="Xception" fieldType="LRoot" ref="appmod_xception" value="app_Xception"/>
+        <new def="appmod_densenet" class="Lobject"/>
+        <putfield class="LRoot" field="densenet" fieldType="LRoot" ref="applications" value="appmod_densenet"/>
+        <new def="app_DenseNet121" class="Ltensorflow/keras/applications/DenseNet121"/>
+        <putfield class="LRoot" field="DenseNet121" fieldType="LRoot" ref="applications" value="app_DenseNet121"/>
+        <putfield class="LRoot" field="DenseNet121" fieldType="LRoot" ref="appmod_densenet" value="app_DenseNet121"/>
+        <new def="app_DenseNet169" class="Ltensorflow/keras/applications/DenseNet169"/>
+        <putfield class="LRoot" field="DenseNet169" fieldType="LRoot" ref="applications" value="app_DenseNet169"/>
+        <putfield class="LRoot" field="DenseNet169" fieldType="LRoot" ref="appmod_densenet" value="app_DenseNet169"/>
+        <new def="app_DenseNet201" class="Ltensorflow/keras/applications/DenseNet201"/>
+        <putfield class="LRoot" field="DenseNet201" fieldType="LRoot" ref="applications" value="app_DenseNet201"/>
+        <putfield class="LRoot" field="DenseNet201" fieldType="LRoot" ref="appmod_densenet" value="app_DenseNet201"/>
+        <new def="appmod_nasnet" class="Lobject"/>
+        <putfield class="LRoot" field="nasnet" fieldType="LRoot" ref="applications" value="appmod_nasnet"/>
+        <new def="app_NASNetMobile" class="Ltensorflow/keras/applications/NASNetMobile"/>
+        <putfield class="LRoot" field="NASNetMobile" fieldType="LRoot" ref="applications" value="app_NASNetMobile"/>
+        <putfield class="LRoot" field="NASNetMobile" fieldType="LRoot" ref="appmod_nasnet" value="app_NASNetMobile"/>
+        <new def="app_NASNetLarge" class="Ltensorflow/keras/applications/NASNetLarge"/>
+        <putfield class="LRoot" field="NASNetLarge" fieldType="LRoot" ref="applications" value="app_NASNetLarge"/>
+        <putfield class="LRoot" field="NASNetLarge" fieldType="LRoot" ref="appmod_nasnet" value="app_NASNetLarge"/>
+        <new def="appmod_efficientnet" class="Lobject"/>
+        <putfield class="LRoot" field="efficientnet" fieldType="LRoot" ref="applications" value="appmod_efficientnet"/>
+        <new def="app_EfficientNetB0" class="Ltensorflow/keras/applications/EfficientNetB0"/>
+        <putfield class="LRoot" field="EfficientNetB0" fieldType="LRoot" ref="applications" value="app_EfficientNetB0"/>
+        <putfield class="LRoot" field="EfficientNetB0" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB0"/>
+        <new def="app_EfficientNetB1" class="Ltensorflow/keras/applications/EfficientNetB1"/>
+        <putfield class="LRoot" field="EfficientNetB1" fieldType="LRoot" ref="applications" value="app_EfficientNetB1"/>
+        <putfield class="LRoot" field="EfficientNetB1" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB1"/>
+        <new def="app_EfficientNetB2" class="Ltensorflow/keras/applications/EfficientNetB2"/>
+        <putfield class="LRoot" field="EfficientNetB2" fieldType="LRoot" ref="applications" value="app_EfficientNetB2"/>
+        <putfield class="LRoot" field="EfficientNetB2" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB2"/>
+        <new def="app_EfficientNetB3" class="Ltensorflow/keras/applications/EfficientNetB3"/>
+        <putfield class="LRoot" field="EfficientNetB3" fieldType="LRoot" ref="applications" value="app_EfficientNetB3"/>
+        <putfield class="LRoot" field="EfficientNetB3" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB3"/>
+        <new def="app_EfficientNetB4" class="Ltensorflow/keras/applications/EfficientNetB4"/>
+        <putfield class="LRoot" field="EfficientNetB4" fieldType="LRoot" ref="applications" value="app_EfficientNetB4"/>
+        <putfield class="LRoot" field="EfficientNetB4" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB4"/>
+        <new def="app_EfficientNetB5" class="Ltensorflow/keras/applications/EfficientNetB5"/>
+        <putfield class="LRoot" field="EfficientNetB5" fieldType="LRoot" ref="applications" value="app_EfficientNetB5"/>
+        <putfield class="LRoot" field="EfficientNetB5" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB5"/>
+        <new def="app_EfficientNetB6" class="Ltensorflow/keras/applications/EfficientNetB6"/>
+        <putfield class="LRoot" field="EfficientNetB6" fieldType="LRoot" ref="applications" value="app_EfficientNetB6"/>
+        <putfield class="LRoot" field="EfficientNetB6" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB6"/>
+        <new def="app_EfficientNetB7" class="Ltensorflow/keras/applications/EfficientNetB7"/>
+        <putfield class="LRoot" field="EfficientNetB7" fieldType="LRoot" ref="applications" value="app_EfficientNetB7"/>
+        <putfield class="LRoot" field="EfficientNetB7" fieldType="LRoot" ref="appmod_efficientnet" value="app_EfficientNetB7"/>
+        <new def="appmod_efficientnet_v2" class="Lobject"/>
+        <putfield class="LRoot" field="efficientnet_v2" fieldType="LRoot" ref="applications" value="appmod_efficientnet_v2"/>
+        <new def="app_EfficientNetV2B0" class="Ltensorflow/keras/applications/EfficientNetV2B0"/>
+        <putfield class="LRoot" field="EfficientNetV2B0" fieldType="LRoot" ref="applications" value="app_EfficientNetV2B0"/>
+        <putfield class="LRoot" field="EfficientNetV2B0" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2B0"/>
+        <new def="app_EfficientNetV2B1" class="Ltensorflow/keras/applications/EfficientNetV2B1"/>
+        <putfield class="LRoot" field="EfficientNetV2B1" fieldType="LRoot" ref="applications" value="app_EfficientNetV2B1"/>
+        <putfield class="LRoot" field="EfficientNetV2B1" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2B1"/>
+        <new def="app_EfficientNetV2B2" class="Ltensorflow/keras/applications/EfficientNetV2B2"/>
+        <putfield class="LRoot" field="EfficientNetV2B2" fieldType="LRoot" ref="applications" value="app_EfficientNetV2B2"/>
+        <putfield class="LRoot" field="EfficientNetV2B2" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2B2"/>
+        <new def="app_EfficientNetV2B3" class="Ltensorflow/keras/applications/EfficientNetV2B3"/>
+        <putfield class="LRoot" field="EfficientNetV2B3" fieldType="LRoot" ref="applications" value="app_EfficientNetV2B3"/>
+        <putfield class="LRoot" field="EfficientNetV2B3" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2B3"/>
+        <new def="app_EfficientNetV2S" class="Ltensorflow/keras/applications/EfficientNetV2S"/>
+        <putfield class="LRoot" field="EfficientNetV2S" fieldType="LRoot" ref="applications" value="app_EfficientNetV2S"/>
+        <putfield class="LRoot" field="EfficientNetV2S" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2S"/>
+        <new def="app_EfficientNetV2M" class="Ltensorflow/keras/applications/EfficientNetV2M"/>
+        <putfield class="LRoot" field="EfficientNetV2M" fieldType="LRoot" ref="applications" value="app_EfficientNetV2M"/>
+        <putfield class="LRoot" field="EfficientNetV2M" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2M"/>
+        <new def="app_EfficientNetV2L" class="Ltensorflow/keras/applications/EfficientNetV2L"/>
+        <putfield class="LRoot" field="EfficientNetV2L" fieldType="LRoot" ref="applications" value="app_EfficientNetV2L"/>
+        <putfield class="LRoot" field="EfficientNetV2L" fieldType="LRoot" ref="appmod_efficientnet_v2" value="app_EfficientNetV2L"/>
+        <new def="appmod_resnet50" class="Lobject"/>
+        <putfield class="LRoot" field="resnet50" fieldType="LRoot" ref="applications" value="appmod_resnet50"/>
+        <putfield class="LRoot" field="ResNet50" fieldType="LRoot" ref="appmod_resnet50" value="app_ResNet50"/>
         <new def="Variable" class="Ltensorflow/functions/Variable"/>
         <putfield class="LRoot" field="Variable" fieldType="LRoot" ref="x" value="Variable"/>
         <putfield class="LRoot" field="Variable" fieldType="LRoot" ref="variables" value="Variable"/>
@@ -2673,6 +2812,300 @@
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self directory target_size color_mode classes class_mode">
           <new def="ret" class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels"/>
           <return value="ret"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/applications">
+      <!-- The pretrained-architecture constructors of `tf.keras.applications` (wala/ML#896). Each constructor allocates one shared callable, `Application`, and stores the two arguments its output rank depends on, `include_top` and `pooling`; `KerasApplicationCall` reads them back and emits a rank-only shape (rank 4 for a feature-map output, rank 2 for a pooled or classifying one), with the input's batch axis and `Unresolved` elsewhere, since the spatial and channel extents are fixed integers of the architecture the analysis does not compute. Parameter names are the constructors' own in TensorFlow 2.9.3 (read with `inspect.signature`; a trailing `**kwargs` is dropped), so keyword calls bind by name and positional calls by position. Every constructor here defaults `include_top` to `True` and `pooling` to `None`, also read from the signatures. -->
+      <class name="Application" allocatable="true">
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <!-- Mirrors the `Dense` workaround for https://github.com/wala/ML/issues/106. -->
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="MobileNet" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="11" paramNames="self input_shape alpha depth_multiplier dropout include_top weights input_tensor pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="MobileNetV2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self input_shape alpha include_top weights input_tensor pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="MobileNetV3Small" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="12" paramNames="self input_shape alpha minimalistic include_top weights input_tensor classes pooling dropout_rate classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="MobileNetV3Large" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="12" paramNames="self input_shape alpha minimalistic include_top weights input_tensor classes pooling dropout_rate classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ResNet50" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self include_top weights input_tensor input_shape pooling classes">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ResNet101" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self include_top weights input_tensor input_shape pooling classes">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ResNet152" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self include_top weights input_tensor input_shape pooling classes">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ResNet50V2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ResNet101V2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ResNet152V2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="VGG16" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="VGG19" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="InceptionV3" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="InceptionResNetV2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Xception" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="DenseNet121" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="DenseNet169" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="DenseNet201" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="NASNetMobile" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input_shape include_top weights input_tensor pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="NASNetLarge" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input_shape include_top weights input_tensor pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB0" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB1" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB3" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB4" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB5" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB6" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetB7" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2B0" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2B1" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2B2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2B3" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2S" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2M" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="EfficientNetV2L" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self include_top weights input_tensor input_shape pooling classes classifier_activation include_preprocessing">
+          <new def="res" class="Ltensorflow/keras/applications/Application"/>
+          <putfield class="LRoot" field="include_top" fieldType="LRoot" ref="res" value="include_top"/>
+          <putfield class="LRoot" field="pooling" fieldType="LRoot" ref="res" value="pooling"/>
+          <return value="res"/>
         </method>
       </class>
     </package>

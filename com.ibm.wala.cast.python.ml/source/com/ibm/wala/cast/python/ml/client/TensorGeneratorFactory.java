@@ -124,6 +124,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.KERAS_APPLICATION_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.KERAS_CONCATENATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
@@ -2071,6 +2072,9 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, CONV2D_CALL.getDeclaringClass())) return new Conv2DCall(source);
+    else if (isType(calledFunction, KERAS_APPLICATION_CALL.getDeclaringClass()))
+      // Registered in tandem with the manual arm in `createManualGenerator` (wala/ML#896).
+      return new KerasApplicationCall(source);
     else if (isType(calledFunction, CONV1D_CALL.getDeclaringClass())) return new Conv1DCall(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);

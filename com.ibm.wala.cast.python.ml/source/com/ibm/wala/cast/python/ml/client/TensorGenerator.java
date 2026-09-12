@@ -5093,12 +5093,30 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) return invokeSuppliesArgument(call, paramPos, paramName);
+    return isArgumentSyntacticallySuppliedAt(builder, this.getNode(), paramPos, paramName);
+  }
 
+  /**
+   * The caller-walk half of {@link #isArgumentSyntacticallySupplied(PropagationCallGraphBuilder,
+   * int, String)} for an arbitrary callee: folds the per-site answers over every reachable invoke
+   * that dispatches to the given node. A generator reading a constructor argument stored on an
+   * instance consults the constructor's own call sites this way, since an omitted argument and a
+   * supplied but unresolvable one leave the same empty points-to set behind (wala/ML#896).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param callee The {@link CGNode} whose calling invokes are read.
+   * @param paramPos The 0-based positional index of the argument, or a negative value if it has no
+   *     positional form.
+   * @param paramName The keyword name of the argument, or {@code null}.
+   * @return {@code TRUE}, {@code FALSE}, or {@code null} as for the instance method.
+   */
+  protected static Boolean isArgumentSyntacticallySuppliedAt(
+      PropagationCallGraphBuilder builder, CGNode callee, int paramPos, String paramName) {
     boolean sawSite = false;
     boolean indeterminate = false;
 
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
-        getCallerInvokes(builder, this.getNode())) {
+        getCallerInvokes(builder, callee)) {
       if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) {
         indeterminate = true;
         continue;
@@ -10146,6 +10164,9 @@ public abstract class TensorGenerator {
       return new Placeholder(node);
     } else if (type.equals(TensorFlowTypes.CONV2D_CALL.getDeclaringClass())) {
       return new Conv2DCall(node);
+    } else if (type.equals(TensorFlowTypes.KERAS_APPLICATION_CALL.getDeclaringClass())) {
+      // Registered in tandem with the factory's arm (wala/ML#896).
+      return new KerasApplicationCall(node);
     } else if (type.equals(TensorFlowTypes.CONV1D_CALL.getDeclaringClass())) {
       // Registered in tandem with the factory's arm (wala/ML#840).
       return new Conv1DCall(node);
