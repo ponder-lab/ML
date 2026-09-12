@@ -23,9 +23,11 @@ public class TestComprehension extends TestJythonCallGraphShape {
                 "CodeBody:__Lscript comp1.py/comprehension1",
                 "CodeBody:__Lscript comp1.py/comprehension3"
               }),
+          // The trampoline calls the comprehension's element lambda and its `if` filter's body
+          // (wala/ML#917).
           new GraphAssertion(
               "CodeBody:__Lscript comp1.py/comprehension1",
-              new String[] {"script comp1.py/comprehension1"}),
+              new String[] {"script comp1.py/comprehension1", "script comp1.py/filter2"}),
           new GraphAssertion(
               "CodeBody:__Lscript comp1.py/comprehension3",
               new String[] {"script comp1.py/comprehension3"}),
@@ -67,9 +69,11 @@ public class TestComprehension extends TestJythonCallGraphShape {
                 "CodeBody:__Lscript comp3.py/comprehension1",
                 "CodeBody:__Lscript comp3.py/comprehension3"
               }),
+          // The trampoline calls the comprehension's element lambda and its `if` filter's body
+          // (wala/ML#917).
           new GraphAssertion(
               "CodeBody:__Lscript comp3.py/comprehension1",
-              new String[] {"script comp3.py/comprehension1"}),
+              new String[] {"script comp3.py/comprehension1", "script comp3.py/filter2"}),
           new GraphAssertion(
               "CodeBody:__Lscript comp3.py/comprehension3",
               new String[] {"script comp3.py/comprehension3"}),

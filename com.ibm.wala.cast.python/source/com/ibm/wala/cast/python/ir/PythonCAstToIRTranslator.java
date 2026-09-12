@@ -1575,6 +1575,13 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     globalDeclSet.add(pair);
   }
 
+  /**
+   * The keyword under which a comprehension invoke carries its {@code i}-th {@code if} filter
+   * function, {@code filter0}, {@code filter1}, ... in source order (wala/ML#917). A comprehension
+   * invoke carries no other keyword, so a keyword on one means a filter.
+   */
+  public static final String COMPREHENSION_FILTER_KEYWORD_PREFIX = "filter";
+
   @Override
   protected boolean doVisit(CAstNode n, WalkContext context, CAstVisitor<WalkContext> visitor) {
     if (n.getKind() == CAstNode.COMPREHENSION_EXPR) {
@@ -1593,12 +1600,24 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         args[i + 2] = context.getValue(n.getChild(2).getChild(i));
       }
 
+      // The comprehension's `if` filters, the functions the parser builds into the fourth child,
+      // ride as keyword parameters, one per filter in source order, so the positional layout the
+      // comprehension trampoline reads stays the lambda, the fresh collection and the iterables
+      // (wala/ML#917).
+      int filterCount = n.getChildCount() > 3 ? n.getChild(3).getChildCount() : 0;
+      @SuppressWarnings({"unchecked", "rawtypes"})
+      Pair<String, Integer>[] keywordParams = new Pair[filterCount];
+      for (int i = 0; i < filterCount; i++) {
+        CAstNode filter = n.getChild(3).getChild(i);
+        visitor.visit(filter, context, visitor);
+        keywordParams[i] =
+            Pair.make(COMPREHENSION_FILTER_KEYWORD_PREFIX + i, context.getValue(filter));
+      }
+
       int pos = context.cfg().getCurrentInstruction();
       CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
       int result = context.currentScope().allocateTempValue();
       int exception = context.currentScope().allocateTempValue();
-      @SuppressWarnings({"unchecked", "rawtypes"})
-      Pair<String, Integer>[] keywordParams = new Pair[0];
       context
           .cfg()
           .addInstruction(

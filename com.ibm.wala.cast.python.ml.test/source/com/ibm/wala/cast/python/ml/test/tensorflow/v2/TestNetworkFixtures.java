@@ -2081,6 +2081,30 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The windowed batcher with an {@code if} clause on its comprehension (wala/ML#917): the filter
+   * admits one of the two sampled files, so the runtime batch is {@code (1, 2049)} and the slice
+   * pair {@code (1, 2048)}, not the sample's {@code k}. The arity arm cannot count what a filter
+   * admits, so it declines and every shape reads unknown rank; before the filters reached the IR
+   * the arm read the unfiltered {@code (2, 2049)} and {@code (2, 2048)} here, a concrete extent the
+   * program does not have. The unfiltered fixture ({@link #testWindowedBatchRaw}, {@link
+   * #testWindowedBatchSlicePair}) is the control that keeps the arm composing where no filter is
+   * present.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWindowedBatchFilteredDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Set<TensorType> top = Set.of(new TensorType(UNKNOWN, null));
+    test("tf2_test_windowed_batch_filtered.py", "consume_raw", 1, 1, Map.of(2, top));
+    test("tf2_test_windowed_batch_filtered.py", "consume_x", 1, 1, Map.of(2, top));
+    test("tf2_test_windowed_batch_filtered.py", "consume_y", 1, 1, Map.of(2, top));
+  }
+
+  /**
    * The argparse-default chase's resolve arms over the decline fixture (wala/ML#852): the plain
    * literal default is the positive control that proves this carrier surfaces the chase (an
    * unresolved pin beside it is a measurement, not the no-inference floor), and an uncontested

@@ -53,22 +53,33 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
         SSAAbstractInvokeInstruction inst = caller.getIR().getCalls(site)[0];
         // The iterables are the invoke's positional parameters from the third onward, so the
         // per-element argument list and the iterable loop count positional parameters, never all
-        // uses: a keyword parameter on a comprehension invoke must not be read as an iterable
-        // (wala/ML#917). The summary's own parameter count and the value-number base still cover
-        // every use, since a keyword parameter is still a parameter of the trampoline. Today every
-        // comprehension invoke carries no keyword parameter, so the two counts agree;
-        // TestComprehensionInvokeArity pins that and becomes the tripwire when one is introduced.
+        // uses: the comprehension's `if` filters ride as keyword parameters and must not be read
+        // as iterables (wala/ML#917). The summary's own parameter count and the value-number base
+        // still cover every use, since a keyword parameter is still a parameter of the trampoline.
+        int uses = inst.getNumberOfUses();
         int positional =
             inst instanceof PythonInvokeInstruction
                 ? ((PythonInvokeInstruction) inst).getNumberOfPositionalParameters()
-                : inst.getNumberOfUses();
-        int v = inst.getNumberOfUses() + 3;
+                : uses;
+        int v = uses + 3;
         int[] args = new int[positional - 1];
         args[0] = 1;
         int nullVal = v++;
 
-        PythonSummary x = new PythonSummary(synth, inst.getNumberOfUses());
+        PythonSummary x = new PythonSummary(synth, uses);
         int idx = 0;
+
+        // The builder binds a keyword argument to the callee's parameter of the same local name,
+        // so each keyword slot after the positionals is named after its keyword; without the name
+        // the filter values would never arrive (wala/ML#917).
+        Map<Integer, Atom> names = HashMapFactory.make();
+        if (inst instanceof PythonInvokeInstruction) {
+          int slot = positional + 1;
+          for (String keyword : ((PythonInvokeInstruction) inst).getKeywords()) {
+            names.put(slot++, Atom.findOrCreateUnicodeAtom(keyword));
+          }
+        }
+        x.setValueNames(names);
 
         x.addConstant(nullVal, null);
 
@@ -85,11 +96,30 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
           args[lst - 2] = lv;
         }
 
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Pair<String, Integer>[] keywordParams = new Pair[0];
+
+        // Each filter function (a keyword parameter) is invoked on the same per-element arguments
+        // as the element lambda, so the filter bodies enter the call graph. The result is not
+        // consulted: the element is stored whether or not the filter would admit it, the
+        // over-approximation a test the analysis cannot decide requires (wala/ML#917).
+        for (int slot = positional + 1; slot <= uses; slot++) {
+          int[] filterArgs = args.clone();
+          filterArgs[0] = slot;
+          int fs = idx++;
+          x.addStatement(
+              new PythonInvokeInstruction(
+                  fs,
+                  v++,
+                  v++,
+                  new DynamicCallSiteReference(PythonTypes.CodeBody, fs),
+                  filterArgs,
+                  keywordParams));
+        }
+
         int s = idx++;
         int r = v++;
         CallSiteReference ss = new DynamicCallSiteReference(PythonTypes.CodeBody, s);
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        Pair<String, Integer>[] keywordParams = new Pair[0];
         x.addStatement(new PythonInvokeInstruction(s, r, v++, ss, args, keywordParams));
 
         x.addStatement(PythonLanguage.Python.instructionFactory().PropertyWrite(idx++, 2, ofv, r));
