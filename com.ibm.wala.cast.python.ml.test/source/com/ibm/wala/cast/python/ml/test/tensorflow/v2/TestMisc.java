@@ -1018,21 +1018,24 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
-   * Witness for <a href="https://github.com/wala/ML/issues/810">wala/ML#810</a>, the dtype half.
-   * The value handed to {@code g} is a sidecar-annotated {@code (4, 3)} float32 (a {@code
-   * tf.constant} of an opaque {@code np.load}); {@code g} declares {@code (None, 3)} float32.
-   * Inside {@code g} TensorFlow's static shape is {@code (None, 3)} and the dtype float32, both
-   * asserted in the fixture. This test is blocked for two different reasons depending on the
-   * engine: without a declaration reader the parameter inherits the annotation's concrete {@code
-   * (4, 3)}, tighter than the static shape in the body; with a reader that copies the dtype off the
-   * pre-solve ⊤ member instead of the declaration, the shape is right and the dtype is unknown. It
-   * passes only when the declaration supplies both halves, so fixing either alone leaves it red by
-   * design.
+   * Witness for <a href="https://github.com/wala/ML/issues/915">wala/ML#915</a>, with the dtype
+   * half of <a href="https://github.com/wala/ML/issues/810">wala/ML#810</a> riding on it. The value
+   * handed to {@code g} is a sidecar-annotated {@code (4, 3)} float32 (a {@code tf.constant} of an
+   * opaque {@code np.load}); {@code g} declares {@code (None, 3)} float32. Inside {@code g}
+   * TensorFlow's static shape is {@code (None, 3)} and the dtype float32, both asserted in the
+   * fixture.
+   *
+   * <p>Blocked today by wala/ML#915: the parameter inherits the annotation's concrete {@code (4,
+   * 3)}, tighter than the static shape in the body. The dtype already reads float32 through the
+   * annotation, so the wala/ML#915 fix alone flips this test. A declaration reader that then copies
+   * the dtype off the pre-solve top member instead of the declaration, the wala/ML#810 dtype
+   * defect, turns it red again for a real reason: the shape would be right and the dtype unknown.
+   * Fixing that defect means reading the declared dtype, not this test's expectation.
    *
    * <p>Paired with {@link #testInputSignatureSidecarAnnotationApplied()}, which pins that the
    * annotation itself is applied to the value before the hand-off.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#915 is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
