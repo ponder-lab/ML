@@ -364,8 +364,11 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * axis concrete even though the model's INPUT has statically unknown rank (a {@code
    * from_generator} dataset with no {@code output_shapes}). The batch axis is the reshape {@code
    * -1} placeholder, which carries no runtime-{@code None} guarantee either way (wala/ML#721). The
-   * labels ride the generator element, so ⊤ shape is the honest answer there. Pins that the whole
-   * composition, including the forward-result return edge, holds; nothing else reads this chain.
+   * labels are read from the generator's own yield, a scalar {@code np.array}, and batched after
+   * {@code repeat()} to {@code (64,)} (wala/ML#903); the sequence component beside it is an
+   * unmodelled {@code np.pad} result, which is why the prediction's batch axis stays the
+   * placeholder. Pins that the whole composition, including the forward-result return edge, holds;
+   * nothing else reads this chain.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -384,12 +387,12 @@ public class TestNetworkFixtures extends AbstractTensorTest {
             2,
             Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)))),
             3,
-            Set.of(new TensorType(FLOAT_32, null))));
+            Set.of(TensorType.of(FLOAT_32, 64))));
   }
 
   /**
    * The accuracy twin of {@link #testDynamicRnnLossParams()}: the same composed prediction at the
-   * other consumer, with the same ⊤-shaped label.
+   * other consumer, with the same {@code (64,)} label read from the generator's yield.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -408,7 +411,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
             2,
             Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)))),
             3,
-            Set.of(new TensorType(FLOAT_32, null))));
+            Set.of(TensorType.of(FLOAT_32, 64))));
   }
 
   /**

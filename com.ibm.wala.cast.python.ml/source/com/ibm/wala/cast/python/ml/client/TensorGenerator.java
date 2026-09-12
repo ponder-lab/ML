@@ -4245,10 +4245,37 @@ public abstract class TensorGenerator {
     // be constant.
     SSAInstruction genDef = node.getDU().getDef(elementRead.getObjectRef());
     if (!(genDef instanceof SSAAbstractInvokeInstruction call)) return ret;
+    ret.addAll(
+        yieldTupleFieldStores(
+            generatorBodiesReachedBy(
+                builder, builder.getCallGraph().getPossibleTargets(node, call.getCallSite())),
+            fieldName));
+    LOGGER.fine(
+        () ->
+            "Resolved "
+                + ret.size()
+                + " generator-yield store(s) for field "
+                + fieldName
+                + " in "
+                + describe(node)
+                + ".");
+    return ret;
+  }
+
+  /**
+   * Expands a set of call targets through synthetic trampolines to the user-code bodies they reach,
+   * bounded (wala/ML#796; shared with the {@code from_generator} yields reader, wala/ML#903, so one
+   * walk serves both the direct-call and the dataset-callback forms).
+   *
+   * @param builder The propagation call graph builder.
+   * @param targets The call's immediate targets.
+   * @return The user-code ({@link AstMethod}) bodies reached.
+   */
+  static Set<CGNode> generatorBodiesReachedBy(
+      PropagationCallGraphBuilder builder, Collection<CGNode> targets) {
     Deque<CGNode> work = new ArrayDeque<>();
     Set<CGNode> seen = HashSetFactory.make();
-    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
-      if (seen.add(callee)) work.add(callee);
+    for (CGNode callee : targets) if (seen.add(callee)) work.add(callee);
     Set<CGNode> bodies = HashSetFactory.make();
     while (!work.isEmpty() && seen.size() < 32) {
       CGNode callee = work.poll();
@@ -4261,6 +4288,23 @@ public abstract class TensorGenerator {
         if (seen.add(next)) work.add(next);
       }
     }
+    return bodies;
+  }
+
+  /**
+   * Collects, over generator bodies, the values stored under {@code fieldName} on every tuple the
+   * body yields: a {@code yield a, b} lowers to a tuple allocation stored into the generator's
+   * {@code __content__} field, and the tuple's field stores carry the yielded components
+   * (wala/ML#796; shared with wala/ML#903). A body that yields nothing contributes nothing, so a
+   * component that never resolves stays unknown for its own index rather than poisoning its
+   * siblings.
+   *
+   * @param bodies The generator bodies.
+   * @param fieldName The tuple field, the component's index as a string.
+   * @return The (generator node, stored value number) pairs.
+   */
+  static Set<Pair<CGNode, Integer>> yieldTupleFieldStores(Set<CGNode> bodies, String fieldName) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
     for (CGNode gen : bodies) {
       IR genIr = gen.getIR();
       if (genIr == null) continue;
@@ -4292,15 +4336,6 @@ public abstract class TensorGenerator {
         }
       }
     }
-    LOGGER.fine(
-        () ->
-            "Resolved "
-                + ret.size()
-                + " generator-yield store(s) for field "
-                + fieldName
-                + " in "
-                + describe(node)
-                + ".");
     return ret;
   }
 

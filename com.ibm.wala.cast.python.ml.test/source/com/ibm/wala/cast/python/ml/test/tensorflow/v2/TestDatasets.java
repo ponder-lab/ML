@@ -7,7 +7,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_STRING;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.STRING;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_1_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_28_28_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_32_32_3_UINT8;
@@ -558,11 +557,15 @@ public class TestDatasets extends AbstractTensorTest {
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  /** Test a dataset that uses an iterator. */
+  /**
+   * Test a dataset that uses an iterator. The generator yields a literal string, so the element's
+   * first component is a rank-0 string once the yields are read (wala/ML#903); the fixture asserts
+   * {@code x.shape == ()} at run time.
+   */
   @Test
   public void testDataset36()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset36.py", "id1", 1, 1, Map.of(2, Set.of(new TensorType(STRING, null))));
+    test("tf2_test_dataset36.py", "id1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
     //    test("tf2_test_dataset36.py", "id2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
   }
 
@@ -2586,5 +2589,58 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(DType.INT64, 4, 3))));
+  }
+
+  /** The batched labels of a generator whose label yield is a scalar array (wala/ML#903). */
+  private static final TensorType TENSOR_64_FLOAT32 = TensorType.of(FLOAT_32, 64);
+
+  /** A prediction whose batch axis is the reshape placeholder and whose class axis is 2. */
+  private static final TensorType TENSOR_SYMBOLIC_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)));
+
+  /**
+   * A {@code from_generator} dataset without {@code output_shapes} gets its label component from
+   * the generator's own yield (wala/ML#903): the accuracy function's {@code y_true} is the batched
+   * labels, {@code (64,)}. Its {@code y_pred} keeps the reshape placeholder on the batch axis, a
+   * control: the sequence yield is an unmodelled {@code np.pad} result, so nothing about the
+   * sequence resolves and the reshape {@code -1} does not fold.
+   */
+  @Test
+  public void testFromGeneratorYieldsTypeLabelComponent()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator_yields.py",
+        "accuracy",
+        2,
+        7,
+        Map.of(2, Set.of(TENSOR_SYMBOLIC_2_FLOAT32), 3, Set.of(TENSOR_64_FLOAT32)));
+  }
+
+  /** The loss function's labels, the same yield through the same batch (wala/ML#903). */
+  @Test
+  public void testFromGeneratorYieldsTypeLossLabels()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator_yields.py",
+        "cross_entropy_loss",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_SYMBOLIC_2_FLOAT32), 3, Set.of(TENSOR_64_FLOAT32)));
+  }
+
+  /**
+   * The training step's labels close on the yield while its input stays at unknown rank
+   * (wala/ML#903): the sequence yield is an unmodelled {@code np.pad} result, so the batched input
+   * has no shape to prepend the batch extent to; a control that must not move on this change.
+   */
+  @Test
+  public void testFromGeneratorYieldsLeaveUnmodelledSequenceUnknown()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator_yields.py",
+        "run_optimization",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32), 3, Set.of(TENSOR_64_FLOAT32)));
   }
 }

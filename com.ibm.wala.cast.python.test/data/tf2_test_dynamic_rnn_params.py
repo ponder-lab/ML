@@ -78,6 +78,10 @@ for step, (batch_x, batch_y) in enumerate(train_data.take(1), 1):
     # (None, 2) even though batch_x's is unknown; at run time the batch is full.
     assert pred.shape == (batch_size, num_classes), pred.shape
     assert pred.dtype == tf.float32, pred.dtype
+    # The labels ride the generator element: a scalar yield batched to (batch_size,), which the
+    # analysis reads from the yield once the generator is in the call graph (wala/ML#903).
+    assert batch_y.shape == (batch_size,), batch_y.shape
+    assert batch_y.dtype == tf.float32, batch_y.dtype
     loss = cross_entropy_loss(pred, batch_y)
     acc = accuracy(pred, batch_y)
     assert loss.shape == (), loss.shape
