@@ -2137,6 +2137,20 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.applications} model instance
+   * (wala/ML#896): every constructor of that package allocates this one callable, whose output rank
+   * follows the stored {@code include_top} and {@code pooling}. Dispatches to {@link
+   * com.ibm.wala.cast.python.ml.client.KerasApplicationCall}.
+   */
+  public static final MethodReference KERAS_APPLICATION_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName(
+                  "Ltensorflow/keras/applications/Application/" + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
+  /**
    * The {@code __call__} synthetic methods on the Keras layer instances whose output has the same
    * shape and dtype as their input (wala/ML#840). All dispatch to {@link
    * com.ibm.wala.cast.python.ml.client.ShapePreservingLayerCall}.
