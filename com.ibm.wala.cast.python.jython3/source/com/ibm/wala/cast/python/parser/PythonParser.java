@@ -1485,11 +1485,16 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           getNames(annotations).stream().anyMatch(s -> s.equals(STATIC_METHOD_ANNOTATION_NAME));
 
       CAstType functionType;
+      // A comprehension's filter is a synthetic function like its element lambda, also when the
+      // comprehension is built in a class's own scope (a method's default value); it is told apart
+      // by its supertype rather than by a name prefix, so a user method named `filter_...` is
+      // untouched (wala/ML#917).
       boolean isMethod =
           context.entity().getKind() == CAstEntity.TYPE_ENTITY
               && arguments.size() > 0
               && !functionName.startsWith("lambda")
-              && !functionName.startsWith("comprehension");
+              && !functionName.startsWith("comprehension")
+              && superType != filter;
       if (isMethod) {
         class PythonMethod extends PythonCodeType implements CAstType.Method {
           @Override
@@ -2043,7 +2048,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         };
 
     private CAstNode[] comprehensionFilters(java.util.List<comprehension> gen) throws Exception {
-      String name = "filter" + (++tmpIndex);
+      // Each filter takes a name of its own (the first keeps the index this method has always
+      // consumed, so no existing function name shifts). The filters of one generator share its
+      // source position, and the translator tells same-named siblings apart only by source line
+      // (wala/ML#719), so two filters under one name would compose one type and the later body
+      // would replace the earlier (wala/ML#917).
+      int index = ++tmpIndex;
 
       java.util.List<expr> arguments = new LinkedList<>();
       gen.forEach(
@@ -2054,6 +2064,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       java.util.List<CAstNode> filters = new LinkedList<>();
       for (comprehension g : gen) {
         for (expr test : g.getInternalIfs()) {
+          String name = "filter" + (filters.isEmpty() ? index : ++tmpIndex);
           CAstNode filter_f =
               defineFunction(
                   name,

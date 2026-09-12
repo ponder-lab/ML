@@ -213,6 +213,17 @@ public class NpArray extends TensorGenerator {
       // comprehension function; its function value is a fresh allocation of the comprehension's
       // own code type.
       if (compInvoke.getNumberOfPositionalParameters() != 3) continue;
+      // A comprehension's `if` filters ride as the invoke's keyword parameters (wala/ML#917). A
+      // filtered comprehension holds however many elements the filters admit, which is not the
+      // sample's `k`, so the arm declines rather than read an arity it cannot see.
+      if (compInvoke.getNumberOfKeywordParameters() > 0) {
+        LOGGER.fine(
+            () ->
+                "Comprehension window batch declined: the comprehension carries "
+                    + compInvoke.getNumberOfKeywordParameters()
+                    + " filter(s) (wala/ML#917).");
+        continue;
+      }
       SSAInstruction compFnDef = caller.getDU().getDef(compInvoke.getUse(0));
       if (!(compFnDef instanceof SSANewInstruction)) continue;
       String compTypeName = ((SSANewInstruction) compFnDef).getConcreteType().getName().toString();
