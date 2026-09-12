@@ -13,7 +13,6 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ssa.ConstantValue;
-import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.Selector;
 import com.ibm.wala.util.collections.HashMapFactory;
@@ -50,17 +49,16 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
                     Atom.findOrCreateUnicodeAtom("__" + receiver.getName()),
                     method.getSelector().descriptor()));
 
-        SSAAbstractInvokeInstruction inst = caller.getIR().getCalls(site)[0];
+        // Only Python IR allocates a comprehension's code type, so the call reaching one is a
+        // Python invoke.
+        PythonInvokeInstruction inst = (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
         // The iterables are the invoke's positional parameters from the third onward, so the
         // per-element argument list and the iterable loop count positional parameters, never all
         // uses: the comprehension's `if` filters ride as keyword parameters and must not be read
         // as iterables (wala/ML#917). The summary's own parameter count and the value-number base
         // still cover every use, since a keyword parameter is still a parameter of the trampoline.
         int uses = inst.getNumberOfUses();
-        int positional =
-            inst instanceof PythonInvokeInstruction
-                ? ((PythonInvokeInstruction) inst).getNumberOfPositionalParameters()
-                : uses;
+        int positional = inst.getNumberOfPositionalParameters();
         int v = uses + 3;
         int[] args = new int[positional - 1];
         args[0] = 1;
@@ -73,11 +71,9 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
         // so each keyword slot after the positionals is named after its keyword; without the name
         // the filter values would never arrive (wala/ML#917).
         Map<Integer, Atom> names = HashMapFactory.make();
-        if (inst instanceof PythonInvokeInstruction) {
-          int slot = positional + 1;
-          for (String keyword : ((PythonInvokeInstruction) inst).getKeywords()) {
-            names.put(slot++, Atom.findOrCreateUnicodeAtom(keyword));
-          }
+        int keywordSlot = positional + 1;
+        for (String keyword : inst.getKeywords()) {
+          names.put(keywordSlot++, Atom.findOrCreateUnicodeAtom(keyword));
         }
         x.setValueNames(names);
 

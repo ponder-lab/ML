@@ -1600,11 +1600,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         args[i + 2] = context.getValue(n.getChild(2).getChild(i));
       }
 
-      // The comprehension's `if` filters, the functions the parser builds into the fourth child,
-      // ride as keyword parameters, one per filter in source order, so the positional layout the
-      // comprehension trampoline reads stays the lambda, the fresh collection and the iterables
-      // (wala/ML#917).
-      int filterCount = n.getChildCount() > 3 ? n.getChild(3).getChildCount() : 0;
+      // The comprehension's `if` filters, the functions the parser builds into the fourth child
+      // (always present, empty when the comprehension has no `if`), ride as keyword parameters,
+      // one per filter in source order, so the positional layout the comprehension trampoline
+      // reads stays the lambda, the fresh collection and the iterables (wala/ML#917).
+      int filterCount = n.getChild(3).getChildCount();
       @SuppressWarnings({"unchecked", "rawtypes"})
       Pair<String, Integer>[] keywordParams = new Pair[filterCount];
       for (int i = 0; i < filterCount; i++) {
