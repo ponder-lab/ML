@@ -122,6 +122,10 @@ public class KerasApplicationCall extends TensorGenerator {
       if (pooled == null) return null;
 
       int instanceRank = includeTop || pooled ? VECTOR_RANK : FEATURE_MAP_RANK;
+      // Defensive, and currently unreached: receiver-keyed dispatch gives each instance its own
+      // node, so two constructions of different rank reaching one call are two nodes whose types
+      // union downstream. Without this guard a node that did see both would let the last instance
+      // win, a wrong rank rather than a declined one; it is a guarantee, not a redundant path.
       if (rank != null && rank != instanceRank) return null;
       rank = instanceRank;
     }
