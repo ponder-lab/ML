@@ -51,8 +51,19 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
                     method.getSelector().descriptor()));
 
         SSAAbstractInvokeInstruction inst = caller.getIR().getCalls(site)[0];
+        // The iterables are the invoke's positional parameters from the third onward, so the
+        // per-element argument list and the iterable loop count positional parameters, never all
+        // uses: a keyword parameter on a comprehension invoke must not be read as an iterable
+        // (wala/ML#917). The summary's own parameter count and the value-number base still cover
+        // every use, since a keyword parameter is still a parameter of the trampoline. Today every
+        // comprehension invoke carries no keyword parameter, so the two counts agree;
+        // TestComprehensionInvokeArity pins that and becomes the tripwire when one is introduced.
+        int positional =
+            inst instanceof PythonInvokeInstruction
+                ? ((PythonInvokeInstruction) inst).getNumberOfPositionalParameters()
+                : inst.getNumberOfUses();
         int v = inst.getNumberOfUses() + 3;
-        int[] args = new int[inst.getNumberOfUses() - 1];
+        int[] args = new int[positional - 1];
         args[0] = 1;
         int nullVal = v++;
 
@@ -62,7 +73,7 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
         x.addConstant(nullVal, null);
 
         int ofv = -1;
-        for (int lst = 3; lst <= inst.getNumberOfUses(); lst++) {
+        for (int lst = 3; lst <= positional; lst++) {
           int fv = v++;
           ofv = fv;
           int lv = v++;
