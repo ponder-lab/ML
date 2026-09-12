@@ -144,6 +144,14 @@
       "dtype": "uint8",
       "shape": "4830 2900 3",
       "attribution": "fixture: mirrors the decoded-JPEG entry of the wala/ML#905 subject; the array is saved and reloaded in the same script"
+    },
+    {
+      "module": "driver_signature_pin.py",
+      "function": "",
+      "variable": "t",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "fixture: tf.constant of an opaque np.load, handed to an input_signature-decorated function (wala/ML#810)"
     }
   ]
 }

@@ -940,6 +940,142 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/810">wala/ML#810</a>: the parameter of a
+   * {@code tf.function} with an {@code input_signature} has the signature's static shape inside its
+   * body, and the signature's dtype. {@code g1} declares {@code (None, 4)} float32 and is called on
+   * an opaque rank-2 value (a list built in a loop); TensorFlow shows {@code g1} the shape {@code
+   * (None, 4)}, asserted in the fixture. Nothing reads the declaration today, so the parameter is
+   * rankless.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testInputSignaturePinFirst()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_input_signature_pin_chain.py",
+        "consume_first",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/810">wala/ML#810</a>, the chained case:
+   * {@code g1} hands its parameter to {@code g2}, which declares the looser {@code (None, None)}.
+   * Inside {@code g2} TensorFlow's static shape is {@code (None, None)}, asserted in the fixture,
+   * however tight the value {@code g1} passed. So the declaration wins over the caller's rank, and
+   * a reader of the declaration that keeps a caller-supplied rank instead would be wrong here.
+   *
+   * <p>Paired with {@link #testInputSignaturePinSame()}, the same hand-off into a function
+   * declaring the same {@code (None, 4)}, which reads {@code (None, 4)}: the pair separates what
+   * the declaration decides from what the caller supplied.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testInputSignaturePinLooser()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_input_signature_pin_chain.py",
+        "consume_looser",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_NONE_FLOAT32)));
+  }
+
+  /**
+   * Control for {@link #testInputSignaturePinLooser()}: the same hand-off from {@code g1} into
+   * {@code g3}, which declares the same {@code (None, 4)} and sees {@code (None, 4)} inside its
+   * body (wala/ML#810).
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testInputSignaturePinSame()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_input_signature_pin_chain.py",
+        "consume_same",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/810">wala/ML#810</a>, the dtype half.
+   * The value handed to {@code g} is a sidecar-annotated {@code (4, 3)} float32 (a {@code
+   * tf.constant} of an opaque {@code np.load}); {@code g} declares {@code (None, 3)} float32.
+   * Inside {@code g} TensorFlow's static shape is {@code (None, 3)} and the dtype float32, both
+   * asserted in the fixture. This test is blocked for two different reasons depending on the
+   * engine: without a declaration reader the parameter inherits the annotation's concrete {@code
+   * (4, 3)}, tighter than the static shape in the body; with a reader that copies the dtype off the
+   * pre-solve ⊤ member instead of the declaration, the shape is right and the dtype is unknown. It
+   * passes only when the declaration supplies both halves, so fixing either alone leaves it red by
+   * design.
+   *
+   * <p>Paired with {@link #testInputSignatureSidecarAnnotationApplied()}, which pins that the
+   * annotation itself is applied to the value before the hand-off.
+   *
+   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testInputSignaturePinKeepsDeclaredDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_signature_pin.py"},
+        "driver_signature_pin.py",
+        "consume_pinned",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_3_FLOAT32)));
+  }
+
+  /**
+   * Control for {@link #testInputSignaturePinKeepsDeclaredDtype()}: the sidecar annotation reaches
+   * the annotated value itself, {@code (4, 3)} float32, before it is handed to the decorated
+   * function.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testInputSignatureSidecarAnnotationApplied()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_signature_pin.py"},
+        "driver_signature_pin.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /**
    * Axis-level refinement of a top placeholder (<a
    * href="https://github.com/wala/ML/issues/771">wala/ML#771</a>): inference holds a
    * both-axes-unknown member for {@code tf.constant} of an opaque {@code np.load}, and the sidecar
