@@ -1,4 +1,6 @@
+import os
 import sys
+import tempfile
 
 import tensorflow as tf
 from tensorflow.keras import applications
@@ -35,6 +37,14 @@ def consume_disagree(d):
 
 
 def consume_looped(l):
+    pass
+
+
+def consume_envpool(e):
+    pass
+
+
+def consume_opaque(o):
     pass
 
 
@@ -83,3 +93,20 @@ for top in (True, False):
         [4, 1000] if top else [4, 7, 7, 1280]
     ), looped.shape
     consume_looped(looped)
+
+# A pooling the program reads from its environment: the analysis cannot see the value and declines.
+pooled_env = applications.MobileNetV2(
+    include_top=False, weights=None, pooling=os.environ.get("KERAS_APP_POOLING")
+)(x)
+assert pooled_env.shape.as_list() == [4, 7, 7, 1280], pooled_env.shape
+consume_envpool(pooled_env)
+
+# An input the analysis has no shape for (a decoded image file): the rank still follows the
+# constructor, and only the batch axis, which would have come from the input, stays unresolved.
+png = os.path.join(tempfile.mkdtemp(), "x.png")
+tf.io.write_file(png, tf.io.encode_png(tf.zeros((224, 224, 3), dtype=tf.uint8)))
+decoded = tf.io.decode_image(tf.io.read_file(png), channels=3)
+opaque = tf.cast(tf.expand_dims(decoded, 0), tf.float32)
+features_opaque = applications.MobileNetV2(include_top=False, weights=None)(opaque)
+assert features_opaque.shape.as_list() == [1, 7, 7, 1280], features_opaque.shape
+consume_opaque(features_opaque)

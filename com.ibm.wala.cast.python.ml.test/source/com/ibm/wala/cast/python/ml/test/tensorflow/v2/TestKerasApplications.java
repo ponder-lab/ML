@@ -103,8 +103,10 @@ public class TestKerasApplications extends AbstractTensorTest {
    * rank 2 (through the module path and the package path alike), {@code include_top=False} without
    * pooling keeps the rank-4 feature map, an {@code include_top} the program decides at runtime
    * declines to unknown rank rather than pick one, two constructions of different rank reaching one
-   * call read as the union of both (each receiver instance dispatches on its own), and one
-   * construction site looping over both {@code include_top} values declines.
+   * call read as the union of both (each receiver instance dispatches on its own), one construction
+   * site looping over both {@code include_top} values declines, a {@code pooling} read from the
+   * environment declines, and an input the analysis has no shape for still gets the constructor's
+   * rank with an unresolved batch axis, since the rank never depended on the input.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -139,5 +141,14 @@ public class TestKerasApplications extends AbstractTensorTest {
                 new TensorType(FLOAT_32, asList(new NumericDim(4), U)),
                 new TensorType(FLOAT_32, asList(new NumericDim(4), U, U, U)))));
     test(VARIANTS, "consume_looped", 1, 1, Map.of(2, unknownRank));
+    // A pooling read from the environment is supplied but unreadable, so it declines; an input the
+    // analysis has no shape for still gets the constructor's rank, with the batch unresolved.
+    test(VARIANTS, "consume_envpool", 1, 1, Map.of(2, unknownRank));
+    test(
+        VARIANTS,
+        "consume_opaque",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(U, U, U, U)))));
   }
 }
