@@ -6718,7 +6718,10 @@ public abstract class TensorGenerator {
       // wala/ML#916 guard, which read UNKNOWN when it landed hours earlier, decided before the
       // poisoning was measured: on the null-engine path an UNKNOWN member collapses the union to
       // {UNKNOWN} and erases the siblings' correct dtype (the measurement and the reason are at the
-      // producer guards below, wala/ML#928, pending wala/ML#862). The shape twin above keeps ⊤.
+      // producer guards below, wala/ML#928, pending wala/ML#862). The shape twin above keeps ⊤, so
+      // this member pairs a shape value with an empty dtype: the documented exception to the
+      // lattice
+      // table's pairing rule stated at the manual producer guard, ending with wala/ML#862.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
         return ret;
       TensorGenerator generator;
@@ -6761,6 +6764,13 @@ public abstract class TensorGenerator {
           // partiality is what would let this read ⊤ without erasing its siblings. Residual: a
           // producer whose dtype changes across loop iterations would lose a dtype here; none
           // constructed, none predicted.
+          // DOCUMENTED EXCEPTION to the lattice table's pairing rule (CLAUDE.md, "empty set on one
+          // axis must be paired with empty set on the other"): for this one member the shape twin
+          // contributes ⊤ (a value) and this contributes nothing (empty), the pairing the rule
+          // forbids. It is taken knowingly, for the measured reason above, and it ends when
+          // wala/ML#862 gives the dtype axis a partiality marker, at which point this contributes
+          // the
+          // marked remainder and the pairing is restored. Do not "fix" it to UNKNOWN without that.
           if (applyRecursionGuards
               && this.manualNode != null
               && this.manualNode.equals(readDataNode)) {
@@ -6773,7 +6783,8 @@ public abstract class TensorGenerator {
           ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
         } else if (defSource != null) {
           // Self-recursion contributes nothing, for the measured reason at the manual guard above
-          // (wala/ML#928, pending wala/ML#862); no test reaches this branch (wala/ML#930).
+          // (wala/ML#928, pending wala/ML#862), the same documented exception to the pairing rule
+          // as there; no test reaches this branch (wala/ML#930).
           if (applyRecursionGuards
               && this.getSource() != null
               && this.getSource().equals(defSource)) {
