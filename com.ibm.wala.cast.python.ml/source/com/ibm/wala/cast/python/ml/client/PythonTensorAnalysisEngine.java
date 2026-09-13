@@ -1990,11 +1990,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * <p>Contract, since readers live outside this repository. LIFETIME: {@link #getResolverCensus}
    * returns the census of the most recent {@link #performAnalysis} on this engine, set in that
    * method's {@code finally} so an analysis that ended by exception still leaves its record, and
-   * {@code null} before any analysis has run. COMPLETENESS: {@link #complete()} is {@code true}
-   * only when that analysis ran to its end; on an analysis that ended by exception the counts are
-   * of the partial solve and carry {@code false}, so a reader never mistakes them for a result and
-   * a zero never stands in for "not recorded". EVOLUTION: additive-only; components may be added,
-   * never removed or renamed, and a reader must tolerate components it does not know.
+   * {@code null} before any analysis has run; {@code null} has no other meaning, since the resolver
+   * is installed as the first statement of {@link #performAnalysis}, so an analysis without a
+   * resolver, which would also yield no census, cannot occur. INVARIANTS: {@link
+   * #cyclicSliceQueries} equals {@code cyclicSliceGenerators().size()} and {@link #sliceQueries}
+   * equals {@code sliceGenerators().size()}, always; the integers exist as the cheap projection for
+   * a one-cell column, the lists as the sites behind them. The list components are unmodifiable
+   * copies. COMPLETENESS: {@link #complete()} is {@code true} only when that analysis ran to its
+   * end; on an analysis that ended by exception the counts are of the partial solve and carry
+   * {@code false}, so a reader never mistakes them for a result and a zero never stands in for "not
+   * recorded". EVOLUTION: additive-only; components may be added, never removed or renamed, and a
+   * reader must tolerate components it does not know.
    *
    * @param complete Whether the analysis the census describes ran to its end.
    * @param queries The number of resolved queries.
@@ -2022,7 +2028,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       int cyclicSliceQueries,
       List<String> cyclicSliceGenerators,
       int sliceQueries,
-      List<String> sliceGenerators) {}
+      List<String> sliceGenerators) {
+
+    /** Copies the list components, so a reader cannot alter the census it was handed. */
+    public ResolverCensus {
+      cyclicSliceGenerators = List.copyOf(cyclicSliceGenerators);
+      sliceGenerators = List.copyOf(sliceGenerators);
+    }
+  }
 
   /** The census of the most recent analysis; see {@link ResolverCensus}. */
   private volatile ResolverCensus resolverCensus;
