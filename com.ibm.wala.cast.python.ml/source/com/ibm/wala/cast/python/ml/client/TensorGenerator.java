@@ -5661,7 +5661,8 @@ public abstract class TensorGenerator {
       // on how many times the loop ran, which a single read cannot fold, so the value is ⊤. It is
       // also the resolver's own policy for the same question (its Javadoc: bottom-valued members of
       // a nontrivial SCC are promoted to the unknown-marked element), so the two paths now agree
-      // where they used to differ. The two older guards below return ⊥ on the same path. Paired
+      // where they used to differ. The two older guards below return ⊥ on the same path
+      // (wala/ML#928). Paired
       // with ⊤ on the dtype twin.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
         return ShapeResult.unknown();
