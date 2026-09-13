@@ -617,6 +617,10 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(NpArange::new, NpArange::new);
     if (isType(type, NumpyTypes.PAD.getDeclaringClass()))
       return anchor.makeGenerator(NpPad::new, NpPad::new);
+    // A `np.finfo` attribute (wala/ML#907): a rank-0 array of the queried type, so a tensor scaled
+    // by one keeps its shape through the broadcast instead of losing it to an opaque operand.
+    if (isType(type, NumpyTypes.FINFO_VALUE.getDeclaringClass()))
+      return anchor.makeGenerator(NpFinfoValue::new, NpFinfoValue::new);
 
     // Dispatched through the shared table, so the source and manual arms are registered together
     // rather than one at a time (the tandem-registration rule).

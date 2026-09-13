@@ -1768,6 +1768,90 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The float-valued attributes of {@code np.finfo(dtype)} are NumPy scalars of the queried type
+   * (wala/ML#907): {@code np.finfo(np.float32).max} is a rank-0 {@code float32}, and a tensor
+   * scaled by one, directly or through a module-level constant folded from it, keeps its shape
+   * through the broadcast; so does a NumPy array. Every site in the fixture queries {@code
+   * np.float32}, so the dtype is exact; see {@link #testNumpyFinfoDTypes()} for why that matters.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNumpyFinfo()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_numpy_finfo.py";
+    test(file, "consume_max32", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+    test(file, "consume_scaled_by_folded_max", 1, 1, Map.of(2, Set.of(TENSOR_3_4_FLOAT32)));
+    test(file, "consume_numpy_scaled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5))));
+  }
+
+  /**
+   * The dtype half of the {@code np.finfo} model (wala/ML#907): the queried type's dtype, with the
+   * Python {@code float} builtin naming {@code float64} and a type the program decides at run time
+   * between two reading as both. The fixture holds three sites of two dtypes on purpose. The
+   * attribute values come from one summary helper the analysis shares across every {@code np.finfo}
+   * call site in the program, so the dtype read at any one site is the union over all the sites:
+   * exact for a program with one site or one type, and loosening as a program queries more types.
+   * That is an unusual shape of imprecision (a property of how often the program uses the API
+   * rather than of the construct), the union is sound (the true dtype is a member), and a
+   * disagreeing dtype set declines downstream rather than picking a member. The shape half is rank
+   * 0 at every site regardless.
+   *
+   * <p>Two kinds of assertion sit here. The scalar's dtype set is what this test exists for. The
+   * scaled products' dtype, {@code float32} for a {@code float32} tensor whatever the scalar's set
+   * holds, PINS WHAT THE ELEMENTWISE RULE DOES TODAY, which wala/ML#922 (the rule differs by
+   * operand side) and wala/ML#924 (the dtype half of tensor-times-opaque) may change. If a scaled
+   * product goes red on its dtype and the shape still reads {@code (3, 4)}, the elementwise rule
+   * was changed under one of those issues: follow the program and update the expectation, do not
+   * restore it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNumpyFinfoDTypes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_numpy_finfo_dtypes.py";
+    Set<TensorType> scalarUnion = Set.of(SCALAR_TENSOR_OF_FLOAT64, SCALAR_TENSOR_OF_FLOAT32);
+    test(file, "consume_eps64", 1, 1, Map.of(2, scalarUnion));
+    // A float32 tensor scaled by the attribute stays float32: the elementwise rule keeps the tensor
+    // operand's dtype against a scalar co-operand, whatever the scalar's own dtype set holds.
+    Set<TensorType> scaled = Set.of(TENSOR_3_4_FLOAT32);
+    test(file, "consume_scaled_by_eps64", 1, 1, Map.of(2, scaled));
+    test(file, "consume_scaled_by_py_float_tiny", 1, 1, Map.of(2, scaled));
+    test(file, "consume_scaled_by_two_valued_dtype", 1, 1, Map.of(2, scaled));
+  }
+
+  /**
+   * What the {@code np.finfo} model declines (wala/ML#907): {@code np.iinfo}, whose {@code min} and
+   * {@code max} are Python ints, and the integer-valued {@code finfo} attributes such as {@code
+   * bits}, also Python ints. Neither is modeled, so the operand stays opaque and not provably
+   * scalar, and the product is not typed at all today; that floor is the elementwise rule's own
+   * question (a tensor scaled by anything is a tensor or raises, so unknown shape would be the
+   * sound answer), not this model's. These assertions PIN THAT FLOOR AS IT IS TODAY and are the
+   * standing witnesses of wala/ML#924: when that issue lands, the products become tensors of
+   * unknown shape and these go red; flip them to assert one tensor parameter of unknown shape (and
+   * whatever dtype that issue settles on), do not restore the zero.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNumpyFinfoDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_numpy_finfo.py";
+    test(file, "consume_iinfo_scaled", 0, 0, Map.of());
+    test(file, "consume_bits_scaled", 0, 0, Map.of());
+  }
+
+  /**
    * The scalar type's other role (<a href="https://github.com/wala/ML/issues/827">wala/ML#827</a>):
    * {@code np.zeros((2, 3), dtype=np.float64)} still resolves its dtype token, which making the
    * name callable must not cost.

@@ -158,6 +158,18 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String RANDOM_RANDINT_SIGNATURE = "numpy.random.randint()";
 
+  /**
+   * The float-valued attribute of {@code np.finfo(dtype)}, a rank-0 array of the queried type
+   * (wala/ML#907). See https://numpy.org/doc/stable/reference/generated/numpy.finfo.html.
+   */
+  public static final MethodReference FINFO_VALUE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/finfo_value")),
+          AstMethodReference.fnSelector);
+
+  private static final String FINFO_VALUE_SIGNATURE = "numpy.finfo() attribute";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.reshape.html */
   public static final MethodReference RESHAPE =
       MethodReference.findOrCreate(
@@ -389,6 +401,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(ARANGE.getDeclaringClass(), ARANGE_SIGNATURE),
           Map.entry(PAD.getDeclaringClass(), PAD_SIGNATURE),
           Map.entry(RANDOM_RANDINT.getDeclaringClass(), RANDOM_RANDINT_SIGNATURE),
+          Map.entry(FINFO_VALUE.getDeclaringClass(), FINFO_VALUE_SIGNATURE),
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE),
           Map.entry(NP_TRANSPOSE.getDeclaringClass(), NP_TRANSPOSE_SIGNATURE),
