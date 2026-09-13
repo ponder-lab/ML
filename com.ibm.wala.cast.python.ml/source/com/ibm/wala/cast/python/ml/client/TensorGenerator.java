@@ -5697,7 +5697,21 @@ public abstract class TensorGenerator {
         TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
 
         if (generator != null) {
-          // Avoid infinite recursion for manual generators
+          // Self-recursion: this manual generator is reading an allocation made in its own node (a
+          // loop-carried producer, `x = tf.add(x, 1.0)`, puts the call's own result in its
+          // operand's
+          // set). The guard runs only on the null-engine path (applyRecursionGuards, wala/ML#753):
+          // under the resolver reads never recurse and a self-dependent query iterates to a
+          // fixpoint.
+          // Here the read happens once, so the value ships as read: ⊥ would vanish from the union
+          // and let the other members stand alone as the whole answer, while the extent depends on
+          // how many times the loop ran, which one read cannot fold. So ⊤, the resolver's own
+          // policy
+          // for a cycle (wala/ML#928). Measured, the ⊤ is not observable at any read constructed so
+          // far: a manual generator reads its operands through the default set view, whose contract
+          // is the resolvable subset (wala/ML#718), so the unknown mark is dropped one hop up and
+          // the set stays whatever the other members make it. The value is right wherever a read is
+          // exact; no test witnesses it. The dtype twin deliberately does NOT read ⊤ (see there).
           if (applyRecursionGuards
               && this.manualNode != null
               && this.manualNode.equals(readDataNode)) {
@@ -5706,10 +5720,10 @@ public abstract class TensorGenerator {
                   () ->
                       "REPLAY delegation "
                           + describe(asin)
-                          + " => ⊥ by the manual self-recursion guard of "
+                          + " => ⊤ by the manual self-recursion guard of "
                           + this.getClass().getSimpleName()
                           + ".");
-            return ShapeResult.bottom();
+            return ShapeResult.unknown();
           }
           LOGGER.fine("Delegating shape inference to: " + generator);
           ShapeResult delegatedShapes = memoizedShapeResult(builder, generator);
@@ -5732,7 +5746,8 @@ public abstract class TensorGenerator {
                         + ".");
           }
         } else if (defSource != null) {
-          // Avoid infinite recursion if the current generator is for the same source.
+          // Self-recursion through the defining variable: ⊤ for the reason the manual guard above
+          // gives (wala/ML#928). No test reaches this branch at all (wala/ML#930).
           if (applyRecursionGuards
               && this.getSource() != null
               && this.getSource().equals(defSource)) {
@@ -5741,10 +5756,10 @@ public abstract class TensorGenerator {
                   () ->
                       "REPLAY delegation "
                           + describe(asin)
-                          + " => ⊥ by the source self-recursion guard of "
+                          + " => ⊤ by the source self-recursion guard of "
                           + this.getClass().getSimpleName()
                           + ".");
-            return ShapeResult.bottom();
+            return ShapeResult.unknown();
           }
           try {
             generator = TensorGeneratorFactory.getGenerator(defSource, builder);
@@ -6699,11 +6714,13 @@ public abstract class TensorGenerator {
     // A slice result allocated at its own call (wala/ML#916); the shape twin above explains.
     PointsToSetVariable sliceSource = sliceCallSource(builder, asin);
     if (sliceSource != null) {
-      // Self-recursion reads ⊤ (UNKNOWN), paired with the shape twin above, which explains; like
-      // it,
-      // reachable only on the null-engine path.
+      // Self-recursion contributes nothing to the dtype union. This REVERSES the dtype half of the
+      // wala/ML#916 guard, which read UNKNOWN when it landed hours earlier, decided before the
+      // poisoning was measured: on the null-engine path an UNKNOWN member collapses the union to
+      // {UNKNOWN} and erases the siblings' correct dtype (the measurement and the reason are at the
+      // producer guards below, wala/ML#928, pending wala/ML#862). The shape twin above keeps ⊤.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
-        return EnumSet.of(UNKNOWN);
+        return ret;
       TensorGenerator generator;
       try {
         generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
@@ -6733,6 +6750,17 @@ public abstract class TensorGenerator {
         TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
 
         if (generator != null) {
+          // Self-recursion: the self-referential member contributes NOTHING to the dtype union, not
+          // UNKNOWN, although the shape twin reads ⊤ (wala/ML#928). Measured on three loop-carried
+          // producers read on the null-engine path: UNKNOWN here turned every correct float32 into
+          // unknown, because the union's normalization collapses any set containing UNKNOWN to
+          // {UNKNOWN}; the empty contribution kept float32 on all three. That collapse is the
+          // reason
+          // getDTypesFromTensor chose empty over UNKNOWN for an unreadable member, and the cost of
+          // the choice (a short union reads as complete) is wala/ML#862; a dtype axis that can mark
+          // partiality is what would let this read ⊤ without erasing its siblings. Residual: a
+          // producer whose dtype changes across loop iterations would lose a dtype here; none
+          // constructed, none predicted.
           if (applyRecursionGuards
               && this.manualNode != null
               && this.manualNode.equals(readDataNode)) {
@@ -6744,6 +6772,8 @@ public abstract class TensorGenerator {
           // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
           ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
         } else if (defSource != null) {
+          // Self-recursion contributes nothing, for the measured reason at the manual guard above
+          // (wala/ML#928, pending wala/ML#862); no test reaches this branch (wala/ML#930).
           if (applyRecursionGuards
               && this.getSource() != null
               && this.getSource().equals(defSource)) {
