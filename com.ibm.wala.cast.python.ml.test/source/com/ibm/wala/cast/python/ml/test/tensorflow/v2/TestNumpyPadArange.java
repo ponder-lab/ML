@@ -91,8 +91,10 @@ public class TestNumpyPadArange extends AbstractTensorTest {
     test(FIXTURE, "consume_pad_cancels_draw", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 15))));
     // The scalar on the left of the rescale, an arange with only a stop, and coefficients. The
     // left-scaled product's dtype is the elementwise generator's standing int32 for an integer
-    // scalar over an array of unknown dtype (int64 at run time), a rule this test does not own; the
-    // extent is what it asserts.
+    // scalar over an array of unknown dtype, where the program has int64 (wala/ML#922), a rule this
+    // test does not own; the extent is what it asserts. If this expectation goes red on the dtype,
+    // the elementwise rule was fixed: follow the program (int64, or unknown) rather than restore
+    // int32.
     test(FIXTURE, "consume_pad_scaled_left", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 10))));
     test(FIXTURE, "consume_pad_stop_only", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 10))));
     test(FIXTURE, "consume_pad_coefficient", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 20))));

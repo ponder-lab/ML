@@ -193,8 +193,9 @@ assert p10.shape == (n + 2, n + 2), p10.shape
 consume_pad_typed_unresolved(p10)
 
 # The scalar on the left of the elementwise operation. The product is int64 at run time; the
-# analysis types an integer scalar's product with an array of unknown dtype as int32, a standing
-# elementwise rule this file does not test, so the JUnit expectation carries that dtype knowingly.
+# analysis types an integer scalar's product with an array of unknown dtype as int32 (wala/ML#922),
+# a standing elementwise rule this file does not test, so the JUnit expectation carries that dtype
+# knowingly and says what to do when the rule changes.
 p11 = np.pad(2 * e, (0, 10 - n))
 assert p11.shape == (10,) and p11.dtype == np.int64, p11
 consume_pad_scaled_left(p11)
