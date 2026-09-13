@@ -26,7 +26,7 @@ public class WorklistTypeResolverTest {
 
   @After
   public void uninstall() {
-    WorklistTypeResolver.uninstall(null);
+    WorklistTypeResolver.uninstall(null, true);
   }
 
   /** An acyclic chain evaluates inline and the demanded root sees its dependency's final value. */

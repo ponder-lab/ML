@@ -667,19 +667,32 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
   private static final String CALL_GRAPH_CENSUS_FILE_PROPERTY = "wala.ml.callgraph.census.file";
 
   /**
-   * Appends {@code fixture,function,nodes,edges,sliceSites,sliceEmpty} for the given call graph to
-   * the census file named by {@value #CALL_GRAPH_CENSUS_FILE_PROPERTY}, when set.
+   * The value the census's resolver column carries when the analysis did not complete, so that a
+   * crashed analysis reads as a marked absence rather than as a zero or as no row.
+   */
+  private static final String CENSUS_NOT_RECORDED = "not-recorded";
+
+  /**
+   * Appends {@code fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles} for the given
+   * call graph to the census file named by {@value #CALL_GRAPH_CENSUS_FILE_PROPERTY}, when set. The
+   * last column is the resolver's count of slice-result queries in a nontrivial strongly connected
+   * component of its query graph (the engine's view of a loop-carried slice, wala/ML#916), or
+   * {@value #CENSUS_NOT_RECORDED} when the analysis did not complete; {@code 0} and that sentinel
+   * are never the same cell.
    *
    * @param builder The builder whose pointer analysis the slice counts read.
    * @param callGraph The call graph just built.
    * @param filename The fixture analyzed.
    * @param functionName The function under test.
+   * @param census The resolver's census of the analysis, whose completeness flag decides whether
+   *     its count is written or the sentinel; {@code null} when no analysis ran.
    */
   private static void recordCallGraphCensus(
       PythonSSAPropagationCallGraphBuilder builder,
       CallGraph callGraph,
       String filename,
-      String functionName) {
+      String functionName,
+      PythonTensorAnalysisEngine.ResolverCensus census) {
     String path = System.getProperty(CALL_GRAPH_CENSUS_FILE_PROPERTY);
     if (path == null || path.isBlank()) return;
     // With a directory named too, the node list itself is written (one line per node: method
@@ -701,6 +714,34 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
       } catch (IOException e) {
         LOGGER.log(Level.WARNING, "Could not write the call graph node list under " + dir, e);
       }
+      // Beside the node list, the sites of the slice generators in a cycle, so a non-zero count in
+      // the census names its programs' sites rather than only a number.
+      if (census != null && census.complete() && !census.cyclicSliceGenerators().isEmpty())
+        try {
+          java.nio.file.Files.write(
+              java.nio.file.Path.of(
+                  dir,
+                  (filename + "__" + functionName).replaceAll("[^A-Za-z0-9_.-]", "_")
+                      + ".slicecycles"),
+              census.cyclicSliceGenerators(),
+              java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+          LOGGER.log(Level.WARNING, "Could not write the slice cycle list under " + dir, e);
+        }
+      // And every slice generator evaluated, cyclic or not, with what its evaluations read: the
+      // denominator for the cycle count, and where a chain stops for a site that did not cycle.
+      if (census != null && census.complete() && !census.sliceGenerators().isEmpty())
+        try {
+          java.nio.file.Files.write(
+              java.nio.file.Path.of(
+                  dir,
+                  (filename + "__" + functionName).replaceAll("[^A-Za-z0-9_.-]", "_")
+                      + ".slicequeries"),
+              census.sliceGenerators(),
+              java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+          LOGGER.log(Level.WARNING, "Could not write the slice query list under " + dir, e);
+        }
     }
     long edges = 0;
     for (CGNode node : callGraph) edges += callGraph.getSuccNodeCount(node);
@@ -753,6 +794,10 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
             + sliceSites
             + ","
             + sliceEmpty
+            + ","
+            + (census == null || !census.complete()
+                ? CENSUS_NOT_RECORDED
+                : String.valueOf(census.cyclicSliceQueries()))
             + "\n";
     try {
       java.nio.file.Files.writeString(
@@ -893,7 +938,6 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
 
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     assertNotNull(CG);
-    recordCallGraphCensus(builder, CG, filename, functionName);
 
     if (LOGGER.isLoggable(Level.FINE)) {
       // Both the IR dump (`dumpCG`) and the per-node call-graph dump render each node's context,
@@ -923,7 +967,17 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
                 + ").");
     }
 
-    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+    TensorTypeAnalysis analysis;
+    try {
+      analysis = engine.performAnalysis(builder);
+    } finally {
+      // The census line is written whether or not the analysis completed: an analysis that crashed
+      // must leave a row with a marked absence, not no row, since a missing row is
+      // indistinguishable
+      // from a function that was never a candidate. The resolver's column carries its count only
+      // when the engine's own record says the analysis completed; otherwise the sentinel.
+      recordCallGraphCensus(builder, CG, filename, functionName, engine.getResolverCensus());
+    }
     // A lazy FINE supplier: the whole-lattice dump is a multi-hundred-MB string on the
     // whole-project fixtures, and an eager INFO concatenation builds it even when the CI logging
     // config discards the message (the release runner's heap exhaustion).
