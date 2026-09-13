@@ -1624,6 +1624,13 @@ public class TestConstructors extends AbstractTensorTest {
    * SSA-chain walkers must cross both the closure boundary and the callee tuple to recover the
    * dtype.
    *
+   * <p>Regression guard for the receiver-to-result edge of a {@code slice} call (wala/ML#916): the
+   * value here flows through a slice of a pass-through (non-tensor) receiver, so it is carried by
+   * the assignment-graph edge from the receiver to the slice result, not by a shape pin. A slice
+   * result supplied to the pointer analysis without that edge reads right at every pinned tensor
+   * slice and loses this value, so this test failing while the tensor slice tests pass means that
+   * edge is gone.
+   *
    * <p>TODO: Flip to a positive guard when the remaining wala/ML#796 residuals land (the reader
    * shape walk's spurious scalar member and the consume-side dtype drop; see the issue's diagnosis
    * comments).
@@ -1644,7 +1651,16 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
-  /** See {@link #testReaderChainProbeUnpacked()}. */
+  /**
+   * See {@link #testReaderChainProbeUnpacked()}.
+   *
+   * <p>Regression guard for the receiver-to-result edge of a {@code slice} call (wala/ML#916): the
+   * value here flows through a slice of a pass-through (non-tensor) receiver, so it is carried by
+   * the assignment-graph edge from the receiver to the slice result, not by a shape pin. A slice
+   * result supplied to the pointer analysis without that edge reads right at every pinned tensor
+   * slice and loses this value, so this test failing while the tensor slice tests pass means that
+   * edge is gone.
+   */
   @Test
   public void testReaderChainProbeSliced()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1656,7 +1672,16 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
-  /** See {@link #testReaderChainProbeUnpacked()}. */
+  /**
+   * See {@link #testReaderChainProbeUnpacked()}.
+   *
+   * <p>Regression guard for the receiver-to-result edge of a {@code slice} call (wala/ML#916): the
+   * value here flows through a slice of a pass-through (non-tensor) receiver, so it is carried by
+   * the assignment-graph edge from the receiver to the slice result, not by a shape pin. A slice
+   * result supplied to the pointer analysis without that edge reads right at every pinned tensor
+   * slice and loses this value, so this test failing while the tensor slice tests pass means that
+   * edge is gone.
+   */
   @Test
   public void testReaderChainProbeListed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1668,7 +1693,16 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
-  /** See {@link #testReaderChainProbeUnpacked()}. */
+  /**
+   * See {@link #testReaderChainProbeUnpacked()}.
+   *
+   * <p>Regression guard for the receiver-to-result edge of a {@code slice} call (wala/ML#916): the
+   * value here flows through a slice of a pass-through (non-tensor) receiver, so it is carried by
+   * the assignment-graph edge from the receiver to the slice result, not by a shape pin. A slice
+   * result supplied to the pointer analysis without that edge reads right at every pinned tensor
+   * slice and loses this value, so this test failing while the tensor slice tests pass means that
+   * edge is gone.
+   */
   @Test
   public void testReaderChainProbeDynamic()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

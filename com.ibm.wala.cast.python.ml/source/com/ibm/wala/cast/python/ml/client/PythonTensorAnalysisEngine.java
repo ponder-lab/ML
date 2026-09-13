@@ -650,6 +650,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache2) {
     PythonSSAPropagationCallGraphBuilder builder = super.getCallGraphBuilder(cha, options, cache2);
 
+    // A tensor's slice is a tensor with an allocation of its own, so a generator reading
+    // `x[:, :-1]` through the points-to set no longer sees the receiver's pre-slice window
+    // (wala/ML#916). Only the tensor type is named. A slice of it yields the same type and the
+    // type's methods live on the class, so dispatch through the result survives. An ndarray is
+    // NOT named: numpy.xml puts an array's methods (`astype`, `tolist`, `reshape`, `transpose`) on
+    // each allocation as instance fields, so a fresh allocation at a slice call has no methods and
+    // `arr[a:b].tolist()` loses its target (measured: four `tolist` nodes vanished from one
+    // whole-program call graph with the array type named); an ndarray slice already reads its own
+    // extent through the slice pin, so nothing was gained there. The ragged and sparse kinds and
+    // every general container keep the pass-through as well; that is the named remainder.
+    builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE));
+
     final ContextSelector base = builder.getContextSelector();
     final ContextSelector targetedCFA =
         new nCFAContextSelector(this.targetedCfaDepth, new ContextInsensitiveSelector());

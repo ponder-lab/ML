@@ -5587,6 +5587,40 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * The points-to set variable of the {@code slice} call an allocation was made at, when the
+   * allocation is a slice result's own (wala/ML#916): such an allocation's site is the slice call's
+   * program counter in the calling node, where the instruction is the call rather than a {@code
+   * new}. Its shape and dtype are the call's own generator's (the slice operation over the
+   * receiver), so delegation resolves the call's result rather than treating the allocation as a
+   * generic tensor with no producer.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param asin The allocation.
+   * @return The slice call's result variable, or {@code null} when the allocation is not one.
+   */
+  private static PointsToSetVariable sliceCallSource(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+    CGNode node = asin.getNode();
+    IR ir = node.getIR();
+    if (ir == null) return null;
+    int pc = asin.getSite().getProgramCounter();
+    SSAInstruction[] instructions = ir.getInstructions();
+    if (pc < 0 || pc >= instructions.length) return null;
+    SSAInstruction at = instructions[pc];
+    if (!(at instanceof PythonInvokeInstruction) || !at.hasDef()) return null;
+    PythonInvokeInstruction call = (PythonInvokeInstruction) at;
+    boolean toSlice = false;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
+      if (callee.getMethod().getDeclaringClass().getReference().equals(PythonTypes.SLICE_BUILTIN))
+        toSlice = true;
+    if (!toSlice) return null;
+    PointerKey key =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, call.getDef());
+    if (builder.getPropagationSystem().isImplicit(key)) return null;
+    return builder.getPropagationSystem().findOrCreatePointsToSet(key);
+  }
+
+  /**
    * Body of {@link #getShapeResultFromTensor(PropagationCallGraphBuilder, AllocationSiteInNode,
    * boolean)}, running as its engine query's transfer.
    *
@@ -5609,6 +5643,27 @@ public abstract class TensorGenerator {
     CGNode readDataNode = asin.getNode();
     WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
     boolean replay = activeEngine != null && activeEngine.isReplaying();
+
+    // A slice result allocated at its own call (wala/ML#916): the allocation's site is the slice
+    // call's program counter in the calling node, so the shape is the call's own generator's.
+    PointsToSetVariable sliceSource = sliceCallSource(builder, asin);
+    if (sliceSource != null) {
+      if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
+        return ShapeResult.bottom();
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(Level.FINE, "Delegating shape inference: factory IAE for " + sliceSource, e);
+        generator = null;
+      }
+      if (generator == null) return finishShapeResult(ret, exact, true);
+      LOGGER.fine("Delegating shape inference to: " + generator);
+      ShapeResult delegatedShapes = memoizedShapeResult(builder, generator);
+      ret.addAll(delegatedShapes.members());
+      if (exact && delegatedShapes.hasUnknown()) hasUnknown = true;
+      return finishShapeResult(ret, hasUnknown, delegatedShapes.hasUnknown());
+    }
 
     // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
     if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
@@ -6622,6 +6677,25 @@ public abstract class TensorGenerator {
       boolean applyRecursionGuards) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     CGNode readDataNode = asin.getNode();
+
+    // A slice result allocated at its own call (wala/ML#916); the shape twin above explains.
+    PointsToSetVariable sliceSource = sliceCallSource(builder, asin);
+    if (sliceSource != null) {
+      if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
+        return ret;
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + sliceSource, e);
+        generator = null;
+      }
+      if (generator == null) return EnumSet.of(UNKNOWN);
+      LOGGER.fine("Delegating dtype inference to: " + generator);
+      Set<DType> delegated = memoizedDTypes(builder, generator);
+      ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
+      return ret;
+    }
 
     // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
     if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {

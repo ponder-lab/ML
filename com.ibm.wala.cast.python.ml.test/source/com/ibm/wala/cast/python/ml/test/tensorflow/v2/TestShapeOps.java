@@ -1442,6 +1442,56 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A slice of a tensor is a tensor with an allocation of its own (wala/ML#916). Before, the slice
+   * builtin returned its receiver, so the result's points-to set was the receiver's, and a
+   * generator reading its operand through the points-to set saw the receiver's pre-slice window: an
+   * {@code Embedding} over {@code data[:, :-1]} read {@code 2049} where the slice has {@code 2048},
+   * while the parameter fed by the same value read the pinned {@code 2048} from dataflow state; the
+   * two disagreed about one value. With the fresh allocation the generator's read resolves through
+   * the slice's own operation.
+   *
+   * <p>Two outcomes were registered for the two windows before this ran, and only one proves the
+   * mechanism: the sliced extent ({@code 2048}) means the wala/ML#405 pin is authoritative and
+   * correct at the site; unknown rank would mean the receiver's window is gone (the fix worked) but
+   * the pin is absent or wrong there, a smaller result with its own follow-on. The unsliced
+   * embedding is the control; the list slice used as a shape vector is the container remainder,
+   * which keeps the pass-through (pinned at the base engine's own reading, wrong member included),
+   * and the ndarray slice is the array remainder: it keeps the pass-through too, because the array
+   * model's methods are per-allocation fields and a fresh allocation would lose them (four {@code
+   * tolist} nodes vanished from a whole-program call graph when the array type was named), and it
+   * already reads its own extent through the slice pin.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceResultHasItsOwnAllocation()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_slice_result_allocation.py";
+    Set<TensorType> window = Set.of(TensorType.of(FLOAT_32, 2, 2048, 8));
+    test(file, "consume_first_window", 1, 1, Map.of(2, window));
+    test(file, "consume_half_window", 1, 1, Map.of(2, window));
+    test(file, "consume_unsliced", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2049, 8))));
+    // The container remainder, pinned at what the base engine reads so it cannot move unnoticed: a
+    // list slice used as a reshape target reads the WHOLE list beside unknown rank ({@code (4, 6,
+    // 7)} where the program has {@code (4, 6)}), on the base engine and here alike, because the
+    // list keeps the pass-through and the shape-vector walk reads the unsliced contents through
+    // it. That is the parent defect surviving in the class the fix does not cover, tracked as
+    // wala/ML#926 (a sub-issue of wala/ML#916); this line asserts only that the slice-result
+    // allocation leaves it exactly as it was. When wala/ML#926 lands, this expectation becomes
+    // TensorType.of(FLOAT_32, 4, 6) alone: follow the program, do not restore the wrong member.
+    test(
+        file,
+        "consume_list_slice_shape",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null), TensorType.of(FLOAT_32, 4, 6, 7))));
+    test(file, "consume_ndarray_slice", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously

@@ -81,6 +81,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.Map;
@@ -144,6 +145,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * names assuming that import instructions are traversed from first to last.
    */
   private Map<String, Deque<MethodReference>> scriptToWildcardImports = Maps.newHashMap();
+
+  /**
+   * The element types whose slice results get an allocation of their own (wala/ML#916). A subscript
+   * with slice syntax lowers to a call of the {@code slice} builtin, whose result used to be its
+   * receiver's points-to set, so every reader of the result through the points-to set saw the
+   * receiver's pre-slice window. For a receiver key whose concrete type is in this set, the result
+   * instead gets a fresh allocation of that type at the call site; every other key passes through
+   * as before. Empty by default, so a client that has no element types to name sees no change; the
+   * tensor analysis names its tensor and array types. Staged on purpose: only where the element
+   * type is known does a slice yield a value of the same kind, so dispatch through the result
+   * survives; a general container's subscript yields an element of unknown type and keeps the
+   * pass-through.
+   */
+  private Set<TypeReference> freshSliceResultTypes = Collections.emptySet();
+
+  /**
+   * Names the element types whose slice results get an allocation of their own (wala/ML#916); see
+   * {@link #freshSliceResultTypes}.
+   *
+   * @param types The concrete receiver types whose slices allocate.
+   */
+  public void setFreshSliceResultTypes(Set<TypeReference> types) {
+    this.freshSliceResultTypes = types == null ? Collections.emptySet() : Set.copyOf(types);
+  }
 
   public static class PythonConstraintVisitor extends AstConstraintVisitor
       implements PythonInstructionVisitor {
@@ -1055,6 +1080,93 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       PointerKey reret = getPointerKeyForExceptionalReturnValue(target);
       PointerKey leret = getPointerKeyForLocal(caller, call.getException());
       getSystem().newConstraint(leret, assignOperator, reret);
+
+      if (target.getMethod().getDeclaringClass().getReference().equals(PythonTypes.SLICE_BUILTIN))
+        processSliceResult(caller, call, constParams);
+    }
+  }
+
+  /**
+   * Supplies the result of a {@code slice} builtin call (wala/ML#916). The builtin's body returns
+   * nothing; the result is the first argument's points-to set, as the body used to return, except
+   * that a key whose concrete type is one of the {@link #freshSliceResultTypes} becomes a fresh
+   * allocation of that type at this call, so a tensor's slice is a tensor of its own rather than an
+   * alias of its receiver. The result is a unary constraint from the receiver to the result, an
+   * edge of the assignment graph like the one the body used to make through its parameter and
+   * return, because the tensor dataflow analysis uses that graph as its flow graph: a side effect
+   * would supply the same keys but sever the edge, and every value flowing through a slice of a
+   * pass-through receiver (an array's dtype state, a named tuple's element types) would stop at the
+   * call. A constant first argument (the {@code slice(None, n, None)} form a subscript's bounds
+   * lower to) flows as the constant, as before.
+   *
+   * @param caller The node containing the call.
+   * @param call The {@code slice} call.
+   * @param constParams The call's constant arguments, indexed by positional argument, or {@code
+   *     null}.
+   */
+  private void processSliceResult(
+      CGNode caller, PythonInvokeInstruction call, InstanceKey[][] constParams) {
+    if (call.getNumberOfPositionalParameters() < 2 || !call.hasDef()) return;
+    PointerKey def = getPointerKeyForLocal(caller, call.getDef());
+    if (constParams != null && constParams.length > 1 && constParams[1] != null) {
+      for (InstanceKey element : constParams[1]) system.newConstraint(def, element);
+      return;
+    }
+    PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
+    getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /**
+   * The assignment from a {@code slice} call's receiver to its result (wala/ML#916): every key
+   * passes through except one of a {@link #freshSliceResultTypes fresh type}, which becomes the
+   * fresh allocation of that type at the call. Equal for the same call, so the constraint is
+   * idempotent like an assignment.
+   */
+  private final class SliceResultOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode caller;
+    private final int pc;
+
+    private SliceResultOperator(CGNode caller, int pc) {
+      this.caller = caller;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      Set<TypeReference> fresh = freshSliceResultTypes;
+      MutableIntSet out = IntSetUtil.make();
+      rhs.getValue()
+          .foreach(
+              i -> {
+                InstanceKey key = getSystem().getInstanceKey(i);
+                TypeReference type = key.concreteType().getReference();
+                out.add(
+                    fresh.contains(type)
+                        ? getSystem()
+                            .findOrCreateIndexForInstanceKey(
+                                getInstanceKeyForAllocation(
+                                    caller, NewSiteReference.make(pc, type)))
+                        : i);
+              });
+      return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return caller.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof SliceResultOperator
+          && ((SliceResultOperator) o).caller.equals(caller)
+          && ((SliceResultOperator) o).pc == pc;
+    }
+
+    @Override
+    public String toString() {
+      return "slice result at " + pc + " in " + caller;
     }
   }
 
