@@ -64,7 +64,8 @@ public class TestKerasApplications extends AbstractTensorTest {
 
   /**
    * The values beside the backbone that the model must not touch: the images the generator yields
-   * and the labels, whose class-count axis the generator cannot see.
+   * and the labels, whose class-count axis the generator cannot see and a downstream loss fixes
+   * (wala/ML#920).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -89,12 +90,16 @@ public class TestKerasApplications extends AbstractTensorTest {
                         new NumericDim(112),
                         new NumericDim(112),
                         new NumericDim(3))))));
+    // The labels' class axis is the directory's class count, which the generator cannot see; it is
+    // fixed by the `CategoricalCrossentropy` call the labels reach beside the `(None, 10)`
+    // predictions (wala/ML#920), so it reads 10 here rather than unresolved.
     test(
         BACKBONE,
         "consume_labels",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, U)))));
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**

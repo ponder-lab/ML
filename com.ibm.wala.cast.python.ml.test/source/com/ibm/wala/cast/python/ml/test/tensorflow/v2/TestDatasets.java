@@ -277,6 +277,123 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The class axis of {@code class_mode="categorical"} labels is the directory's class count, which
+   * no forward chase reads; it is fixed backwards by a shape-constrained consumer (wala/ML#920):
+   * {@code tf.keras.losses.CategoricalCrossentropy} raises on a shape mismatch, so labels reaching
+   * such a call beside {@code (batch, 10)} predictions are {@code (batch, 10)}, positionally or by
+   * keyword. The extent is derived from the program being well-formed and is not independent
+   * evidence for the prediction width it was derived from.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCategoricalLabelsFromLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_categorical_labels_from_loss.py";
+    Set<TensorType> fixed =
+        Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(10))));
+    test(file, "consume_labels_constrained", 1, 1, Map.of(2, fixed));
+    test(file, "consume_labels_keyword", 1, 1, Map.of(2, fixed));
+  }
+
+  /**
+   * What the consumer constraint declines (wala/ML#920), each leaving the class axis unresolved as
+   * before: labels that reach no loss (a second categorical generator inherits nothing, since
+   * membership is the identity of each generator's own labels allocation), labels reaching two
+   * categorical losses whose predictions disagree, predictions whose width the analysis cannot
+   * read, the sparse loss (rank-1 integer labels, no class axis, and not the named class), the
+   * function form, which the mechanism does not name, predictions whose shape depends on these very
+   * labels' batch, and a rank-3 prediction. {@code BinaryCrossentropy} and {@code
+   * CategoricalAccuracy.update_state} decline through the same "callee is not the modeled class"
+   * branch the sparse and function-form cases exercise, so they have no fixture of their own.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCategoricalLabelsFromLossDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_categorical_labels_from_loss.py";
+    test(
+        file, "consume_labels_unconsumed", 1, 1, Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    test(
+        file, "consume_labels_two_widths", 1, 1, Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    test(
+        file,
+        "consume_labels_unread_width",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    test(
+        file,
+        "consume_labels_sparse",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)))));
+    test(
+        file,
+        "consume_labels_function_form",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    // Predictions whose shape depends on this generator's own images (a `Sequential` with no
+    // `Input`): resolving them re-enters the generator being computed and reads nothing, so the
+    // axis stays unresolved. This PINS today's evaluation order, not a rule: if the resolver ever
+    // serves the images position during the labels' evaluation, the fold yields the width from
+    // `Dense(10)` and this reads (Dynamic, 10), which is right; follow the program, do not restore.
+    // No width can be derived from the labels themselves either way, since their own axis reads
+    // unresolved while it is being computed.
+    test(
+        file,
+        "consume_labels_self_dependent_predictions",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    // A rank-3 prediction: the width is read off a rank-2 prediction only (a distinct arm from the
+    // class check the sparse and function-form cases exercise).
+    test(
+        file,
+        "consume_labels_rank3_predictions",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+  }
+
+  /**
+   * Two categorical generators of different class counts built through one wrapper function, only
+   * one of which reaches a {@code CategoricalCrossentropy} call (wala/ML#920). A wrapper is one
+   * {@code flow_from_directory} call site serving both, so a width fixed for one generator's labels
+   * must not be read for the other's: the unconsumed generator's class axis stays unresolved. The
+   * two are not told apart today (the labels helper's context keeps the two innermost call sites,
+   * both inside the wrapper, so one allocation serves both), so the recognizer declines for both.
+   * The single-chain walk that declines here starts at the ALLOCATING node, not at the {@code
+   * flow_from_directory} frame: an earlier version walked from the frame, each wrapper caller had
+   * its own frame, and this test failed against it with the five-class labels reading ten. It
+   * passes on the base engine too, where nothing is fixed; its teeth are against that version.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCategoricalLabelsWrappedGeneratorDeclines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_categorical_labels_wrapped_generator.py";
+    test(
+        file,
+        "consume_wrapped_unconsumed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+  }
+
+  /**
    * Test a dataset that uses an iterator.
    *
    * <p>The parameter receives the whole {@code (images, labels)} batch, so its state is the union
