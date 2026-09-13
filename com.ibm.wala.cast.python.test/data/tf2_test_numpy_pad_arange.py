@@ -64,6 +64,54 @@ def consume_randint(r):
     pass
 
 
+def consume_arange_mixed(a):
+    pass
+
+
+def consume_pad_typed_input(p):
+    pass
+
+
+def consume_pad_typed_unresolved(p):
+    pass
+
+
+def consume_pad_scaled_left(p):
+    pass
+
+
+def consume_pad_two_arrays(p):
+    pass
+
+
+def consume_pad_stepped_input(p):
+    pass
+
+
+def consume_pad_stop_only(p):
+    pass
+
+
+def consume_pad_single_width(p):
+    pass
+
+
+def consume_pad_single_pair(p):
+    pass
+
+
+def consume_pad_float_bound(p):
+    pass
+
+
+def consume_pad_coefficient(p):
+    pass
+
+
+def consume_pad_floordiv(p):
+    pass
+
+
 a = np.arange(10)
 assert a.shape == (10,) and a.dtype == np.int64, a
 consume_arange_stop(a)
@@ -128,3 +176,65 @@ consume_pad_open(p7)
 p8 = np.pad(np.zeros(5), (0, n))
 assert p8.shape == (5 + n,), p8.shape
 consume_pad_unknown_width(p8)
+
+# One positional bound beside a keyword: `2` is the start when `stop` is named.
+h = np.arange(2, stop=10)
+assert h.shape == (8,), h.shape
+consume_arange_mixed(h)
+
+# An input the chase does not know how to read but whose shape is typed: the fold uses the shape.
+p9 = np.pad(np.eye(3), 1)
+assert p9.shape == (5, 5), p9.shape
+consume_pad_typed_input(p9)
+
+# The same with an unresolved typed shape: the axes stay unresolved, the rank is kept.
+p10 = np.pad(np.eye(n), 1)
+assert p10.shape == (n + 2, n + 2), p10.shape
+consume_pad_typed_unresolved(p10)
+
+# The scalar on the left of the elementwise operation. The product is int64 at run time; the
+# analysis types an integer scalar's product with an array of unknown dtype as int32, a standing
+# elementwise rule this file does not test, so the JUnit expectation carries that dtype knowingly.
+p11 = np.pad(2 * e, (0, 10 - n))
+assert p11.shape == (10,) and p11.dtype == np.int64, p11
+consume_pad_scaled_left(p11)
+
+# An elementwise operation of two arrays: the chase declines and the typed extent is unresolved.
+p12 = np.pad(e + e, (0, 10 - n))
+assert p12.shape == (10,), p12.shape
+consume_pad_two_arrays(p12)
+
+# An arange with a step: its length is not `stop - start`, so the chase declines.
+p13 = np.pad(np.arange(0, 2 * n, 2), (0, 10 - n))
+assert p13.shape == (10,), p13.shape
+consume_pad_stepped_input(p13)
+
+# An arange with only a stop: the start is zero.
+p14 = np.pad(np.arange(n), (0, 10 - n))
+assert p14.shape == (10,), p14.shape
+consume_pad_stop_only(p14)
+
+# A one-element width tuple pads every side.
+p15 = np.pad(np.zeros(5), (2,))
+assert p15.shape == (9,), p15.shape
+consume_pad_single_width(p15)
+
+# A single pair pads every axis alike.
+p16 = np.pad(np.zeros((2, 3)), ((1, 2),))
+assert p16.shape == (5, 6), p16.shape
+consume_pad_single_pair(p16)
+
+# A float bound is not a term the fold expresses.
+p17 = np.pad(np.arange(0.5, n), (0, 10 - n))
+assert p17.shape == (10,), p17.shape
+consume_pad_float_bound(p17)
+
+# Coefficients cancel too: `2n` elements padded by `20 - 2n`.
+p18 = np.pad(np.arange(2 * n), (0, 20 - 2 * n))
+assert p18.shape == (20,), p18.shape
+consume_pad_coefficient(p18)
+
+# An operator the fold does not express (floor division) leaves the width unresolved.
+p19 = np.pad(np.zeros(5), (0, n // 2))
+assert p19.shape == (5 + n // 2,), p19.shape
+consume_pad_floordiv(p19)

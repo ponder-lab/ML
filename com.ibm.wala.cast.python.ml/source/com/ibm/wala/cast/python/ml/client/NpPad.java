@@ -225,9 +225,9 @@ public class NpPad extends TensorGenerator {
   }
 
   /**
-   * The {@code pad_width} argument as per-axis {@code (before, after)} terms: an integer pads every
-   * side of every axis, a {@code (before, after)} pair pads every axis alike, and a sequence of
-   * pairs pads each axis on its own.
+   * The {@code pad_width} argument as per-axis {@code (before, after)} terms: an integer (or a
+   * one-element tuple) pads every side of every axis, a {@code (before, after)} pair (bare or as
+   * the only element) pads every axis alike, and a sequence of pairs pads each axis on its own.
    *
    * @return The per-axis widths, or {@code null} when the argument is absent or not a form this
    *     generator reads.
@@ -244,9 +244,19 @@ public class NpPad extends TensorGenerator {
     }
     Integer first = elements.get(0);
     if (first == null) return null;
-    if (elements.size() == 1 && tupleElements(node, first) == null) {
-      LinearTerm both = LinearTerm.resolve(builder, node, first, CHASE_DEPTH);
-      for (int axis = 0; axis < rank; axis++) ret.add(new LinearTerm[] {both, both});
+    if (elements.size() == 1) {
+      Map<Integer, Integer> onlyPair = tupleElements(node, first);
+      if (onlyPair == null) {
+        // `(w,)`: one width for every side of every axis.
+        LinearTerm both = LinearTerm.resolve(builder, node, first, CHASE_DEPTH);
+        for (int axis = 0; axis < rank; axis++) ret.add(new LinearTerm[] {both, both});
+        return ret;
+      }
+      // `((before, after),)`: one pair for every axis.
+      if (onlyPair.size() != 2 || onlyPair.get(0) == null || onlyPair.get(1) == null) return null;
+      LinearTerm before = LinearTerm.resolve(builder, node, onlyPair.get(0), CHASE_DEPTH);
+      LinearTerm after = LinearTerm.resolve(builder, node, onlyPair.get(1), CHASE_DEPTH);
+      for (int axis = 0; axis < rank; axis++) ret.add(new LinearTerm[] {before, after});
       return ret;
     }
     Integer second = elements.get(1);

@@ -36,6 +36,7 @@ public class TestNumpyPadArange extends AbstractTensorTest {
     test(FIXTURE, "consume_arange_bounds", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 8))));
     test(FIXTURE, "consume_arange_step", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 4))));
     test(FIXTURE, "consume_arange_keywords", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+    test(FIXTURE, "consume_arange_mixed", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 8))));
     test(
         FIXTURE,
         "consume_arange_unresolved",
@@ -59,6 +60,12 @@ public class TestNumpyPadArange extends AbstractTensorTest {
     test(FIXTURE, "consume_pad_scalar", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 9))));
     test(FIXTURE, "consume_pad_pair", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 8))));
     test(FIXTURE, "consume_pad_axes", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 4, 5))));
+    test(FIXTURE, "consume_pad_single_width", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 9))));
+    test(
+        FIXTURE, "consume_pad_single_pair", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 5, 6))));
+    // An input the chase does not read (`np.eye`) but whose shape is typed folds from the shape.
+    test(
+        FIXTURE, "consume_pad_typed_input", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 5, 5))));
   }
 
   /**
@@ -82,6 +89,13 @@ public class TestNumpyPadArange extends AbstractTensorTest {
     // because the chase reads the draw's `size` argument as a term, not its emitted dimension.
     test(FIXTURE, "consume_randint", 1, 1, Map.of(2, Set.of(new TensorType(INT_64, null))));
     test(FIXTURE, "consume_pad_cancels_draw", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 15))));
+    // The scalar on the left of the rescale, an arange with only a stop, and coefficients. The
+    // left-scaled product's dtype is the elementwise generator's standing int32 for an integer
+    // scalar over an array of unknown dtype (int64 at run time), a rule this test does not own; the
+    // extent is what it asserts.
+    test(FIXTURE, "consume_pad_scaled_left", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 10))));
+    test(FIXTURE, "consume_pad_stop_only", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 10))));
+    test(FIXTURE, "consume_pad_coefficient", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 20))));
   }
 
   /**
@@ -105,6 +119,29 @@ public class TestNumpyPadArange extends AbstractTensorTest {
     test(
         FIXTURE,
         "consume_pad_unknown_width",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
+    Set<TensorType> unresolvedUnknown =
+        Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE)));
+    // Inputs the chase declines on: two arrays combined, an arange with a step, a float bound.
+    test(FIXTURE, "consume_pad_two_arrays", 1, 1, Map.of(2, unresolvedUnknown));
+    test(FIXTURE, "consume_pad_stepped_input", 1, 1, Map.of(2, unresolvedUnknown));
+    test(FIXTURE, "consume_pad_float_bound", 1, 1, Map.of(2, unresolvedUnknown));
+    // A typed but unresolved input keeps its rank with unresolved axes; a floor-division width
+    // is an operator the fold does not express.
+    test(
+        FIXTURE,
+        "consume_pad_typed_unresolved",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+    test(
+        FIXTURE,
+        "consume_pad_floordiv",
         1,
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
