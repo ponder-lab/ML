@@ -2119,4 +2119,46 @@ public class TestElementwiseOps extends AbstractTensorTest {
         4,
         Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
+
+  /**
+   * The dtype of an elementwise operation between a Python integer literal and an array or tensor
+   * does not depend on which side the literal is on (wala/ML#922): NumPy keeps the array's dtype
+   * against an integer scalar and TensorFlow converts the constant to the tensor's dtype, so the
+   * non-literal operand decides, and an operand of unknown dtype leaves the result unknown. Before
+   * this the rule read the LEFT operand's dtype, and an integer literal there read as {@code
+   * int32}, imposing {@code int32} on {@code 2 * e} whatever {@code e} was: an {@code int64} array,
+   * an array of unknown dtype, or a known {@code float32} tensor. The right-literal forms were
+   * already right because the tensor was the left operand there.
+   *
+   * <p>The witnesses of the new rule are the left-literal cases over {@code int64}, {@code float32}
+   * and an unknown dtype, where the old and new rules disagree. The left-literal case over an
+   * {@code int32} tensor reads {@code int32} under both rules, by the literal's default before and
+   * by the operand after, so it is a control against over-firing and cannot witness the change. The
+   * float literal cases are wala/ML#814's rule, untouched and asserted here as controls.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIntegerLiteralOperandSideDoesNotDecideDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String file = "tf2_test_scalar_operand_dtype.py";
+    Set<TensorType> unknownDTypeUnresolvedExtent =
+        Set.of(new TensorType(UNKNOWN, java.util.List.of(TensorType.UnresolvedDim.INSTANCE)));
+    // The array's dtype is unknown to the analysis (a runtime bound): unknown on either side.
+    test(file, "consume_int_left_unknown_np", 1, 1, Map.of(2, unknownDTypeUnresolvedExtent));
+    test(file, "consume_int_right_unknown_np", 1, 1, Map.of(2, unknownDTypeUnresolvedExtent));
+    // Known operands: the operand decides on either side.
+    test(file, "consume_int_left_int64_np", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 8))));
+    test(file, "consume_int_right_int64_np", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 8))));
+    test(file, "consume_int_left_float32_tf", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    test(file, "consume_int_right_float32_tf", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    // Control by warrant: int32 under both rules.
+    test(file, "consume_int_left_int32_tf", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2, 2))));
+    // Float literals: wala/ML#814's promotion, untouched.
+    test(file, "consume_float_left_int64_np", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 8))));
+    test(file, "consume_float_left_float32_tf", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
 }

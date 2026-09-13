@@ -90,12 +90,13 @@ public class TestNumpyPadArange extends AbstractTensorTest {
     test(FIXTURE, "consume_randint", 1, 1, Map.of(2, Set.of(new TensorType(INT_64, null))));
     test(FIXTURE, "consume_pad_cancels_draw", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 15))));
     // The scalar on the left of the rescale, an arange with only a stop, and coefficients. The
-    // left-scaled product's dtype is the elementwise generator's standing int32 for an integer
-    // scalar over an array of unknown dtype, where the program has int64 (wala/ML#922), a rule this
-    // test does not own; the extent is what it asserts. If this expectation goes red on the dtype,
-    // the elementwise rule was fixed: follow the program (int64, or unknown) rather than restore
-    // int32.
-    test(FIXTURE, "consume_pad_scaled_left", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 10))));
+    // left-scaled product's dtype followed the program when the elementwise rule was fixed
+    // (wala/ML#922): an integer literal no longer decides, and the array's dtype is unknown to the
+    // analysis (a runtime bound), so the product is unknown, where it used to read int32. The
+    // expectation was written as knowingly divergent with the instruction to follow the program
+    // rather than restore int32, and this is that instruction carried out; the extent is what this
+    // test owns.
+    test(FIXTURE, "consume_pad_scaled_left", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 10))));
     test(FIXTURE, "consume_pad_stop_only", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 10))));
     test(FIXTURE, "consume_pad_coefficient", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 20))));
   }
