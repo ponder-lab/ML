@@ -129,6 +129,35 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String UNIQUE_INDICES_SIGNATURE = "numpy.unique() indices";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.arange.html (wala/ML#909). */
+  public static final MethodReference ARANGE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/arange")),
+          AstMethodReference.fnSelector);
+
+  private static final String ARANGE_SIGNATURE = "numpy.arange()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.pad.html (wala/ML#909). */
+  public static final MethodReference PAD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/pad")),
+          AstMethodReference.fnSelector);
+
+  private static final String PAD_SIGNATURE = "numpy.pad()";
+
+  /**
+   * {@code np.random.randint(low, high, size, dtype)}. See {@link #RANDOM_NORMAL} (wala/ML#909).
+   */
+  public static final MethodReference RANDOM_RANDINT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/random/randint")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_RANDINT_SIGNATURE = "numpy.random.randint()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.reshape.html */
   public static final MethodReference RESHAPE =
       MethodReference.findOrCreate(
@@ -357,6 +386,9 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(UNIQUE_VALUES.getDeclaringClass(), UNIQUE_VALUES_SIGNATURE),
           Map.entry(UNIQUE_INDICES.getDeclaringClass(), UNIQUE_INDICES_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
+          Map.entry(ARANGE.getDeclaringClass(), ARANGE_SIGNATURE),
+          Map.entry(PAD.getDeclaringClass(), PAD_SIGNATURE),
+          Map.entry(RANDOM_RANDINT.getDeclaringClass(), RANDOM_RANDINT_SIGNATURE),
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE),
           Map.entry(NP_TRANSPOSE.getDeclaringClass(), NP_TRANSPOSE_SIGNATURE),

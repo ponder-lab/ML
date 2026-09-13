@@ -8,7 +8,8 @@ from tensorflow.keras import Model, layers
 # generator feeding `from_generator` WITHOUT `output_shapes`, so the dataset element's static shape
 # is unknown even at run time (TensorFlow reports `<unknown>` rank there), and the model's own
 # `reshape` re-establishes rank internally. The prediction that flows back out therefore has a
-# statically provable shape, `(None, 2)` after the final Dense, while the raw batch does not.
+# statically provable shape, `(None, 2)` after the final Dense, while the raw batch does not. The
+# analysis recovers the element's fixed length from the generator's own padding (wala/ML#909).
 
 num_classes = 2
 seq_max_len = 20
@@ -19,19 +20,38 @@ batch_size = 64
 num_units = 32
 
 
+def consume_batch_x(b):
+    pass
+
+
 def toy_sequence_data():
     while True:
         seq_len = random.randint(seq_min_len, seq_max_len)
         rand_start = random.randint(0, max_value - seq_len)
-        seq = np.arange(start=rand_start, stop=rand_start + seq_len)
-        seq = seq / max_value
-        seq = np.pad(
-            seq,
-            mode="constant",
-            pad_width=(0, seq_max_len - seq_len),
-            constant_values=masking_val,
-        )
-        label = 0
+        # Both of the subject's branches: a linear sequence and a random one, each padded to the
+        # maximum length; the pad width is `seq_max_len - seq_len` against a sequence `seq_len` long,
+        # so the padded length is fixed by cancellation (wala/ML#909).
+        if random.random() < 0.5:
+            seq = np.arange(start=rand_start, stop=rand_start + seq_len)
+            seq = seq / max_value
+            seq = np.pad(
+                seq,
+                mode="constant",
+                pad_width=(0, seq_max_len - seq_len),
+                constant_values=masking_val,
+            )
+            label = 0
+        else:
+            seq = np.random.randint(max_value, size=seq_len)
+            seq = seq / max_value
+            seq = np.pad(
+                seq,
+                mode="constant",
+                pad_width=(0, seq_max_len - seq_len),
+                constant_values=masking_val,
+            )
+            label = 1
+        assert seq.shape == (seq_max_len,), seq.shape
         yield np.array(seq, dtype=np.float32), np.array(label, dtype=np.float32)
 
 
@@ -73,6 +93,10 @@ def accuracy(y_pred, y_true):
 
 
 for step, (batch_x, batch_y) in enumerate(train_data.take(1), 1):
+    # The batch's static shape is unknown to TensorFlow (no `output_shapes`), but every element is
+    # padded to `seq_max_len`, so the batch is `(batch_size, seq_max_len)` at run time.
+    assert batch_x.shape == (batch_size, seq_max_len), batch_x.shape
+    consume_batch_x(batch_x)
     pred = lstm_net(batch_x, is_training=True)
     # The model's internal reshape re-establishes rank, so the prediction's static shape is
     # (None, 2) even though batch_x's is unknown; at run time the batch is full.

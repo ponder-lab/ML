@@ -1363,10 +1363,11 @@ public class TestMisc extends AbstractTensorTest {
    * entrypoint: a parameter with no caller to supply it. Reading source tells you which shapes
    * exist and not which the analysis reaches under a given configuration.
    *
-   * <p>The expectation is a tensor with both axes unknown rather than no result at all. The dtype
-   * is unknown because the argument's members cannot be read, which is the state of an argument
-   * that was never supplied; the shape is unknown because the receiver walk does not resolve here
-   * either. What matters is that the analysis COMPLETES: before the fix this program ended it.
+   * <p>The expectation is a tensor of unknown dtype rather than no result at all. The dtype is
+   * unknown because the argument's members cannot be read, which is the state of an argument that
+   * was never supplied; the shape is the {@code (4,)} of the {@code np.arange(4)} the {@code
+   * astype} preserves (wala/ML#909; it read unknown while {@code np.arange} had no summary). What
+   * matters is that the analysis COMPLETES: before the fix this program ended it.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1376,12 +1377,7 @@ public class TestMisc extends AbstractTensorTest {
   @Test
   public void testEntrypointParameterDtypeDeclines()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "entrypoint_dtype_test.py",
-        "consume",
-        1,
-        1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+    test("entrypoint_dtype_test.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 4))));
   }
 
   /**
