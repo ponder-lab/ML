@@ -38,7 +38,6 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -365,10 +364,12 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * from_generator} dataset with no {@code output_shapes}). The batch axis is the reshape {@code
    * -1} placeholder, which carries no runtime-{@code None} guarantee either way (wala/ML#721). The
    * labels are read from the generator's own yield, a scalar {@code np.array}, and batched after
-   * {@code repeat()} to {@code (64,)} (wala/ML#903); the sequence component beside it is an
-   * unmodelled {@code np.pad} result, which is why the prediction's batch axis stays the
-   * placeholder. Pins that the whole composition, including the forward-result return edge, holds;
-   * nothing else reads this chain.
+   * {@code repeat()} to {@code (64,)} (wala/ML#903). The sequence component beside it is a {@code
+   * np.pad} whose width is written against the sequence's own length, so its extent folds to the
+   * padded length {@code 20} (wala/ML#909); with the element {@code (20,)} known, the batch is
+   * {@code (64, 20)} and the reshape's {@code -1} folds to {@code 64}, so the prediction's batch
+   * axis is concrete rather than the placeholder. Pins that the whole composition, including the
+   * forward-result return edge, holds; nothing else reads this chain.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -383,11 +384,29 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "cross_entropy_loss",
         2,
         5,
-        Map.of(
-            2,
-            Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)))),
-            3,
-            Set.of(TensorType.of(FLOAT_32, 64))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 64, 2)), 3, Set.of(TensorType.of(FLOAT_32, 64))));
+  }
+
+  /**
+   * The raw batch the model consumes in the same program (wala/ML#909): each generator element is
+   * padded to {@code seq_max_len} on both of the generator's branches (a linear {@code arange} and
+   * a random {@code randint} draw), so the batched sequence is {@code (64, 20)} although
+   * TensorFlow's own static shape for it is unknown.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDynamicRnnBatch()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dynamic_rnn_params.py",
+        "consume_batch_x",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 64, 20))));
   }
 
   /**
@@ -407,11 +426,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "accuracy",
         2,
         7,
-        Map.of(
-            2,
-            Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)))),
-            3,
-            Set.of(TensorType.of(FLOAT_32, 64))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 64, 2)), 3, Set.of(TensorType.of(FLOAT_32, 64))));
   }
 
   /**

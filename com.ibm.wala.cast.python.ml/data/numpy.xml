@@ -74,6 +74,8 @@
         <putfield class="LRoot" field="normal" fieldType="LRoot" ref="random" value="np_normal_fn"/>
         <new def="np_uniform_fn" class="Lnumpy/random/uniform"/>
         <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="random" value="np_uniform_fn"/>
+        <new def="np_randint_fn" class="Lnumpy/random/randint"/>
+        <putfield class="LRoot" field="randint" fieldType="LRoot" ref="random" value="np_randint_fn"/>
         <new def="np_permutation_fn" class="Lnumpy/random/permutation"/>
         <putfield class="LRoot" field="permutation" fieldType="LRoot" ref="random" value="np_permutation_fn"/>
         <new def="seed_fn" class="Lnumpy/random/seed"/>
@@ -88,6 +90,10 @@
         <putfield class="LRoot" field="ones" fieldType="LRoot" ref="x" value="ones_fn"/>
         <new def="zeros_fn" class="Lnumpy/zeros"/>
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros_fn"/>
+        <new def="arange_fn" class="Lnumpy/arange"/>
+        <putfield class="LRoot" field="arange" fieldType="LRoot" ref="x" value="arange_fn"/>
+        <new def="pad_fn" class="Lnumpy/pad"/>
+        <putfield class="LRoot" field="pad" fieldType="LRoot" ref="x" value="pad_fn"/>
         <new def="reshape_fn" class="Lnumpy/reshape"/>
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
         <new def="np_transpose_fn" class="Lnumpy/transpose"/>
@@ -257,6 +263,38 @@
           <return value="ret"/>
         </method>
       </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.arange.html -->
+      <!-- `np.arange([start,] stop[, step], dtype=None)`: a rank-1 array of `ceil((stop - start) / step)` elements. `NpArange` computes the extent when the bounds are constants and floors it to `Unresolved` otherwise (wala/ML#909); a padding that follows can still fold the bounds as terms, see `pad`. -->
+      <class name="arange" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start stop step dtype like">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.pad.html -->
+      <!-- `np.pad(array, pad_width, mode='constant', **kwargs)`: the rank is the input's and every axis grows by its `before` and `after` widths; the mode never affects the shape, and the mode-specific keywords (`constant_values`, `stat_length`, ...) are dropped by the keyword binding since they do not shape the result. `NpPad` folds the input's extent and the widths as linear terms over the program's own values, so a width written as `total - n` against an input `n` long comes out as `total` (wala/ML#909). -->
+      <class name="pad" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self array pad_width mode">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.eye.html -->
       <!-- Modeled as a class-per-function (same pattern as `zeros`) so that `np.eye` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned identity matrix takes its shape from the `n`/`m` arguments and its dtype from the `dtype` argument (float64 default); the `k` diagonal offset does not affect the type. See `NpEye`; wala/ML#797. -->
       <class name="eye" allocatable="true">
@@ -414,6 +452,8 @@
           <new def="rs" class="Lobject"/>
           <new def="rs_uniform" class="Lnumpy/random/uniform"/>
           <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="rs" value="rs_uniform"/>
+          <new def="rs_randint" class="Lnumpy/random/randint"/>
+          <putfield class="LRoot" field="randint" fieldType="LRoot" ref="rs" value="rs_randint"/>
           <new def="rs_normal" class="Lnumpy/random/normal"/>
           <putfield class="LRoot" field="normal" fieldType="LRoot" ref="rs" value="rs_normal"/>
           <new def="rs_randn" class="Lnumpy/random/randn"/>
@@ -447,6 +487,22 @@
       <!-- `np.random.uniform(low, high, size)`: the `normal` signature with different distribution parameters. -->
       <class name="uniform" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self low high size">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.randint.html -->
+      <!-- `np.random.randint(low, high, size, dtype)`: the `normal` and `uniform` signature shape, two distribution parameters then `size`, so `NpRandomIntegerDraw` shares their generator and differs only in the integer dtype (wala/ML#909). -->
+      <class name="randint" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self low high size dtype">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>

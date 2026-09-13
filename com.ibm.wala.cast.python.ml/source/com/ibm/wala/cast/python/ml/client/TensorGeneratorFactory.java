@@ -607,6 +607,16 @@ public class TensorGeneratorFactory {
     if (isType(type, NumpyTypes.RANDOM_NORMAL.getDeclaringClass())
         || isType(type, NumpyTypes.RANDOM_UNIFORM.getDeclaringClass()))
       return anchor.makeGenerator(NpRandomSizedDraw::new, NpRandomSizedDraw::new);
+    // The integer draw shares the sized-draw generator and differs in dtype only (wala/ML#909).
+    if (isType(type, NumpyTypes.RANDOM_RANDINT.getDeclaringClass()))
+      return anchor.makeGenerator(NpRandomIntegerDraw::new, NpRandomIntegerDraw::new);
+    // `np.arange` and `np.pad` (wala/ML#909): the pad folds its input's extent and its widths as
+    // linear terms over the program's own values, which is where a width written against the
+    // input's own length cancels; arange alone emits a constant extent only for constant bounds.
+    if (isType(type, NumpyTypes.ARANGE.getDeclaringClass()))
+      return anchor.makeGenerator(NpArange::new, NpArange::new);
+    if (isType(type, NumpyTypes.PAD.getDeclaringClass()))
+      return anchor.makeGenerator(NpPad::new, NpPad::new);
 
     // Dispatched through the shared table, so the source and manual arms are registered together
     // rather than one at a time (the tandem-registration rule).
