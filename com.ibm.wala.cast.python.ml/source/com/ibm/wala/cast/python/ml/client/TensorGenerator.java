@@ -5648,12 +5648,29 @@ public abstract class TensorGenerator {
     // call's program counter in the calling node, so the shape is the call's own generator's.
     PointsToSetVariable sliceSource = sliceCallSource(builder, asin);
     if (sliceSource != null) {
+      // Self-recursion: this generator IS the slice call's, and the allocation it is reading is the
+      // call's own result (a loop-carried slice, `x = x[:, 1:]`, puts it in the receiver's set).
+      // This guard runs only on the null-engine path (applyRecursionGuards, wala/ML#753); under the
+      // WorklistTypeResolver, which every analysis run installs, reads never recurse and the query
+      // iterates to a fixpoint (a loop-carried slice reads every extent from the receiver's own
+      // down
+      // to zero), so this line is unreachable there by construction and no test reaches it. Without
+      // that iteration the read happens once, so an optimistic ⊥ would ship as read, and ⊥ vanishes
+      // from a union and lets another member decide alone (the wala/ML#924 class); the extent
+      // depends
+      // on how many times the loop ran, which a single read cannot fold, so the value is ⊤. It is
+      // also the resolver's own policy for the same question (its Javadoc: bottom-valued members of
+      // a nontrivial SCC are promoted to the unknown-marked element), so the two paths now agree
+      // where they used to differ. The two older guards below return ⊥ on the same path. Paired
+      // with ⊤ on the dtype twin.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
-        return ShapeResult.bottom();
+        return ShapeResult.unknown();
       TensorGenerator generator;
       try {
         generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
       } catch (IllegalArgumentException e) {
+        // Not expected: the source was verified to be a slice call's result, which the factory
+        // always dispatches. Kept as a decline to ⊤ because the factory's contract is its own.
         LOGGER.log(Level.FINE, "Delegating shape inference: factory IAE for " + sliceSource, e);
         generator = null;
       }
@@ -6681,12 +6698,16 @@ public abstract class TensorGenerator {
     // A slice result allocated at its own call (wala/ML#916); the shape twin above explains.
     PointsToSetVariable sliceSource = sliceCallSource(builder, asin);
     if (sliceSource != null) {
+      // Self-recursion reads ⊤ (UNKNOWN), paired with the shape twin above, which explains; like
+      // it,
+      // reachable only on the null-engine path.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
-        return ret;
+        return EnumSet.of(UNKNOWN);
       TensorGenerator generator;
       try {
         generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
       } catch (IllegalArgumentException e) {
+        // Not expected (the shape twin explains); a decline to ⊤.
         LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + sliceSource, e);
         generator = null;
       }

@@ -38,6 +38,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
@@ -1489,6 +1490,21 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_32, null), TensorType.of(FLOAT_32, 4, 6, 7))));
     test(file, "consume_ndarray_slice", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+    // A loop-carried slice puts the call's own result in its receiver's set, so the slice query
+    // depends on itself. The worklist resolver iterates it to a fixpoint, slicing once more per
+    // pass
+    // until the extent floors at zero, so the value reads every extent the loop could leave, from
+    // the receiver's own 10 down to 0, the runtime 7 among them: sound, and eleven members rather
+    // than the once-sliced (2, 9) alone, which is what a ⊥ for the self-referential member would
+    // have left standing (the wala/ML#921 class). The pinned value is IMPRECISE: the loop runs
+    // three
+    // times, so the reachable set is (2, 7) through (2, 10) and the runtime value is (2, 7). An
+    // engine that folds the trip count may narrow this set to those four, or to (2, 7) alone, and
+    // should replace this pin rather than restore it.
+    Set<TensorType> loopExtents = HashSetFactory.make();
+    for (int extent = 0; extent <= 10; extent++)
+      loopExtents.add(TensorType.of(FLOAT_32, 2, extent));
+    test(file, "consume_loop_slice", 1, 1, Map.of(2, loopExtents));
   }
 
   /**

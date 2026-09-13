@@ -1121,6 +1121,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * passes through except one of a {@link #freshSliceResultTypes fresh type}, which becomes the
    * fresh allocation of that type at the call. Equal for the same call, so the constraint is
    * idempotent like an assignment.
+   *
+   * <p>Every key of a fresh type in the receiver's set maps to the ONE allocation of that type at
+   * this call, so two distinct tensors reaching the slice through a merge are one object after it.
+   * That is a deliberate precision choice, not an accident: the result's shape and dtype are
+   * resolved from the call itself (the slice operation over the whole receiver), never from the
+   * individual key, so per-key allocations would multiply objects without sharpening a reading.
+   *
+   * <p>When the instance-key factory declines the allocation (a {@code null} key), the receiver's
+   * key passes through instead: the result then aliases its receiver at that key exactly as before
+   * this change, a decline rather than a failure inside the solver.
    */
   private final class SliceResultOperator extends UnaryOperator<PointsToSetVariable> {
     private final CGNode caller;
@@ -1141,13 +1151,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               i -> {
                 InstanceKey key = getSystem().getInstanceKey(i);
                 TypeReference type = key.concreteType().getReference();
-                out.add(
+                InstanceKey allocation =
                     fresh.contains(type)
-                        ? getSystem()
-                            .findOrCreateIndexForInstanceKey(
-                                getInstanceKeyForAllocation(
-                                    caller, NewSiteReference.make(pc, type)))
-                        : i);
+                        ? getInstanceKeyForAllocation(caller, NewSiteReference.make(pc, type))
+                        : null;
+                // A declined allocation (null) falls back to the receiver's own key: the type came
+                // off an existing key, so the class resolves and this is not expected to happen,
+                // but a null inside the solver would take the whole analysis down (the wala/ML#925
+                // class) where aliasing the receiver merely loses this change at one key.
+                out.add(
+                    allocation == null
+                        ? i
+                        : getSystem().findOrCreateIndexForInstanceKey(allocation));
               });
       return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
     }

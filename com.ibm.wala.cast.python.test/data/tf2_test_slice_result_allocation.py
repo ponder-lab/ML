@@ -33,6 +33,10 @@ def consume_ndarray_slice(x):
     pass
 
 
+def consume_loop_slice(x):
+    pass
+
+
 embedding = tf.keras.layers.Embedding(VOCAB, EMB)
 
 # `slide_seq2seq_batch`: a batch of length + 1 sliced to its first `length` columns.
@@ -68,3 +72,21 @@ arr = np.zeros((10, 6), dtype=np.float32)
 row_slice = arr[:4]
 assert row_slice.shape == (4, 6)
 consume_ndarray_slice(tf.constant(row_slice) * 2.0)
+
+# A loop-carried slice. This MUST be a loop, not three written-out slices: only the loop makes the
+# variable depend on itself, so that the call's own result is among its receiver's objects and the
+# slice generator re-enters itself when it reads that object. Three straight-line slices are a chain
+# and never re-enter. The extent depends on how many times the loop ran, which the analysis does not
+# fold, so the sound reading is every extent the loop could leave, from 10 down to 0, with 7 among
+# them, not the once-sliced 9 alone.
+loop = tf.ones((2, 10))
+for _ in range(3):
+    loop = loop[:, 1:]
+assert loop.shape == (2, 7)
+consume_loop_slice(loop)
+
+# The builtin's two other call forms: a `slice` object made directly, and a slice of a constant.
+bounds = slice(3)
+assert bounds.stop == 3
+prefix = "window"[:3]
+assert prefix == "win"
