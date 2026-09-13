@@ -574,6 +574,13 @@ public class TestReductions extends AbstractTensorTest {
    * ones. The ⊤ components come from the wala/ML#480 attribute/slice path, which doesn't carry the
    * composed per-element shape through; once wala/ML#480 lands they drop, narrowing this to {@code
    * Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)}.
+   *
+   * <p>Also a regression guard for the receiver-to-result edge of a {@code slice} call
+   * (wala/ML#916): the named tuple is a pass-through receiver, so its element types reach the slice
+   * result only along the assignment-graph edge from the receiver, not through a shape pin. A slice
+   * result supplied to the pointer analysis without that edge reads right at every pinned tensor
+   * slice and loses these types, so this test failing while the tensor slice tests pass means that
+   * edge is gone.
    */
   @Test
   public void testTopkSliceCatalog()

@@ -330,7 +330,7 @@ public class BuiltinFunctions {
       this.cha = cha;
       this.ref = builtinFunction(name);
       this.builtinCode =
-          returnedType == null
+          returnedType == null || name.equals("slice")
               ? noopSummary(this, name)
               // `range` must return an iterable (non-empty) container so that loops and
               // comprehensions over it can recover element keys. See wala/ML#599.
@@ -553,7 +553,13 @@ public class BuiltinFunctions {
     builtinFunctions.put("sum", Either.forLeft(TypeReference.Int));
     builtinFunctions.put("type", Either.forLeft(PythonTypes.object));
     builtinFunctions.put("zip", Either.forLeft(PythonTypes.list));
-    builtinFunctions.put("slice", Either.forRight(2));
+    // `slice` used to return its first argument (the subscripted object), so a slice result's
+    // points-to set was its receiver's: a generator reading `x[:, :-1]` through the points-to set
+    // saw the receiver's pre-slice window (wala/ML#916). The body now returns nothing; the builder
+    // supplies the result at the call site (`processSliceResult`): the receiver's keys pass through
+    // as before, except that a key of a configured element type (a tensor) becomes a
+    // fresh allocation of that type at the call, so the slice has an allocation of its own.
+    builtinFunctions.put("slice", Either.forLeft(TypeReference.Void));
     builtinFunctions.put("__delete__", Either.forRight(2));
     // https://docs.python.org/3/library/functions.html#print
     builtinFunctions.put("print", Either.forLeft(TypeReference.Void));

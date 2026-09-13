@@ -657,6 +657,115 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
     return false;
   }
 
+  /**
+   * System property naming a file to which each analysis appends its call graph's node and edge
+   * counts (wala/ML#916). A change to the pointer analysis can remove dispatch targets, and a row
+   * whose node is gone does not read as unknown shape: it vanishes, indistinguishable from a
+   * function that was never a candidate. Row- and test-level readings are blind to that, so the
+   * counts are the one instrument that sees it; unset, nothing is written.
+   */
+  private static final String CALL_GRAPH_CENSUS_FILE_PROPERTY = "wala.ml.callgraph.census.file";
+
+  /**
+   * Appends {@code fixture,function,nodes,edges,sliceSites,sliceEmpty} for the given call graph to
+   * the census file named by {@value #CALL_GRAPH_CENSUS_FILE_PROPERTY}, when set.
+   *
+   * @param builder The builder whose pointer analysis the slice counts read.
+   * @param callGraph The call graph just built.
+   * @param filename The fixture analyzed.
+   * @param functionName The function under test.
+   */
+  private static void recordCallGraphCensus(
+      PythonSSAPropagationCallGraphBuilder builder,
+      CallGraph callGraph,
+      String filename,
+      String functionName) {
+    String path = System.getProperty(CALL_GRAPH_CENSUS_FILE_PROPERTY);
+    if (path == null || path.isBlank()) return;
+    // With a directory named too, the node list itself is written (one line per node: method
+    // signature and context), so two censuses that differ can be diffed down to the nodes.
+    String dir = System.getProperty(CALL_GRAPH_CENSUS_FILE_PROPERTY + ".nodes.dir");
+    if (dir != null && !dir.isBlank()) {
+      java.util.List<String> names = new java.util.ArrayList<>();
+      for (CGNode node : callGraph)
+        names.add(node.getMethod().getSignature() + " @ " + node.getContext());
+      java.util.Collections.sort(names);
+      try {
+        java.nio.file.Files.createDirectories(java.nio.file.Path.of(dir));
+        java.nio.file.Files.write(
+            java.nio.file.Path.of(
+                dir,
+                (filename + "__" + functionName).replaceAll("[^A-Za-z0-9_.-]", "_") + ".nodes"),
+            names,
+            java.nio.charset.StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        LOGGER.log(Level.WARNING, "Could not write the call graph node list under " + dir, e);
+      }
+    }
+    long edges = 0;
+    for (CGNode node : callGraph) edges += callGraph.getSuccNodeCount(node);
+    // The slice builtin's result is supplied at the call site rather than by its body
+    // (wala/ML#916),
+    // so a slice call reached by some path the call-site handling does not cover would yield an
+    // EMPTY result, which reads as ordinary absence. Count the slice call sites the graph reaches
+    // and, among them, those whose result is empty while the receiver's set is not: equal-to-zero
+    // means every reached slice got a result.
+    long sliceSites = 0;
+    long sliceEmpty = 0;
+    com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis<
+            com.ibm.wala.ipa.callgraph.propagation.InstanceKey>
+        pa = builder.getPointerAnalysis();
+    for (CGNode node : callGraph) {
+      com.ibm.wala.ssa.IR ir = node.getIR();
+      if (ir == null) continue;
+      for (com.ibm.wala.ssa.SSAInstruction inst : ir.getInstructions()) {
+        if (!(inst instanceof com.ibm.wala.cast.python.ssa.PythonInvokeInstruction)) continue;
+        com.ibm.wala.cast.python.ssa.PythonInvokeInstruction call =
+            (com.ibm.wala.cast.python.ssa.PythonInvokeInstruction) inst;
+        if (call.getNumberOfPositionalParameters() < 2 || !call.hasDef()) continue;
+        boolean toSlice = false;
+        for (CGNode callee : callGraph.getPossibleTargets(node, call.getCallSite()))
+          if (callee
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN)) toSlice = true;
+        if (!toSlice) continue;
+        sliceSites++;
+        boolean receiverEmpty =
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, call.getUse(1)))
+                .isEmpty();
+        boolean resultEmpty =
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, call.getDef()))
+                .isEmpty();
+        if (resultEmpty && !receiverEmpty) sliceEmpty++;
+      }
+    }
+    String line =
+        filename
+            + ","
+            + functionName
+            + ","
+            + callGraph.getNumberOfNodes()
+            + ","
+            + edges
+            + ","
+            + sliceSites
+            + ","
+            + sliceEmpty
+            + "\n";
+    try {
+      java.nio.file.Files.writeString(
+          java.nio.file.Path.of(path),
+          line,
+          java.nio.charset.StandardCharsets.UTF_8,
+          java.nio.file.StandardOpenOption.CREATE,
+          java.nio.file.StandardOpenOption.APPEND);
+    } catch (IOException e) {
+      LOGGER.log(Level.WARNING, "Could not append to the call graph census file " + path, e);
+    }
+  }
+
   protected void test(
       String filename,
       String functionName,
@@ -784,6 +893,7 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
 
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     assertNotNull(CG);
+    recordCallGraphCensus(builder, CG, filename, functionName);
 
     if (LOGGER.isLoggable(Level.FINE)) {
       // Both the IR dump (`dumpCG`) and the per-node call-graph dump render each node's context,
