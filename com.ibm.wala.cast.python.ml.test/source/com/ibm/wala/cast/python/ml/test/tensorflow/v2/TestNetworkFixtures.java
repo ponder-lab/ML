@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SPARSE_TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_100_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_256_256_3_FLOAT32;
@@ -1812,6 +1813,41 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * The hard-negative-mining layer of a recommender library at its subject's shape (wala/ML#907),
+   * with its only driver: {@code call} computes {@code tf.nn.top_k(logits + labels * MAX_FLOAT,
+   * k=num_sampled)} over its two parameters, where {@code MAX_FLOAT} is {@code
+   * np.finfo(np.float32).max / 100.0} at module level and {@code k} is a tensor, and passes the
+   * indices to {@code _gather_elements_along_row} as {@code column_indices}. Before {@code
+   * np.finfo} was modeled the scaling operand was opaque and not provably scalar, so the product
+   * floored to "not a tensor", {@code top_k}'s input read failed in both the points-to and the
+   * caller-frame path, and the indices came out {@code int32} with no rank. With the attribute a
+   * rank-0 scalar the product broadcasts to {@code (2, 20)} and the landed non-constant-{@code k}
+   * rule (wala/ML#609) keeps the rank: {@code (2, Dynamic)}, {@code Dynamic} because {@code k} is a
+   * tensor, so TensorFlow's static shape reports {@code None} there (wala/ML#721).
+   *
+   * <p>The driver is a pytest-shaped parameterized test method (file, class and method names), so
+   * the analysis binds it as an entrypoint the way the subject's own runner does; the two {@code
+   * logits} parameters read the driver's literal {@code (2, 20)} through the layer's {@code
+   * __call__}, the second call's numpy binop included (wala/ML#910).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testHardNegativeMining()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String[] files = {"test_hard_negative_mining.py", "parameterized.py"};
+    String file = "test_hard_negative_mining.py";
+    Set<TensorType> logits = Set.of(TensorType.of(FLOAT_32, 2, 20));
+    Set<TensorType> indices =
+        Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)));
+    test(files, file, "_gather_elements_along_row", "", 2, 10, Map.of(2, logits, 3, indices));
+    test(files, file, "HardNegativeMining.call", "", 2, 9, Map.of(3, logits, 4, logits));
   }
 
   /**

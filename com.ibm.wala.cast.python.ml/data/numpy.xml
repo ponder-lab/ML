@@ -94,6 +94,8 @@
         <putfield class="LRoot" field="arange" fieldType="LRoot" ref="x" value="arange_fn"/>
         <new def="pad_fn" class="Lnumpy/pad"/>
         <putfield class="LRoot" field="pad" fieldType="LRoot" ref="x" value="pad_fn"/>
+        <new def="finfo_fn" class="Lnumpy/finfo"/>
+        <putfield class="LRoot" field="finfo" fieldType="LRoot" ref="x" value="finfo_fn"/>
         <new def="reshape_fn" class="Lnumpy/reshape"/>
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
         <new def="np_transpose_fn" class="Lnumpy/transpose"/>
@@ -283,6 +285,39 @@
       <!-- `np.pad(array, pad_width, mode='constant', **kwargs)`: the rank is the input's and every axis grows by its `before` and `after` widths; the mode never affects the shape, and the mode-specific keywords (`constant_values`, `stat_length`, ...) are dropped by the keyword binding since they do not shape the result. `NpPad` folds the input's extent and the widths as linear terms over the program's own values, so a width written as `total - n` against an input `n` long comes out as `total` (wala/ML#909). -->
       <class name="pad" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self array pad_width mode">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.finfo.html -->
+      <!-- `np.finfo(dtype)`: the machine limits of a floating-point type. Its float-valued attributes (`max`, `min`, `eps`, `epsneg`, `tiny`, `smallest_normal`, `smallest_subnormal`, `resolution`) are NumPy scalars of that type, i.e. rank-0 arrays, exactly what `np.float32(2.0)` constructs (wala/ML#827), so a program that scales a tensor by one of them (`labels * MAX_FLOAT` with `MAX_FLOAT = np.finfo(np.float32).max / 100.0`) keeps the tensor's shape through the broadcast. The attributes are HELPER-CALL results rather than direct allocations (the wala/ML#834 pattern): a summary-internal call whose target is named `do` is seeded, so `NpFinfoValue` types the value (shape rank 0, dtype from the `dtype` argument) and the `putfield`s carry it onto every attribute. One helper value serves all the attributes, since they share the shape and the dtype and no attribute's VALUE is modeled. The helper node is shared across every `finfo` call context, so the dtype an attribute reads is the union over the program's `finfo` sites (exact for one site or one type); see `NpFinfoValue`. The integer-valued attributes (`bits`, `precision`, `iexp`, `maxexp`, `minexp`, `machep`, `negep`, `nexp`, `nmant`) are Python ints and stay unmodeled, as does `np.iinfo`, whose `min`/`max` are Python ints as well (wala/ML#907). -->
+      <class name="finfo" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dtype">
+          <new def="res" class="Lnumpy/finfo"/>
+          <new def="value_fn" class="Lnumpy/finfo_value"/>
+          <call class="Lnumpy/finfo_value" name="do" type="virtual" def="value" descriptor="()LRoot;" arg0="value_fn" arg1="dtype" numArgs="2"/>
+          <putfield class="LRoot" field="max" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="min" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="eps" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="epsneg" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="tiny" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="smallest_normal" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="smallest_subnormal" fieldType="LRoot" ref="res" value="value"/>
+          <putfield class="LRoot" field="resolution" fieldType="LRoot" ref="res" value="value"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- The float-valued attribute of a `finfo`: a rank-0 array of the queried type. `NpFinfoValue` supplies the shape and the dtype; the helper frame mirrors `finfo`'s own `self dtype` layout, so the dtype argument resolves against the user call site's value through the caller hop (wala/ML#760). -->
+      <class name="finfo_value" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dtype">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
