@@ -102,6 +102,21 @@
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="preprocessing" value="image"/>
         <new def="datasets" class="Lobject"/>
         <putfield class="LRoot" field="datasets" fieldType="LRoot" ref="keras" value="datasets"/>
+        <!-- `tf.keras.losses` (wala/ML#920): one loss class, `CategoricalCrossentropy`, modeled as a distinguishable instance so a shape-constrained consumer can be recognized by class rather than by family (the sparse variant takes rank-1 integer labels and constrains no class axis, so it must NOT match), plus the `Reduction` constants it is constructed with. The instance's `__call__` is deliberately NOT modeled: a call on it stays unresolved exactly as before, so no forward value moves; only the recognizer in `FlowFromDirectoryGenerator` reads the instance. -->
+        <new def="losses" class="Lobject"/>
+        <putfield class="LRoot" field="losses" fieldType="LRoot" ref="keras" value="losses"/>
+        <new def="cce_fn" class="Ltensorflow/keras/losses/CategoricalCrossentropy"/>
+        <putfield class="LRoot" field="CategoricalCrossentropy" fieldType="LRoot" ref="losses" value="cce_fn"/>
+        <new def="reduction" class="Lobject"/>
+        <putfield class="LRoot" field="Reduction" fieldType="LRoot" ref="losses" value="reduction"/>
+        <constant name="reduction_none" type="string" value="none"/>
+        <putfield class="LRoot" field="NONE" fieldType="LRoot" ref="reduction" value="reduction_none"/>
+        <constant name="reduction_sum" type="string" value="sum"/>
+        <putfield class="LRoot" field="SUM" fieldType="LRoot" ref="reduction" value="reduction_sum"/>
+        <constant name="reduction_sum_over_batch_size" type="string" value="sum_over_batch_size"/>
+        <putfield class="LRoot" field="SUM_OVER_BATCH_SIZE" fieldType="LRoot" ref="reduction" value="reduction_sum_over_batch_size"/>
+        <constant name="reduction_auto" type="string" value="auto"/>
+        <putfield class="LRoot" field="AUTO" fieldType="LRoot" ref="reduction" value="reduction_auto"/>
         <new def="keras_mnist" class="Lobject"/>
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="x" value="image"/>
         <new def="io" class="Lobject"/>
@@ -2812,6 +2827,16 @@
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self directory target_size color_mode classes class_mode">
           <new def="ret" class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels"/>
           <return value="ret"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/losses">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/losses/CategoricalCrossentropy (wala/ML#920). The constructor allocates an instance of this class and stores `reduction`; the instance is what `FlowFromDirectoryGenerator` recognizes as the consumer whose whole-shape compatibility requirement (`Loss.__call__` raises on a mismatch, verified on TensorFlow 2.9.3) fixes the class axis of `class_mode="categorical"` labels from the predictions passed beside them. No `__call__` is modeled; see the module wiring above. -->
+      <class name="CategoricalCrossentropy" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self from_logits label_smoothing axis reduction name">
+          <new def="res" class="Ltensorflow/keras/losses/CategoricalCrossentropy"/>
+          <putfield class="LRoot" field="reduction" fieldType="LRoot" ref="res" value="reduction"/>
+          <return value="res"/>
         </method>
       </class>
     </package>

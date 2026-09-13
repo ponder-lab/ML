@@ -313,6 +313,17 @@ public class TensorFlowTypes extends PythonTypes {
           TypeName.findOrCreate("Ltensorflow/keras/preprocessing/image/directory_iterator_images"));
 
   /**
+   * The instance {@code tf.keras.losses.CategoricalCrossentropy(...)} allocates (wala/ML#920): the
+   * shape-constrained consumer whose call fixes the class axis of categorical labels from the
+   * predictions beside them. Named as the class, not the family: the sparse and binary variants
+   * constrain no class axis and must not match.
+   */
+  public static final TypeReference KERAS_CATEGORICAL_CROSSENTROPY_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/keras/losses/CategoricalCrossentropy"));
+
+  /**
    * The label position (field 1) of the {@code (x, y)} batch tuple a {@code DirectoryIterator}
    * yields. Allocated in {@code flow_from_directory}'s summary; see wala/ML#830.
    */
