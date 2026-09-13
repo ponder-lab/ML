@@ -4959,6 +4959,25 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns true iff {@code vn} is a Python integer-literal constant in {@code node}'s symbol
+   * table, an {@link Integer} or {@link Long} value with no defining instruction (wala/ML#922). A
+   * Python integer scalar decides nothing about an elementwise result's dtype: NumPy keeps the
+   * array's dtype against an integer scalar and TensorFlow converts the constant to the tensor's
+   * dtype, so the non-literal operand is the one to read.
+   *
+   * @param node The CG node whose symbol table to query.
+   * @param vn The SSA value number to check.
+   * @return {@code true} iff {@code vn} is an {@link Integer} or {@link Long} literal constant.
+   */
+  protected static boolean isIntegerLiteralVn(CGNode node, int vn) {
+    if (vn <= 0) return false;
+    if (node.getDU().getDef(vn) != null) return false;
+    if (!node.getIR().getSymbolTable().isConstant(vn)) return false;
+    Object val = node.getIR().getSymbolTable().getConstantValue(vn);
+    return val instanceof Integer || val instanceof Long;
+  }
+
+  /**
    * Scans {@code node}'s IR for a {@link PythonPropertyWrite} whose {@code objectRef} and member
    * value match {@code propRead}'s. Used to peel tuple-unpack patterns like {@code x, y = a, b}.
    *

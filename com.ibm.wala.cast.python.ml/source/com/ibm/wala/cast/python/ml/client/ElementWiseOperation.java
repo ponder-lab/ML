@@ -610,6 +610,24 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     if (isFloatLiteralVn(node, xVn)) {
       return promoteWithFloatLiteral(builder, yVn);
     }
+    // An integer literal on the LEFT decides nothing (wala/ML#922): the rule below reads x's dtype,
+    // and an integer constant reads as int32 (TensorFlow's default integer), which imposed int32 on
+    // `2 * e` whatever `e` was: a known int64 array, a known float32 tensor, or an array of unknown
+    // dtype. NumPy keeps the array's dtype against an integer scalar and TensorFlow converts the
+    // constant to the tensor's dtype, so the result is the non-literal operand's dtype, unknown
+    // when
+    // that is unknown. This is the rule the RIGHT side already had (there the tensor is x),
+    // mirrored.
+    if (yVn > 0 && isIntegerLiteralVn(node, xVn) && !isIntegerLiteralVn(node, yVn)) {
+      Set<DType> yDTypes = this.getOperandDTypes(builder, yVn);
+      LOGGER.fine(
+          () ->
+              "ElementWiseOperation getDefaultDTypes: integer literal left of operand vn="
+                  + yVn
+                  + " dtypes="
+                  + yDTypes);
+      return yDTypes == null || yDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : yDTypes;
+    }
 
     Set<DType> xDTypes = this.getOperandDTypes(builder, xVn);
     LOGGER.fine("ElementWiseOperation getDefaultDTypes dtypes: " + xDTypes);
