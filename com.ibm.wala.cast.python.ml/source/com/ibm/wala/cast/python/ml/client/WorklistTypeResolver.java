@@ -1,9 +1,23 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
+import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContext;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerContext;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -185,24 +199,246 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Uninstalls the builder's engine, logging its end-of-analysis census (the successor of the
-   * retired wala/ML#591 recorder's summary; see wala/ML#727). The census reads only map sizes, so
-   * it costs no key hashing.
+   * Uninstalls the builder's engine and returns its end-of-analysis census (the successor of the
+   * retired wala/ML#591 recorder's summary; see wala/ML#727). Besides the map sizes, the census
+   * counts the queries that sit in a nontrivial strongly connected component of the final
+   * query-dependency graph, and among them the slice-result generator queries: one Tarjan pass over
+   * the settled graph, after the fixpoint and outside it, reading the graph without writing state.
+   * A slice query in a cycle is the engine's view of a loop-carried slice, whether the loop is
+   * written directly or carried through a helper (wala/ML#916).
    *
    * @param builder The builder whose engine to remove.
+   * @param complete Whether the analysis ran to its end; carried into the census so a reader can
+   *     tell the counts of a partial solve from a result.
+   * @return The census, or {@code null} when no engine was installed for the builder.
    */
-  static void uninstall(PropagationCallGraphBuilder builder) {
+  static PythonTensorAnalysisEngine.ResolverCensus uninstall(
+      PropagationCallGraphBuilder builder, boolean complete) {
     WorklistTypeResolver engine = ACTIVE.remove(builder);
-    if (engine == null) return;
+    if (engine == null) return null;
+    int cyclicQueries = 0;
+    Map<Object, String> cyclicSliceGenerators = HashMapFactory.make();
+    for (List<Object> scc : engine.tarjan()) {
+      boolean cyclic =
+          scc.size() > 1
+              || engine.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
+      if (!cyclic) continue;
+      String composition = null;
+      for (Object key : scc) {
+        cyclicQueries++;
+        Object generator = sliceGeneratorOf(key);
+        if (generator == null || cyclicSliceGenerators.containsKey(generator)) continue;
+        if (composition == null) composition = describeComponent(scc);
+        cyclicSliceGenerators.put(generator, composition);
+      }
+    }
+    int cyclicSliceQueries = cyclicSliceGenerators.size();
+    List<String> descriptions = new ArrayList<>();
+    for (Map.Entry<Object, String> generator : cyclicSliceGenerators.entrySet())
+      descriptions.add(describeGenerator(generator.getKey()) + " | " + generator.getValue());
+    Collections.sort(descriptions);
+    // Every slice generator the resolver evaluated, cyclic or not, with what its evaluations read:
+    // the denominator that makes a zero above a reading rather than an absence, and the record of
+    // where a query chain stops for a site that was expected to cycle and did not.
+    Set<Object> sliceGenerators = HashSetFactory.make();
+    for (Object key : engine.state.keySet()) {
+      Object generator = sliceGeneratorOf(key);
+      if (generator != null) sliceGenerators.add(generator);
+    }
+    List<String> evaluated = new ArrayList<>();
+    for (Object generator : sliceGenerators) {
+      StringBuilder line = new StringBuilder(describeGenerator(generator));
+      for (String tag : new String[] {"shape-eval", "dtype-eval"}) {
+        Object evaluation = Pair.make(tag, generator);
+        Set<Object> reads = engine.reads.get(evaluation);
+        if (reads != null)
+          line.append(" | ")
+              .append(tag)
+              .append(" reads ")
+              .append(describeComponent(new ArrayList<>(reads)));
+        Set<Object> dependents = engine.dependents.get(evaluation);
+        if (dependents != null)
+          line.append(" | ")
+              .append(tag)
+              .append(" read by ")
+              .append(describeComponent(new ArrayList<>(dependents)));
+      }
+      evaluated.add(line.toString());
+    }
+    Collections.sort(evaluated);
+    PythonTensorAnalysisEngine.ResolverCensus census =
+        new PythonTensorAnalysisEngine.ResolverCensus(
+            complete,
+            engine.state.size(),
+            engine.reads.values().stream().mapToInt(Set::size).sum(),
+            engine.versions.values().stream().mapToInt(Integer::intValue).sum(),
+            cyclicQueries,
+            cyclicSliceQueries,
+            Collections.unmodifiableList(descriptions),
+            sliceGenerators.size(),
+            Collections.unmodifiableList(evaluated));
     LOGGER.fine(
         () ->
-            "Query census: "
-                + engine.state.size()
+            "Query census"
+                + (census.complete() ? ": " : " (analysis did not complete): ")
+                + census.queries()
                 + " queries, "
-                + engine.reads.values().stream().mapToInt(Set::size).sum()
+                + census.dependencyEdges()
                 + " dependency edges, "
-                + engine.versions.values().stream().mapToInt(Integer::intValue).sum()
-                + " value growths.");
+                + census.valueGrowths()
+                + " value growths, "
+                + census.cyclicQueries()
+                + " in cycles, "
+                + census.cyclicSliceQueries()
+                + " slice generators in cycles.");
+    return census;
+  }
+
+  /**
+   * Describes a strongly connected component by its size and the kinds of query in it, so a reader
+   * can tell a cycle that runs through a value read of the receiver from one made only of a
+   * generator's own evaluations and delegations (which would be an artefact of the counter rather
+   * than a dependency in the program).
+   *
+   * @param scc The component's keys.
+   * @return {@code "scc=N: k1 x kind1, k2 x kind2, ..."} with kinds sorted.
+   */
+  private static String describeComponent(List<Object> scc) {
+    Map<String, Integer> kinds = new java.util.TreeMap<>();
+    for (Object key : scc) {
+      String kind;
+      if (key instanceof Pair && ((Pair<?, ?>) key).fst instanceof String) {
+        kind = (String) ((Pair<?, ?>) key).fst;
+        Object generator = sliceGeneratorOf(key);
+        if (generator != null) kind = kind + "(slice)";
+        else if (((Pair<?, ?>) key).snd instanceof Pair
+            && ((Pair<?, ?>) ((Pair<?, ?>) key).snd).fst instanceof Class)
+          kind =
+              kind
+                  + "("
+                  + ((Class<?>) ((Pair<?, ?>) ((Pair<?, ?>) key).snd).fst).getSimpleName()
+                  + ")";
+      } else if (key instanceof Pair) kind = "dtype-read";
+      else kind = key.getClass().getSimpleName();
+      kinds.merge(kind, 1, Integer::sum);
+    }
+    StringBuilder description = new StringBuilder("scc=").append(scc.size()).append(':');
+    for (Map.Entry<String, Integer> kind : kinds.entrySet())
+      description
+          .append(' ')
+          .append(kind.getValue())
+          .append(" x ")
+          .append(kind.getKey())
+          .append(',');
+    return description.substring(0, description.length() - 1);
+  }
+
+  /**
+   * Describes a generator by its anchor so a census reader can find the program site: the anchoring
+   * node's method, the value number, and the source file and line of the value's defining
+   * instruction where the method carries positions. Falls back to the anchor's own rendering.
+   *
+   * @param evaluationKey A generator evaluation key, {@code Pair(class, Pair(anchor,
+   *     discriminator))}.
+   * @return A one-line description.
+   */
+  private static String describeGenerator(Object evaluationKey) {
+    Object anchor =
+        evaluationKey instanceof Pair && ((Pair<?, ?>) evaluationKey).snd instanceof Pair
+            ? ((Pair<?, ?>) ((Pair<?, ?>) evaluationKey).snd).fst
+            : evaluationKey;
+    if (anchor instanceof ReturnValueKey) {
+      // A generator anchored on a summary's return value (the slice builtin's `do()`): name the
+      // call site that created the context, since the summary node itself carries no position.
+      CGNode node = ((ReturnValueKey) anchor).getNode();
+      StringBuilder description =
+          new StringBuilder("return of ").append(node.getMethod().getSignature());
+      Context context = node.getContext();
+      if (context instanceof CallerSiteContext) {
+        CGNode caller = ((CallerSiteContext) context).getCaller();
+        int pc = ((CallerSiteContext) context).getCallSite().getProgramCounter();
+        description.append(" called from ").append(caller.getMethod().getSignature());
+        if (caller.getMethod() instanceof AstMethod) {
+          Position position =
+              ((AstMethod) caller.getMethod()).debugInfo().getInstructionPosition(pc);
+          if (position != null) {
+            String file = position.getURL() == null ? "?" : position.getURL().getPath();
+            description
+                .append(" @ ")
+                .append(file.substring(file.lastIndexOf('/') + 1))
+                .append(':')
+                .append(position.getFirstLine());
+          }
+        }
+      } else if (context instanceof CallerContext) {
+        description
+            .append(" called from ")
+            .append(((CallerContext) context).getCaller().getMethod().getSignature());
+      } else if (context instanceof CallStringContext) {
+        // A call-string context names the innermost call site and its method directly.
+        CallString callString = (CallString) context.get(CallStringContextSelector.CALL_STRING);
+        if (callString.getMethods().length > 0 && callString.getCallSiteRefs().length > 0) {
+          IMethod caller = callString.getMethods()[0];
+          int pc = callString.getCallSiteRefs()[0].getProgramCounter();
+          description.append(" called from ").append(caller.getSignature());
+          if (caller instanceof AstMethod) {
+            Position position = ((AstMethod) caller).debugInfo().getInstructionPosition(pc);
+            if (position != null) {
+              String file = position.getURL() == null ? "?" : position.getURL().getPath();
+              description
+                  .append(" @ ")
+                  .append(file.substring(file.lastIndexOf('/') + 1))
+                  .append(':')
+                  .append(position.getFirstLine());
+            }
+          }
+        }
+      }
+      return description.toString();
+    }
+    if (!(anchor instanceof LocalPointerKey)) return brief(anchor);
+    LocalPointerKey local = (LocalPointerKey) anchor;
+    CGNode node = local.getNode();
+    int vn = local.getValueNumber();
+    StringBuilder description =
+        new StringBuilder(node.getMethod().getSignature()).append(" vn=").append(vn);
+    SSAInstruction def = node.getDU() == null ? null : node.getDU().getDef(vn);
+    if (def != null && def.iIndex() >= 0 && node.getMethod() instanceof AstMethod) {
+      Position position =
+          ((AstMethod) node.getMethod()).debugInfo().getInstructionPosition(def.iIndex());
+      if (position != null) {
+        String file = position.getURL() == null ? "?" : position.getURL().getPath();
+        description
+            .append(" @ ")
+            .append(file.substring(file.lastIndexOf('/') + 1))
+            .append(':')
+            .append(position.getFirstLine());
+      }
+    }
+    return description.toString();
+  }
+
+  /**
+   * The slice-result generator a query key evaluates, or {@code null} when the key is not a slice
+   * generator's evaluation. A generator evaluation is keyed {@code Pair(tag, evaluationKey)} with
+   * the tag {@code "shape-eval"} or {@code "dtype-eval"} and {@code evaluationKey} the pair {@code
+   * TensorGenerator.evaluationKey} builds, whose first component is the generator's class; the
+   * returned value is that inner key, so the shape and dtype evaluations of one generator count
+   * once. Delegation and value-read keys have other shapes and are not slice queries.
+   *
+   * @param key A query key.
+   * @return The {@link SliceBuiltinOperation} evaluation key inside {@code key}, or {@code null}.
+   */
+  private static Object sliceGeneratorOf(Object key) {
+    if (!(key instanceof Pair)) return null;
+    Pair<?, ?> tagged = (Pair<?, ?>) key;
+    if (!"shape-eval".equals(tagged.fst) && !"dtype-eval".equals(tagged.fst)) return null;
+    if (!(tagged.snd instanceof Pair)) return null;
+    Object generatorClass = ((Pair<?, ?>) tagged.snd).fst;
+    return generatorClass instanceof Class
+            && SliceBuiltinOperation.class.isAssignableFrom((Class<?>) generatorClass)
+        ? tagged.snd
+        : null;
   }
 
   /**

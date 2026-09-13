@@ -1979,6 +1979,79 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * The worklist resolver's end-of-analysis census (wala/ML#916): how many queries it resolved, how
+   * many dependency edges and value growths the fixpoint took, how many queries sit in a nontrivial
+   * strongly connected component of the final query-dependency graph, and how many distinct
+   * slice-result generators have a shape or dtype evaluation among those (one per generator, not
+   * one per evaluation). The last is the engine's view of a loop-carried slice, whether the loop is
+   * written directly or carried through a helper: a cyclic slice query names a program to look at,
+   * not a construct counted in its source.
+   *
+   * <p>Contract, since readers live outside this repository. LIFETIME: {@link #getResolverCensus}
+   * returns the census of the most recent {@link #performAnalysis} on this engine, set in that
+   * method's {@code finally} so an analysis that ended by exception still leaves its record, and
+   * {@code null} before any analysis has run; {@code null} has no other meaning, since the resolver
+   * is installed as the first statement of {@link #performAnalysis}, so an analysis without a
+   * resolver, which would also yield no census, cannot occur. INVARIANTS: {@link
+   * #cyclicSliceQueries} equals {@code cyclicSliceGenerators().size()} and {@link #sliceQueries}
+   * equals {@code sliceGenerators().size()}, always; the integers exist as the cheap projection for
+   * a one-cell column, the lists as the sites behind them. The list components are unmodifiable
+   * copies. COMPLETENESS: {@link #complete()} is {@code true} only when that analysis ran to its
+   * end; on an analysis that ended by exception the counts are of the partial solve and carry
+   * {@code false}, so a reader never mistakes them for a result and a zero never stands in for "not
+   * recorded". EVOLUTION: additive-only; components may be added, never removed or renamed, and a
+   * reader must tolerate components it does not know.
+   *
+   * @param complete Whether the analysis the census describes ran to its end.
+   * @param queries The number of resolved queries.
+   * @param dependencyEdges The number of dependency edges recorded between queries.
+   * @param valueGrowths The number of value growths over the fixpoint.
+   * @param cyclicQueries The number of queries in a nontrivial strongly connected component.
+   * @param cyclicSliceQueries The number of distinct slice-result generators with an evaluation
+   *     among those.
+   * @param cyclicSliceGenerators One line per such generator, sorted: the anchoring node's method,
+   *     the value number, and the source file and line of the defining instruction where the method
+   *     carries positions, then the size and composition of its component, so a non-zero count
+   *     names its sites.
+   * @param sliceQueries The number of distinct slice-result generators the resolver evaluated at
+   *     all, cyclic or not: the denominator that makes a zero in {@code cyclicSliceQueries} a
+   *     reading about cycles rather than an absence of slice queries.
+   * @param sliceGenerators One line per evaluated slice generator, sorted, with the kinds of query
+   *     each of its evaluations read, so a site expected to cycle that did not can be read.
+   */
+  public record ResolverCensus(
+      boolean complete,
+      int queries,
+      int dependencyEdges,
+      int valueGrowths,
+      int cyclicQueries,
+      int cyclicSliceQueries,
+      List<String> cyclicSliceGenerators,
+      int sliceQueries,
+      List<String> sliceGenerators) {
+
+    /** Copies the list components, so a reader cannot alter the census it was handed. */
+    public ResolverCensus {
+      cyclicSliceGenerators = List.copyOf(cyclicSliceGenerators);
+      sliceGenerators = List.copyOf(sliceGenerators);
+    }
+  }
+
+  /** The census of the most recent analysis; see {@link ResolverCensus}. */
+  private volatile ResolverCensus resolverCensus;
+
+  /**
+   * Returns the worklist resolver's census of the most recent {@link #performAnalysis} on this
+   * engine, or {@code null} before any analysis has run. See {@link ResolverCensus} for the
+   * contract.
+   *
+   * @return The most recent census, or {@code null}.
+   */
+  public ResolverCensus getResolverCensus() {
+    return this.resolverCensus;
+  }
+
+  /**
    * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
    * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
    * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
@@ -2058,6 +2131,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // engine's memoization and cycle convergence just as the seeds do (an unguarded read recurses
     // unboundedly through producer delegation on cyclic subjects).
     WorklistTypeResolver.install(builder);
+    boolean completed = false;
     try {
       Graph<PointsToSetVariable> dataflow =
           SlowSparseNumberedGraph.duplicate(
@@ -2725,6 +2799,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (engine != null) engine.replaySettled(replayFilter);
       }
 
+      completed = true;
       return tt;
     } finally {
       // The engine (with its query state) is uninstalled and the remaining per-builder memos are
@@ -2734,7 +2809,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // analysis completes. The `finally` ensures the state is released and the interpreter-miss
       // counter is reset even when the analysis exits early via `CancelException`, so neither
       // leaks into the next run.
-      WorklistTypeResolver.uninstall(builder);
+      this.resolverCensus = WorklistTypeResolver.uninstall(builder, completed);
       TensorGenerator.clearCaches(builder);
       reportAndResetInterpreterUnavailableMisses();
     }
