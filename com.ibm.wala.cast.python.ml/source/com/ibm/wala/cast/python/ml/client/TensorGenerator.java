@@ -22,6 +22,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
@@ -5461,9 +5462,12 @@ public abstract class TensorGenerator {
           sawUnknown |= fromTensor.hasUnknown();
           ret.addAll(fromTensor.members());
         }
-      } else if (getAllocationSiteInNode(valueIK) != null) {
+      } else if (findAllocationSiteInNode(valueIK) != null) {
         // Unwrap ScopeMappingInstanceKey or similar wrapping keys
-        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+        // A key with no allocation behind it (a builtin's type token reaching a value read) falls
+        // through above and contributes nothing, where a throw floored the whole query
+        // (wala/ML#925).
+        AllocationSiteInNode asin = findAllocationSiteInNode(valueIK);
 
         // Instead of forcing a points-to set, try to get the generator for this allocation site
         PointerKey pk =
@@ -5513,7 +5517,18 @@ public abstract class TensorGenerator {
           if (replay) LOGGER.fine(() -> "REPLAY member " + describe(asin) + " => factory IAE.");
         }
       } else {
-        throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
+        // A key that is neither a constant, an allocation nor a recognized token (a builtin's type
+        // object reaching a value read through a parameter, say) is not a tensor value and
+        // contributes nothing; in exact mode it marks the remainder unknown. It used to be
+        // unreachable, since the allocation-site extractor threw first and the resolver floored the
+        // whole query (wala/ML#925); a throw here would escape the resolver's catch and end the
+        // analysis, so it declines.
+        LOGGER.fine(
+            () ->
+                "getShapeResultOfValue: "
+                    + valueIK.getClass().getSimpleName()
+                    + " is not a tensor value; contributes nothing.");
+        if (exact) hasUnknown = true;
       }
 
     return finishShapeResult(ret, hasUnknown, sawUnknown);
@@ -5894,7 +5909,9 @@ public abstract class TensorGenerator {
         continue;
       }
 
-      AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
+      // A declining lookup (wala/ML#925): a token that is neither a recognized builtin, a constant
+      // nor an allocation contributes nothing, where a throw floored the whole query.
+      AllocationSiteInNode asin = findAllocationSiteInNode(instanceKey);
       if (asin == null && !(instanceKey instanceof ConstantKey)) continue;
       // First, check for `None`.
       if (instanceKey instanceof ConstantKey) {
@@ -6627,9 +6644,12 @@ public abstract class TensorGenerator {
                   + ". Attempting to retrieve dtype from producer.");
           ret.addAll(this.getDTypesFromTensor(builder, asin));
         }
-      } else if (getAllocationSiteInNode(valueIK) != null) {
+      } else if (findAllocationSiteInNode(valueIK) != null) {
         // Unwrap ScopeMappingInstanceKey or similar wrapping keys
-        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+        // A key with no allocation behind it (a builtin's type token reaching a value read) falls
+        // through above and contributes nothing, where a throw floored the whole query
+        // (wala/ML#925).
+        AllocationSiteInNode asin = findAllocationSiteInNode(valueIK);
 
         // Instead of forcing a points-to set, try to get the generator for this allocation site
         PointerKey pk =
@@ -6653,7 +6673,13 @@ public abstract class TensorGenerator {
           LOGGER.log(Level.FINE, "getDTypesOfValue: factory IAE for " + var, e);
         }
       } else {
-        throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
+        // Not a tensor value (the shape twin explains); contributes nothing rather than throwing
+        // past the resolver's catch (wala/ML#925).
+        LOGGER.fine(
+            () ->
+                "getDTypesOfValue: "
+                    + valueIK.getClass().getSimpleName()
+                    + " is not a tensor value; contributes nothing.");
       }
     }
 

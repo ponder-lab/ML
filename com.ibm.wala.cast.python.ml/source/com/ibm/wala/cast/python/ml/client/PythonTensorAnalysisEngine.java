@@ -10,7 +10,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TY
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_FUNCTIONS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
-import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
@@ -1151,12 +1151,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, iterator);
                   for (InstanceKey iterIK : pointerAnalysis.getPointsToSet(iterPK)) {
                     if (ret) break;
-                    AllocationSiteInNode asin;
-                    try {
-                      asin = getAllocationSiteInNode(iterIK);
-                    } catch (IllegalArgumentException e) {
-                      continue;
-                    }
+                    AllocationSiteInNode asin = findAllocationSiteInNode(iterIK);
                     if (asin != null) {
                       CGNode creatorNode = asin.getNode();
                       if (creatorNode
@@ -1528,7 +1523,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         OrdinalSet<InstanceKey> defPointsToSet = pointerAnalysis.getPointsToSet(defPointerKey);
 
         for (InstanceKey ik : defPointsToSet) {
-          AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+          AllocationSiteInNode asin = findAllocationSiteInNode(ik);
 
           if (asin != null) {
             TypeReference reference = asin.concreteType().getReference();
@@ -1784,7 +1779,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // Use the `getAllocationSiteInNode` helper to unwrap `ScopeMappingInstanceKey` /
             // `ConstantKey` wrappers — mirrors the pattern used at lines 386 and 714 of this
             // file and avoids missing tensor receivers that flow through closures or constants.
-            AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+            AllocationSiteInNode asin = findAllocationSiteInNode(ik);
             if (asin != null
                 && SET_SHAPE_RECEIVER_TYPES.contains(asin.concreteType().getReference())) {
               receiverEligible = true;
@@ -1871,7 +1866,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointerKey usePK =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, use);
       for (InstanceKey useIK : builder.getPointerAnalysis().getPointsToSet(usePK))
-        if (getAllocationSiteInNode(useIK) != null) return false;
+        if (findAllocationSiteInNode(useIK) != null) return false;
     }
     // Classify by application context: a consumer that applies this slice to a list or tuple is
     // shape-vector machinery, not a tensor subscript, so the constructor stays unpinned. An empty
@@ -1890,7 +1885,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, appliedTo);
       boolean sawAllocation = false;
       for (InstanceKey appliedToIK : builder.getPointerAnalysis().getPointsToSet(appliedToPK)) {
-        AllocationSiteInNode asin = getAllocationSiteInNode(appliedToIK);
+        AllocationSiteInNode asin = findAllocationSiteInNode(appliedToIK);
         if (asin == null) continue;
         sawAllocation = true;
         TypeReference appliedToType = asin.concreteType().getReference();
@@ -2018,6 +2013,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    *     reading about cycles rather than an absence of slice queries.
    * @param sliceGenerators One line per evaluated slice generator, sorted, with the kinds of query
    *     each of its evaluations read, so a site expected to cycle that did not can be read.
+   * @param caughtQueryExceptions How many query evaluations threw and were floored to unknown by
+   *     the resolver's catch (wala/ML#925): the count that separates a value the analysis could not
+   *     compute from one a generator failed to compute, which read identically otherwise.
    */
   public record ResolverCensus(
       boolean complete,
@@ -2028,7 +2026,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       int cyclicSliceQueries,
       List<String> cyclicSliceGenerators,
       int sliceQueries,
-      List<String> sliceGenerators) {
+      List<String> sliceGenerators,
+      int caughtQueryExceptions) {
 
     /** Copies the list components, so a reader cannot alter the census it was handed. */
     public ResolverCensus {

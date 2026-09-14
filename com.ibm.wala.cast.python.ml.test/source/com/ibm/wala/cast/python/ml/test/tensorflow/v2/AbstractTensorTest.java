@@ -673,12 +673,13 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
   private static final String CENSUS_NOT_RECORDED = "not-recorded";
 
   /**
-   * Appends {@code fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles} for the given
-   * call graph to the census file named by {@value #CALL_GRAPH_CENSUS_FILE_PROPERTY}, when set. The
-   * last column is the resolver's count of slice-result queries in a nontrivial strongly connected
-   * component of its query graph (the engine's view of a loop-carried slice, wala/ML#916), or
-   * {@value #CENSUS_NOT_RECORDED} when the analysis did not complete; {@code 0} and that sentinel
-   * are never the same cell.
+   * Appends {@code fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles,caughtExceptions}
+   * for the given call graph to the census file named by {@value #CALL_GRAPH_CENSUS_FILE_PROPERTY},
+   * when set. The seventh column is the resolver's count of slice-result queries in a nontrivial
+   * strongly connected component of its query graph (the engine's view of a loop-carried slice,
+   * wala/ML#916); the eighth is its count of query evaluations that threw and were floored to
+   * unknown (wala/ML#925). Both carry {@value #CENSUS_NOT_RECORDED} when the analysis did not
+   * complete; {@code 0} and that sentinel are never the same cell.
    *
    * @param builder The builder whose pointer analysis the slice counts read.
    * @param callGraph The call graph just built.
@@ -798,6 +799,10 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
             + (census == null || !census.complete()
                 ? CENSUS_NOT_RECORDED
                 : String.valueOf(census.cyclicSliceQueries()))
+            + ","
+            + (census == null || !census.complete()
+                ? CENSUS_NOT_RECORDED
+                : String.valueOf(census.caughtQueryExceptions()))
             + "\n";
     try {
       java.nio.file.Files.writeString(
