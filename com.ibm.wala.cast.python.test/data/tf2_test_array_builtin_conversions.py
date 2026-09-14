@@ -34,3 +34,20 @@ consume_ints(tf.constant(ints))
 floats = reader.read_file(["1.5,2.5", "3.5,4.5"], dtype=float)
 assert floats.shape == (2, 2) and floats.dtype == np.float64
 consume_floats(tf.constant(floats))
+
+
+def consume_identity(e):
+    pass
+
+
+# A builtin's type token that shares a container with a tensor reaches the value readers as one
+# member of the operand's points-to set, beside the tensor's allocation. A lookup that throws floors
+# the whole operand to unknown; a lookup that declines contributes nothing for the token and keeps
+# the tensor's shape. The runtime skips the token, which no operation accepts.
+mixed = [tf.ones((2, 3)), int]
+for item in mixed:
+    if isinstance(item, type):
+        continue
+    same = tf.identity(item)
+    assert same.shape == (2, 3) and same.dtype == tf.float32
+    consume_identity(same)

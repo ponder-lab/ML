@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import java.util.ArrayList;
@@ -9,6 +10,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.junit.After;
 import org.junit.Test;
 
@@ -68,6 +73,76 @@ public class WorklistTypeResolverTest {
             true);
 
     assertEquals(ShapeResult.unknown(), result);
+  }
+
+  /**
+   * A transfer that throws is counted (wala/ML#925). The census's caught-exception count is the
+   * instrument the integration witnesses read as 0, and a 0 means nothing unless a throw reads as 1
+   * somewhere: this is that control.
+   */
+  @Test
+  public void testCaughtExceptionIsCounted() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    engine.demand(
+        "E",
+        () -> {
+          throw new IllegalArgumentException("synthetic");
+        },
+        true);
+    engine.demand("F", () -> EnumSet.of(DType.FLOAT32), false);
+
+    PythonTensorAnalysisEngine.ResolverCensus census = WorklistTypeResolver.uninstall(null, true);
+    assertEquals(1, census.caughtQueryExceptions());
+    assertNull("uninstalled once", WorklistTypeResolver.uninstall(null, true));
+  }
+
+  /**
+   * The catch's fine line names the throwing frame and the first frame outside the throwing class
+   * (wala/ML#925): a shared helper's own line names the mechanism, the caller is the site that has
+   * to change. Here the transfer throws from this class and is called from the resolver.
+   */
+  @Test
+  public void testCaughtExceptionNamesItsCaller() {
+    Logger logger = Logger.getLogger(WorklistTypeResolver.class.getName());
+    List<String> messages = new ArrayList<>();
+    Handler handler =
+        new Handler() {
+          @Override
+          public void publish(LogRecord record) {
+            messages.add(record.getMessage());
+          }
+
+          @Override
+          public void flush() {}
+
+          @Override
+          public void close() {}
+        };
+    Level old = logger.getLevel();
+    logger.setLevel(Level.FINE);
+    logger.addHandler(handler);
+    try {
+      WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+      engine.demand(
+          "E",
+          () -> {
+            throw new IllegalArgumentException("synthetic");
+          },
+          true);
+    } finally {
+      logger.removeHandler(handler);
+      logger.setLevel(old);
+    }
+
+    String line =
+        messages.stream()
+            .filter(m -> m != null && m.startsWith("Worklist transfer IAE"))
+            .findFirst()
+            .orElse("");
+    assertTrue(line, line.contains(WorklistTypeResolverTest.class.getName() + ".lambda$"));
+    assertTrue(line, line.contains(" called from " + WorklistTypeResolver.class.getName() + "."));
+    assertTrue(line, line.endsWith("treating as ⊤."));
   }
 
   /** A dtype query's value passes through unchanged. */

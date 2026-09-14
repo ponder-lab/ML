@@ -376,12 +376,15 @@ public class Util {
    * null} when there is none (wala/ML#925). The scheme is {@link
    * #getAllocationSiteInNode(InstanceKey)}'s: the key itself when it is an allocation site, the
    * base of a {@link ScopeMappingInstanceKey} when that is one, and the constant overload for a
-   * {@link ConstantKey}. Where that method throws for any other key, a {@link ConcreteTypeKey} for
-   * a builtin among them, this one declines. A caller that tests the result for {@code null} wants
-   * this variant: a throw inside a generator is caught by the worklist resolver and floors the
-   * whole query to unknown, so the value reads like one the analysis could not compute, and nothing
-   * above fine level says why; a decline lets the caller floor the one member and go on with the
-   * rest.
+   * {@link ConstantKey}, which declines. That method therefore already returns {@code null} for a
+   * constant; it throws for any other key with no allocation behind it, a {@link ConcreteTypeKey}
+   * for a builtin among them, and this one declines there too, so the two agree on constants and
+   * differ on everything else unextractable (wala/ML#933). The scheme is repeated here rather than
+   * shared for that reason: writing the throwing method as "find, then throw on {@code null}" would
+   * turn its constant case into a throw. A caller that tests the result for {@code null} wants this
+   * variant: a throw inside a generator is caught by the worklist resolver and floors the whole
+   * query to unknown, so the value reads like one the analysis could not compute, and nothing above
+   * fine level says why; a decline lets the caller floor the one member and go on with the rest.
    *
    * @param instanceKey The {@link InstanceKey} in question.
    * @return The {@link AllocationSiteInNode} behind the key, or {@code null} when it has none.

@@ -19,9 +19,10 @@ import org.junit.Test;
  * hops, from the reader into the helper that builds the array, as at the site a census found in the
  * field. A one-hop form does not reach the defect: the dtype argument resolves per calling context
  * and the value walks never meet the builtin. In the two-hop form the builtin's type token itself
- * reaches the shape and dtype value readers, whose allocation-site lookup threw; the worklist
- * resolver caught the exception and floored the whole array query to unknown, and nothing above
- * fine level said so.
+ * reaches the dtype value reader, whose allocation-site lookup threw; the worklist resolver caught
+ * the exception and floored the whole array query to unknown, and nothing above fine level said so.
+ * The shape value reader's identical arm is reached by the co-flow witness below, not by the
+ * conversions.
  *
  * <p>The lookup now declines and the readers contribute nothing for such a key, so the query is
  * evaluated rather than floored. The values read here are the same before and after (unknown shape
@@ -56,6 +57,21 @@ public class TestArrayBuiltinConversions extends AbstractTensorTest {
   public void testFloatConversionsReadWithoutAFlooredQuery()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     String[] census = analyseWithCensus("consume_floats", UNKNOWN_SHAPE_UNKNOWN);
+    assertEquals("query evaluations floored by a caught exception: " + census[7], "0", census[7]);
+  }
+
+  /**
+   * The shape reader's decline, which the conversions above never reach (their token meets only the
+   * dtype reader): a builtin's type token sharing a container with a tensor is one member of the
+   * operand's points-to set at {@code tf.identity(item)}, beside the tensor's allocation. On the
+   * previous engine the extractor's throw at each value reader floored the whole result to {@code ?
+   * of unknown} (measured); a decline contributes nothing for the token and keeps the tensor's
+   * shape and dtype.
+   */
+  @Test
+  public void testTokenBesideATensorKeepsTheTensorShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String[] census = analyseWithCensus("consume_identity", Set.of(TENSOR_2_3_FLOAT32));
     assertEquals("query evaluations floored by a caught exception: " + census[7], "0", census[7]);
   }
 
