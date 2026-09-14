@@ -5711,13 +5711,14 @@ public abstract class TensorGenerator {
     if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
       int def = findDefinition(readDataNode, asin);
       if (def != -1) {
-        PointerKey defKey =
-            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
-        PointsToSetVariable defSource = null;
-        if (!builder.getPropagationSystem().isImplicit(defKey)) {
-          defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-        }
-
+        // Only the manual registry can resolve an allocation made in a synthetic method. The local
+        // defined by a `new` is an implicit points-to set in WALA (SSAPropagationCallGraphBuilder's
+        // visitNew records it so whenever contentsAreInvariant holds, and that is true for every
+        // SSANewInstruction def under SHORT_CIRCUIT_INVARIANT_SETS; WALA 1.8.0, not overridden by
+        // the Python builder), so a read through the definition's points-to variable never had a
+        // variable to read. The branch that tried was dead code and is deleted (wala/ML#930); if
+        // WALA or the builder changes that rule, this is the place a definition-variable fallback
+        // would return to.
         TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
 
         if (generator != null) {
@@ -5768,56 +5769,6 @@ public abstract class TensorGenerator {
                         + ", unknown="
                         + delegatedShapes.hasUnknown()
                         + ".");
-          }
-        } else if (defSource != null) {
-          // Self-recursion through the defining variable: ⊤ for the reason the manual guard above
-          // gives (wala/ML#928). No test reaches this branch at all (wala/ML#930).
-          if (applyRecursionGuards
-              && this.getSource() != null
-              && this.getSource().equals(defSource)) {
-            if (replay)
-              LOGGER.fine(
-                  () ->
-                      "REPLAY delegation "
-                          + describe(asin)
-                          + " => ⊤ by the source self-recursion guard of "
-                          + this.getClass().getSimpleName()
-                          + ".");
-            return ShapeResult.unknown();
-          }
-          try {
-            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-          } catch (IllegalArgumentException e) {
-            // Factory couldn't resolve — treat as "no generator" and skip. See wala/ML#363.
-            LOGGER.log(Level.FINE, "Delegating shape inference: factory IAE for " + defSource, e);
-            generator = null;
-          }
-          if (generator != null) {
-            LOGGER.fine("Delegating shape inference to: " + generator);
-            ShapeResult delegatedShapes = memoizedShapeResult(builder, generator);
-            ret.addAll(delegatedShapes.members());
-            if (exact && delegatedShapes.hasUnknown())
-              hasUnknown = true; // Incomplete union, wala/ML#718.
-            sawUnknown |= delegatedShapes.hasUnknown();
-            if (replay) {
-              TensorGenerator dispatched = generator;
-              LOGGER.fine(
-                  () ->
-                      "REPLAY delegation "
-                          + describe(asin)
-                          + " via "
-                          + dispatched.getClass().getSimpleName()
-                          + " => members="
-                          + delegatedShapes.members()
-                          + ", unknown="
-                          + delegatedShapes.hasUnknown()
-                          + ".");
-            }
-          } else {
-            if (exact) hasUnknown = true;
-            if (replay)
-              LOGGER.fine(
-                  () -> "REPLAY delegation " + describe(asin) + " => no generator resolved.");
           }
         }
       }
@@ -6778,13 +6729,14 @@ public abstract class TensorGenerator {
     if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
       int def = findDefinition(readDataNode, asin);
       if (def != -1) {
-        PointerKey defKey =
-            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
-        PointsToSetVariable defSource = null;
-        if (!builder.getPropagationSystem().isImplicit(defKey)) {
-          defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-        }
-
+        // Only the manual registry can resolve an allocation made in a synthetic method. The local
+        // defined by a `new` is an implicit points-to set in WALA (SSAPropagationCallGraphBuilder's
+        // visitNew records it so whenever contentsAreInvariant holds, and that is true for every
+        // SSANewInstruction def under SHORT_CIRCUIT_INVARIANT_SETS; WALA 1.8.0, not overridden by
+        // the Python builder), so a read through the definition's points-to variable never had a
+        // variable to read. The branch that tried was dead code and is deleted (wala/ML#930); if
+        // WALA or the builder changes that rule, this is the place a definition-variable fallback
+        // would return to.
         TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
 
         if (generator != null) {
@@ -6816,29 +6768,6 @@ public abstract class TensorGenerator {
           // A null delegation result is ⊤ (e.g., an argument dtype that resolves through neither
           // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
           ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
-        } else if (defSource != null) {
-          // Self-recursion contributes nothing, for the measured reason at the manual guard above
-          // (wala/ML#928, pending wala/ML#862), the same documented exception to the pairing rule
-          // as there; no test reaches this branch (wala/ML#930).
-          if (applyRecursionGuards
-              && this.getSource() != null
-              && this.getSource().equals(defSource)) {
-            return ret;
-          }
-
-          try {
-            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-          } catch (IllegalArgumentException e) {
-            // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
-            LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + defSource, e);
-            generator = null;
-          }
-          if (generator != null) {
-            LOGGER.fine("Delegating dtype inference to: " + generator);
-            Set<DType> delegated = memoizedDTypes(builder, generator);
-            // A null delegation result is ⊤; contribute UNKNOWN rather than NPE-ing.
-            ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
-          }
         }
       }
       return ret;
