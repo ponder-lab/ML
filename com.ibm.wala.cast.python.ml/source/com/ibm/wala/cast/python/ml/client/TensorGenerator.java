@@ -3628,7 +3628,16 @@ public abstract class TensorGenerator {
     try {
       TensorGenerator generator = TensorGeneratorFactory.getGenerator(baseVar, builder);
       if (generator == null) return null;
-      shapes = generator.getShapes(builder);
+      // Diverted through the engine's memo layer, as ModelCall.getDefaultShapes is (wala/ML#753):
+      // the direct one-argument read recursed outside the engine when the base's generator walked
+      // to the callers, whose branch-reachability filter evaluated this same predicate, and the
+      // analysis died by StackOverflowError (wala/ML#923). Through the engine the first read is a
+      // query evaluation and the re-entrant read observes its interim value, so the predicate
+      // declines and the branch stays two-way. The legacy collapse is kept deliberately: the direct
+      // read saw a partial result as null through every generator's legacy path, so the predicate
+      // declined on it, and toLegacy() holds that; members() would have decided a rank from the
+      // resolvable subset while an unknown remainder may hold another (wala/ML#934).
+      shapes = memoizedShapeResult(builder, generator).toLegacy();
     } catch (RuntimeException e) {
       return null;
     }
