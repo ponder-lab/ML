@@ -17,12 +17,12 @@ import org.junit.Test;
 /**
  * The call-graph census hook of {@link AbstractTensorTest} (wala/ML#916): with the census file
  * property set, every analysis appends one line of {@code
- * fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles}, and with the node-list directory
- * set too, the sorted node list is written beside it. The census is the instrument that sees a
- * pointer-analysis change remove dispatch targets, which no value-level reading can, so its
- * contract is asserted here rather than trusted: the counts are positive, the slice call sites the
- * fixture's graph reaches all have a non-empty result, and the node list has exactly as many lines
- * as the node count.
+ * fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles,caughtExceptions}, and with the
+ * node-list directory set too, the sorted node list is written beside it. The census is the
+ * instrument that sees a pointer-analysis change remove dispatch targets, which no value-level
+ * reading can, so its contract is asserted here rather than trusted: the counts are positive, the
+ * slice call sites the fixture's graph reaches all have a non-empty result, and the node list has
+ * exactly as many lines as the node count.
  *
  * <p>The last column is the resolver's count of slice-result queries in a cycle of its query graph,
  * the engine's view of a loop-carried slice. It has a positive control, the fixture whose slice is
@@ -58,7 +58,10 @@ public class TestCallGraphCensus extends AbstractTensorTest {
     assertEquals("one census line per analysis", 1, lines.size());
     String[] fields = lines.get(0).split(",");
     assertEquals(
-        "fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles", 7, fields.length);
+        "fixture,function,nodes,edges,sliceSites,sliceEmpty,sliceCycles,caughtExceptions",
+        8,
+        fields.length);
+    assertEquals("no query evaluation threw on this fixture: " + fields[7], "0", fields[7]);
     assertEquals(fixture, fields[0]);
     assertEquals(function, fields[1]);
     long nodes = Long.parseLong(fields[2]);
@@ -105,7 +108,7 @@ public class TestCallGraphCensus extends AbstractTensorTest {
     List<String> lines = Files.readAllLines(file);
     assertEquals("one census line per analysis", 1, lines.size());
     String[] fields = lines.get(0).split(",");
-    assertEquals(7, fields.length);
+    assertEquals(8, fields.length);
     // The negative control: every slice in this fixture is straight-line, so no slice query depends
     // on itself. This is what makes a zero elsewhere a reading rather than an absence.
     assertEquals("no slice query in a cycle: " + fields[6], "0", fields[6]);

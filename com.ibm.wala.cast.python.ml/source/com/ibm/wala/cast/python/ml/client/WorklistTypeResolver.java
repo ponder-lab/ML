@@ -141,6 +141,12 @@ final class WorklistTypeResolver {
   private final Map<Object, Integer> evaluationCounts = HashMapFactory.make();
 
   /**
+   * How many query evaluations threw and were floored to unknown (wala/ML#925): a generator that
+   * throws is not a crash and not a gap, and this is the only count that separates the two.
+   */
+  private int caughtQueryExceptions = 0;
+
+  /**
    * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
    * hybrid inline scheduling fixes the acyclic region's evaluation order, so the orders the engine
    * does not determine are the ones the worklist and the dependent re-enqueues impose on
@@ -276,7 +282,8 @@ final class WorklistTypeResolver {
             cyclicSliceQueries,
             Collections.unmodifiableList(descriptions),
             sliceGenerators.size(),
-            Collections.unmodifiableList(evaluated));
+            Collections.unmodifiableList(evaluated),
+            engine.caughtQueryExceptions);
     LOGGER.fine(
         () ->
             "Query census"
@@ -290,7 +297,9 @@ final class WorklistTypeResolver {
                 + census.cyclicQueries()
                 + " in cycles, "
                 + census.cyclicSliceQueries()
-                + " slice generators in cycles.");
+                + " slice generators in cycles, "
+                + census.caughtQueryExceptions()
+                + " query evaluations floored by a caught exception.");
     return census;
   }
 
@@ -930,6 +939,23 @@ final class WorklistTypeResolver {
   }
 
   /**
+   * Names where a caught exception came from: its throwing frame, and the first frame outside the
+   * throwing class, since a shared helper's own line (the allocation-site extractor's throw, say)
+   * names the mechanism but not the caller that has to change (wala/ML#925).
+   *
+   * @param e The caught exception.
+   * @return {@code "<throwing frame> called from <first frame in another class>"}.
+   */
+  private static String thrownFrom(Throwable e) {
+    StackTraceElement[] frames = e.getStackTrace();
+    if (frames.length == 0) return "an unknown frame";
+    String thrower = frames[0].getClassName();
+    for (StackTraceElement frame : frames)
+      if (!frame.getClassName().equals(thrower)) return frames[0] + " called from " + frame;
+    return frames[0].toString();
+  }
+
+  /**
    * Renders a key or value for the diagnostic dump. The interesting record components of a query
    * key (the value number and the exactness mode) trail its node's rendering, whose nested calling
    * contexts exceed any reasonable truncation length, so they are hoisted in front of the truncated
@@ -993,9 +1019,10 @@ final class WorklistTypeResolver {
                   + " ("
                   + e.getMessage()
                   + " at "
-                  + e.getStackTrace()[0]
+                  + thrownFrom(e)
                   + "); treating as ⊤.");
       result = this.shapeKinds.get(key) ? ShapeResult.unknown() : EnumSet.of(DType.UNKNOWN);
+      this.caughtQueryExceptions++;
     } finally {
       this.evaluating.pop();
       this.inStack.remove(key);

@@ -372,6 +372,34 @@ public class Util {
   }
 
   /**
+   * Finds the {@link AllocationSiteInNode} behind the given {@link InstanceKey}, or returns {@code
+   * null} when there is none (wala/ML#925). The scheme is {@link
+   * #getAllocationSiteInNode(InstanceKey)}'s: the key itself when it is an allocation site, the
+   * base of a {@link ScopeMappingInstanceKey} when that is one, and the constant overload for a
+   * {@link ConstantKey}. Where that method throws for any other key, a {@link ConcreteTypeKey} for
+   * a builtin among them, this one declines. A caller that tests the result for {@code null} wants
+   * this variant: a throw inside a generator is caught by the worklist resolver and floors the
+   * whole query to unknown, so the value reads like one the analysis could not compute, and nothing
+   * above fine level says why; a decline lets the caller floor the one member and go on with the
+   * rest.
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return The {@link AllocationSiteInNode} behind the key, or {@code null} when it has none.
+   */
+  public static AllocationSiteInNode findAllocationSiteInNode(InstanceKey instanceKey) {
+    if (instanceKey instanceof AllocationSiteInNode) return (AllocationSiteInNode) instanceKey;
+    if (instanceKey instanceof ScopeMappingInstanceKey) {
+      InstanceKey base = ((ScopeMappingInstanceKey) instanceKey).getBase();
+      if (base instanceof AllocationSiteInNode) return (AllocationSiteInNode) base;
+      if (base instanceof ConstantKey) return getAllocationSiteInNode((ConstantKey<?>) base);
+      return null;
+    }
+    if (instanceKey instanceof ConstantKey)
+      return getAllocationSiteInNode((ConstantKey<?>) instanceKey);
+    return null;
+  }
+
+  /**
    * Extracts the {@link AllocationSiteInNode} from the given {@link InstanceKey}. If the given
    * {@link InstanceKey} is an instance of {@link AllocationSiteInNode}, then it itself is returned.
    * If the given {@link InstanceKey} is a {@link ScopeMappingInstanceKey}, then it's base {@link
@@ -404,6 +432,8 @@ public class Util {
       throw new IllegalArgumentException(
           "Can't extract AllocationSiteInNode from: "
               + instanceKey
+              + " of type "
+              + instanceKey.concreteType().getReference()
               + ". Not expecting: "
               + instanceKey.getClass()
               + ".");

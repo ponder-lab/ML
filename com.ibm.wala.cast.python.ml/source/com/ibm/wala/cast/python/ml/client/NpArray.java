@@ -4,7 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
-import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -669,7 +669,10 @@ public class NpArray extends TensorGenerator {
           return false; // Unrecognized scalar.
         }
       } else {
-        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        // A declining lookup (wala/ML#925): a leaf that is no allocation, such as the result of a
+        // builtin conversion (`dtype(x)` with the Python `int` or `float`), floors this walk rather
+        // than throwing out of the generator, where the resolver would floor the whole query.
+        AllocationSiteInNode asin = findAllocationSiteInNode(ik);
         if (asin == null) {
           LOGGER.fine(() -> "collectNumpyLeaves: no allocation site for " + ik + "; flooring.");
           return false;
