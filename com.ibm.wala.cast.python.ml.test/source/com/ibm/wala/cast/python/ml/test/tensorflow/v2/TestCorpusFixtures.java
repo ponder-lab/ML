@@ -932,9 +932,20 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             // The model forward output: rank 3 with the vocab dimension recovered as the
             // constant 100; the dtype is refinable once `add_weight` consumes its `dtype`
             // argument. The (2, 2) int32 member is the call-site union with the label tensor.
+            // The float32 member arrives through the `self.output_layer(hidden_states)` arm:
+            // the model module reaches tensorflow only through `from utils.tf_utils import *`,
+            // and with a base written through that binding resolving (wala/ML#938),
+            // `OutputLayer` inherits the layer shell and its `add_weight` allocates a float32
+            // weight. That arm is dead at run time (`rev_embedding_projection` defaults to
+            // true and nothing overrides it), so the member is a runtime-infeasible arm's, not
+            // a refinement of the live arm's, whose dtype stays unknown. A decision pin, not a
+            // guard. TODO: wala/ML#889 tracks the arm; when it is pruned, this member goes.
             Set.of(
                 new TensorType(
                     UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
+                new TensorType(
+                    FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
                 TensorType.of(INT_32, 2, 2))));
   }
@@ -1056,9 +1067,20 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             // The model forward output: rank 3 with the vocab dimension recovered as the
             // constant 100; the dtype is refinable once `add_weight` consumes its `dtype`
             // argument. The (2, 2) int32 member is the call-site union with the label tensor.
+            // The float32 member arrives through the `self.output_layer(hidden_states)` arm:
+            // the model module reaches tensorflow only through `from utils.tf_utils import *`,
+            // and with a base written through that binding resolving (wala/ML#938),
+            // `OutputLayer` inherits the layer shell and its `add_weight` allocates a float32
+            // weight. That arm is dead at run time (`rev_embedding_projection` defaults to
+            // true and nothing overrides it), so the member is a runtime-infeasible arm's, not
+            // a refinement of the live arm's, whose dtype stays unknown. A decision pin, not a
+            // guard. TODO: wala/ML#889 tracks the arm; when it is pruned, this member goes.
             Set.of(
                 new TensorType(
                     UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
+                new TensorType(
+                    FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
                 TensorType.of(INT_32, 2, 2))));
   }
