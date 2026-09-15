@@ -165,8 +165,17 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
 
-          if (isLocalModule(moduleName))
+          if (isLocalModule(moduleName)) {
+            // An in-scope module is imported here and never reaches the base visitor, so its
+            // wildcard is recorded here for base-class resolution (wala/ML#938).
+            if (importFrom.getInternalNames().stream()
+                .anyMatch(a -> "*".equals(a.getInternalName())))
+              noteWildcardSource(
+                  importFrom.getInternalModuleNames().stream()
+                      .map(Name::getInternalId)
+                      .collect(Collectors.joining(".")));
             return createImportNode(importFrom.getInternalNames(), moduleName);
+          }
         }
 
         return super.visitImportFrom(importFrom);
