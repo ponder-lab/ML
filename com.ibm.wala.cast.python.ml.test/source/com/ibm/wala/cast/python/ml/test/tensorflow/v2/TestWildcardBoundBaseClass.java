@@ -34,6 +34,18 @@ public class TestWildcardBoundBaseClass extends AbstractTensorTest {
 
   private static final String PROJECT = "addweight_proj";
 
+  /**
+   * The same files with the wildcard source listed last, so the importer is parsed before the
+   * module it imports from. The registry is filled as each module is parsed and read only when a
+   * class is translated to IR, after every module has been parsed, so the parse order must not
+   * change the answer; this arm is what would show it if it did.
+   */
+  private static final String[] SOURCE_LAST = {
+    "addweight_proj/block_wild.py", "addweight_proj/block_direct.py",
+    "addweight_proj/block_shadow.py", "addweight_proj/driver.py",
+    "addweight_proj/tf_utils.py"
+  };
+
   @Test
   public void testWildcardBoundBaseResolvesTheWeight()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -72,5 +84,26 @@ public class TestWildcardBoundBaseClass extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 3))));
     test(FILES, "block_shadow.py", "consume_shadow_weight", PROJECT, 0, 0, Map.of());
+  }
+
+  @Test
+  public void testWildcardBoundBaseResolvesWhateverTheParseOrder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        SOURCE_LAST,
+        "block_wild.py",
+        "consume_wild",
+        PROJECT,
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+    test(
+        SOURCE_LAST,
+        "block_shadow.py",
+        "consume_shadow",
+        PROJECT,
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 3))));
   }
 }
