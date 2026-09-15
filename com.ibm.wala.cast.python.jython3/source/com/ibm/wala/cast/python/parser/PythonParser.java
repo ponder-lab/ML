@@ -413,6 +413,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
    * resolve, not this file's. A local definition never reaches here, since the base lookup consults
    * this file's own classes before it asks for a missing type.
    *
+   * <p>A source is matched against the registered scripts by path suffix and the first match that
+   * binds the root wins, so when two scripts in one analysis end with the same relative path (two
+   * source roots, or a vendored copy beside the original), which one's bindings are used depends on
+   * the registry's iteration order (wala/ML#941). That is an order the parse-order witness for this
+   * method cannot vary; the ambiguity is stated here rather than resolved.
+   *
    * @param root the root identifier of a dotted name
    * @return the module path the root is bound to in a wildcard source, or {@code null}
    */
