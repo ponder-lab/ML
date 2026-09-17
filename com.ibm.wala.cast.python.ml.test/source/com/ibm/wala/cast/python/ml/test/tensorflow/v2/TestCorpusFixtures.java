@@ -608,7 +608,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "GCNLayer.call",
         "nlpgnn_full_proj",
         1,
-        5,
+        7,
         Map.of(
             3,
             Set.of(
@@ -635,7 +635,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "GATLayer.call",
         "nlpgnn_full_proj",
         1,
-        3,
+        5,
         Map.of(
             3,
             Set.of(

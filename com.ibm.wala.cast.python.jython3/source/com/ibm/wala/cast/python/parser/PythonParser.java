@@ -380,6 +380,31 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       CLASS_REGISTRY = Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
   /**
+   * Records, for the loader's translation order, which modules this class's bases come from
+   * (wala/ML#944): the module an explicit import binding names for a base written through it, or
+   * every wildcard source of this module for a bare base no explicit binding covers. Recorded at
+   * parse time, before any module is translated, so the loader can translate a base's module before
+   * the module of the class that extends it.
+   *
+   * @param baseNames The class's bases as written, possibly dotted.
+   */
+  private void noteBaseDependencies(java.util.List<String> baseNames) {
+    for (String baseName : baseNames) {
+      if (baseName.indexOf('.') < 0 && localClassTypes.containsKey(baseName)) continue;
+      int dot = baseName.indexOf('.');
+      String root = dot < 0 ? baseName : baseName.substring(0, dot);
+      String bound = importedNames.get(root);
+      if (bound != null) {
+        String qualified = dot < 0 ? bound : bound + baseName.substring(dot);
+        int last = qualified.lastIndexOf('.');
+        if (last > 0) BaseDependencies.note(types, scriptName(), qualified.substring(0, last));
+      } else if (dot < 0) {
+        for (String source : wildcardSources) BaseDependencies.note(types, scriptName(), source);
+      }
+    }
+  }
+
+  /**
    * Resolves a base-class name by this module's scope rather than by a global table of simple names
    * (wala/ML#946): a class defined in this module first, else the class the module's import binding
    * names in the script it names, else {@code null} so the caller records a missing type and the
@@ -1059,6 +1084,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           };
       types.map(arg0.getInternalName(), cls);
       localClassTypes.put(arg0.getInternalName(), cls);
+      java.util.List<String> baseNames = new ArrayList<>();
+      for (expr e : arg0.getInternalBases()) baseNames.add(dottedName(e));
+      noteBaseDependencies(baseNames);
       CLASS_REGISTRY
           .computeIfAbsent(types, k -> Collections.synchronizedMap(HashMapFactory.make()))
           .computeIfAbsent(scriptName(), k -> Collections.synchronizedMap(HashMapFactory.make()))

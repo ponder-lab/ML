@@ -12,6 +12,7 @@ import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.CAstAbstractModuleLoader;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.parser.BaseDependencies;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAst;
 import com.ibm.wala.cast.tree.CAstEntity;
@@ -26,6 +27,7 @@ import com.ibm.wala.cast.util.CAstPattern;
 import com.ibm.wala.cast.util.CAstPattern.Segments;
 import com.ibm.wala.cfg.AbstractCFG;
 import com.ibm.wala.cfg.IBasicBlock;
+import com.ibm.wala.classLoader.FileModule;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.classLoader.IField;
@@ -47,11 +49,14 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.types.annotations.Annotation;
+import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -459,14 +464,118 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     return Ast.makeNode(CAstNode.CALL, Ast.makeNode(CAstNode.VAR, Ast.makeConstant("slice")), args);
   }
 
+  /** The translator of the current {@link #init(List)}, kept for the deferred translations. */
+  private TranslatorToIR translator;
+
+  /** Each top-level entity's module entry, kept for the deferred translations. */
+  private final Map<CAstEntity, ModuleEntry> entryOf = HashMapFactory.make();
+
+  /** Each top-level entity's script name, as the parser spelled it. */
+  private final Map<CAstEntity, String> scriptOf = HashMapFactory.make();
+
+  /** The top-level entities each top-level entity takes a class base from (wala/ML#944). */
+  private final Map<CAstEntity, Set<CAstEntity>> baseDependencies = HashMapFactory.make();
+
+  /** The top-level entities translated so far. */
+  private final Set<CAstEntity> translated = HashSetFactory.make();
+
+  /** The top-level entities deferred because a base's module had not been translated yet. */
+  private final List<CAstEntity> deferred = new ArrayList<>();
+
+  /**
+   * Creates the translator for this analysis. Subclasses override this rather than {@link
+   * #initTranslator}, which also records the base dependencies the translation order needs.
+   *
+   * @return The translator.
+   */
+  protected TranslatorToIR makeTranslator() {
+    return new PythonCAstToIRTranslator(this);
+  }
+
+  @Override
+  protected final TranslatorToIR initTranslator(
+      Set<Pair<CAstEntity, ModuleEntry>> topLevelEntities) {
+    this.translator = makeTranslator();
+    // Every module is parsed by now. Resolve each script's recorded base dependencies to the
+    // top-level entities in this analysis, so translation can put a base's module before the
+    // module of the class that extends it (wala/ML#944).
+    Map<String, Set<String>> recorded = BaseDependencies.get(typeDictionary);
+    Map<String, CAstEntity> byScript = HashMapFactory.make();
+    for (Pair<CAstEntity, ModuleEntry> p : topLevelEntities) {
+      entryOf.put(p.fst, p.snd);
+      String script = scriptNameOf(p.snd);
+      scriptOf.put(p.fst, script);
+      byScript.put(script, p.fst);
+    }
+    for (Pair<CAstEntity, ModuleEntry> p : topLevelEntities) {
+      Set<String> modules = recorded.get(scriptOf.get(p.fst));
+      if (modules == null) continue;
+      for (String module : modules) {
+        String plain = module.replace('.', '/') + ".py";
+        for (Map.Entry<String, CAstEntity> e : byScript.entrySet())
+          if (scriptNameMatches(e.getKey(), plain) && e.getValue() != p.fst)
+            baseDependencies.computeIfAbsent(p.fst, k -> HashSetFactory.make()).add(e.getValue());
+      }
+    }
+    return translator;
+  }
+
+  /**
+   * The script name the parser records a module entry under: a file module's class name, else its
+   * name, mirroring the parser's own spelling.
+   */
+  private static String scriptNameOf(ModuleEntry entry) {
+    if (entry instanceof FileModule) return entry.getClassName();
+    return entry.getName();
+  }
+
+  /**
+   * Translates an entity now only if every module one of its classes takes a base from has been
+   * translated already; otherwise defers it to {@link #finishTranslation()}, which translates the
+   * deferred entities once their bases' modules are done (wala/ML#944). A cycle of base
+   * dependencies, which module-level Python cannot execute, falls back to the given order.
+   */
   @Override
   protected boolean shouldTranslate(CAstEntity entity) {
+    if (!entryOf.containsKey(entity)) return true;
+    for (CAstEntity dependency : baseDependencies.getOrDefault(entity, Collections.emptySet()))
+      if (!translated.contains(dependency)) {
+        deferred.add(entity);
+        return false;
+      }
+    translated.add(entity);
     return true;
   }
 
   @Override
-  protected TranslatorToIR initTranslator(Set<Pair<CAstEntity, ModuleEntry>> topLevelEntities) {
-    return new PythonCAstToIRTranslator(this);
+  protected void finishTranslation() {
+    // Translate the deferred entities as their dependencies complete; whatever remains after a
+    // pass makes no progress is a dependency cycle and goes in the given order.
+    List<CAstEntity> pending = new ArrayList<>(deferred);
+    deferred.clear();
+    while (!pending.isEmpty()) {
+      boolean progress = false;
+      for (Iterator<CAstEntity> it = pending.iterator(); it.hasNext(); ) {
+        CAstEntity entity = it.next();
+        boolean ready = true;
+        for (CAstEntity dependency : baseDependencies.getOrDefault(entity, Collections.emptySet()))
+          if (!translated.contains(dependency) && pending.contains(dependency)) ready = false;
+        if (ready) {
+          translator.translate(entity, entryOf.get(entity));
+          translated.add(entity);
+          it.remove();
+          progress = true;
+        }
+      }
+      if (!progress) {
+        for (CAstEntity entity : pending) {
+          translator.translate(entity, entryOf.get(entity));
+          translated.add(entity);
+        }
+        pending.clear();
+      }
+    }
+    super.finishTranslation();
   }
 
   final CoreClass CodeBody =

@@ -14,7 +14,6 @@ import com.ibm.wala.cast.tree.CAstType;
 import com.ibm.wala.cast.tree.visit.CAstVisitor;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
-import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.types.FieldReference;
@@ -40,7 +39,7 @@ public class PytestLoader extends Python3Loader {
   }
 
   @Override
-  protected TranslatorToIR initTranslator(Set<Pair<CAstEntity, ModuleEntry>> topLevelEntities) {
+  protected TranslatorToIR makeTranslator() {
     return new PythonCAstToIRTranslator(this) {
 
       private boolean isPytestEntry(CAstEntity F) {
