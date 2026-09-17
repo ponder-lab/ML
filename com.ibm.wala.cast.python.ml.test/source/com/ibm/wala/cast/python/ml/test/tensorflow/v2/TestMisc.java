@@ -800,7 +800,7 @@ public class TestMisc extends AbstractTensorTest {
         "distorted_random_crop",
         "sidecar_proj",
         1,
-        3,
+        4,
         Map.of(2, Set.of(TensorType.of(UINT_8, 4830, 2900, 3))));
   }
 

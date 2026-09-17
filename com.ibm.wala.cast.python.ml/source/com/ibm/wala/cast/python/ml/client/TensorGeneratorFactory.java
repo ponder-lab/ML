@@ -183,6 +183,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENTIAL_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SHAPE_OF;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIN;
@@ -717,6 +718,8 @@ public class TensorGeneratorFactory {
     if (isType(type, RANK.getDeclaringClass())) return anchor.makeGenerator(Rank::new, Rank::new);
     if (isType(type, SEQUENCE_MASK.getDeclaringClass()))
       return anchor.makeGenerator(SequenceMask::new, SequenceMask::new);
+    if (isType(type, SHAPE_OF.getDeclaringClass()))
+      return anchor.makeGenerator(Shape::new, Shape::new);
     if (isType(type, SIZE.getDeclaringClass())) return anchor.makeGenerator(Size::new, Size::new);
     if (isType(type, SLICE.getDeclaringClass()))
       return anchor.makeGenerator(Slice::new, Slice::new);
