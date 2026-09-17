@@ -354,7 +354,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   @Test
   public void testPix2pixLoadParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_pix2pix_load.py", "load", 1, 7, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+    test("tf2_test_pix2pix_load.py", "load", 1, 11, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
   }
 
   /**
@@ -1627,7 +1627,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        22,
+        30,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -1656,7 +1656,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        14,
+        21,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -1744,7 +1744,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_crf.py",
         "crf_forward",
         4,
-        17,
+        19,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -1773,7 +1773,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_crf.py",
         "crf_decode_forward",
         4,
-        6,
+        8,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -1809,7 +1809,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        10,
+        20,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -1846,8 +1846,8 @@ public class TestNetworkFixtures extends AbstractTensorTest {
     Set<TensorType> logits = Set.of(TensorType.of(FLOAT_32, 2, 20));
     Set<TensorType> indices =
         Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)));
-    test(files, file, "_gather_elements_along_row", "", 2, 10, Map.of(2, logits, 3, indices));
-    test(files, file, "HardNegativeMining.call", "", 2, 9, Map.of(3, logits, 4, logits));
+    test(files, file, "_gather_elements_along_row", "", 2, 20, Map.of(2, logits, 3, indices));
+    test(files, file, "HardNegativeMining.call", "", 2, 11, Map.of(3, logits, 4, logits));
   }
 
   /**

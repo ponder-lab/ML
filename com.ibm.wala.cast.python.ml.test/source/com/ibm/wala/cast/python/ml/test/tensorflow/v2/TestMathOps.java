@@ -80,7 +80,7 @@ public class TestMathOps extends AbstractTensorTest {
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 13, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 15, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**
@@ -107,7 +107,7 @@ public class TestMathOps extends AbstractTensorTest {
         "tf2_test_take_along_axis.py",
         "_take_long_axis",
         2,
-        10,
+        15,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 

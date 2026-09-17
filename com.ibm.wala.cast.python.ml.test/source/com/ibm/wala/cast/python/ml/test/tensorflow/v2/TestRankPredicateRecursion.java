@@ -30,7 +30,7 @@ public class TestRankPredicateRecursion extends AbstractTensorTest {
         "test_rank_assert_overflow.py",
         "pick",
         1,
-        4,
+        6,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5))));
   }
 }

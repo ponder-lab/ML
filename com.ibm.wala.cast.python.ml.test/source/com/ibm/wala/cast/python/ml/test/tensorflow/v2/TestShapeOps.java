@@ -2245,4 +2245,52 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 9, 2))));
   }
+
+  /**
+   * {@code tf.shape} of a rank-3 tensor is a rank-1 {@code int32} vector of extent 3, the operand's
+   * rank (wala/ML#943). Before the {@code Shape} generator the result was a fresh allocation the
+   * factory refused, so the parameter read as not a tensor.
+   */
+  @Test
+  public void testShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A subscript of the shape vector is a rank-0 {@code int32} scalar, through the existing
+   * subscript pin, once the vector itself has a type (wala/ML#943).
+   */
+  @Test
+  public void testShapeSubscript()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * A scalar operand has an empty shape vector: the extent is a concrete zero, which is a different
+   * reading from an unknown rank (wala/ML#943). This arm and {@link #testShapeOfUnknownRank()} are
+   * separate so that neither can pass for the other.
+   */
+  @Test
+  public void testShapeOfScalar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_scalar.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 0))));
+  }
+
+  /**
+   * An operand of unknown rank yields a rank-1 vector whose extent is {@code Unresolved}: the rank
+   * is a fixed runtime integer the analysis could not compute, not {@code None}-evidence
+   * (wala/ML#721), and never a concrete zero (wala/ML#943).
+   */
+  @Test
+  public void testShapeOfUnknownRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_unknown_rank.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
+  }
 }
