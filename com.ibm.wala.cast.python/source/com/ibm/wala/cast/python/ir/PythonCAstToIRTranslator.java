@@ -1118,7 +1118,12 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       List<String> superMembers = classEmittedMemberNames.get(superTypeName);
       if (superMembers == null || superMembers.isEmpty()) continue;
 
-      int superClassObject = doLocalRead(code, superType.getName(), superClass.getReference());
+      // Read the base's class object by the composed global name every class is written under
+      // when it is defined, not by a local read of the bare base name: inside a function body the
+      // bare name is a synthesized lexical read of a script-level binding the script never exposed,
+      // so it resolved to nothing and no member was inherited (wala/ML#945).
+      int superClassObject =
+          doGlobalRead(null, code, superTypeName.toString().substring(1), PythonTypes.Root);
 
       for (String memberName : superMembers) {
         if (!propagated.add(memberName)) continue;

@@ -354,6 +354,94 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
   private final Map<String, String> importedNames = HashMapFactory.make();
 
   /**
+   * Records an import binding made on the module parser's in-scope path, which returns before the
+   * base visitor's {@code visitImportFrom} runs and so never reaches {@link #importedNames} on its
+   * own. Every binding the parser publishes must be written from both paths, or base-class
+   * resolution sees a module's imports only when they are not in scope (wala/ML#946).
+   *
+   * @param name The name bound in this module.
+   * @param qualified The dotted module path and member the name is bound to.
+   */
+  protected void noteImportedName(String name, String qualified) {
+    importedNames.put(name, qualified);
+  }
+
+  /** The classes this module defines, by simple name, for base-class resolution (wala/ML#946). */
+  private final Map<String, CAstType> localClassTypes = HashMapFactory.make();
+
+  /**
+   * The classes every module of one analysis defines, by script name and simple name, keyed by the
+   * type dictionary the analysis's module parsers share, so a base written as an imported name
+   * resolves to the class the import names rather than to whichever same-named class was parsed
+   * last (wala/ML#946). Published at parse time and read at translation time, after every module
+   * has been parsed.
+   */
+  private static final Map<CAstTypeDictionaryImpl<String>, Map<String, Map<String, CAstType>>>
+      CLASS_REGISTRY = Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+  /**
+   * Records, for the loader's translation order, which modules this class's bases come from
+   * (wala/ML#944): the module an explicit import binding names for a base written through it, or
+   * every wildcard source of this module for a bare base no explicit binding covers. Recorded at
+   * parse time, before any module is translated, so the loader can translate a base's module before
+   * the module of the class that extends it.
+   *
+   * @param baseNames The class's bases as written, possibly dotted.
+   */
+  private void noteBaseDependencies(java.util.List<String> baseNames) {
+    for (String baseName : baseNames) {
+      if (baseName.indexOf('.') < 0 && localClassTypes.containsKey(baseName)) continue;
+      int dot = baseName.indexOf('.');
+      String root = dot < 0 ? baseName : baseName.substring(0, dot);
+      String bound = importedNames.get(root);
+      if (bound != null) {
+        String qualified = dot < 0 ? bound : bound + baseName.substring(dot);
+        int last = qualified.lastIndexOf('.');
+        if (last > 0) BaseDependencies.note(types, scriptName(), qualified.substring(0, last));
+      } else if (dot < 0) {
+        for (String source : wildcardSources) BaseDependencies.note(types, scriptName(), source);
+      }
+    }
+  }
+
+  /**
+   * Resolves a base-class name by this module's scope rather than by a global table of simple names
+   * (wala/ML#946): a class defined in this module first, else the class the module's import binding
+   * names in the script it names, else {@code null} so the caller records a missing type and the
+   * summary-shell fallback can engage. The type dictionary shared across modules maps a simple name
+   * to whichever class was parsed last, which made a colliding class in an unrelated module the
+   * superclass whenever the bare-name idiom {@code from pkg import Name; class X(Name)} met a
+   * same-named class elsewhere.
+   *
+   * @param baseName The base as written, possibly dotted.
+   * @return The resolved class type, or {@code null} if this module's scope does not resolve it.
+   */
+  private CAstType resolveBaseType(String baseName) {
+    if (baseName.indexOf('.') < 0) {
+      CAstType local = localClassTypes.get(baseName);
+      if (local != null) return local;
+    }
+    String qualified = expandImportedName(baseName);
+    if (qualified.equals(baseName)) return null;
+    int dot = qualified.lastIndexOf('.');
+    if (dot <= 0) return null;
+    String module = qualified.substring(0, dot).replace('.', '/');
+    String name = qualified.substring(dot + 1);
+    Map<String, Map<String, CAstType>> byScript = CLASS_REGISTRY.get(types);
+    if (byScript == null) return null;
+    synchronized (byScript) {
+      for (Map.Entry<String, Map<String, CAstType>> e : byScript.entrySet()) {
+        String script = e.getKey();
+        if (script.equals(module + ".py") || script.endsWith("/" + module + ".py")) {
+          CAstType t = e.getValue().get(name);
+          if (t != null) return t;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * The dotted names of the modules this file wildcard-imports ({@code from m import *}), most
    * recent first, so a name this file does not bind itself can be expanded through the source
    * module's own import bindings (wala/ML#938). A wildcard import exports the source module's
@@ -966,7 +1054,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               for (expr e : arg0.getInternalBases()) {
                 try {
                   String baseName = dottedName(e);
-                  CAstType type = types.getCAstTypeFor(baseName);
+                  CAstType type = resolveBaseType(baseName);
                   if (type != null) {
                     supertypes.add(type);
                   } else {
@@ -994,8 +1082,15 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               return Collections.emptySet();
             }
           };
-      // TODO: CURRENTLY THIS WILL NOT BE CORRECT FOR EXTENDING CLASSES IMPORTED FROM ANOTHER MODULE
       types.map(arg0.getInternalName(), cls);
+      localClassTypes.put(arg0.getInternalName(), cls);
+      java.util.List<String> baseNames = new ArrayList<>();
+      for (expr e : arg0.getInternalBases()) baseNames.add(dottedName(e));
+      noteBaseDependencies(baseNames);
+      CLASS_REGISTRY
+          .computeIfAbsent(types, k -> Collections.synchronizedMap(HashMapFactory.make()))
+          .computeIfAbsent(scriptName(), k -> Collections.synchronizedMap(HashMapFactory.make()))
+          .putIfAbsent(arg0.getInternalName(), cls);
 
       // Insertion-ordered so a class's members (notably annotated fields) keep declaration order,
       // which positional NamedTuple/dataclass construction relies on (wala/ML#579).
@@ -1124,11 +1219,28 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
       CAstNode x = Ast.makeNode(CAstNode.CLASS_STMT, Ast.makeConstant(clse));
       context.addScopedEntity(x, clse);
+      CAstNode result;
       if (methodDefaultInits.isEmpty()) {
-        return x;
+        result = x;
+      } else {
+        methodDefaultInits.add(x);
+        result = Ast.makeNode(CAstNode.BLOCK_EXPR, methodDefaultInits.toArray(new CAstNode[0]));
       }
-      methodDefaultInits.add(x);
-      return Ast.makeNode(CAstNode.BLOCK_EXPR, methodDefaultInits.toArray(new CAstNode[0]));
+      // A class statement inside a function binds its name in that function's scope, as a nested
+      // `def` does. Without the declaration the later read of the name resolved lexically to the
+      // script scope, which the definition never wrote, so an instance of the nested class
+      // dispatched no inherited method (wala/ML#945).
+      if (parent.entity().getKind() == CAstEntity.FUNCTION_ENTITY) {
+        parent.addDefinedName(arg0.getInternalName());
+        result =
+            Ast.makeNode(
+                CAstNode.BLOCK_STMT,
+                Ast.makeNode(
+                    CAstNode.DECL_STMT,
+                    Ast.makeConstant(new CAstSymbolImpl(arg0.getInternalName(), CAstType.DYNAMIC))),
+                result);
+      }
+      return result;
     }
 
     private int compareTmp = 0;
