@@ -167,7 +167,13 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
           if (isLocalModule(moduleName)) {
             // An in-scope module is imported here and never reaches the base visitor, so its
-            // wildcard is recorded here for base-class resolution (wala/ML#938).
+            // wildcard is recorded here for base-class resolution (wala/ML#938), and so are its
+            // named bindings (wala/ML#946).
+            for (alias n : importFrom.getInternalNames())
+              if (n.getInternalNameNodes() != null)
+                noteImportedName(
+                    n.getInternalAsname() != null ? n.getInternalAsname() : n.getInternalName(),
+                    moduleName.replace('/', '.') + "." + n.getInternalName());
             if (importFrom.getInternalNames().stream()
                 .anyMatch(a -> "*".equals(a.getInternalName())))
               noteWildcardSource(
