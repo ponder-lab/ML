@@ -354,6 +354,28 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
   private final Map<String, String> importedNames = HashMapFactory.make();
 
   /**
+   * The dotted names of the modules this file wildcard-imports ({@code from m import *}), most
+   * recent first, so a name this file does not bind itself can be expanded through the source
+   * module's own import bindings (wala/ML#938). A wildcard import exports the source module's
+   * public names, the modules it imported included: with {@code import tensorflow as tf} in the
+   * source, the importer's {@code tf.keras.layers.Layer} names the same class. Global reads through
+   * such a binding already resolve in the call-graph builder (wala/ML#665); a base class is
+   * resolved here, at class-definition time, and that path had never followed the binding, so a
+   * class written that way inherited nothing and its {@code add_weight} had no target.
+   */
+  private final java.util.List<String> wildcardSources = new ArrayList<>();
+
+  /**
+   * The import bindings of every module parsed for one analysis, keyed by the type dictionary the
+   * loader shares among that analysis's module parsers (one dictionary per analysis, so the
+   * registry is per analysis and collectable with it), then by script name. Every module is parsed
+   * before any is translated to IR, and a missing base's qualified name is computed at translation
+   * time, so a wildcard-importing module finds its source's bindings whatever the parse order.
+   */
+  private static final Map<CAstTypeDictionaryImpl<String>, Map<String, Map<String, String>>>
+      IMPORT_BINDINGS = Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+  /**
    * Expands the root identifier of a dotted name through {@link #importedNames} to the fully
    * qualified module path it is bound to (e.g. {@code tf.keras.layers.Layer} to {@code
    * tensorflow.keras.layers.Layer} under {@code import tensorflow as tf}).
@@ -366,10 +388,56 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     int dot = dotted.indexOf('.');
     String root = dot < 0 ? dotted : dotted.substring(0, dot);
     String qualifiedRoot = importedNames.get(root);
+    if (qualifiedRoot == null) qualifiedRoot = wildcardBoundRoot(root);
     if (qualifiedRoot == null) {
       return dotted;
     }
     return dot < 0 ? qualifiedRoot : qualifiedRoot + dotted.substring(dot);
+  }
+
+  /**
+   * Records a module this file wildcard-imports, most recent first (wala/ML#938). Called from both
+   * from-import paths: the base visitor's, for modules outside the analysed sources, and the module
+   * parser's, which handles an in-scope module itself and never reaches the base visitor.
+   *
+   * @param module the imported module's dotted name
+   */
+  protected void noteWildcardSource(String module) {
+    wildcardSources.add(0, module);
+  }
+
+  /**
+   * Resolves a root identifier this file does not bind through the import bindings of the modules
+   * it wildcard-imports, most recent import first, as a later wildcard import binds over an earlier
+   * one (wala/ML#938). One level only: a source module's own wildcard imports are its bindings to
+   * resolve, not this file's. A local definition never reaches here, since the base lookup consults
+   * this file's own classes before it asks for a missing type.
+   *
+   * <p>A source is matched against the registered scripts by path suffix and the first match that
+   * binds the root wins, so when two scripts in one analysis end with the same relative path (two
+   * source roots, or a vendored copy beside the original), which one's bindings are used depends on
+   * the registry's iteration order (wala/ML#941). That is an order the parse-order witness for this
+   * method cannot vary; the ambiguity is stated here rather than resolved.
+   *
+   * @param root the root identifier of a dotted name
+   * @return the module path the root is bound to in a wildcard source, or {@code null}
+   */
+  private String wildcardBoundRoot(String root) {
+    Map<String, Map<String, String>> byScript = IMPORT_BINDINGS.get(types);
+    if (byScript == null) return null;
+    for (String source : wildcardSources) {
+      String plain = source.replace('.', '/') + ".py";
+      String suffix = "/" + plain;
+      synchronized (byScript) {
+        for (Map.Entry<String, Map<String, String>> entry : byScript.entrySet()) {
+          String script = entry.getKey();
+          if (!script.equals(plain) && !script.endsWith(suffix)) continue;
+          String bound = entry.getValue().get(root);
+          if (bound != null) return bound;
+        }
+      }
+    }
+    return null;
   }
 
   public class CAstVisitor extends AbstractParser.CAstVisitor implements VisitorIF<CAstNode> {
@@ -1885,6 +1953,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               .collect(Collectors.joining("."));
       for (alias n : arg0.getInternalNames()) {
         java.util.List<Name> nn = n.getInternalNameNodes();
+        if ("*".equals(n.getInternalName())) noteWildcardSource(moduleName);
         if (nn == null) {
           assert n.getInternalName().equals("*");
         } else {
@@ -2847,6 +2916,11 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
   @Override
   public CAstEntity translateToCAst() throws Error, IOException {
+    // Publish this file's bindings before the visit fills them: the map is shared by reference,
+    // and lookups happen at translation time, after every module has been parsed (wala/ML#938).
+    IMPORT_BINDINGS
+        .computeIfAbsent(types, k -> Collections.synchronizedMap(HashMapFactory.make()))
+        .put(scriptName(), importedNames);
     WalaPythonParser parser = makeParser();
     Module pythonAst = (Module) parser.parseModule();
 
