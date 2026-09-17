@@ -11,23 +11,19 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.Module;
-import com.ibm.wala.classLoader.SourceURLModule;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.junit.Test;
 
 /**
@@ -88,17 +84,15 @@ public class TestCrossModuleBaseOrder extends AbstractTensorTest {
 
   private void assertResolved(boolean descending)
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    File dir = this.getPathFiles(PROJECT).get(0);
-    List<Path> paths;
-    try (var walk = Files.walk(dir.toPath())) {
-      paths = walk.filter(p -> p.toString().endsWith(".py")).sorted().collect(Collectors.toList());
-    }
-    if (descending) Collections.reverse(paths);
+    // The fixture is read from the class path, as the harness reads it, so the arms hold wherever
+    // the packaged copy lives; only the insertion order of the modules differs between the arms.
+    List<String> names = new ArrayList<>(List.of(FILES));
+    if (descending) Collections.reverse(names);
     Set<Module> modules = new LinkedHashSet<>();
-    for (Path p : paths) modules.add(new SourceURLModule(p.toUri().toURL()));
+    for (String name : names) modules.add(getScript(name));
     PythonTensorAnalysisEngine engine =
         new PythonTensorAnalysisEngine(
-            List.of(dir),
+            this.getPathFiles(PROJECT),
             PythonTensorAnalysisEngine.TENSORFLOW,
             PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH);
     engine.setModuleFiles(modules);
@@ -150,18 +144,14 @@ public class TestCrossModuleBaseOrder extends AbstractTensorTest {
   public void testCyclicBaseDependencyFallsBackToTheGivenOrder()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     for (boolean descending : new boolean[] {false, true}) {
-      File dir = this.getPathFiles("cyc_proj").get(0);
-      List<Path> paths;
-      try (var walk = Files.walk(dir.toPath())) {
-        paths =
-            walk.filter(p -> p.toString().endsWith(".py")).sorted().collect(Collectors.toList());
-      }
-      if (descending) Collections.reverse(paths);
+      List<String> names =
+          new ArrayList<>(List.of("cyc_proj/a.py", "cyc_proj/b.py", "cyc_proj/driver.py"));
+      if (descending) Collections.reverse(names);
       Set<Module> modules = new LinkedHashSet<>();
-      for (Path p : paths) modules.add(new SourceURLModule(p.toUri().toURL()));
+      for (String name : names) modules.add(getScript(name));
       PythonTensorAnalysisEngine engine =
           new PythonTensorAnalysisEngine(
-              List.of(dir),
+              this.getPathFiles("cyc_proj"),
               PythonTensorAnalysisEngine.TENSORFLOW,
               PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH);
       engine.setModuleFiles(modules);
