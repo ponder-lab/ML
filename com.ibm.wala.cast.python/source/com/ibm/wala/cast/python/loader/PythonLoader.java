@@ -496,6 +496,13 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   protected final TranslatorToIR initTranslator(
       Set<Pair<CAstEntity, ModuleEntry>> topLevelEntities) {
     this.translator = makeTranslator();
+    // Per-analysis state: a loader reused for a second analysis must not carry the first one's
+    // translated set, or a module would translate before its base's module was.
+    entryOf.clear();
+    scriptOf.clear();
+    baseDependencies.clear();
+    translated.clear();
+    deferred.clear();
     // Every module is parsed by now. Resolve each script's recorded base dependencies to the
     // top-level entities in this analysis, so translation can put a base's module before the
     // module of the class that extends it (wala/ML#944).
