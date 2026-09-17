@@ -1219,11 +1219,28 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
       CAstNode x = Ast.makeNode(CAstNode.CLASS_STMT, Ast.makeConstant(clse));
       context.addScopedEntity(x, clse);
+      CAstNode result;
       if (methodDefaultInits.isEmpty()) {
-        return x;
+        result = x;
+      } else {
+        methodDefaultInits.add(x);
+        result = Ast.makeNode(CAstNode.BLOCK_EXPR, methodDefaultInits.toArray(new CAstNode[0]));
       }
-      methodDefaultInits.add(x);
-      return Ast.makeNode(CAstNode.BLOCK_EXPR, methodDefaultInits.toArray(new CAstNode[0]));
+      // A class statement inside a function binds its name in that function's scope, as a nested
+      // `def` does. Without the declaration the later read of the name resolved lexically to the
+      // script scope, which the definition never wrote, so an instance of the nested class
+      // dispatched no inherited method (wala/ML#945).
+      if (parent.entity().getKind() == CAstEntity.FUNCTION_ENTITY) {
+        parent.addDefinedName(arg0.getInternalName());
+        result =
+            Ast.makeNode(
+                CAstNode.BLOCK_STMT,
+                Ast.makeNode(
+                    CAstNode.DECL_STMT,
+                    Ast.makeConstant(new CAstSymbolImpl(arg0.getInternalName(), CAstType.DYNAMIC))),
+                result);
+      }
+      return result;
     }
 
     private int compareTmp = 0;

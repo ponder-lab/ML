@@ -55,12 +55,7 @@ public class TestCrossModuleBaseOrder extends AbstractTensorTest {
     "Lscript alpha_sub.py/Outer/Nested"
   };
 
-  /**
-   * The inherited method's parameter carries the top-level and class-nested drivers' shapes. The
-   * function-nested arm resolves its base (see the order arms) but the engine never dispatches an
-   * inherited method on a class defined inside a function, in any module order and even within one
-   * module ({@link #testFunctionNestedSubclassSameModule()}), so its {@code (4,)} is absent here.
-   */
+  /** The inherited method's parameter carries all three drivers' shapes, one per nesting depth. */
   @Test
   public void testInheritedMethodParameterAcrossNestings()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -71,7 +66,12 @@ public class TestCrossModuleBaseOrder extends AbstractTensorTest {
         PROJECT,
         1,
         2,
-        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(FLOAT_32, 5, 6, 7))));
+        Map.of(
+            3,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3),
+                TensorType.of(FLOAT_32, 4),
+                TensorType.of(FLOAT_32, 5, 6, 7))));
   }
 
   @Test
@@ -124,12 +124,12 @@ public class TestCrossModuleBaseOrder extends AbstractTensorTest {
   }
 
   /**
-   * Same-module twin of the function-nested arm: no module order involved, and it fails on the
-   * unfixed and the fixed engine alike, so the miss is not the order defect. TODO: flip to a plain
-   * test once <a href="https://github.com/wala/ML/issues/945">wala/ML#945</a> (an inherited method
-   * on a class defined inside a function is never dispatched) is fixed.
+   * Same-module twin of the function-nested arm: no module order involved. A class defined inside a
+   * function now declares its name in that scope and the inherited-member propagation reads the
+   * base by its global name, so the inherited method dispatches (wala/ML#945); before the fix this
+   * read {@code Function must exist in call graph}.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testFunctionNestedSubclassSameModule()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
