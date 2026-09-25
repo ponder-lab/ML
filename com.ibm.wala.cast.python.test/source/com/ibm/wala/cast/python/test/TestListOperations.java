@@ -77,6 +77,24 @@ public class TestListOperations extends TestJythonCallGraphShape {
     assertTrue("`v` reads " + values, values.contains(7L) || values.contains(7));
   }
 
+  /**
+   * A concatenation whose left operand is a literal and whose right operand's list arrives through
+   * a call chain, after the literal was offered: the literal's element is retried when the right
+   * operand's set grows, so the sink reads both elements.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testConcatenationWithLateRightOperandCarriesBothElements()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Set<Object> values = lastParameterValues("list_operations_pa.py", "/sink3");
+    assertTrue("`v` reads " + values, values.contains(1L) || values.contains(1));
+    assertTrue("`v` reads " + values, values.contains(2L) || values.contains(2));
+  }
+
   private static Set<Object> nullOnly() {
     Set<Object> ret = new HashSet<>();
     ret.add(null);

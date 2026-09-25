@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -150,5 +151,35 @@ public class TestListOperations extends AbstractTensorTest {
   public void testRepeatedShapeArgumentDecline()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FILE, "decline_zeros_repeated", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A list beside a tensor is the tensor's own addition: the result reads as the tensor, and the
+   * model synthesizes no list for it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMixedAddDecline()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FILE, "decline_mixed_add", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * A list beside an ndarray is the ndarray's multiplication: the result reads as the array, and
+   * the model synthesizes no list for it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMixedMulDecline()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FILE, "decline_mixed_mul", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 2))));
   }
 }

@@ -85,3 +85,22 @@ decline_tf_concatenated(c)
 zz = tf.zeros([2] * 2)
 assert zz.shape == (2, 2) and zz.dtype == tf.float32
 decline_zeros_repeated(zz)
+
+
+def decline_mixed_add(t):
+    pass
+
+
+def decline_mixed_mul(a2):
+    pass
+
+
+# Mixed operands: a list beside a tensor is the tensor's own addition and a list beside an
+# ndarray is the ndarray's multiplication; the results are tensors, never lists.
+t = tf.constant([1.0, 2.0]) + [1.0, 2.0]
+assert t.shape == (2,) and t.dtype == tf.float32
+decline_mixed_add(t)
+
+a2 = np.ones(2) * [2, 3]
+assert a2.shape == (2,) and a2.dtype == np.float64
+decline_mixed_mul(a2)

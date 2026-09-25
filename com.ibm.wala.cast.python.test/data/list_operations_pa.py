@@ -32,3 +32,19 @@ def sink2(v):
 
 for q in rep([7], 3):
     sink2(q)
+
+
+def prepend_one(ys):
+    return [1] + ys
+
+
+def two():
+    return [2]
+
+
+def sink3(v):
+    return v
+
+
+for w in prepend_one(two()):
+    sink3(w)
