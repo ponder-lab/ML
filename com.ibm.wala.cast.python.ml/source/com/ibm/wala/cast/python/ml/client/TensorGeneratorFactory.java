@@ -195,6 +195,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX_CROSS_EN
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTPLUS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTSIGN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_CATEGORICAL_CROSSENTROPY_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
@@ -2098,6 +2099,8 @@ public class TensorGeneratorFactory {
       return new KerasApplicationCall(source);
     else if (isType(calledFunction, CONV1D_CALL.getDeclaringClass())) return new Conv1DCall(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
+    else if (isType(calledFunction, SPARSE_CATEGORICAL_CROSSENTROPY_CALL.getDeclaringClass()))
+      return new SparseCategoricalCrossentropyCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))

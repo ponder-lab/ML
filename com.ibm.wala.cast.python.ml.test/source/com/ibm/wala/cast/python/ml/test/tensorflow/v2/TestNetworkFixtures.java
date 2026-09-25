@@ -953,7 +953,9 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
+   * @throws IOException On I/O error reading the test file. The function-local count is five: the
+   *     loss instance call's result is a tensor local once {@code SparseCategoricalCrossentropy} is
+   *     modeled (wala/ML#951).
    */
   @Test
   public void testCnnTrainStep()
@@ -962,7 +964,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_cnn_steps.py",
         "train_step",
         2,
-        4,
+        5,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1)),
@@ -978,7 +980,9 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
+   * @throws IOException On I/O error reading the test file. The function-local count is four: the
+   *     loss instance call's result is a tensor local once {@code SparseCategoricalCrossentropy} is
+   *     modeled (wala/ML#951).
    */
   @Test
   public void testCnnTestStep()
@@ -987,7 +991,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_cnn_steps.py",
         "test_step",
         2,
-        3,
+        4,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1), TensorType.of(FLOAT_64, 16, 28, 28, 1)),

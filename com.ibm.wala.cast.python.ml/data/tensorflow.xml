@@ -107,6 +107,9 @@
         <putfield class="LRoot" field="losses" fieldType="LRoot" ref="keras" value="losses"/>
         <new def="cce_fn" class="Ltensorflow/keras/losses/CategoricalCrossentropy"/>
         <putfield class="LRoot" field="CategoricalCrossentropy" fieldType="LRoot" ref="losses" value="cce_fn"/>
+        <!-- `SparseCategoricalCrossentropy` (wala/ML#951): the constructor stores `reduction` and `from_logits`, and the instance's `__call__` allocates the loss tensor that `SparseCategoricalCrossentropyCall` types from `y_pred` and the stored `reduction`. -->
+        <new def="scce_fn" class="Ltensorflow/keras/losses/class/SparseCategoricalCrossentropy"/>
+        <putfield class="LRoot" field="SparseCategoricalCrossentropy" fieldType="LRoot" ref="losses" value="scce_fn"/>
         <new def="reduction" class="Lobject"/>
         <putfield class="LRoot" field="Reduction" fieldType="LRoot" ref="losses" value="reduction"/>
         <constant name="reduction_none" type="string" value="none"/>
@@ -2837,6 +2840,28 @@
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self from_logits label_smoothing axis reduction name">
           <new def="res" class="Ltensorflow/keras/losses/CategoricalCrossentropy"/>
           <putfield class="LRoot" field="reduction" fieldType="LRoot" ref="res" value="reduction"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/losses/SparseCategoricalCrossentropy (wala/ML#951): the instance the constructor (in the `losses/class` package, as the layer constructors are split from their instances) allocates and stores `reduction` and `from_logits` on. Its `__call__` takes `Loss.__call__`'s parameters (`y_true`, `y_pred`, `sample_weight`) and allocates a fresh `Tensor`, which `SparseCategoricalCrossentropyCall` types: `y_pred`'s dtype, and `y_pred`'s shape without its class axis under `Reduction.NONE` or a scalar under the summing reductions and the default `auto`. `call` mirrors `__call__` as the layer classes do (wala/ML#106). -->
+      <class name="SparseCategoricalCrossentropy" allocatable="true">
+        <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self y_true y_pred sample_weight">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self y_true y_pred sample_weight">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/losses/class">
+      <!-- The constructor of `tf.keras.losses.SparseCategoricalCrossentropy` (wala/ML#951), split from the instance as the layer constructors are: its parameter names are TensorFlow 2.9.3's (`from_logits`, `reduction`, `name`, read with `inspect.signature`), and it allocates the instance storing `reduction` and `from_logits`. -->
+      <class name="SparseCategoricalCrossentropy" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self from_logits reduction name">
+          <new def="res" class="Ltensorflow/keras/losses/SparseCategoricalCrossentropy"/>
+          <putfield class="LRoot" field="reduction" fieldType="LRoot" ref="res" value="reduction"/>
+          <putfield class="LRoot" field="from_logits" fieldType="LRoot" ref="res" value="from_logits"/>
           <return value="res"/>
         </method>
       </class>

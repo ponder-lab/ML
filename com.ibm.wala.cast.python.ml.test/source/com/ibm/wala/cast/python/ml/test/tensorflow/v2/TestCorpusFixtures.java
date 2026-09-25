@@ -907,6 +907,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * pred} types too: the stubbed model body's forward output is a rank-3 union with the vocab
    * dimension recovered. This pins that wala/ML#618's residual gpt-2 failure is downstream of
    * Ariadne, not an emission gap.
+   * The function-local count is nine: the {@code loss_ = self.loss_object(real, pred)} call result is a tensor local once the loss instance call is modeled (wala/ML#951).
    */
   @Test
   public void testGpt2InterprocGetLoss()
@@ -924,7 +925,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "Gpt2.get_loss",
         "gpt2_proj",
         2,
-        8,
+        9,
         Map.of(
             3,
             Set.of(TensorType.of(INT_32, 2, 2)),
@@ -991,7 +992,9 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * <p>The former {@code (32, Dynamic, 8, 8)}/{@code (?, Dynamic, 8, 8)} members, the {@code
    * mode="projection"} call's rank-3 input crossing into the embedding-mode lookup, are gone: <a
    * href="https://github.com/wala/ML/issues/746">wala/ML#746</a>'s per-call-site arm filtering
-   * prunes the embedding arm at that site.
+   * prunes the embedding arm at that site. The function-local count is nine: the {@code loss_ =
+   * self.loss_object(real, pred)} call result is a tensor local once the loss instance call is
+   * modeled (wala/ML#951).
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -1009,7 +1012,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "Gpt2.get_loss",
         "gpt2_vendored",
         2,
-        8,
+        9,
         Map.of(
             3,
             Set.of(
@@ -1103,6 +1106,38 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The vendored {@code Gpt2.get_perplexity}, whose {@code cross_entropy} parameter is {@code loss
+   * = tf.reduce_mean(self.get_loss(targets, predictions))} in {@code _train_step} and the
+   * distributed steps' {@code mean_loss}: with the {@code SparseCategoricalCrossentropy} instance's
+   * call modeled (wala/ML#951), {@code get_loss}'s {@code loss_ = self.loss_object(real, pred)}
+   * reads {@code pred}'s float32 at the per-token shape, and the dtype survives the mask, sum and
+   * mean down to the parameter. Before, the loss call resolved nothing and the parameter read
+   * {@code ? of unknown} in every context. The rank is still unknown: {@code loss_} reads shaped
+   * and some value between it and the mean reads rankless, at a site not identified here (a direct
+   * {@code tf.cast(mask, dtype=loss_.dtype)} over a shaped mask keeps its shape, so it is not that
+   * cast alone). The dtype is what this pin says.
+   */
+  @Test
+  public void testGpt2GetPerplexityVendored()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py"
+        },
+        "A.py",
+        "Gpt2.get_perplexity",
+        "gpt2_vendored",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Companion to {@link #testGpt2InterprocGetLoss()} that drives the <em>distributed</em> reach of
    * <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>'s gpt-2 case: the same vendored
    * {@code Gpt2} model, but reached via {@code distributed_train_step} &rarr; {@code
@@ -1117,6 +1152,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * args} parameter name surviving summary loading (the <a
    * href="https://github.com/wala/WALA/pull/1972">wala/WALA#1972</a> fix to {@code
    * XMLMethodSummaryReader}'s name filter), without which the keyword {@code args=} could not bind.
+   * The function-local count is nine: the {@code loss_ = self.loss_object(real, pred)} call result
+   * is a tensor local once the loss instance call is modeled (wala/ML#951).
    */
   @Test
   public void testGpt2DistributedGetLoss()
@@ -1134,7 +1171,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "Gpt2.get_loss",
         "gpt2_proj",
         2,
-        8,
+        9,
         Map.of(
             3,
             Set.of(TensorType.of(INT_32, 2, 2)),
