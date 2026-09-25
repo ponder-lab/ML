@@ -138,6 +138,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String ARANGE_SIGNATURE = "numpy.arange()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html (wala/ML#954). */
+  public static final MethodReference CUMSUM =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/cumsum")),
+          AstMethodReference.fnSelector);
+
+  private static final String CUMSUM_SIGNATURE = "numpy.cumsum()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.pad.html (wala/ML#909). */
   public static final MethodReference PAD =
       MethodReference.findOrCreate(
@@ -399,6 +408,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(UNIQUE_INDICES.getDeclaringClass(), UNIQUE_INDICES_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(ARANGE.getDeclaringClass(), ARANGE_SIGNATURE),
+          Map.entry(CUMSUM.getDeclaringClass(), CUMSUM_SIGNATURE),
           Map.entry(PAD.getDeclaringClass(), PAD_SIGNATURE),
           Map.entry(RANDOM_RANDINT.getDeclaringClass(), RANDOM_RANDINT_SIGNATURE),
           Map.entry(FINFO_VALUE.getDeclaringClass(), FINFO_VALUE_SIGNATURE),

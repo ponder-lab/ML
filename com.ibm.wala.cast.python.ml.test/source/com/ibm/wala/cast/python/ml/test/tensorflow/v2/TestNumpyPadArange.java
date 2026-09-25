@@ -1,8 +1,12 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -148,5 +152,83 @@ public class TestNumpyPadArange extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /** {@code np.cumsum([0, 3, 2])} is a rank-1 int64 array of three (wala/ML#954). */
+  @Test
+  public void testCumsumLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cumsum_offsets.py",
+        "consume_literal",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(new NumericDim(3))))));
+  }
+
+  /** With a constant {@code axis} the running sum keeps the input's shape: {@code (2, 2)} int64. */
+  @Test
+  public void testCumsumAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cumsum_offsets.py",
+        "consume_axis",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(new NumericDim(2), new NumericDim(2))))));
+  }
+
+  /** An explicit {@code dtype} overrides the accumulator rule: {@code (3,)} float64. */
+  @Test
+  public void testCumsumDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cumsum_offsets.py",
+        "consume_dtype",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(new NumericDim(3))))));
+  }
+
+  /**
+   * The accumulator rule: an int32 input, narrower than the platform integer, sums as int64 ({@code
+   * np.cumsum(np.array([1, 2], dtype=np.int32))} is {@code (2,)} int64).
+   */
+  @Test
+  public void testCumsumWidensNarrowInteger()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cumsum_offsets.py",
+        "consume_widened",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(new NumericDim(2))))));
+  }
+
+  /**
+   * An unsigned narrow input sums as uint64 at run time, which {@code DType} has no constant for,
+   * so the dtype reads unknown rather than an int64 a signature would assert wrongly.
+   */
+  @Test
+  public void testCumsumUnsignedNarrowInteger()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cumsum_offsets.py",
+        "consume_uint8",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2))))));
+  }
+
+  /** A computed {@code axis} still keeps the input's shape: the axis value never matters. */
+  @Test
+  public void testCumsumComputedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cumsum_offsets.py",
+        "consume_computed_axis",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(new NumericDim(2), new NumericDim(2))))));
   }
 }

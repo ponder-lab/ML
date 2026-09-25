@@ -94,6 +94,8 @@
         <putfield class="LRoot" field="arange" fieldType="LRoot" ref="x" value="arange_fn"/>
         <new def="pad_fn" class="Lnumpy/pad"/>
         <putfield class="LRoot" field="pad" fieldType="LRoot" ref="x" value="pad_fn"/>
+        <new def="cumsum_fn" class="Lnumpy/cumsum"/>
+        <putfield class="LRoot" field="cumsum" fieldType="LRoot" ref="x" value="cumsum_fn"/>
         <new def="finfo_fn" class="Lnumpy/finfo"/>
         <putfield class="LRoot" field="finfo" fieldType="LRoot" ref="x" value="finfo_fn"/>
         <new def="reshape_fn" class="Lnumpy/reshape"/>
@@ -269,6 +271,22 @@
       <!-- `np.arange([start,] stop[, step], dtype=None)`: a rank-1 array of `ceil((stop - start) / step)` elements. `NpArange` computes the extent when the bounds are constants and floors it to `Unresolved` otherwise (wala/ML#909); a padding that follows can still fold the bounds as terms, see `pad`. -->
       <class name="arange" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start stop step dtype like">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.cumsum.html -->
+      <!-- `np.cumsum(a, axis=None, dtype=None, out=None)`: the running sum over the flattened input without `axis`, over the input's shape with it. `NpCumsum` computes the extent and the dtype, numpy's platform integer (int64) for an integer input narrower than it and the input's dtype otherwise (wala/ML#954). -->
+      <class name="cumsum" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a axis dtype out">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
