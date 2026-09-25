@@ -835,6 +835,28 @@ public class TestConstructors extends AbstractTensorTest {
             4, Set.of(TENSOR_2_FLOAT32)));
   }
 
+  /**
+   * A value typed only by dataflow keeps its type through a summary routed through {@code
+   * tf.convert_to_tensor}: {@code tf.tanh} of a Keras layer's call result reads the layer's {@code
+   * (2, 3) float32} alone, with no wholly-unknown member beside it (wala/ML#947).
+   */
+  @Test
+  public void testConvertToTensor14()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor14.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * The direct counterpart of {@link #testConvertToTensor14()}: {@code tf.convert_to_tensor} of a
+   * Keras layer's call result, with no {@code dtype} argument, reads the layer's {@code (2, 3)
+   * float32} alone (wala/ML#947).
+   */
+  @Test
+  public void testConvertToTensor14Direct()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor14.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
   @Test
   public void testEye7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
