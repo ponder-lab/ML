@@ -291,7 +291,15 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * subscript of a {@code tuple}, {@code list} or {@code dict} selects elements rather than slicing
    * a tensor, so its elements keep their own shapes, and the dataflow state the receiver carries is
    * its elements' types, not a tensor's to which the rule applies: {@code tf.math.top_k(x,
-   * k=2)[0:1]} holds the {@code (2,)} values unchanged, where the rule would read {@code (1,)}.
+   * k=2)[0:1]} holds the {@code (2,)} values unchanged, where the rule would read {@code (1,)}. The
+   * guard reads the points-to set, so a container typed only by dataflow is not caught by it, but
+   * such a receiver's own variable carries no dataflow state (a container's element state lives on
+   * its field keys), so the feed composes nothing there rather than mis-slicing.
+   *
+   * <p>The feed does not reopen the receiver leak the wala/ML#405 pin blocks. A seed proven on both
+   * axes registers no feed, so the pin alone decides it as before, and a ranked seed with an
+   * unknown dtype takes the dtype fill, which keeps the seed's dimensions and borrows only the
+   * receiver's dtype. Only the pure ⊤ seed, which the pin never covered, is replaced by the rule.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The rule-carrying feed over the receiver's key in the calling frame, or {@code null}
