@@ -16,12 +16,15 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -759,7 +762,141 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     ElementWiseOperation nested = getNestedForBinop(builder, vn);
     // Diverted like the shape counterpart (wala/ML#790).
     if (nested != null) return memoizedDTypes(builder, nested);
-    return this.getDTypes(builder, vn);
+    Set<DType> dtypes = this.getDTypes(builder, vn);
+    if (dtypes == null || dtypes.isEmpty() || dtypes.equals(EnumSet.of(DType.UNKNOWN)))
+      return dtypes;
+    // The dtype reader is points-to first while the shape reader also merges the callee's return
+    // arms (wala/ML#958): an arm whose value allocates nothing, an elementwise result, is invisible
+    // to the points-to set, so the dtype above can be one arm's while the shape below is another's.
+    // Widening to ⊤ here is always sound; the engine's dtype fill then refills it from the
+    // operands'
+    // dataflow state, whose incoming-else-other rule is exact when the operands agree.
+    if (this.dtypeEvidenceMissesReturnArm(builder, this.getNode(), vn))
+      return EnumSet.of(DType.UNKNOWN);
+    return dtypes;
+  }
+
+  /**
+   * Whether an operand's points-to-derived dtype evidence misses a return arm of the call that
+   * defines it (wala/ML#958). The evidence is the operand's own points-to set; each callee's return
+   * value is <em>covered</em> when its points-to set is non-empty and lies within that evidence,
+   * and is followed through an invoke or a φ definition otherwise, so an arm returning an
+   * elementwise result (which allocates nothing) or an allocation the operand never received reads
+   * as absent. This is the provenance fact itself, not a comparison of set sizes; a value not
+   * defined by an invoke, or whose dtype evidence is not the points-to set, never qualifies.
+   *
+   * <p>The widening this decides is sound by itself: an unknown dtype only loses precision. The
+   * precision then rests on the engine's dtype fill, which composes each incoming operand member's
+   * dtype with the seed's dims; on operands whose dataflow dtypes agree (the two-arm layer
+   * fixtures: both float32) the fill is exact, and where they disagree the result is their union
+   * rather than a promotion.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The operand's value number.
+   * @return {@code true} iff the operand is an invoke result with a non-empty points-to set and
+   *     some return arm of a target is not covered by it.
+   */
+  private boolean dtypeEvidenceMissesReturnArm(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof SSAAbstractInvokeInstruction invoke)) return false;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    OrdinalSet<InstanceKey> evidence =
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn));
+    if (evidence == null || evidence.isEmpty()) return false;
+    int[] counts = new int[2]; // arms seen, arms absent
+    this.countUncoveredReturnArms(builder, node, invoke, evidence, HashSetFactory.make(), counts);
+    LOGGER.fine(
+        () ->
+            "wala/ML#958 return-arm provenance of operand vn="
+                + vn
+                + " in "
+                + describe(node)
+                + ": arms="
+                + counts[0]
+                + " absent="
+                + counts[1]);
+    return counts[1] > 0;
+  }
+
+  /**
+   * Counts the return arms of {@code invoke}'s targets and those not covered by {@code evidence},
+   * following an arm defined by an invoke into its targets' returns and a φ into its uses.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke whose targets' returns are the arms.
+   * @param evidence The operand's points-to set.
+   * @param visited The {@code (node, vn)} pairs already followed, bounding recursion.
+   * @param counts Output: {@code counts[0]} arms seen, {@code counts[1]} arms absent.
+   */
+  private void countUncoveredReturnArms(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction invoke,
+      OrdinalSet<InstanceKey> evidence,
+      Set<Pair<CGNode, Integer>> visited,
+      int[] counts) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null) return;
+    for (CGNode callee : targets) {
+      if (callee.getIR() == null || callee.getDU() == null) continue;
+      for (SSAInstruction instruction : callee.getIR().getInstructions()) {
+        if (!(instruction instanceof SSAReturnInstruction ret) || ret.getResult() < 0) continue;
+        this.countUncoveredArm(builder, callee, ret.getResult(), evidence, visited, counts);
+      }
+    }
+  }
+
+  private void countUncoveredArm(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      OrdinalSet<InstanceKey> evidence,
+      Set<Pair<CGNode, Integer>> visited,
+      int[] counts) {
+    if (!visited.add(Pair.make(node, vn))) return;
+    // A value defined by a call or a φ is followed before its points-to set is consulted: a
+    // trampoline's return carries the operand's whole points-to set and would read as covered
+    // while the arms it forwards, one call deeper, are what the evidence can miss. The visited set
+    // bounds the walk.
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSAAbstractInvokeInstruction armInvoke) {
+      this.countUncoveredReturnArms(builder, node, armInvoke, evidence, visited, counts);
+      return;
+    }
+    if (def instanceof SSAPhiInstruction phi) {
+      for (int i = 0; i < phi.getNumberOfUses(); i++)
+        if (phi.getUse(i) > 0)
+          this.countUncoveredArm(builder, node, phi.getUse(i), evidence, visited, counts);
+      return;
+    }
+    counts[0]++;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    OrdinalSet<InstanceKey> pts =
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn));
+    boolean covered = pts != null && !pts.isEmpty();
+    if (covered)
+      for (InstanceKey ik : pts)
+        if (!evidence.contains(ik)) {
+          covered = false;
+          break;
+        }
+    // No allocation, no call, no φ: a value the points-to set cannot carry (an elementwise result,
+    // a constant) is an arm the dtype evidence never saw.
+    if (!covered) counts[1]++;
+    final boolean verdict = covered;
+    LOGGER.finer(
+        () ->
+            "wala/ML#958 return arm vn="
+                + vn
+                + " of "
+                + describe(node)
+                + (verdict ? " covered" : " absent")
+                + " (def "
+                + def
+                + ")");
   }
 
   /**
