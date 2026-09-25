@@ -620,6 +620,9 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(NpArange::new, NpArange::new);
     if (isType(type, NumpyTypes.PAD.getDeclaringClass()))
       return anchor.makeGenerator(NpPad::new, NpPad::new);
+    // `np.cumsum` (wala/ML#954): the running sum's shape and the promoted dtype of its input.
+    if (isType(type, NumpyTypes.CUMSUM.getDeclaringClass()))
+      return anchor.makeGenerator(NpCumsum::new, NpCumsum::new);
     // A `np.finfo` attribute (wala/ML#907): a rank-0 array of the queried type, so a tensor scaled
     // by one keeps its shape through the broadcast instead of losing it to an opaque operand.
     if (isType(type, NumpyTypes.FINFO_VALUE.getDeclaringClass()))
