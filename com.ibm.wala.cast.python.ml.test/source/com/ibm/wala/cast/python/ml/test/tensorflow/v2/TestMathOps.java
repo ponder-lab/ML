@@ -8,6 +8,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_2_2_27_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_5_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT32;
@@ -1732,6 +1733,25 @@ public class TestMathOps extends AbstractTensorTest {
   public void testStack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Control for the {@code Stack} type feed (wala/ML#950): {@code tf.stack} of two layer-call
+   * results resolves {@code (2, 2, 4)} float32 with and without the feed, because the points-to
+   * walk from a layer-call result reaches the layer's {@code add_weight} dtype through the call
+   * trampoline. The feed's witness is the loop-carried case, where that walk cycles ({@link
+   * TestCorpusFixtures#testGpt2SamplingLoopPastLayer()}); this pin says the direct case does not
+   * move.
+   */
+  @Test
+  public void testStackDataflowDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_stack_dataflow_dtype.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_4_FLOAT32)));
   }
 
   /**

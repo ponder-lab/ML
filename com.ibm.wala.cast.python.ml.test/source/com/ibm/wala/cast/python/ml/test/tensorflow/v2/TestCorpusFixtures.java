@@ -1028,6 +1028,81 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The vendored {@code Gpt2} driven by a sampling loop ({@code probe_sample.py}: {@code logits,
+   * past = model(prev, training=False, past=past)} three times), so every decoder layer's {@code
+   * past} and the attention layer's {@code past_layer} are typed by the {@code present} the
+   * previous call returned. {@code present} is {@code tf.stack([key, value], axis=1)}, and {@code
+   * key} is the concatenation of the unstacked {@code past} with the fresh key, so the value's
+   * dtype travels a loop through {@code tf.unstack} and {@code tf.stack}. With the {@code unstack}
+   * summary typing its pieces from the operand (wala/ML#948) and {@code Stack} declaring a dtype
+   * feed (wala/ML#950), {@code past_layer} reads the stacked shape with the float32 the loop
+   * carries; before, it read that shape with an unknown dtype in every sampling context. The
+   * parameters {@code x} and {@code mask} union the sampling contexts ({@code (2, 1, ...)} and
+   * {@code (2, 3, ...)}) with the module driver's training contexts.
+   */
+  @Test
+  public void testGpt2SamplingLoopPastLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py", "gpt2_vendored/probe_sample.py"
+        },
+        "layers/attention_layer.py",
+        "MultiHeadAttention.call",
+        "gpt2_vendored",
+        3,
+        25,
+        Map.of(
+            3,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 1, 8),
+                TensorType.of(FLOAT_32, 2, 3, 8),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8)))),
+            4,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(32),
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new SymbolicDim("?"),
+                        new NumericDim(1),
+                        UnresolvedDim.INSTANCE,
+                        DynamicDim.INSTANCE))),
+            5,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(2),
+                        new NumericDim(2),
+                        new SymbolicDim("?"),
+                        new NumericDim(4))))));
+  }
+
+  /**
    * Companion to {@link #testGpt2InterprocGetLoss()} that drives the <em>distributed</em> reach of
    * <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>'s gpt-2 case: the same vendored
    * {@code Gpt2} model, but reached via {@code distributed_train_step} &rarr; {@code
