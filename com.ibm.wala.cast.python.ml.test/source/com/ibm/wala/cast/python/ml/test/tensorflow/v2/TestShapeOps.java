@@ -520,6 +520,22 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * The leading-axis counterpart of {@link #testSubscriptDataflowReceiver()} (wala/ML#953): {@code
+   * adj[:2]} over the same dataflow-typed {@code (4, 2) int32} receiver takes the {@code [:k]}
+   * form's bound, {@code (2, 2) int32}, through the feed's rule.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptDataflowReceiverLeadingAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_dataflow_receiver.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /**
    * Pins the output shape of an integer index on the middle axis of a multi-dim subscript
    * (wala/ML#406). {@code x[:, 0, :]} over a {@code (4, 5, 6)} tensor drops the middle axis
    * entirely: {@code (4, 6)}.

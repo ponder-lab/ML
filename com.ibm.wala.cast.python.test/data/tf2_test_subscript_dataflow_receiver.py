@@ -15,9 +15,15 @@ def f(t):
     assert t.dtype == tf.int32
 
 
+def h(t):
+    assert t.shape == (2, 2)
+    assert t.dtype == tf.int32
+
+
 def g(adjacency_lists):
     for i, adj in enumerate(adjacency_lists):
         f(adj[:, 0])
+        h(adj[:2])
 
 
 layer = Shift()
