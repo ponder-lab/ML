@@ -19,6 +19,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * Common base for tensor generators that produce a fresh tensor with the same shape as a single
@@ -46,6 +47,9 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
+
+  private static final Logger LOGGER =
+      Logger.getLogger(PassThroughUnaryTensorGenerator.class.getName());
 
   /**
    * Constructs from a caller-side {@link PointsToSetVariable}.
@@ -302,6 +306,26 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    */
   protected boolean inputRaisesOnNone() {
     return true;
+  }
+
+  /**
+   * Whether this operation cannot execute because its input is exactly the None constant
+   * (wala/ML#962): the wala/ML#961 predicate, read from this generator's own frame (a manual anchor
+   * resolves the argument through its callers, so a producer node shared by a None-passing caller
+   * and a tensor-passing caller sees both and answers {@code false}, the conservative verdict).
+   * {@code false} for an operation whose input may legitimately be None.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the argument read.
+   * @return {@code true} iff the input's points-to set is non-empty and holds only the None
+   *     constant and this operation raises on None.
+   */
+  public boolean inputIsNoneOnly(PropagationCallGraphBuilder builder) {
+    if (!inputRaisesOnNone() || getInputParameterPosition() == UNDEFINED_PARAMETER_POSITION)
+      return false;
+    OrdinalSet<InstanceKey> pts =
+        this.getArgumentPointsToSet(builder, getInputParameterPosition(), getInputParameterName());
+    LOGGER.fine(() -> "wala/ML#962 inputIsNoneOnly node=" + this.getNode() + " pts=" + pts);
+    return pts != null && !pts.isEmpty() && allNullConstants(pts);
   }
 
   /**

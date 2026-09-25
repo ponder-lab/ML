@@ -1539,4 +1539,61 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
   }
+
+  /**
+   * The vendored {@code Gpt2} under a pytest-shaped driver that omits {@code past}: the element
+   * rule (wala/ML#962) fires on every unstack of the None-bound {@code past_layer}, yet {@code
+   * Conv1d.call}'s {@code x} keeps an unknown-dtype twin in the projection node the attention layer
+   * calls. That twin is not the None arm's: the driver's input is a mined parameter with no shape,
+   * so the attention mask has no shape either, and the add {@code matmul_qk += mask * -1e9} keeps
+   * its seed's unknown dtype: the multiply is a temporary with no points-to variable, never seeded,
+   * so the add's feed has one operand to fill from and fills nothing over a shapeless seed
+   * (wala/ML#963). The twin then rides softmax, the value matmul, and {@code merge_heads} into the
+   * projection, whose input is float32 at run time. Pinned as read so the member is on record and
+   * wala/ML#963's repair fails this pin on purpose.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGpt2ProjectionInputEntrypointDriverVendored()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py", "gpt2_vendored/test_entry_default.py"
+        },
+        "layers/feed_forward.py",
+        "Conv1d.call",
+        "gpt2_vendored",
+        1,
+        11,
+        Map.of(
+            3,
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
+  }
 }

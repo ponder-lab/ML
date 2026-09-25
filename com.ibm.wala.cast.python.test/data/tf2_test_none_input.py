@@ -66,3 +66,67 @@ def consume_direct_concat(h):
 c = BlockConcat()(tf.ones((2, 3, 4)), past=None)
 assert c.shape == (2, 3, 4) and c.dtype == tf.float32
 consume_direct_concat(c)
+
+
+def consume_list_element_control(m):
+    pass
+
+
+class BlockListElement(tf.keras.layers.Layer):
+    def __init__(self):
+        super(BlockListElement, self).__init__()
+        self.dense = tf.keras.layers.Dense(4)
+
+    def call(self, x):
+        h = self.dense(x)
+        # A real list element beside the tensor: `tf.concat` accepts it (converted), so the
+        # result is a tensor whatever the analysis knows about `h`.
+        return tf.concat([[[[1.0, 2.0, 3.0, 4.0]] * 3] * 2, h], axis=-2)
+
+
+m = BlockListElement()(tf.ones((2, 3, 4)))
+assert m.shape == (2, 6, 4) and m.dtype == tf.float32
+consume_list_element_control(m)
+
+
+def consume_nested(n):
+    return n
+
+
+class BlockNested(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+
+    def call(self, h, past=None):
+        if past is not None:
+            past_key, past_value = tf.unstack(past, axis=1)
+            # The outer concat's element is itself a concat over the infeasible piece: the rule
+            # follows the element to its producer and through it to the unstack.
+            h = tf.concat([tf.concat([past_key, h], axis=-2), past_value], axis=-2)
+        return h
+
+
+n = BlockNested()(tf.ones((2, 3, 4)))
+assert n.shape == (2, 3, 4) and n.dtype == tf.float32
+consume_nested(n)
+
+
+def consume_second(s):
+    return s
+
+
+class BlockSecond(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+
+    def call(self, h, past=None):
+        if past is not None:
+            past_key, past_value = tf.unstack(past, axis=1)
+            # The infeasible piece is the second element, so the rule must read past the first.
+            h = tf.concat([h, past_key], axis=-2)
+        return h
+
+
+s = BlockSecond()(tf.ones((2, 3, 4)))
+assert s.shape == (2, 3, 4) and s.dtype == tf.float32
+consume_second(s)
