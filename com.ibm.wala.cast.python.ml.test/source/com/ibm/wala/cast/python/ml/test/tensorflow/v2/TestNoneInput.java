@@ -140,4 +140,21 @@ public class TestNoneInput extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FILE, "consume_second", 1, 1, Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32)));
   }
+
+  /**
+   * The quantifier control (wala/ML#962): the element's set mixes the dead arm's infeasible piece
+   * with a live tensor, so the element may be live and the concat executes. The rule is universal
+   * over the set, as the None-only read is, and the concat keeps its concatenated shape; an
+   * existential reading would claim it cannot execute and drop it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMixedElementStaysTyped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FILE, "consume_mixed", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6, 4))));
+  }
 }

@@ -250,8 +250,6 @@ public class Concat extends TensorGenerator {
         () ->
             "wala/ML#962 concat dtype tail node="
                 + this.getNode().getGraphNodeId()
-                + " ctx="
-                + this.getNode().getContext()
                 + " values="
                 + valuesPts
                 + " ret="
@@ -336,7 +334,7 @@ public class Concat extends TensorGenerator {
     // An element that is exactly the None constant cannot be concatenated: the call cannot execute
     // and its result is no tensor (wala/ML#961); an empty set is no evidence.
     if (allNullConstants(firstElemPts)) return ShapeResult.bottom();
-    if (anyInfeasible(builder, firstElemPts)) return ShapeResult.bottom(); // wala/ML#962
+    if (allInfeasible(builder, firstElemPts)) return ShapeResult.bottom(); // wala/ML#962
     ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, false);
     if (firstResult.isBottom()) return ShapeResult.bottom();
     if (firstResult.hasUnknown() || firstResult.members().size() != 1) return ShapeResult.unknown();
@@ -354,7 +352,7 @@ public class Concat extends TensorGenerator {
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
       if (elemPts == null) return ShapeResult.unknown();
       if (allNullConstants(elemPts)) return ShapeResult.bottom(); // wala/ML#961
-      if (anyInfeasible(builder, elemPts)) return ShapeResult.bottom(); // wala/ML#962
+      if (allInfeasible(builder, elemPts)) return ShapeResult.bottom(); // wala/ML#962
       ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
       if (elemResult.isBottom()) return ShapeResult.bottom();
       if (elemResult.hasUnknown() || elemResult.members().size() != 1) return ShapeResult.unknown();
@@ -463,42 +461,46 @@ public class Concat extends TensorGenerator {
       AllocationSiteInNode listAsin,
       OrdinalSet<InstanceKey> catalog,
       OrdinalSet<InstanceKey> firstElemPts) {
-    if (allNullConstants(firstElemPts) || anyInfeasible(builder, firstElemPts)) return true;
+    if (allNullConstants(firstElemPts) || allInfeasible(builder, firstElemPts)) return true;
     for (InstanceKey catalogIK : catalog) {
       if (!(catalogIK instanceof ConstantKey)) continue;
       Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
       if (fieldIndex == null || fieldIndex == 0) continue;
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
-      if (elemPts != null && (allNullConstants(elemPts) || anyInfeasible(builder, elemPts)))
+      if (elemPts != null && (allNullConstants(elemPts) || allInfeasible(builder, elemPts)))
         return true;
     }
     return false;
   }
 
   /**
-   * Whether any member of an element's points-to set is infeasible (wala/ML#962): produced by an
-   * operation that cannot execute on its None-only input, or by a concat with such an element.
+   * Whether an element is infeasible (wala/ML#962): its points-to set is non-empty and every member
+   * is produced by an operation that cannot execute on its None-only input, or by a concat with
+   * such an element. The quantifier is universal, as {@link #allNullConstants}'s is: a set mixing
+   * an infeasible piece with a live tensor (a merged arm, or a producer shared by a None-passing
+   * and a tensor-passing caller) says the element may be live, so the concat may execute and stays
+   * typed.
    *
    * @param builder The {@link PropagationCallGraphBuilder} resolving producers.
    * @param elemPts The element's points-to set.
-   * @return {@code true} iff some member is provably infeasible.
+   * @return {@code true} iff the set is non-empty and every member is provably infeasible.
    */
-  private static boolean anyInfeasible(
+  private static boolean allInfeasible(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> elemPts) {
-    return anyInfeasible(builder, elemPts, HashSetFactory.make());
+    return allInfeasible(builder, elemPts, HashSetFactory.make());
   }
 
-  private static boolean anyInfeasible(
+  private static boolean allInfeasible(
       PropagationCallGraphBuilder builder,
       OrdinalSet<InstanceKey> elemPts,
       Set<InstanceKey> visited) {
-    if (elemPts == null) return false;
+    if (elemPts == null || elemPts.isEmpty()) return false;
     for (InstanceKey ik : elemPts) {
-      boolean inf = isInfeasibleByNoneInput(builder, ik, visited);
-      LOGGER.fine(() -> "wala/ML#962 element " + ik + " infeasible=" + inf);
-      if (inf) return true;
+      boolean infeasible = isInfeasibleByNoneInput(builder, ik, visited);
+      LOGGER.fine(() -> "wala/ML#962 element " + ik + " infeasible=" + infeasible);
+      if (!infeasible) return false;
     }
-    return false;
+    return true;
   }
 
   /**
@@ -530,7 +532,7 @@ public class Concat extends TensorGenerator {
         if (idx == null) continue;
         OrdinalSet<InstanceKey> elemPts = getElementPts(builder, asin, catalog, idx);
         if (elemPts != null
-            && (allNullConstants(elemPts) || anyInfeasible(builder, elemPts, visited))) return true;
+            && (allNullConstants(elemPts) || allInfeasible(builder, elemPts, visited))) return true;
       }
     }
     return false;

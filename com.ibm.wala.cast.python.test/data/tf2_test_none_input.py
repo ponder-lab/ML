@@ -130,3 +130,26 @@ class BlockSecond(tf.keras.layers.Layer):
 s = BlockSecond()(tf.ones((2, 3, 4)))
 assert s.shape == (2, 3, 4) and s.dtype == tf.float32
 consume_second(s)
+
+
+def consume_mixed(x):
+    return x
+
+
+class BlockMixed(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+
+    def call(self, h, past=None, live=None):
+        piece = live
+        if past is not None:
+            past_key, past_value = tf.unstack(past, axis=1)
+            piece = past_key
+        # The element's set mixes the dead arm's infeasible piece with the live tensor, so the
+        # element may be live and the concat executes: it must stay typed.
+        return tf.concat([piece, h], axis=-2)
+
+
+mx = BlockMixed()(tf.ones((2, 3, 4)), live=tf.ones((2, 3, 4)))
+assert mx.shape == (2, 6, 4) and mx.dtype == tf.float32
+consume_mixed(mx)
