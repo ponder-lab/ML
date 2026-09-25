@@ -25,6 +25,7 @@ import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -286,9 +287,15 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * replaced by the rule applied to the receiver's dataflow state, so the result takes the
    * subscript's shape and the receiver's dtype.
    *
+   * <p>The feed is withheld when any points-to member of the receiver is a Python container. A
+   * subscript of a {@code tuple}, {@code list} or {@code dict} selects elements rather than slicing
+   * a tensor, so its elements keep their own shapes, and the dataflow state the receiver carries is
+   * its elements' types, not a tensor's to which the rule applies: {@code tf.math.top_k(x,
+   * k=2)[0:1]} holds the {@code (2,)} values unchanged, where the rule would read {@code (1,)}.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The rule-carrying feed over the receiver's key in the calling frame, or {@code null}
-   *     when the call site is not uniquely resolved.
+   *     when the call site is not uniquely resolved or the receiver may be a container.
    */
   @Override
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
@@ -299,6 +306,14 @@ public class SliceBuiltinOperation extends TensorGenerator {
             .getPointerAnalysis()
             .getHeapModel()
             .getPointerKeyForLocal(view.callerNode(), view.receiverVn());
+    for (InstanceKey member : builder.getPointerAnalysis().getPointsToSet(receiver)) {
+      AllocationSiteInNode site = getAllocationSiteInNode(member);
+      if (site == null) continue;
+      TypeReference type = site.concreteType().getReference();
+      if (type.equals(PythonTypes.tuple)
+          || type.equals(PythonTypes.list)
+          || type.equals(PythonTypes.dict)) return null;
+    }
     return new TypeFeed(
         TypeFeedKind.TRANSFORM,
         List.of(receiver),
