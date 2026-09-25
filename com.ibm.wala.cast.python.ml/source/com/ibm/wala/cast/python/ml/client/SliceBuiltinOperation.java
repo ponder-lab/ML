@@ -25,6 +25,7 @@ import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -157,22 +158,46 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (receiverShapes == null) return null;
     if (receiverShapes.isEmpty()) return Set.of();
 
+    SubscriptPlan plan = this.planSubscript(builder, view);
+
     // Multi-dim subscript: `slice(receiver, dim0, dim1, ...)` where each dimension is a
     // `slice(lower, upper, step)` object or an integer index (wala/ML#406). Distinguished from the
     // single `[:k]` form below by the presence of at least one slice-object argument.
-    List<SubscriptDim> dims = parseSubscriptDims(builder, view);
-    if (dims != null) {
+    if (plan.dims() != null) {
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (List<Dimension<?>> shape : receiverShapes) {
-        List<Dimension<?>> out = applySubscriptDims(shape, dims);
+        List<Dimension<?>> out = applySubscriptDims(shape, plan.dims());
         if (out != null) ret.add(out);
       }
       if (!ret.isEmpty()) {
-        LOGGER.fine(() -> "Matched multi-dim subscript " + dims + " → " + ret);
+        LOGGER.fine(() -> "Matched multi-dim subscript " + plan.dims() + " → " + ret);
         return ret;
       }
     }
 
+    // The leading-axis forms: a scalar member stands for the whole receiver, as it always has.
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> shape : receiverShapes) {
+      if (shape == null || shape.isEmpty()) return receiverShapes;
+      ret.add(applyLeadingAxis(shape, plan));
+    }
+    LOGGER.fine(() -> "Leading-axis subscript " + plan + " → " + ret);
+    return ret;
+  }
+
+  /**
+   * Classifies this subscript once from its call site: the multi-dimensional dimensions, when any
+   * argument is a slice object, and otherwise the leading-axis form's bounds and the number of
+   * {@code tf.newaxis} tokens. Both the substrate arm ({@link #getDefaultShapes}) and the feed's
+   * rule ({@link #subscriptRule}) apply what this returns, so the two read the subscript the same
+   * way.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param view The resolved slice call site.
+   * @return The subscript's classification.
+   */
+  private SubscriptPlan planSubscript(PropagationCallGraphBuilder builder, CallSiteView view) {
+    List<SubscriptDim> dims = parseSubscriptDims(builder, view);
     boolean startOK =
         isNone(builder, view.callerNode(), view.startVn())
             || constIntEquals(builder, view.callerNode(), view.startVn(), 0);
@@ -180,74 +205,127 @@ public class SliceBuiltinOperation extends TensorGenerator {
         isNone(builder, view.callerNode(), view.stepVn())
             || constIntEquals(builder, view.callerNode(), view.stepVn(), 1);
     Integer stop = constInt(builder, view.callerNode(), view.stopVn());
-    LOGGER.fine(() -> "Classified startOK=" + startOK + " stepOK=" + stepOK + " stop=" + stop);
-
-    if (startOK && stepOK && stop != null) {
-      Set<List<Dimension<?>>> ret = HashSetFactory.make();
-      for (List<Dimension<?>> shape : receiverShapes) {
-        if (shape == null || shape.isEmpty()) {
-          return receiverShapes;
-        }
-        List<Dimension<?>> out = new ArrayList<>(shape.size());
-        // The bound is an upper limit, not the resulting extent: `x[:k]` yields `k` elements only
-        // when the axis has at least `k` of them, and against an axis whose size is unknown the
-        // result is unknown too, which is what the runtime reports. Claiming `k` there would
-        // assert a length the slice need not produce (wala/ML#841).
-        Dimension<?> recv = shape.get(0);
-        out.add(sliceExtentFromZero(recv, stop));
-        for (int i = 1; i < shape.size(); i++) out.add(shape.get(i));
-        ret.add(out);
-      }
-      final int boundedStop = stop;
-      LOGGER.fine(() -> "Matched [:k] pattern with k=" + boundedStop + " → " + ret);
-      return ret;
-    }
-
-    // The invoke didn't match the canonical `[:k]` pattern, so the leading axis's extent is not
-    // computable here. Whether the receiver's extent may be carried forward depends on whether the
-    // subscript constrains that axis at all: a full slice (`[:]`, `[0:]`, `[::1]`) preserves it,
+    // Whether the receiver's extent may be carried forward depends on whether the subscript
+    // constrains the leading axis at all: a full slice (`[:]`, `[0:]`, `[::1]`) preserves it,
     // while any supplied bound or non-unit step shortens it by an amount we could not compute.
     // Passing the receiver's extent through in the latter case asserts a length the slice does not
     // produce, which is worse than admitting ignorance: a single concrete extent, asserted
     // confidently and wrong, gives a consumer nothing to defend against (wala/ML#841).
     boolean constrainsLeadingAxis =
         !startOK || !stepOK || !isNone(builder, view.callerNode(), view.stopVn());
-
     // If the compound subscript includes `tf.newaxis` tokens (e.g., `x[:n, ..., newaxis]`), each
     // one inserts a size-1 dim. Append them to the receiver shape — better than dropping the
     // size-1 dim entirely, which otherwise leaks the pre-subscript shape downstream.
     int newaxisCount = countNewaxisArgs(builder, view.callerNode(), view.call());
+    return new SubscriptPlan(
+        dims, startOK && stepOK ? stop : null, constrainsLeadingAxis, newaxisCount);
+  }
 
-    if (!constrainsLeadingAxis && newaxisCount == 0) {
-      LOGGER.fine(
-          () -> "Non-[:k] pattern leaving the leading axis whole; passing receiver through");
-      return receiverShapes;
+  /**
+   * Applies the leading-axis forms to one non-scalar receiver shape.
+   *
+   * @param shape The receiver's dimensions, non-empty.
+   * @param plan The subscript's classification.
+   * @return The subscript's dimensions for that receiver shape.
+   */
+  private static List<Dimension<?>> applyLeadingAxis(List<Dimension<?>> shape, SubscriptPlan plan) {
+    if (plan.boundedStop() != null) {
+      List<Dimension<?>> out = new ArrayList<>(shape.size());
+      // The bound is an upper limit, not the resulting extent: `x[:k]` yields `k` elements only
+      // when the axis has at least `k` of them, and against an axis whose size is unknown the
+      // result is unknown too, which is what the runtime reports. Claiming `k` there would assert
+      // a length the slice need not produce (wala/ML#841).
+      out.add(sliceExtentFromZero(shape.get(0), plan.boundedStop()));
+      for (int i = 1; i < shape.size(); i++) out.add(shape.get(i));
+      return out;
     }
+    if (!plan.constrainsLeadingAxis() && plan.newaxisCount() == 0) return shape;
+    List<Dimension<?>> out = new ArrayList<>(shape);
+    if (plan.constrainsLeadingAxis()) {
+      // Slice bounds are Python scalars, so an uncomputable extent over a fixed axis is a fixed
+      // runtime size the analysis could not compute; only slicing a `None` axis yields a `None`
+      // extent (wala/ML#721). Matches `sliceExtent`'s convention for the multi-dim path.
+      Dimension<?> recv = out.get(0);
+      out.set(0, recv instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+    }
+    for (int i = 0; i < plan.newaxisCount(); i++) out.add(new NumericDim(1));
+    return out;
+  }
 
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> shape : receiverShapes) {
-      if (shape == null || shape.isEmpty()) return receiverShapes;
-      List<Dimension<?>> out = new ArrayList<>(shape);
-      if (constrainsLeadingAxis) {
-        // Slice bounds are Python scalars, so an uncomputable extent over a fixed axis is a fixed
-        // runtime size the analysis could not compute; only slicing a `None` axis yields a `None`
-        // extent (wala/ML#721). Matches `sliceExtent`'s convention for the multi-dim path.
-        Dimension<?> recv = out.get(0);
-        out.set(0, recv instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+  /**
+   * The subscript's shape rule as a function of one receiver shape, its classification resolved
+   * once from the call site (the wala/ML#905 form). It is {@link #getDefaultShapes}'s computation
+   * over a single member: the multi-dimensional dimensions when they apply to that shape, and the
+   * leading-axis forms otherwise. A multi-dimensional subscript that fits no member at all falls
+   * back to the leading-axis forms in both arms; where it fits some members but not others, the
+   * substrate arm drops the misfits while this rule, which sees one member at a time, gives each
+   * misfit the leading-axis answer.
+   *
+   * @param plan The subscript's classification.
+   * @return The rule.
+   */
+  private static ShapeTransform subscriptRule(SubscriptPlan plan) {
+    return input -> {
+      if (plan.dims() != null) {
+        List<Dimension<?>> out = applySubscriptDims(input, plan.dims());
+        if (out != null) return Set.of(out);
       }
-      for (int i = 0; i < newaxisCount; i++) out.add(new NumericDim(1));
-      ret.add(out);
+      if (input.isEmpty()) return Set.of(input);
+      return Set.of(applyLeadingAxis(input, plan));
+    };
+  }
+
+  /**
+   * Declares a {@link TypeFeedKind#TRANSFORM} feed over the subscript's receiver, carrying {@link
+   * #subscriptRule} (<a href="https://github.com/wala/ML/issues/953">wala/ML#953</a>). A receiver
+   * typed only by dataflow, such as a Keras layer's call result reached as a list element, has an
+   * empty points-to set, so this generator's own receiver read resolves nothing and its seed is the
+   * pure ⊤. That seed is never pinned (the wala/ML#405 pin requires ranked members), so the
+   * receiver's own type reaches the result unchanged through the assignment graph: a column of a
+   * rank-2 matrix then carries the matrix's rank-2 shape, and in a union beside the ⊤ seed the
+   * result is a wholly unknown member beside a wrongly ranked one. With the feed the ⊤ seed is
+   * replaced by the rule applied to the receiver's dataflow state, so the result takes the
+   * subscript's shape and the receiver's dtype.
+   *
+   * <p>The feed is withheld when any points-to member of the receiver is a Python container. A
+   * subscript of a {@code tuple}, {@code list} or {@code dict} selects elements rather than slicing
+   * a tensor, so its elements keep their own shapes, and the dataflow state the receiver carries is
+   * its elements' types, not a tensor's to which the rule applies: {@code tf.math.top_k(x,
+   * k=2)[0:1]} holds the {@code (2,)} values unchanged, where the rule would read {@code (1,)}. The
+   * guard reads the points-to set, so a container typed only by dataflow is not caught by it, but
+   * such a receiver's own variable carries no dataflow state (a container's element state lives on
+   * its field keys), so the feed composes nothing there rather than mis-slicing.
+   *
+   * <p>The feed does not reopen the receiver leak the wala/ML#405 pin blocks. A seed proven on both
+   * axes registers no feed, so the pin alone decides it as before, and a ranked seed with an
+   * unknown dtype takes the dtype fill, which keeps the seed's dimensions and borrows only the
+   * receiver's dtype. Only the pure ⊤ seed, which the pin never covered, is replaced by the rule.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The rule-carrying feed over the receiver's key in the calling frame, or {@code null}
+   *     when the call site is not uniquely resolved or the receiver may be a container.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    CallSiteView view = findCallSite(builder);
+    if (view == null || view.receiverVn() <= 0) return null;
+    PointerKey receiver =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(view.callerNode(), view.receiverVn());
+    for (InstanceKey member : builder.getPointerAnalysis().getPointsToSet(receiver)) {
+      AllocationSiteInNode site = getAllocationSiteInNode(member);
+      if (site == null) continue;
+      TypeReference type = site.concreteType().getReference();
+      if (type.equals(PythonTypes.tuple)
+          || type.equals(PythonTypes.list)
+          || type.equals(PythonTypes.dict)) return null;
     }
-    final int capturedCount = newaxisCount;
-    LOGGER.fine(
-        () ->
-            "Non-[:k] pattern; leadingAxisConstrained="
-                + constrainsLeadingAxis
-                + " newaxis="
-                + capturedCount
-                + " → "
-                + ret);
-    return ret;
+    return new TypeFeed(
+        TypeFeedKind.TRANSFORM,
+        List.of(receiver),
+        subscriptRule(this.planSubscript(builder, view)));
   }
 
   /**
@@ -866,6 +944,22 @@ public class SliceBuiltinOperation extends TensorGenerator {
       return kind == DimKind.SLICE;
     }
   }
+
+  /**
+   * A subscript's classification, resolved once from its call site.
+   *
+   * @param dims The multi-dimensional subscript's dimensions, or {@code null} for the single
+   *     leading-axis form.
+   * @param boundedStop The {@code [:k]} form's resolved bound, or {@code null} when the subscript
+   *     is not that form.
+   * @param constrainsLeadingAxis Whether a bound or a non-unit step constrains the leading axis.
+   * @param newaxisCount The number of {@code tf.newaxis} tokens among the arguments.
+   */
+  private record SubscriptPlan(
+      List<SubscriptDim> dims,
+      Integer boundedStop,
+      boolean constrainsLeadingAxis,
+      int newaxisCount) {}
 
   /**
    * A positional snapshot of a {@code slice(x, start, stop, step)} invoke, pinned to the caller

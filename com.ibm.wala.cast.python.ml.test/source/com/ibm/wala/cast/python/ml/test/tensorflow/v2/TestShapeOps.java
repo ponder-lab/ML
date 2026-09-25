@@ -573,6 +573,40 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A subscript of a value typed only by dataflow takes the subscript's shape and the receiver's
+   * dtype, with no wholly unknown member beside it (wala/ML#953). {@code adj[:, 0]} over a Keras
+   * layer's {@code (4, 2) int32} call result is {@code (4,) int32}: the layer-call result has an
+   * empty points-to set, so the generator's own receiver read cannot see it, and only a feed from
+   * the receiver's dataflow state can.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptDataflowReceiver()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_dataflow_receiver.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * The leading-axis counterpart of {@link #testSubscriptDataflowReceiver()} (wala/ML#953): {@code
+   * adj[:2]} over the same dataflow-typed {@code (4, 2) int32} receiver takes the {@code [:k]}
+   * form's bound, {@code (2, 2) int32}, through the feed's rule.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptDataflowReceiverLeadingAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_dataflow_receiver.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /**
    * Pins the output shape of an integer index on the middle axis of a multi-dim subscript
    * (wala/ML#406). {@code x[:, 0, :]} over a {@code (4, 5, 6)} tensor drops the middle axis
    * entirely: {@code (4, 6)}.
