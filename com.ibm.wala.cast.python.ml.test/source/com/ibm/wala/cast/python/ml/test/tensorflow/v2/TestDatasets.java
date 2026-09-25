@@ -1679,10 +1679,13 @@ public class TestDatasets extends AbstractTensorTest {
         "gpt2_vendored",
         1,
         1,
-        // The computed output shape is opaque (a runtime-built list), so the reshape result is
-        // pinned at unknown rank (wala/ML#703); receiver-keyed contexts (wala/ML#679) recover the
-        // `add_weight` float32 dtype.
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        // The output reshape's target is a runtime-built list, so the generator seeds the result
+        // at unknown rank (wala/ML#703) with the `add_weight` float32 dtype that receiver-keyed
+        // contexts recover (wala/ML#679). The reshape's type feed (wala/ML#940) then composes the
+        // concrete `(2, 3, 16)` the fixture's own assertion observes at run time from the
+        // matmul-plus-bias operand's dataflow state; the unknown-rank member is the seed's own,
+        // surviving beside the repair as wala/ML#939 describes.
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TensorType.of(FLOAT_32, 2, 3, 16))));
   }
 
   /**
