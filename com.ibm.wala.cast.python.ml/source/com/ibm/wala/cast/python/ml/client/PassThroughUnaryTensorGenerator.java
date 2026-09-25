@@ -14,6 +14,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -272,6 +273,11 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
     ShapeResult fromValue = ShapeResult.unknown();
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
+      // An input that is exactly the None constant is positive evidence that this call cannot
+      // execute (an arm guarded by `if x is not None:` with x None), so the result is no tensor
+      // (wala/ML#961): infeasible-arm pruning in the wala/ML#746 sense, decided per context. An
+      // EMPTY set is no evidence and stays on the ordinary route.
+      if (inputRaisesOnNone() && allNullConstants(pts)) return ShapeResult.bottom();
       // Exact mode (wala/ML#716): the generator asserts an output shape computed from "the"
       // input shape, so a partial union here would overclaim.
       fromValue = this.getShapeResultOfValue(builder, pts, true);
@@ -283,6 +289,19 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
     ShapeResult viaCallers = this.getArgumentShapeResultViaCallers(builder, paramPos, paramName);
     if (!viaCallers.members().isEmpty()) return viaCallers;
     return fromValue.members().isEmpty() ? viaCallers : fromValue;
+  }
+
+  /**
+   * Whether this operation raises when its input (the argument at {@link
+   * #getInputParameterPosition}) is {@code None}, so that an input whose points-to set is exactly
+   * the None constant reads as no tensor (wala/ML#961). {@code true} for a required tensor input,
+   * the common case; an operation whose input may legitimately be {@code None} overrides with
+   * {@code false}, and its None-only input keeps the ordinary route.
+   *
+   * @return {@code true} iff a {@code None} input cannot execute this operation.
+   */
+  protected boolean inputRaisesOnNone() {
+    return true;
   }
 
   /**
@@ -306,6 +325,9 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               + " override getDefaultDTypes entirely.");
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
+      // The shape read's twin (wala/ML#961): a None-only input yields no tensor on this axis too,
+      // so the two axes agree on ⊥.
+      if (inputRaisesOnNone() && allNullConstants(pts)) return Collections.emptySet();
       Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
       if (dtypes != null && !dtypes.isEmpty()) return dtypes;
     }

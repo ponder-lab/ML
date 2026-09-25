@@ -19,9 +19,10 @@ public class TestListOperations extends AbstractTensorTest {
   private static final String FILE = "tf2_test_list_operations.py";
 
   /**
-   * A layer reached through {@code [None] * n}: the dead {@code past} arm's unstack still reads ⊤
-   * (the None-input read is a separate change), so the twin beside the real {@code (2, 3, 4)}
-   * stays, unchanged by the model.
+   * A layer reached through {@code [None] * n}: with the elements known, the dead {@code past}
+   * arm's unstack reads its None-only input as no tensor (wala/ML#961), so the unknown-dtype twin
+   * the arm used to add beside the real {@code (2, 3, 4)} is gone; the rankless float32 member is
+   * the arm's concat refilled by its feed, a separate item.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -36,17 +37,12 @@ public class TestListOperations extends AbstractTensorTest {
         "consume_repeated",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TENSOR_2_3_4_FLOAT32,
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
-   * The same layer with a direct {@code past=None}: the same reading, the two idioms now reaching
-   * the read with the same evidence.
+   * The same layer with a direct {@code past=None}: the same reading, the two idioms reaching the
+   * read with the same evidence (wala/ML#961 reads both as no tensor).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -61,12 +57,7 @@ public class TestListOperations extends AbstractTensorTest {
         "consume_direct",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TENSOR_2_3_4_FLOAT32,
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**

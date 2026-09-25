@@ -219,6 +219,7 @@ public class Concat extends TensorGenerator {
 
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Set<DType> ret = EnumSet.noneOf(DType.class);
+    boolean noneElement = false;
 
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
@@ -235,9 +236,15 @@ public class Concat extends TensorGenerator {
       // accumulated under the synthetic append-contents field instead (wala/ML#570).
       if (firstElemPts == null) firstElemPts = getAppendedContentsPts(builder, asin);
       if (firstElemPts == null) continue;
+      // The shape read's twin (wala/ML#961): a None-only element yields no tensor on this axis too.
+      if (allNullConstants(firstElemPts)) {
+        noneElement = true;
+        continue;
+      }
       Set<DType> firstDTypes = this.getDTypesOfValue(builder, firstElemPts);
       if (firstDTypes != null) ret.addAll(firstDTypes);
     }
+    if (ret.isEmpty() && noneElement) return Collections.emptySet();
     return ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
   }
 
@@ -312,6 +319,9 @@ public class Concat extends TensorGenerator {
     // nondeterminism.
     OrdinalSet<InstanceKey> firstElemPts = getElementPts(builder, listAsin, catalog, 0);
     if (firstElemPts == null) return ShapeResult.unknown();
+    // An element that is exactly the None constant cannot be concatenated: the call cannot execute
+    // and its result is no tensor (wala/ML#961); an empty set is no evidence.
+    if (allNullConstants(firstElemPts)) return ShapeResult.bottom();
     ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, false);
     if (firstResult.isBottom()) return ShapeResult.bottom();
     if (firstResult.hasUnknown() || firstResult.members().size() != 1) return ShapeResult.unknown();
@@ -328,6 +338,7 @@ public class Concat extends TensorGenerator {
       if (fieldIndex == null) return ShapeResult.unknown();
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
       if (elemPts == null) return ShapeResult.unknown();
+      if (allNullConstants(elemPts)) return ShapeResult.bottom(); // wala/ML#961
       ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
       if (elemResult.isBottom()) return ShapeResult.bottom();
       if (elemResult.hasUnknown() || elemResult.members().size() != 1) return ShapeResult.unknown();
