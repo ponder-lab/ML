@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 def consume(t):
-    pass
+    assert t.shape == (6, 4) and t.dtype == tf.float32
 
 
 class Block(tf.keras.layers.Layer):

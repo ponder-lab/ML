@@ -1683,8 +1683,10 @@ public class TestDatasets extends AbstractTensorTest {
         // at unknown rank (wala/ML#703) with the `add_weight` float32 dtype that receiver-keyed
         // contexts recover (wala/ML#679). The reshape's type feed (wala/ML#940) then composes the
         // concrete `(2, 3, 16)` the fixture's own assertion observes at run time from the
-        // matmul-plus-bias operand's dataflow state; the unknown-rank member is the seed's own,
-        // surviving beside the repair as wala/ML#939 describes.
+        // matmul-plus-bias operand's dataflow state. The unknown-rank member is not a restored
+        // seed (a probe of the unfed-seed restore found none in `Conv1d.call`): the seed takes
+        // SHAPE_FILL, whose rule maps each operand member, and the operand's own rankless member
+        // maps to a rankless output.
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TensorType.of(FLOAT_32, 2, 3, 16))));
   }
 
