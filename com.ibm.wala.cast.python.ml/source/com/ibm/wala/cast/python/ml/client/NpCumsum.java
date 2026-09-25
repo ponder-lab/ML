@@ -92,17 +92,15 @@ public class NpCumsum extends NpArray {
    */
   private boolean isAxisPassed(PropagationCallGraphBuilder builder) {
     PythonInvokeInstruction call = getInvokeInstruction();
-    if (call != null) return passesAxis(builder, this.getNode(), call);
+    if (call != null) return passesAxis(this.getNode(), call);
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, this.getNode()))
       if (callerInvoke.snd instanceof PythonInvokeInstruction
-          && passesAxis(builder, callerInvoke.fst, (PythonInvokeInstruction) callerInvoke.snd))
-        return true;
+          && passesAxis(callerInvoke.fst, (PythonInvokeInstruction) callerInvoke.snd)) return true;
     return false;
   }
 
-  private static boolean passesAxis(
-      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction call) {
+  private static boolean passesAxis(CGNode node, PythonInvokeInstruction call) {
     int vn = call.getUse("axis");
     if (vn == -1 && call.getNumberOfPositionalParameters() > 2) vn = call.getUse(2);
     if (vn == -1) return false;
