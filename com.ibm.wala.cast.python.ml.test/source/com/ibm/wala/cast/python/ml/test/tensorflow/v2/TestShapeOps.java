@@ -392,6 +392,29 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A {@code tf.reshape} whose input is typed only by the dataflow keeps no unknown-dtype seed
+   * member beside the dtype the dataflow delivers (<a
+   * href="https://github.com/wala/ML/issues/940">wala/ML#940</a>). Python {@code Stack} calls two
+   * instances of one {@code Block} layer in sequence; {@code Block.call} reshapes its input to
+   * {@code [-1, 4]} and passes the result to {@code consume}. In the second instance's context the
+   * input is the first instance's output, a layer-call result no generator types at seed time, so
+   * the reshape's seed carried {@code (6, 4)} with an unknown dtype and the reshape node op added
+   * {@code (6, 4)} float32 from the operand's dataflow state: two members of one shape, one
+   * unknown. With the reshape declaring a feed over its input, the seed is suppressed and the dtype
+   * composes from the operand, so {@code consume} reads the single member.
+   */
+  @Test
+  public void testReshapeDataflowDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_dataflow_dtype.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(6), new NumericDim(4))))));
+  }
+
+  /**
    * Pins the output shape of {@code tf.squeeze} with no axis (wala/ML#513). {@code tf.squeeze(x)}
    * over a {@code (2, 1, 3, 1)} tensor drops every statically size-1 axis: {@code (2, 3)}.
    *
