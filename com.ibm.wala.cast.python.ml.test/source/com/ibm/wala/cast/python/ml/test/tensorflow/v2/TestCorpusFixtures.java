@@ -1489,4 +1489,54 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         11,
         Map.of(3, hidden));
   }
+
+  /**
+   * The vendored {@code Gpt2}'s projection input reads float32 alone (wala/ML#961). Under the
+   * training driver the attention layer's {@code past_layer} is None (through {@code [None] *
+   * self.num_layers}, wala/ML#960), so {@code tf.unstack(past_layer)} in the dead {@code if
+   * past_layer is not None:} arm reads no tensor instead of an unknown-dtype tensor, and the twin
+   * it used to carry through the key/value concat, the attention, and {@code merge_heads} into
+   * {@code c_proj}'s input is gone: every member of {@code Conv1d.call}'s {@code x}, over its
+   * contexts, is float32.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGpt2ProjectionInputDtypeVendored()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py"
+        },
+        "layers/feed_forward.py",
+        "Conv1d.call",
+        "gpt2_vendored",
+        1,
+        11,
+        Map.of(
+            3,
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
+  }
 }
