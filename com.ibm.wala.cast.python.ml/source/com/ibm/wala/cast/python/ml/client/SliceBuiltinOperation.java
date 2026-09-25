@@ -276,7 +276,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   /**
    * Declares a {@link TypeFeedKind#TRANSFORM} feed over the subscript's receiver, carrying {@link
-   * #subscriptRule} (<a href="https://github.com/wala/ML/issues/XXX">wala/ML#XXX</a>). A receiver
+   * #subscriptRule} (<a href="https://github.com/wala/ML/issues/953">wala/ML#953</a>). A receiver
    * typed only by dataflow, such as a Keras layer's call result reached as a list element, has an
    * empty points-to set, so this generator's own receiver read resolves nothing and its seed is the
    * pure ⊤. That seed is never pinned (the wala/ML#405 pin requires ranked members), so the

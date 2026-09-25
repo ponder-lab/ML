@@ -1,4 +1,4 @@
-# Test https://github.com/wala/ML/issues/XXX: a subscript of a value typed only by dataflow (a Keras
+# Test https://github.com/wala/ML/issues/953: a subscript of a value typed only by dataflow (a Keras
 # layer's call result, reached as an element of a list parameter) takes the subscript's shape and the
 # receiver's dtype, with no wholly unknown member beside it.
 import tensorflow as tf
