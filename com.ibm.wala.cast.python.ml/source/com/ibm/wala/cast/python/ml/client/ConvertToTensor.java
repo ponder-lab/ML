@@ -85,9 +85,12 @@ public class ConvertToTensor extends ValueExtractingTensorGenerator {
    *
    * <p>The feed is withheld entirely when any caller passes anything beyond the value, since a
    * {@code dtype}, a {@code dtype_hint} or any keyword can make the result's dtype differ from the
-   * value's, and a feed describes every calling context at once. It is also withheld unless this
-   * generator is anchored in the conversion's own summary node, the only frame whose callers pass
-   * {@code value} as their first argument.
+   * value's. The scope of that decision is the summary node's callers, not a single call site:
+   * under a context that merges call sites, one caller passing {@code dtype} withholds the feed for
+   * every caller of the node, the summaries routed through it included. A {@code value=} keyword is
+   * declined too although it passes nothing else, which costs precision and never soundness. The
+   * feed is also withheld unless this generator is anchored in the conversion's own summary node,
+   * the only frame whose callers pass {@code value} as their first argument.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The pass-through feed over the callers' {@code value} arguments, or {@code null} when
