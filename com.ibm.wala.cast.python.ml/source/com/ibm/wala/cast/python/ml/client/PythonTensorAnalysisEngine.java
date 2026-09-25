@@ -2364,6 +2364,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (origins != null) suppressedOrigins.put(src, origins);
         init.remove(src);
         initOrigins.remove(src);
+        // A subscript result pinned by the wala/ML#405 reroute above keeps its pin's blocking but
+        // not its contribution once a feed serves it. The pin writes the seed's members, with their
+        // unresolved dtype, as a fixed value on every edge the feed does not own, and the join
+        // would carry that unknown-dtype member beside the dtype the feed delivers: a same-shape
+        // twin from one subscript (wala/ML#957). Pinning the empty set there still clears whatever
+        // those edges bring (the receiver's pre-subscript type, the leak the pin exists to block)
+        // while only the feed's composed member lands.
+        if (setCalls.containsKey(src)) setCalls.put(src, Collections.emptySet());
       }
       LOGGER.fine(() -> "wala/ML#736 type feeds: " + typeFeeds.size());
       for (Map.Entry<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> f : typeFeeds.entrySet())

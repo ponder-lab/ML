@@ -297,13 +297,12 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * its field keys), so the feed composes nothing there rather than mis-slicing.
    *
    * <p>The feed does not reopen the receiver leak the wala/ML#405 pin blocks. A seed proven on both
-   * axes registers no feed, so the pin alone decides it as before, and a ranked seed with an
-   * unknown dtype takes the dtype fill, which keeps the seed's dimensions and borrows only the
-   * receiver's dtype. Only the pure ⊤ seed, which the pin never covered, is replaced by the rule.
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The rule-carrying feed over the receiver's key in the calling frame, or {@code null}
-   *     when the call site is not uniquely resolved or the receiver may be a container.
+   * axes registers no feed, so the pin alone decides it as before. A ranked seed with an unknown
+   * dtype takes the dtype fill, which keeps the seed's dimensions and borrows only the receiver's
+   * dtype; on that destination the engine keeps the pin's blocking but empties its contribution,
+   * since a pin left writing the seed's members beside the fill's would produce a same-shape twin
+   * with one unknown dtype (wala/ML#957). Only the pure ⊤ seed, which the pin never covered, is
+   * replaced by the rule.
    */
   @Override
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
