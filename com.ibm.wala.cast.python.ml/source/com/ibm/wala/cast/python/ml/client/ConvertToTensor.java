@@ -1,12 +1,19 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -62,6 +69,53 @@ public class ConvertToTensor extends ValueExtractingTensorGenerator {
    */
   public ConvertToTensor(CGNode node) {
     super(node);
+  }
+
+  /**
+   * A conversion returns its {@code value} unchanged when that value is already a tensor, so the
+   * result's type is the value's, and this declares a {@link TypeFeedKind#PASS_THROUGH} feed over
+   * each caller's {@code value} argument (<a
+   * href="https://github.com/wala/ML/issues/947">wala/ML#947</a>). Without one, a value typed only
+   * by dataflow, such as a Keras layer's call result, has an empty points-to set, so this
+   * generator's seed is the pure ⊤ while the pass-through edge still delivers the value's real
+   * type, and the join keeps both. Every summary that returns {@code convert_to_tensor(x)} ({@code
+   * tf.tanh} among them) inherits that member. A declared feed replaces the ⊤ seed with the
+   * operand's composed type instead (<a
+   * href="https://github.com/wala/ML/issues/736">wala/ML#736</a>).
+   *
+   * <p>The feed is withheld entirely when any caller passes anything beyond the value, since a
+   * {@code dtype}, a {@code dtype_hint} or any keyword can make the result's dtype differ from the
+   * value's. The scope of that decision is the summary node's callers, not a single call site:
+   * under a context that merges call sites, one caller passing {@code dtype} withholds the feed for
+   * every caller of the node, the summaries routed through it included. A {@code value=} keyword is
+   * declined too although it passes nothing else, which costs precision and never soundness. The
+   * feed is also withheld unless this generator is anchored in the conversion's own summary node,
+   * the only frame whose callers pass {@code value} as their first argument.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The pass-through feed over the callers' {@code value} arguments, or {@code null} when
+   *     it is withheld or no caller is located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    CGNode node = this.getNode();
+    if (!node.getMethod()
+        .getDeclaringClass()
+        .getReference()
+        .equals(CONVERT_TO_TENSOR.getDeclaringClass())) return null;
+
+    List<PointerKey> operands = new ArrayList<>();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      // The callee (or, from a summary body, the receiver) and the value: nothing else.
+      if (callerInvoke.snd.getNumberOfUses() != 2) return null;
+      operands.add(
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(callerInvoke.fst, callerInvoke.snd.getUse(1)));
+    }
+    return operands.isEmpty() ? null : new TypeFeed(TypeFeedKind.PASS_THROUGH, operands);
   }
 
   @Override
