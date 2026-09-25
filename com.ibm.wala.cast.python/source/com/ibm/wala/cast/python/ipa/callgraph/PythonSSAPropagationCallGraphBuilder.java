@@ -19,6 +19,7 @@ import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_FILENAME;
 import static com.ibm.wala.cast.python.util.Util.PYTHON_FILE_EXTENSION;
 
 import com.google.common.collect.Maps;
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
@@ -49,6 +50,7 @@ import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -58,6 +60,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
@@ -73,6 +76,7 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.IntIterator;
 import com.ibm.wala.util.intset.IntSetUtil;
@@ -98,6 +102,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * properties.
    */
   public static final String LIST_APPEND_CONTENTS_FIELD = "__list_append_contents__";
+
+  /**
+   * The synthetic field holding the elements of a list or tuple produced by repetition ({@code xs *
+   * n}) or concatenation ({@code xs + ys}) (wala/ML#960). Like {@value #LIST_APPEND_CONTENTS_FIELD}
+   * it is read by every non-constant subscript, iteration and {@code zip}; unlike it, no shape
+   * reader interprets it, so a synthesized list, whose length is unknowable, never yields an
+   * extent.
+   */
+  public static final String LIST_OPERATION_CONTENTS_FIELD = "__list_operation_contents__";
 
   private static final Logger logger =
       Logger.getLogger(PythonSSAPropagationCallGraphBuilder.class.getName());
@@ -441,13 +454,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       InstanceKey contentsKey =
           getBuilder().getInstanceKeyForConstant(PythonTypes.string, LIST_APPEND_CONTENTS_FIELD);
+      InstanceKey operationKey =
+          getBuilder().getInstanceKeyForConstant(PythonTypes.string, LIST_OPERATION_CONTENTS_FIELD);
 
       newFieldOperationFieldConstant(
           node,
           true,
           fieldReadAction(getPointerKeyForLocal(instruction.getDef())),
           instruction.getObjectRef(),
-          new InstanceKey[] {contentsKey});
+          new InstanceKey[] {contentsKey, operationKey});
     }
 
     /**
@@ -512,7 +527,61 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * gated-allocation strategy can hook here. See wala/ML#398.
      */
     @Override
-    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {}
+    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
+      // List repetition and concatenation (wala/ML#960): `xs * n` and `xs + ys` produce a fresh
+      // list (or tuple) whose elements are the operands' elements. Only a list or tuple key
+      // flowing into an operand produces anything, so a tensor binop keeps its empty result set
+      // and tensor identification is untouched (the wala/ML#398 regression class). The fresh key
+      // is allocated at this instruction's index, so `xs + ys` over two lists yields ONE fresh
+      // list, and the elements go to the synthetic {@value #LIST_OPERATION_CONTENTS_FIELD} field
+      // that every non-constant subscript, iteration and `zip` read beside the append contents:
+      // indices are unknowable here, a numeric field would let a length-counting reader derive a
+      // wrong extent, and the append field would let the shape readers that interpret appended
+      // contents derive one.
+      IBinaryOpInstruction.IOperator operator = binop.getOperator();
+      if (operator != IBinaryOpInstruction.Operator.ADD
+          && operator != IBinaryOpInstruction.Operator.MUL) return;
+      PointerKey resultKey = getPointerKeyForLocal(binop.getDef());
+      SymbolTable symtab = ir.getSymbolTable();
+      int[] operands = {binop.getUse(0), binop.getUse(1)};
+      PointerKey[] keys = new PointerKey[2];
+      InstanceKey[][] invariant = new InstanceKey[2][];
+      for (int i = 0; i < 2; i++) {
+        int use = operands[i];
+        if (use <= 0 || symtab.isConstant(use)) continue; // the multiplier, or a literal
+        keys[i] = getPointerKeyForLocal(use);
+        // An operand whose contents are invariant (a literal list) or whose key is otherwise
+        // represented implicitly (a summary return) is read directly, as the append model does:
+        // a constraint over such a key would crash `findOrCreatePointsToSet` (the wala/ML#668
+        // trap), and even a side effect would MATERIALIZE the key, turning an implicit parameter
+        // or return explicit and changing how the tensor analysis reads it (a parameter with no
+        // list evidence at all gained a tensor state that way).
+        if (contentsAreInvariant(symtab, du, use) || system.isImplicit(keys[i]))
+          invariant[i] = getInvariantContents(symtab, du, node, use);
+      }
+      for (int i = 0; i < 2; i++) {
+        if (keys[i] == null) continue;
+        int other = 1 - i;
+        ListOperationOperator listOperation =
+            getBuilder()
+            .new ListOperationOperator(
+                node, binop.iIndex(), resultKey, operator, i, keys[other], invariant[other]);
+        if (invariant[i] != null) {
+          for (InstanceKey key : invariant[i]) listOperation.contribute(key);
+        } else {
+          // A side effect, not an assignment constraint: the flow graph the tensor dataflow walks
+          // includes every unary constraint's edge, and an operand-to-result edge here would carry
+          // a tensor operand's state into the result of `x * y` (the wala/ML#405 substrate-leak
+          // class). The side effect adds only the fresh key.
+          system.newSideEffect(listOperation, keys[i]);
+        }
+        // A key declined because the other operand has not grown into the rule yet is retried
+        // when that operand's set changes, so the operator also watches it (a represented one;
+        // an invariant or implicit other operand has static contents and nothing arrives late).
+        if (keys[other] != null && invariant[other] == null)
+          system.newSideEffect(listOperation, keys[other]);
+      }
+    }
 
     @Override
     public void visitArrayLoad(SSAArrayLoadInstruction inst) {
@@ -1114,6 +1183,256 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /**
+   * The result of a list repetition or concatenation (wala/ML#960), attached to ONE operand: for
+   * each list or tuple key flowing into that operand, when the operation's rule holds against the
+   * other operand's contents, a fresh key of the same type allocated at the binop's instruction
+   * index joins the result, and the operand key's elements, every field its object catalog names
+   * plus its own appended and operation contents, flow into the fresh key's synthetic {@value
+   * #LIST_OPERATION_CONTENTS_FIELD} field, which non-constant subscripts, iteration and {@code zip}
+   * read and no shape reader interprets. Keys of other types contribute nothing, and a key already
+   * contributed is not registered again.
+   *
+   * <p>The rule: {@code ADD} fires only when the other operand also carries a list or tuple (list
+   * plus list); a list beside a tensor or an ndarray is that object's own addition, whose result is
+   * no list. {@code MUL} fires only when the other operand carries neither a list or tuple nor a
+   * tensor-like value (a tensor or an ndarray, by their model packages): repetition takes an
+   * integer, and a list times a tensor is the tensor's multiplication.
+   *
+   * <p>A key declined because the other operand has not met the rule yet is kept pending and
+   * retried when that operand's set changes. The converse is the monotone limit: a repetition
+   * contributed while the other operand held only integers is not retracted if that operand later
+   * grows a tensor member.
+   */
+  public final class ListOperationOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final IBinaryOpInstruction.IOperator operator;
+    private final int operandIndex;
+
+    /** The other operand's key, or {@code null} for a constant (the multiplier). */
+    private final PointerKey otherKey;
+
+    /** The other operand's contents when invariant or implicit, else {@code null}. */
+    private final InstanceKey[] otherInvariant;
+
+    private final Set<InstanceKey> contributed = HashSetFactory.make();
+
+    /** Keys of this operand declined so far because the other operand had not met the rule. */
+    private final Set<InstanceKey> pending = HashSetFactory.make();
+
+    private ListOperationOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        IBinaryOpInstruction.IOperator operator,
+        int operandIndex,
+        PointerKey otherKey,
+        InstanceKey[] otherInvariant) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.operator = operator;
+      this.operandIndex = operandIndex;
+      this.otherKey = otherKey;
+      this.otherInvariant = otherInvariant;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      if (otherKey != null && otherKey.equals(rhs.getPointerKey())) {
+        // The other operand grew: retry this operand's keys declined before.
+        for (InstanceKey key : new java.util.ArrayList<>(pending)) contribute(key);
+        return NOT_CHANGED;
+      }
+      rhs.getValue().foreach(i -> contribute(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds the fresh key an operand key contributes to the result, if any and if the operation's
+     * rule holds against the other operand, to the result's points-to set by an instance
+     * constraint, which is not an edge of the flow graph. A key seen before contributes nothing
+     * again.
+     *
+     * @param key An operand's instance key.
+     */
+    private void contribute(InstanceKey key) {
+      if (!isListOrTuple(key) || contributed.contains(key)) return;
+      if (!ruleHolds()) {
+        pending.add(key); // retried when the other operand's set changes
+        return;
+      }
+      pending.remove(key);
+      contributed.add(key);
+      InstanceKey fresh =
+          getInstanceKeyForAllocation(
+              node, NewSiteReference.make(pc, key.concreteType().getReference()));
+      if (fresh == null) return;
+      getSystem().newConstraint(resultKey, fresh);
+      copyElements(key, fresh);
+    }
+
+    /** Whether the operation's rule holds against the other operand's current contents. */
+    private boolean ruleHolds() {
+      boolean otherList = false;
+      boolean otherTensorLike = false;
+      Iterable<InstanceKey> contents =
+          otherInvariant == null ? null : java.util.Arrays.asList(otherInvariant);
+      if (contents == null && otherKey != null) {
+        PointsToSetVariable v = getSystem().findOrCreatePointsToSet(otherKey);
+        java.util.List<InstanceKey> keys = new java.util.ArrayList<>();
+        if (v.getValue() != null)
+          v.getValue().foreach(i -> keys.add(getSystem().getInstanceKey(i)));
+        contents = keys;
+      }
+      if (contents != null)
+        for (InstanceKey ik : contents) {
+          if (isListOrTuple(ik)) otherList = true;
+          else if (isTensorLike(ik)) otherTensorLike = true;
+        }
+      if (operator == IBinaryOpInstruction.Operator.ADD) return otherList;
+      return !otherList && !otherTensorLike;
+    }
+
+    private boolean isListOrTuple(InstanceKey key) {
+      IClassHierarchy cha = getClassHierarchy();
+      IClass type = key.concreteType();
+      return cha.isSubclassOf(type, cha.lookupClass(PythonTypes.list))
+          || cha.isSubclassOf(type, cha.lookupClass(PythonTypes.tuple));
+    }
+
+    /** A tensor or an ndarray, by the model packages that declare them. */
+    private boolean isTensorLike(InstanceKey key) {
+      String name = key.concreteType().getName().toString();
+      return name.startsWith("Ltensorflow/") || name.startsWith("Lnumpy/");
+    }
+
+    /**
+     * Flows every catalogued field of {@code from}, and its appended and operation contents, into
+     * {@code to}'s operation-contents field. The catalog is read by a side effect with value
+     * equality on (from, to), so re-evaluation registers nothing twice.
+     */
+    private void copyElements(InstanceKey from, InstanceKey to) {
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      IField contents = resolveRootField(cha, LIST_OPERATION_CONTENTS_FIELD);
+      IField appended = resolveRootField(cha, LIST_APPEND_CONTENTS_FIELD);
+      if (contents == null || appended == null) return;
+      PointerKey contentsKey = factory.getPointerKeyForInstanceField(to, contents);
+      logger.fine(() -> "list operation at " + pc + " in " + node + ": " + to + " from " + from);
+      // The operand's own appended contents and operation contents flow through unchanged, so a
+      // chain of operations, or an operation over an appended list, keeps every element.
+      getSystem()
+          .newConstraint(
+              contentsKey, assignOperator, factory.getPointerKeyForInstanceField(from, contents));
+      getSystem()
+          .newConstraint(
+              contentsKey, assignOperator, factory.getPointerKeyForInstanceField(from, appended));
+      getSystem()
+          .newSideEffect(
+              new ElementCopyOperator(from, contentsKey, pc),
+              factory.getPointerKeyForObjectCatalog(from));
+    }
+
+    @Override
+    public int hashCode() {
+      return ((node.hashCode() * 31 + pc) * 31 + resultKey.hashCode()) * 31 + operandIndex;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ListOperationOperator
+          && ((ListOperationOperator) o).node.equals(node)
+          && ((ListOperationOperator) o).pc == pc
+          && ((ListOperationOperator) o).resultKey.equals(resultKey)
+          && ((ListOperationOperator) o).operandIndex == operandIndex;
+    }
+
+    @Override
+    public String toString() {
+      return "list operation result at " + pc + " in " + node + " (operand " + operandIndex + ")";
+    }
+  }
+
+  private static IField resolveRootField(IClassHierarchy cha, String name) {
+    return cha.resolveField(
+        FieldReference.findOrCreate(
+            PythonTypes.Root, Atom.findOrCreateUnicodeAtom(name), PythonTypes.Root));
+  }
+
+  /**
+   * Flows every catalogued field of a list key into a contents field as the catalog's names arrive
+   * (wala/ML#960). Equal for the same (from, contents) pair, so the propagation system keeps one.
+   */
+  private final class ElementCopyOperator extends UnaryOperator<PointsToSetVariable> {
+    private final InstanceKey from;
+    private final PointerKey contentsKey;
+    private final int pc;
+
+    private ElementCopyOperator(InstanceKey from, PointerKey contentsKey, int pc) {
+      this.from = from;
+      this.contentsKey = contentsKey;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+      if (catalog.getValue() == null) return NOT_CHANGED;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      catalog
+          .getValue()
+          .foreach(
+              c -> {
+                InstanceKey nameKey = getSystem().getInstanceKey(c);
+                if (!(nameKey instanceof ConstantKey)) return;
+                Object value = ((ConstantKey<?>) nameKey).getValue();
+                // A literal's element fields are named by integer constants, a dictionary's by
+                // strings; both name a field.
+                if (!(value instanceof String) && !(value instanceof Number)) return;
+                String name = value.toString();
+                IField f = resolveRootField(cha, name);
+                if (f == null) return;
+                logger.fine(
+                    () ->
+                        "list operation at "
+                            + pc
+                            + ": field "
+                            + name
+                            + " of "
+                            + from
+                            + " into "
+                            + contentsKey);
+                getSystem()
+                    .newConstraint(
+                        contentsKey,
+                        assignOperator,
+                        factory.getPointerKeyForInstanceField(from, f));
+              });
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return from.hashCode() * 31 + contentsKey.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ElementCopyOperator
+          && ((ElementCopyOperator) o).from.equals(from)
+          && ((ElementCopyOperator) o).contentsKey.equals(contentsKey);
+    }
+
+    @Override
+    public String toString() {
+      return "list-operation elements of " + from + " into " + contentsKey;
+    }
   }
 
   /**

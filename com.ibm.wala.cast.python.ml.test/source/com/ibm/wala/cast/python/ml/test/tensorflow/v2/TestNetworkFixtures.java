@@ -1052,7 +1052,10 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * <p>The extents are {@code Unresolved} rather than {@code Dynamic} because they are fixed
    * runtime integers the analysis could not compute, and nothing in them carries {@code
    * None}-evidence (wala/ML#721). Recovering them exactly needs element representation for
-   * concatenated and repeated lists, which is the wala/ML#805 family.
+   * concatenated and repeated lists, which is the wala/ML#805 family; wala/ML#960 gives {@code
+   * strides = [stride] + [1] * (num_blocks - 1)} its elements, and the third lateral's path then
+   * computes {@code (1, 104, 104, 256)}, the fixture's own third {@code y} at run time, while the
+   * other two calls' spatials stay {@code Unresolved}, so {@code y}'s union carries both.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1067,7 +1070,11 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "FPN._upsample_add",
         2,
         3,
-        Map.of(3, Set.of(PYRAMID_LATERAL), 4, Set.of(PYRAMID_LATERAL)));
+        Map.of(
+            3,
+            Set.of(PYRAMID_LATERAL),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 1, 104, 104, 256), PYRAMID_LATERAL)));
   }
 
   /**

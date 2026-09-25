@@ -37,6 +37,7 @@ import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.fixpoint.UnaryStatement;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -878,6 +879,47 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointerKey pointerKey, TensorGenerator.ShapeUnresolutionCause cause) {}
 
   private final List<ShapeAnnotationCandidate> shapeAnnotationCandidates = new ArrayList<>();
+
+  /**
+   * Removes from the dataflow graph every isolated node whose only statements are the list
+   * repetition and concatenation model's side effects (wala/ML#960). That model registers a side
+   * effect on each binop operand's variable to learn whether a list key arrives; the propagation
+   * system then lists the variable in its flow graph as a node with no edge, and this analysis
+   * would count and dump it as a tensor variable of the function although nothing about its value
+   * changed and, on the graph without the model, it was no node at all. A variable with any other
+   * statement, or any edge, stays.
+   *
+   * @param builder The builder whose propagation system holds the statements.
+   * @param dataflow The duplicated flow graph to prune.
+   */
+  private static void pruneListOperationOnlyNodes(
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
+    PropagationSystem system = builder.getPropagationSystem();
+    List<PointsToSetVariable> pruned = new ArrayList<>();
+    for (PointsToSetVariable v : dataflow) {
+      if (dataflow.getPredNodeCount(v) > 0 || dataflow.getSuccNodeCount(v) > 0) continue;
+      if (system.getStatementsThatDef(v).hasNext()) continue;
+      Iterator<?> uses = system.getStatementsThatUse(v);
+      boolean any = false;
+      boolean only = true;
+      while (uses.hasNext()) {
+        Object statement = uses.next();
+        any = true;
+        if (!(statement instanceof UnaryStatement)
+            || !(((UnaryStatement<?>) statement).getOperator()
+                instanceof PythonSSAPropagationCallGraphBuilder.ListOperationOperator)) {
+          only = false;
+          break;
+        }
+      }
+      if (any && only) pruned.add(v);
+    }
+    for (PointsToSetVariable v : pruned) dataflow.removeNode(v);
+    LOGGER.fine(
+        () ->
+            "wala/ML#960 list-operation-only nodes pruned from the dataflow graph: "
+                + pruned.size());
+  }
 
   /**
    * Identifies the dataflow sources for tensor analysis.
@@ -2135,6 +2177,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Graph<PointsToSetVariable> dataflow =
           SlowSparseNumberedGraph.duplicate(
               builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
+      pruneListOperationOnlyNodes(builder, dataflow);
 
       Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 

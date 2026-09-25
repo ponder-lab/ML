@@ -552,7 +552,7 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
-    if (pointsToSet == null || !pointsToSet.iterator().hasNext())
+    if (pointsToSet == null || !hasLiteralShapeEvidence(pointsToSet))
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + describe(this.getSource()) + ".");
 
@@ -573,6 +573,11 @@ public abstract class TensorGenerator {
 
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null) continue;
+      // A list produced by repetition or concatenation carries its elements under one non-numeric
+      // name and no length (wala/ML#960): reading it here would count zero numeric fields and
+      // answer a scalar shape. It is not a literal, so it contributes nothing and the caller falls
+      // through to the def-use vector walk, today's route for such a value.
+      if (isListOperationResult(asin)) continue;
       TypeReference reference = asin.concreteType().getReference();
 
       if (reference.equals(dict)) {
@@ -927,6 +932,43 @@ public abstract class TensorGenerator {
     }
 
     return null;
+  }
+
+  /**
+   * Whether a shape argument's points-to set holds any evidence a literal reader can use: a key
+   * that is not a list synthesized by the repetition and concatenation model (wala/ML#960). A set
+   * of synthesized keys alone is no evidence, and reads as an empty set so that every caller takes
+   * its no-evidence route (the def-use vector walk, or an unknown shape) rather than an empty or
+   * scalar shape set.
+   *
+   * @param pointsToSet The shape argument's points-to set.
+   * @return {@code true} iff some member is not a synthesized list.
+   */
+  protected static boolean hasLiteralShapeEvidence(Iterable<InstanceKey> pointsToSet) {
+    for (InstanceKey ik : pointsToSet) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null || !isListOperationResult(asin)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Whether an allocation was synthesized by the list repetition and concatenation model
+   * (wala/ML#960): such a key's allocation site is a binary-op instruction of its node, never a
+   * {@code new}. Its elements sit under a single non-numeric field and its length is unknown, so a
+   * reader counting numeric fields must not read it as a literal.
+   *
+   * @param asin The allocation to test.
+   * @return {@code true} iff the allocation's site indexes a binary-op instruction.
+   */
+  protected static boolean isListOperationResult(AllocationSiteInNode asin) {
+    IR ir = asin.getNode().getIR();
+    if (ir == null) return false;
+    int pc = asin.getSite().getProgramCounter();
+    SSAInstruction[] instructions = ir.getInstructions();
+    return pc >= 0
+        && pc < instructions.length
+        && instructions[pc] instanceof SSABinaryOpInstruction;
   }
 
   /**
@@ -2779,7 +2821,8 @@ public abstract class TensorGenerator {
                 + ", vn="
                 + valueNumber
                 + ", ptsEmpty="
-                + valuePointsToSet.isEmpty());
+                + valuePointsToSet.isEmpty()
+                + (valuePointsToSet.isEmpty() ? "" : ", pts=" + valuePointsToSet));
 
     // A φ-defined value's points-to set is the union over ALL arms, so arm feasibility must
     // decide BEFORE the points-to stage: when some arm's governing branch is constant-decidable
