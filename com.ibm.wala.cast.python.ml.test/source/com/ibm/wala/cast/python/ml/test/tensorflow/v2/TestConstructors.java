@@ -857,6 +857,24 @@ public class TestConstructors extends AbstractTensorTest {
     test("tf2_test_convert_to_tensor14.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
+  /**
+   * The decline of {@link #testConvertToTensor14Direct()}: with a {@code dtype} argument the
+   * conversion's feed is withheld, since the result's dtype is then the argument's and not the
+   * value's (wala/ML#947). The seed takes its {@code float32} from the argument, correctly, but its
+   * shape stays unknown beside the {@code (2, 3) float32} the pass-through edge delivers. Pinned so
+   * a change to that decline is visible rather than silent.
+   */
+  @Test
+  public void testConvertToTensor14Dtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convert_to_tensor14.py",
+        "h",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
   @Test
   public void testEye7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

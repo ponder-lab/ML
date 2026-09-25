@@ -22,3 +22,11 @@ def g(t):
 layer = Scale()
 f(tf.tanh(layer(tf.ones([2, 3]))))
 g(tf.convert_to_tensor(layer(tf.ones([2, 3]))))
+
+
+def h(t):
+    assert t.shape == (2, 3)
+    assert t.dtype == tf.float32
+
+
+h(tf.convert_to_tensor(layer(tf.ones([2, 3])), dtype=tf.float32))
