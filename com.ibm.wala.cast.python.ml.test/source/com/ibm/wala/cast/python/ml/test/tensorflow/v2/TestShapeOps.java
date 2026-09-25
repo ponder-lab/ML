@@ -18,6 +18,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_32_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_28_28_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_6_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_512_FLOAT32;
@@ -385,6 +386,37 @@ public class TestShapeOps extends AbstractTensorTest {
             Set.of(TENSOR_2_4_FLOAT32),
             4,
             Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * A negative {@code axis} normalizes against the rank: {@code tf.unstack(y, axis=-1)} over {@code
+   * (3, 2)} gives {@code (3,)}.
+   */
+  @Test
+  public void testUnstackNegativeAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unstack.py",
+        "consume_neg",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * A computed {@code axis} ({@code len(y.shape) - 1}) is not a constant the analysis reads, so the
+   * pieces are tensors of unknown shape with the input's dtype: the degradation arm, not a fixed
+   * answer.
+   */
+  @Test
+  public void testUnstackComputedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unstack.py",
+        "consume_computed",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32), 3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**

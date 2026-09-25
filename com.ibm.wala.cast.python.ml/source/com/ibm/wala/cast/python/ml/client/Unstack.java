@@ -90,22 +90,31 @@ public class Unstack extends PassThroughUnaryTensorGenerator {
 
   /**
    * Whether the {@code axis} argument is passed at the call site, positionally (a fourth use beyond
-   * the callable, {@code value}, and {@code num}) or as a resolvable keyword. A keyword-passed
-   * <em>computed</em> axis is indistinguishable from an absent one here and is treated as absent.
+   * the callable, {@code value}, and {@code num}) or by keyword. A keyword is tested by name on the
+   * invoke, so a computed axis passed by keyword counts as passed and degrades the result rather
+   * than being read as the default.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @return {@code true} iff some call site passes {@code axis}.
    */
   private boolean isAxisPassed(PropagationCallGraphBuilder builder) {
     PythonInvokeInstruction call = getInvokeInstruction();
-    if (call != null) return call.getNumberOfPositionalParameters() > 3;
+    if (call != null) return passesAxis(call);
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, this.getNode()))
       if (callerInvoke.snd instanceof PythonInvokeInstruction
-          && ((PythonInvokeInstruction) callerInvoke.snd).getNumberOfPositionalParameters() > 3)
-        return true;
-    OrdinalSet<InstanceKey> keywordPts = this.getArgumentPointsToSet(builder, 2, "axis");
-    return keywordPts != null && !keywordPts.isEmpty();
+          && passesAxis((PythonInvokeInstruction) callerInvoke.snd)) return true;
+    return false;
+  }
+
+  /**
+   * Whether an invoke passes {@code axis}, as its fourth positional argument or by keyword.
+   *
+   * @param call The invoke.
+   * @return {@code true} iff it passes {@code axis}.
+   */
+  private static boolean passesAxis(PythonInvokeInstruction call) {
+    return call.getNumberOfPositionalParameters() > 3 || call.getUse("axis") != -1;
   }
 
   /**
