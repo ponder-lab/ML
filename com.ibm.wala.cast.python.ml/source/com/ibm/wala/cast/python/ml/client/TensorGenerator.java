@@ -10064,6 +10064,8 @@ public abstract class TensorGenerator {
 
     if (type.equals(TensorFlowTypes.SPLIT.getDeclaringClass())) {
       return new Split(node);
+    } else if (type.equals(TensorFlowTypes.UNSTACK.getDeclaringClass())) {
+      return new Unstack(node);
     } else if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.ZEROS.getDeclaringClass())) {

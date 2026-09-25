@@ -1426,6 +1426,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SPLIT_SIGNATURE = "tf.split()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/unstack. */
+  public static final MethodReference UNSTACK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/unstack")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNSTACK_SIGNATURE = "tf.unstack()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
   public static final MethodReference EXTRACT_PATCHES =
       MethodReference.findOrCreate(
@@ -2507,6 +2516,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SLICE.getDeclaringClass(), SLICE_SIGNATURE),
           Map.entry(SQUEEZE.getDeclaringClass(), SQUEEZE_SIGNATURE),
           Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
+          Map.entry(UNSTACK.getDeclaringClass(), UNSTACK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass(), RANDOM_FLIP_LEFT_RIGHT_SIGNATURE),
           Map.entry(ADJUST_CONTRAST.getDeclaringClass(), ADJUST_CONTRAST_SIGNATURE),

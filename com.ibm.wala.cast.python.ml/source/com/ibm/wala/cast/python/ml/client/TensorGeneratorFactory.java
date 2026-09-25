@@ -226,6 +226,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_SUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSTACK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VAR_LEN_FEATURE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
@@ -1829,7 +1830,9 @@ public class TensorGeneratorFactory {
         // `tf.split` returns a list of same-shaped pieces, and its generator is defined to
         // describe one piece, so a subscript of the result is the piece itself; the generic
         // `TensorElementGenerator` fallthrough would peel a real dimension (wala/ML#717).
-        if (effectiveGenerator instanceof Split) return effectiveGenerator;
+        // `tf.unstack` is modeled the same way: one fresh tensor stands for every piece.
+        if (effectiveGenerator instanceof Split || effectiveGenerator instanceof Unstack)
+          return effectiveGenerator;
 
         if (containerGenerator instanceof TensorElementGenerator
             && ((TensorElementGenerator) containerGenerator).getContainerGenerator()
@@ -2071,6 +2074,7 @@ public class TensorGeneratorFactory {
       return new EmbeddingLookup(source);
     else if (isType(calledFunction, SQUEEZE.getDeclaringClass())) return new Squeeze(source);
     else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);
+    else if (isType(calledFunction, UNSTACK.getDeclaringClass())) return new Unstack(source);
     else if (isType(calledFunction, SQUARE.getDeclaringClass())) return new Square(source);
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);

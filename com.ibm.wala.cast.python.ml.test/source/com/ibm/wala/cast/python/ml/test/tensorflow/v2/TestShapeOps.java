@@ -11,11 +11,13 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_5_6_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_64_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_30_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_32_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_28_28_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_6_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_512_FLOAT32;
@@ -346,6 +348,43 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * {@code tf.unstack} over a {@code (2, 3, 4)} tensor with the default axis unpacks to two {@code
+   * (3, 4)} pieces of the input's dtype. The summary used to return a list whose first element was
+   * an unrelated constant and whose second was empty, so the first unpacked value read a fabricated
+   * member and the second read nothing.
+   */
+  @Test
+  public void testUnstack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unstack.py",
+        "consume",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_4_FLOAT32), 3, Set.of(TENSOR_3_4_FLOAT32)));
+  }
+
+  /**
+   * {@code tf.unstack(x, axis=1)} over {@code (2, 3, 4)} removes the middle axis: {@code (2, 4)}.
+   */
+  @Test
+  public void testUnstackAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unstack.py",
+        "consume_axis",
+        3,
+        3,
+        Map.of(
+            2,
+            Set.of(TENSOR_2_4_FLOAT32),
+            3,
+            Set.of(TENSOR_2_4_FLOAT32),
+            4,
+            Set.of(TENSOR_2_4_FLOAT32)));
   }
 
   /**
