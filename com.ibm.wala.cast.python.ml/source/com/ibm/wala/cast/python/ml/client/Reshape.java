@@ -116,7 +116,9 @@ public class Reshape extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
-    if (shapePts != null && !shapePts.isEmpty()) {
+    // A synthesized list (wala/ML#960) is no evidence for the literal reader and would read as an
+    // unknown target here, ahead of the vector walk that resolves it.
+    if (shapePts != null && hasLiteralShapeEvidence(shapePts)) {
       // `tf.reshape(arr, tf.shape(other))` is a common pattern where the shape argument is itself a
       // runtime Tensor (the result of `tf.shape(...)`); `getShapesFromShapeArgument` degrades such
       // unrecognized forms to ⊤ ("output shape unknown") rather than throwing (wala/ML#471). See
