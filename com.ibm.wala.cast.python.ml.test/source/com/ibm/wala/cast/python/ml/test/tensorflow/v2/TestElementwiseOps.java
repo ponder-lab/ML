@@ -2161,4 +2161,46 @@ public class TestElementwiseOps extends AbstractTensorTest {
     test(file, "consume_float_left_int64_np", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 8))));
     test(file, "consume_float_left_float32_tf", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
+
+  /**
+   * An add over a callee whose return has two arms selected by a string mode (wala/ML#958): the
+   * embedding arm is an elementwise result with no allocation of its own, the projection arm an
+   * int32-typed allocation. The add's generator reads the shape from both arms (the broadcast
+   * discards the projection arm's) and the dtype, points-to first, from the projection arm alone,
+   * so its seed pairs the projection's int32 with the embedding's shape. The operands' dataflow
+   * dtypes are float32, and under {@code DTYPE_COMPOSE} they decide the add's dtype; without it the
+   * seed ships as int32 at the embedding's shape, the runtime assert's contradiction.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTwoArmReturnAdd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_two_arm_return_add.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32)));
+  }
+
+  /**
+   * Control for wala/ML#958: a parameter genuinely fed an int32 and a float32 elementwise result at
+   * one shape keeps both members, since each add's dtype composes from its own operands' dataflow
+   * dtypes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddBothDtypes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_both_dtypes.py",
+        "take",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_INT32, TENSOR_2_3_FLOAT32)));
+  }
 }

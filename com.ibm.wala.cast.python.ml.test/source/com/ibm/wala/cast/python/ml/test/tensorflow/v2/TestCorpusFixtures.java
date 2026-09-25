@@ -1442,4 +1442,51 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32,
                     asList(new NumericDim(16), new NumericDim(100), new NumericDim(8))))));
   }
+
+  /**
+   * The vendored {@code Gpt2}'s hidden state reads float32 alone at the decoder stack's input
+   * (wala/ML#958). {@code hidden_states = embedded_x + self.pos_embedding(x, ...)} is an add over
+   * {@code EmbeddingLayer.call}'s result, whose return has two arms selected by a string {@code
+   * mode}: the embedding arm is an elementwise result with no allocation, the projection arm an
+   * int32-typed allocation. The add's seed paired the projection's int32 with the embedding's shape
+   * (the shape reader saw both arms, the points-to-first dtype reader only the allocating one), and
+   * the seed, proven on both axes, got no feed; the int32 member then rode the loop-carried hidden
+   * state into every decoder layer and the final layer norm. Under {@code DTYPE_COMPOSE} the
+   * operands' float32 decides the add's dtype. Pinned at {@code LayerNormalization.call}'s {@code
+   * x} and {@code DecoderLayer.call}'s {@code x}: the three shapes are the loop-carried members;
+   * none carries int32.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGpt2HiddenStateDtypeVendored()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String[] files = {
+      "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+      "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+      "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+      "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+      "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+      "gpt2_vendored/A.py"
+    };
+    Set<TensorType> hidden =
+        Set.of(
+            new TensorType(
+                FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
+            new TensorType(
+                FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
+            new TensorType(
+                FLOAT_32, asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))));
+    test(
+        files,
+        "layers/layer_norm.py",
+        "LayerNormalization.call",
+        "gpt2_vendored",
+        1,
+        11,
+        Map.of(3, hidden));
+  }
 }
