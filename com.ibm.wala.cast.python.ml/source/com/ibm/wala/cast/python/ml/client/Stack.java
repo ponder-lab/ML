@@ -139,6 +139,32 @@ public class Stack extends TensorGenerator {
     return ret.isEmpty() ? null : ret;
   }
 
+  /**
+   * Declares a {@link TypeFeedKind#DTYPE_ONLY} feed over the {@code values} argument and its
+   * container-element keys, in {@link Concat}'s form (wala/ML#949). The seed's dtype comes from the
+   * first element's points-to walk, which cannot see a value typed only by the dataflow, and cycles
+   * where a stacked value is fed back as an operand of the values it stacks (a decoder's {@code
+   * present} returned as the next call's {@code past}); the walk then resolves nothing or promotes
+   * to unknown, and without a feed that seed dtype was never filled although the elements' dataflow
+   * state carried it. The shape is not fed: it inserts the stacked count at {@code axis}, which the
+   * generator computes from the substrate.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype-only feed over {@code values} and its element keys, or {@code null} when the
+   *     argument cannot be located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    int valuesVn = getArgumentValueNumber(Parameters.VALUES.getIndex());
+    if (valuesVn <= 0) return null;
+    PointerKey argument =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), valuesVn);
+    List<PointerKey> operands = new ArrayList<>();
+    operands.add(argument);
+    addContainerElementOperands(builder, argument, operands);
+    return new TypeFeed(TypeFeedKind.DTYPE_ONLY, operands);
+  }
+
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =
