@@ -10294,6 +10294,10 @@ public abstract class TensorGenerator {
       return new Conv1DCall(node);
     } else if (type.equals(TensorFlowTypes.DENSE_CALL.getDeclaringClass())) {
       return new DenseCall(node);
+    } else if (type.equals(
+        TensorFlowTypes.SPARSE_CATEGORICAL_CROSSENTROPY_CALL.getDeclaringClass())) {
+      // Registered in tandem with the factory's arm (wala/ML#951).
+      return new SparseCategoricalCrossentropyCall(node);
     } else if (type.equals(TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass())) {
       return new GlobalAveragePooling1DCall(node);
     } else if (isShapePreservingLayerCallType(type)) {

@@ -324,6 +324,19 @@ public class TensorFlowTypes extends PythonTypes {
           TypeName.findOrCreate("Ltensorflow/keras/losses/CategoricalCrossentropy"));
 
   /**
+   * The {@code __call__} of a {@code tf.keras.losses.SparseCategoricalCrossentropy} instance
+   * (wala/ML#951), whose result {@code SparseCategoricalCrossentropyCall} types.
+   */
+  public static final MethodReference SPARSE_CATEGORICAL_CROSSENTROPY_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName(
+                  "Ltensorflow/keras/losses/SparseCategoricalCrossentropy/"
+                      + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
+  /**
    * The label position (field 1) of the {@code (x, y)} batch tuple a {@code DirectoryIterator}
    * yields. Allocated in {@code flow_from_directory}'s summary; see wala/ML#830.
    */
