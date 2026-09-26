@@ -1440,6 +1440,25 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SQUEEZE_SIGNATURE = "tf.squeeze()";
 
+  /** The {@code RNN} summary's internal step op (wala/ML#973); bound on no module. */
+  public static final MethodReference RNN_STEP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/rnn_step")),
+          AstMethodReference.fnSelector);
+
+  private static final String RNN_STEP_SIGNATURE = "tf.keras.layers.RNN step";
+
+  /** The {@code RNN} summary's internal sequence op (wala/ML#973); bound on no module. */
+  public static final MethodReference RNN_SEQUENCE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/rnn_sequence")),
+          AstMethodReference.fnSelector);
+
+  private static final String RNN_SEQUENCE_SIGNATURE = "tf.keras.layers.RNN()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/reverse_sequence. */
   public static final MethodReference REVERSE_SEQUENCE =
       MethodReference.findOrCreate(
@@ -2549,6 +2568,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(SLICE.getDeclaringClass(), SLICE_SIGNATURE),
           Map.entry(SQUEEZE.getDeclaringClass(), SQUEEZE_SIGNATURE),
+          Map.entry(RNN_STEP.getDeclaringClass(), RNN_STEP_SIGNATURE),
+          Map.entry(RNN_SEQUENCE.getDeclaringClass(), RNN_SEQUENCE_SIGNATURE),
           Map.entry(REVERSE_SEQUENCE.getDeclaringClass(), REVERSE_SEQUENCE_SIGNATURE),
           Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
           Map.entry(UNSTACK.getDeclaringClass(), UNSTACK_SIGNATURE),

@@ -180,6 +180,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REVERSE_SEQUENCE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RNN_SEQUENCE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RNN_STEP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SCATTER_ND;
@@ -2080,6 +2082,9 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EMBEDDING_LOOKUP.getDeclaringClass()))
       return new EmbeddingLookup(source);
     else if (isType(calledFunction, SQUEEZE.getDeclaringClass())) return new Squeeze(source);
+    else if (isType(calledFunction, RNN_STEP.getDeclaringClass())) return new RnnStep(source);
+    else if (isType(calledFunction, RNN_SEQUENCE.getDeclaringClass()))
+      return new RnnSequence(source);
     else if (isType(calledFunction, REVERSE_SEQUENCE.getDeclaringClass()))
       return new ReverseSequence(source);
     else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);
