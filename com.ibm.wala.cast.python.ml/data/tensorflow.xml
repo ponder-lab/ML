@@ -507,6 +507,8 @@
         <putfield class="LRoot" field="GRU" fieldType="LRoot" ref="layers" value="GRULayerCls"/>
         <new def="SimpleRNNLayerCls" class="Ltensorflow/keras/layers/class/SimpleRNN"/>
         <putfield class="LRoot" field="SimpleRNN" fieldType="LRoot" ref="layers" value="SimpleRNNLayerCls"/>
+        <new def="RNNLayerCls" class="Ltensorflow/keras/layers/class/RNN"/>
+        <putfield class="LRoot" field="RNN" fieldType="LRoot" ref="layers" value="RNNLayerCls"/>
         <new def="BidirectionalLayerCls" class="Ltensorflow/keras/layers/class/Bidirectional"/>
         <putfield class="LRoot" field="Bidirectional" fieldType="LRoot" ref="layers" value="BidirectionalLayerCls"/>
         <new def="ConcatenateLayerCls" class="Ltensorflow/keras/layers/class/Concatenate"/>
@@ -2531,6 +2533,20 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="rnn_step" allocatable="true">
+        <!-- Internal to the `RNN` summary (wala/ML#973): one time step of a batch-major sequence, the input without its time axis; paired with the `RnnStep` generator. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="rnn_sequence" allocatable="true">
+        <!-- Internal to the `RNN` summary (wala/ML#973): the layer's output from the cell's step output, with the input's time axis reinserted when the layer's `return_sequences` is true; paired with the `RnnSequence` generator. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self step inputs layer">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="squeeze" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; the generator drops the singleton axes named by `axis` (or all statically size-1 axes when `axis` is absent). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input axis name">
@@ -3465,6 +3481,15 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="RNN" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/RNN. The cell and `return_sequences` are stored on the instance: the call invokes the cell and the `RnnSequence` generator reads `return_sequences` (wala/ML#973). -->
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self cell return_sequences return_state go_backwards stateful unroll time_major zero_output_for_mask">
+          <new def="res" class="Ltensorflow/keras/layers/RNN"/>
+          <putfield class="LRoot" field="cell" fieldType="LRoot" ref="res" value="cell"/>
+          <putfield class="LRoot" field="return_sequences" fieldType="LRoot" ref="res" value="return_sequences"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Bidirectional" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The wrapped layer and `merge_mode` are stored on the instance so `BidirectionalCall` can read the wrapped layer's parameters and the width factor back (wala/ML#840). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self layer merge_mode weights backward_layer">
@@ -3741,6 +3766,41 @@
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+      </class>
+      <class name="RNN" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/RNN (wala/ML#973). The call invokes the cell once, on a fresh step tensor (`rnn_step`: the input without its time axis) and the initial state wrapped in a list, as the layer does per step; the result is a fresh sequence tensor (`rnn_sequence`: the cell output's dtype, with the time axis reinserted when `return_sequences` is true), never the cell's step output passed through, which would carry the step's rank. The result is `[output, new_state]`, the `return_state=True` form: a summary cannot choose the bare output that `return_state=False` returns, so that form stays unmodeled. Batch-major inputs only. -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="7" paramNames="func self inputs initial_state mask training constants">
+          <getfield class="LRoot" field="cell" fieldType="LRoot" ref="self" def="cell"/>
+          <new def="step_op" class="Ltensorflow/functions/rnn_step"/>
+          <call class="Ltensorflow/functions/rnn_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="inputs" numArgs="2" def="step"/>
+          <new def="states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="states" value="initial_state"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="cell" arg1="step" arg2="states" numArgs="3" def="cell_out"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="cell_out" def="step_out"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="cell_out" def="new_state"/>
+          <new def="seq_op" class="Ltensorflow/functions/rnn_sequence"/>
+          <call class="Ltensorflow/functions/rnn_sequence" name="do" descriptor="()LRoot;" type="virtual" arg0="seq_op" arg1="step_out" arg2="inputs" arg3="self" numArgs="4" def="out"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_state"/>
+          <return value="res"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="7" paramNames="func self inputs initial_state mask training constants">
+          <getfield class="LRoot" field="cell" fieldType="LRoot" ref="self" def="cell"/>
+          <new def="step_op" class="Ltensorflow/functions/rnn_step"/>
+          <call class="Ltensorflow/functions/rnn_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="inputs" numArgs="2" def="step"/>
+          <new def="states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="states" value="initial_state"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="cell" arg1="step" arg2="states" numArgs="3" def="cell_out"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="cell_out" def="step_out"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="cell_out" def="new_state"/>
+          <new def="seq_op" class="Ltensorflow/functions/rnn_sequence"/>
+          <call class="Ltensorflow/functions/rnn_sequence" name="do" descriptor="()LRoot;" type="virtual" arg0="seq_op" arg1="step_out" arg2="inputs" arg3="self" numArgs="4" def="out"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_state"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="Bidirectional" allocatable="true">
