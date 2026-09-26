@@ -3867,8 +3867,11 @@ public abstract class TensorGenerator {
         builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
-    // A `@click.option` default is written under a global of its own, never under this one, so
-    // a click default declines here by construction (wala/ML#971).
+    // A `@click.option` default is written under a global of its own, but it reaches this one
+    // when a nested function's Python default IS the click parameter (`def pick(flag=wide)`):
+    // the parameter's marker key flows into the nested function's defaults global through an
+    // ordinary assignment, so the refusal is needed here as well (wala/ML#971).
+    if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
     return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
   }
 

@@ -43,6 +43,14 @@ def consume_arg(x):
     pass
 
 
+def consume_nested(x):
+    pass
+
+
+def consume_mode_direct(x):
+    pass
+
+
 def pick_by_arg(flag):
     # The flag passed as an argument: the call-site binding rule must decline it as well.
     if flag:
@@ -105,7 +113,29 @@ def main(wide, width, mode, dims):
     assert g.shape == (4,)
     consume_arg(g)
 
-    # A string default: `mode == "wide"` decides nothing, and the string still dispatches.
+    # A nested function whose Python default IS the click parameter: the default reader must
+    # decline the click default that reaches the nested function's own default.
+    def pick_nested(flag=wide):
+        if flag:
+            return tf.ones([2, 3])
+        else:
+            return tf.ones([4], dtype=tf.int32)
+
+    n = pick_nested()
+    assert n.shape == (4,)
+    consume_nested(n)
+
+    # A string default compared directly: the string marker declines, where the singleton
+    # fallback would otherwise fold `mode == "wide"` to not-taken under the default "narrow".
+    if mode == "wide":
+        d = tf.ones([2])
+    else:
+        d = tf.ones([3], dtype=tf.int32)
+    assert d.shape == (3,)
+    consume_mode_direct(d)
+
+    # A method call on the string default still dispatches through the marker's `string` base;
+    # a call result never folds, so this pins the dispatch, not the decline.
     if mode.lower() == "wide":
         m = tf.ones([2])
     else:

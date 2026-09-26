@@ -74,9 +74,42 @@ public class TestClickGuard extends AbstractTensorTest {
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 4))));
   }
 
-  /** A string click default decides nothing, and a method call on it still dispatches. */
+  /**
+   * A nested function whose Python default is the click parameter: the click default reaches the
+   * nested function's own defaults global, and the default reader declines it there too.
+   */
+  @Test
+  public void testClickDefaultAsNestedPythonDefaultKeepsBothArms()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_nested",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 4))));
+  }
+
+  /**
+   * A string click default compared directly decides nothing: the string marker declines where the
+   * singleton fallback would fold the comparison to not-taken under the default.
+   */
   @Test
   public void testStringClickDefaultKeepsBothArms()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_mode_direct",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2), TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A method call on a string click default dispatches through the marker's {@code string} base. A
+   * call result never folds, so this pins the dispatch, not the decline.
+   */
+  @Test
+  public void testStringClickDefaultMethodDispatches()
       throws ClassHierarchyException, CancelException, IOException {
     test(
         FILE,
