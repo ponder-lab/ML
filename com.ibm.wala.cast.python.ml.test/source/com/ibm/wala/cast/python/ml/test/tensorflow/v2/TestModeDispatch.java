@@ -94,4 +94,25 @@ public class TestModeDispatch extends AbstractTensorTest {
     test(
         FILE, "consume_third_arm_input", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
   }
+
+  /**
+   * The shared-edge control: a dead call and a live call in one function pass the same local to the
+   * same helper. The dataflow graph holds one edge per variable pair, so the dead site's
+   * suppression must leave that edge alone; the helper's consumer keeps the hidden states.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testLiveCallSharingTheEdgeKeepsIt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_shared_call_input",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
+  }
 }

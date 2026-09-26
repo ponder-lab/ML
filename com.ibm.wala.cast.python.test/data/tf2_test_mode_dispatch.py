@@ -146,3 +146,24 @@ three_hidden = three(ids)
 assert three_hidden.shape == (2, 3, 8) and three_hidden.dtype == tf.float32
 three_out = three(three_hidden, mode="third")
 assert three_out.shape == (2, 3, 8) and three_out.dtype == tf.float32
+
+
+def consume_shared_call_input(x):
+    return x
+
+
+def helper_shared(x):
+    consume_shared_call_input(x)
+    return x
+
+
+def caller_shared(x, mode):
+    # The dead call and the live call pass the same local to the same helper: the dataflow graph
+    # holds one edge per variable pair, so the live call must keep it.
+    if mode == "unused":
+        helper_shared(x)
+    return helper_shared(x)
+
+
+shared_out = caller_shared(hidden, "live")
+assert shared_out.shape == (2, 3, 8) and shared_out.dtype == tf.float32

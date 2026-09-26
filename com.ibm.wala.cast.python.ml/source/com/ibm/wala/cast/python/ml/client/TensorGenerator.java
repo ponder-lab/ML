@@ -3268,7 +3268,9 @@ public abstract class TensorGenerator {
    * decidably dead when every normal predecessor either reaches it over an edge that folds to not
    * taken (the wala/ML#746 comparison fold, per node, so a parameter bound to one string constant
    * in this node's context decides an {@code if mode == "..."} arm) or is itself decidably dead.
-   * The entry block is live; a block on a cycle is undecidable and kept.
+   * The entry block is live; a block on a cycle is undecidable and kept. Only normal predecessors
+   * are walked: a block reached over an exceptional edge alone has none and is kept, so a handler
+   * is never decided dead by the guards above the call that may throw into it.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
    * @param node The {@link CGNode} whose IR contains the block.
