@@ -5316,6 +5316,42 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Whether a value is infeasible because the operation that produced it cannot execute
+   * (wala/ML#962): its allocation's producer, reached by producer delegation, is a pass-through
+   * operation whose input is exactly the None constant (wala/ML#961), or a concat with such an
+   * element, recursively. This is #961's predicate applied along def-use, not a new lattice fact: a
+   * list or ndarray element, or a value whose read merely resolved nothing, is not infeasible. The
+   * walk carries a visited set and answers {@code false} on a revisit (a loop-carried concat that
+   * feeds itself), so "not provably infeasible" stays ⊤.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph and pointer analysis
+   *     resolve the producer.
+   * @param key The value's instance key.
+   * @param visited The allocation keys already on the walk.
+   * @return {@code true} iff the value's producer provably cannot execute.
+   */
+  protected static boolean isInfeasibleByNoneInput(
+      PropagationCallGraphBuilder builder, InstanceKey key, Set<InstanceKey> visited) {
+    AllocationSiteInNode asin = getAllocationSiteInNode(key);
+    if (asin == null || !visited.add(asin)) return false;
+    TensorGenerator producer;
+    try {
+      producer = createManualGenerator(asin.getNode(), asin, builder);
+    } catch (IllegalArgumentException e) {
+      LOGGER.fine(() -> "wala/ML#962 no producer for " + key + ": " + e.getMessage());
+      return false;
+    }
+    if (producer == null) return false;
+    LOGGER.fine(
+        () -> "wala/ML#962 producer of " + key + " is " + producer.getClass().getSimpleName());
+    if (producer instanceof PassThroughUnaryTensorGenerator)
+      return ((PassThroughUnaryTensorGenerator) producer).inputIsNoneOnly(builder);
+    if (producer instanceof Concat)
+      return ((Concat) producer).hasInfeasibleElement(builder, visited);
+    return false;
+  }
+
+  /**
    * Returns whether every member of the given points-to set is a {@code null} {@link ConstantKey},
    * i.e., the value is statically an explicit Python {@code None}. Consumers of optional arguments
    * use this to treat an explicit {@code None} the same as an omitted argument, since the shape and

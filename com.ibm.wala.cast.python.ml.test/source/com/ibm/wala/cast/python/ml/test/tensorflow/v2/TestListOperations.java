@@ -20,9 +20,9 @@ public class TestListOperations extends AbstractTensorTest {
 
   /**
    * A layer reached through {@code [None] * n}: with the elements known, the dead {@code past}
-   * arm's unstack reads its None-only input as no tensor (wala/ML#961), so the unknown-dtype twin
-   * the arm used to add beside the real {@code (2, 3, 4)} is gone; the rankless float32 member is
-   * the arm's concat refilled by its feed, a separate item.
+   * arm's unstack reads its None-only input as no tensor (wala/ML#961), and the arm's concat over
+   * that piece is no tensor either (wala/ML#962), so neither the unknown-dtype twin nor the
+   * rankless float32 member the arm used to add beside the real {@code (2, 3, 4)} survives.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -32,17 +32,12 @@ public class TestListOperations extends AbstractTensorTest {
   @Test
   public void testRepeatedNoneKeepsTheDeadArmTwin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_repeated",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_repeated", 1, 1, Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32)));
   }
 
   /**
    * The same layer with a direct {@code past=None}: the same reading, the two idioms reaching the
-   * read with the same evidence (wala/ML#961 reads both as no tensor).
+   * read with the same evidence (wala/ML#961 and wala/ML#962 read both arms the same way).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -52,12 +47,7 @@ public class TestListOperations extends AbstractTensorTest {
   @Test
   public void testDirectNoneReadsTheSame()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_direct",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_direct", 1, 1, Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32)));
   }
 
   /**

@@ -236,14 +236,26 @@ public class Concat extends TensorGenerator {
       // accumulated under the synthetic append-contents field instead (wala/ML#570).
       if (firstElemPts == null) firstElemPts = getAppendedContentsPts(builder, asin);
       if (firstElemPts == null) continue;
-      // The shape read's twin (wala/ML#961): a None-only element yields no tensor on this axis too.
-      if (allNullConstants(firstElemPts)) {
+      // The shape read's twin (wala/ML#961): a None-only element yields no tensor on this axis too,
+      // at any position (wala/ML#962), so a dead list is read the same way on both axes.
+      if (hasDeadElement(builder, asin, catalog, firstElemPts)) {
         noneElement = true;
         continue;
       }
       Set<DType> firstDTypes = this.getDTypesOfValue(builder, firstElemPts);
       if (firstDTypes != null) ret.addAll(firstDTypes);
     }
+    final boolean noneElementFinal = noneElement;
+    LOGGER.fine(
+        () ->
+            "wala/ML#962 concat dtype tail node="
+                + this.getNode().getGraphNodeId()
+                + " values="
+                + valuesPts
+                + " ret="
+                + ret
+                + " noneElement="
+                + noneElementFinal);
     if (ret.isEmpty() && noneElement) return Collections.emptySet();
     return ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
   }
@@ -322,6 +334,7 @@ public class Concat extends TensorGenerator {
     // An element that is exactly the None constant cannot be concatenated: the call cannot execute
     // and its result is no tensor (wala/ML#961); an empty set is no evidence.
     if (allNullConstants(firstElemPts)) return ShapeResult.bottom();
+    if (allInfeasible(builder, firstElemPts)) return ShapeResult.bottom(); // wala/ML#962
     ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, false);
     if (firstResult.isBottom()) return ShapeResult.bottom();
     if (firstResult.hasUnknown() || firstResult.members().size() != 1) return ShapeResult.unknown();
@@ -339,6 +352,7 @@ public class Concat extends TensorGenerator {
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
       if (elemPts == null) return ShapeResult.unknown();
       if (allNullConstants(elemPts)) return ShapeResult.bottom(); // wala/ML#961
+      if (allInfeasible(builder, elemPts)) return ShapeResult.bottom(); // wala/ML#962
       ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
       if (elemResult.isBottom()) return ShapeResult.bottom();
       if (elemResult.hasUnknown() || elemResult.members().size() != 1) return ShapeResult.unknown();
@@ -428,5 +442,99 @@ public class Concat extends TensorGenerator {
   @Override
   protected String getDTypeParameterName() {
     return null;
+  }
+
+  /**
+   * Whether a list holds an element that yields no tensor: a None-only element (wala/ML#961) or an
+   * element produced by an operation that cannot execute (wala/ML#962), at any position. The first
+   * element's set is taken as given, so an append-populated list (no numeric catalog) is judged by
+   * its accumulated contents alone.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @param listAsin The list's allocation.
+   * @param catalog The list's object catalog.
+   * @param firstElemPts The first element's points-to set, already resolved.
+   * @return {@code true} iff some element of the list yields no tensor.
+   */
+  private boolean hasDeadElement(
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode listAsin,
+      OrdinalSet<InstanceKey> catalog,
+      OrdinalSet<InstanceKey> firstElemPts) {
+    if (allNullConstants(firstElemPts) || allInfeasible(builder, firstElemPts)) return true;
+    for (InstanceKey catalogIK : catalog) {
+      if (!(catalogIK instanceof ConstantKey)) continue;
+      Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+      if (fieldIndex == null || fieldIndex == 0) continue;
+      OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
+      if (elemPts != null && (allNullConstants(elemPts) || allInfeasible(builder, elemPts)))
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Whether an element is infeasible (wala/ML#962): its points-to set is non-empty and every member
+   * is produced by an operation that cannot execute on its None-only input, or by a concat with
+   * such an element. The quantifier is universal, as {@link #allNullConstants}'s is: a set mixing
+   * an infeasible piece with a live tensor (a merged arm, or a producer shared by a None-passing
+   * and a tensor-passing caller) says the element may be live, so the concat may execute and stays
+   * typed.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving producers.
+   * @param elemPts The element's points-to set.
+   * @return {@code true} iff the set is non-empty and every member is provably infeasible.
+   */
+  private static boolean allInfeasible(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> elemPts) {
+    return allInfeasible(builder, elemPts, HashSetFactory.make());
+  }
+
+  private static boolean allInfeasible(
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> elemPts,
+      Set<InstanceKey> visited) {
+    if (elemPts == null || elemPts.isEmpty()) return false;
+    for (InstanceKey ik : elemPts) {
+      boolean infeasible = isInfeasibleByNoneInput(builder, ik, visited);
+      LOGGER.fine(() -> "wala/ML#962 element " + ik + " infeasible=" + infeasible);
+      if (!infeasible) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Whether this concat has an infeasible element (wala/ML#962), read from this generator's own
+   * frame; used when this concat is itself the producer of another concat's element.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @param visited The allocation keys already on the walk.
+   * @return {@code true} iff some element of some list this concat receives is infeasible.
+   */
+  boolean hasInfeasibleElement(PropagationCallGraphBuilder builder, Set<InstanceKey> visited) {
+    OrdinalSet<InstanceKey> valuesPts =
+        this.getArgumentPointsToSet(
+            builder, this.getValuesParameterIndex(), this.getValuesParameterName());
+    if (valuesPts == null) return false;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (InstanceKey valIk : valuesPts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
+      if (asin == null) continue;
+      TypeReference ref = asin.concreteType().getReference();
+      if (!(ref.equals(list) || ref.equals(tuple))) continue;
+      OrdinalSet<InstanceKey> catalog =
+          pa.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+      for (InstanceKey catalogIK : catalog) {
+        if (!(catalogIK instanceof ConstantKey)) continue;
+        Integer idx = getFieldIndex((ConstantKey<?>) catalogIK);
+        if (idx == null) continue;
+        OrdinalSet<InstanceKey> elemPts = getElementPts(builder, asin, catalog, idx);
+        if (elemPts != null
+            && (allNullConstants(elemPts) || allInfeasible(builder, elemPts, visited))) return true;
+      }
+    }
+    return false;
   }
 }
