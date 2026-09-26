@@ -501,6 +501,78 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * Pins {@code tf.reverse_sequence} as shape- and dtype-preserving: reversing the leading {@code
+   * seq_lengths[i]} elements of each slice of a {@code (2, 3)} int32 tensor yields a {@code (2, 3)}
+   * int32 tensor. Before the op was modeled, its result had no tensor type at all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReverseSequence()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reverse_sequence.py", "consume_int", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Pins {@code tf.reverse_sequence} with {@code input} and both axes passed by keyword over a
+   * {@code (3, 2)} float32 tensor: {@code (3, 2)} float32.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReverseSequenceKeywords()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reverse_sequence.py",
+        "consume_float",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code tf.reverse_sequence} over int32 tags that a {@code tf.concat} assembles, the tail
+   * of a CRF Viterbi decode: {@code (2, 3)} int32.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReverseSequenceOfConcat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reverse_sequence.py", "consume_tags", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Pins that a sink fed float32 logits by one caller and reversed int32 tags by another reads both
+   * arms. Before the op was modeled, the reversed arm had no tensor type, so the sink read the
+   * float32 arm alone: a dtype narrower than the program's.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReverseSequenceJoinsOtherArm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reverse_sequence.py",
+        "consume_mixed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_2_3_INT32)));
+  }
+
+  /**
    * Pins {@code tf.squeeze} with a single (non-list) integer axis (wala/ML#513). {@code
    * tf.squeeze(x, 1)} over a {@code (2, 1, 3, 1)} tensor drops axis 1: {@code (2, 3, 1)}.
    *
