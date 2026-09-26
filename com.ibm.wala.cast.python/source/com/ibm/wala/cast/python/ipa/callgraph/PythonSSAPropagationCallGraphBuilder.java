@@ -431,6 +431,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public void visitPythonInvoke(PythonInvokeInstruction inst) {
       visitInvokeInternal(inst, new DefaultInvariantComputer());
       processListAppend(inst);
+      processTextRead(inst);
     }
 
     /**
@@ -512,6 +513,43 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
             read.getObjectRef(),
             new InstanceKey[] {contentsKey},
             getPointerKeyForLocal(valueVn));
+    }
+
+    /**
+     * A text read yields strings: {@code f.read()} and {@code f.readline()} on the object {@code
+     * open} returns yield a string, and {@code f.readlines()} on it, or {@code s.splitlines()} and
+     * {@code s.split(...)} on a string, yield a list of strings. The receiver is checked when its
+     * points-to set arrives, so a method of the same name on another object is untouched. Without
+     * this a text dataset built from a file's lines carried no element type at all.
+     *
+     * @param inst The call.
+     */
+    private void processTextRead(PythonInvokeInstruction inst) {
+      SSAInstruction calleeDef = du.getDef(inst.getUse(0));
+      if (!(calleeDef instanceof AstPropertyRead)) return;
+      AstPropertyRead read = (AstPropertyRead) calleeDef;
+      SymbolTable symtab = ir.getSymbolTable();
+      if (!symtab.isConstant(read.getMemberRef())) return;
+      Object member = symtab.getConstantValue(read.getMemberRef());
+      TextReadOperator.Kind kind;
+      if ("read".equals(member) || "readline".equals(member))
+        kind = TextReadOperator.Kind.FILE_TEXT;
+      else if ("readlines".equals(member)) kind = TextReadOperator.Kind.FILE_LINES;
+      else if ("splitlines".equals(member) || "split".equals(member))
+        kind = TextReadOperator.Kind.STRING_PIECES;
+      else return;
+      TextReadOperator operator =
+          getBuilder()
+          .new TextReadOperator(node, inst.iIndex(), getPointerKeyForLocal(inst.getDef()), kind);
+      int receiverVn = read.getObjectRef();
+      PointerKey receiverKey = getPointerKeyForLocal(receiverVn);
+      // A literal receiver (`"a,b".split(",")`) has an implicitly represented key, which a side
+      // effect must not touch (wala/ML#668): read its contents here and apply the operator once.
+      if (contentsAreInvariant(symtab, du, receiverVn) || system.isImplicit(receiverKey)) {
+        operator.apply(getInvariantContents(symtab, du, node, receiverVn));
+        return;
+      }
+      system.newSideEffect(operator, receiverKey);
     }
 
     /**
@@ -1183,6 +1221,103 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /**
+   * Mints the result of a text read once its receiver is known (see {@code processTextRead}): a
+   * string constant for a file's {@code read} or {@code readline}, and a fresh list holding a
+   * string constant under index {@code 0} for a file's {@code readlines} or a string's {@code
+   * splitlines} and {@code split}. The list is populated as a literal list is (a catalog entry and
+   * a numbered field), so every element reader sees the string.
+   */
+  public final class TextReadOperator extends UnaryOperator<PointsToSetVariable> {
+    public enum Kind {
+      FILE_TEXT,
+      FILE_LINES,
+      STRING_PIECES
+    }
+
+    private static final String TEXT = "<text>";
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final Kind kind;
+    private boolean contributed;
+
+    private TextReadOperator(CGNode node, int pc, PointerKey resultKey, Kind kind) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.kind = kind;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (contributed || rhs.getValue() == null) return NOT_CHANGED;
+      java.util.List<InstanceKey> receivers = new java.util.ArrayList<>();
+      rhs.getValue().foreach(i -> receivers.add(getSystem().getInstanceKey(i)));
+      apply(receivers.toArray(new InstanceKey[0]));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Applies the read once some receiver matches its kind.
+     *
+     * @param receivers The receiver's instance keys.
+     */
+    void apply(InstanceKey[] receivers) {
+      if (contributed || receivers == null) return;
+      boolean applies = false;
+      for (InstanceKey receiver : receivers) if (receiverMatches(receiver)) applies = true;
+      if (!applies) return;
+      contributed = true;
+      logger.fine(() -> "text read at " + pc + " in " + node + ": " + kind + " applies.");
+      InstanceKey text = getInstanceKeyForConstant(PythonTypes.string, TEXT);
+      if (kind == Kind.FILE_TEXT) {
+        getSystem().newConstraint(resultKey, text);
+        return;
+      }
+      InstanceKey list =
+          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.list));
+      if (list == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IField zero = resolveRootField(getClassHierarchy(), "0");
+      if (zero == null) return;
+      getSystem().newConstraint(resultKey, list);
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForObjectCatalog(list),
+              getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0));
+      getSystem().newConstraint(factory.getPointerKeyForInstanceField(list, zero), text);
+      logger.fine(() -> "text read at " + pc + " in " + node + ": " + kind + " -> " + list);
+    }
+
+    private boolean receiverMatches(InstanceKey receiver) {
+      if (kind == Kind.STRING_PIECES)
+        return receiver instanceof ConstantKey
+            && ((ConstantKey<?>) receiver).getValue() instanceof String;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass fileClass = cha.lookupClass(PythonTypes.file);
+      return fileClass != null && cha.isSubclassOf(receiver.concreteType(), fileClass);
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + kind.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof TextReadOperator
+          && ((TextReadOperator) o).node.equals(node)
+          && ((TextReadOperator) o).pc == pc
+          && ((TextReadOperator) o).kind == kind;
+    }
+
+    @Override
+    public String toString() {
+      return "text read " + kind + " at " + pc + " in " + node;
+    }
   }
 
   /**

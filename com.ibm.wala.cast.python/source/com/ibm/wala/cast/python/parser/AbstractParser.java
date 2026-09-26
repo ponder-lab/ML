@@ -84,7 +84,6 @@ public abstract class AbstractParser {
         "max",
         "min",
         "object",
-        "open",
         "ord",
         "pow",
         "print",
