@@ -3867,9 +3867,8 @@ public abstract class TensorGenerator {
         builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
-    // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
-    // invocation that passes no option, not the only binding the command line admits.
-    if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
+    // A `@click.option` default is written under a global of its own, never under this one, so
+    // a click default declines here by construction (wala/ML#971).
     return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
   }
 

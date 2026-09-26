@@ -27,10 +27,48 @@ def consume_plain(x):
     pass
 
 
+def consume_field(x):
+    pass
+
+
+def consume_mode(x):
+    pass
+
+
+def consume_tuple(x):
+    pass
+
+
+def consume_arg(x):
+    pass
+
+
+def pick_by_arg(flag):
+    # The flag passed as an argument: the call-site binding rule must decline it as well.
+    if flag:
+        return tf.ones([2, 3])
+    else:
+        return tf.ones([4], dtype=tf.int32)
+
+
+class Holder:
+    def __init__(self, wide):
+        self.wide = wide
+
+    def pick(self):
+        # The flag stored on an attribute: the field rule must decline it as well.
+        if self.wide:
+            return tf.ones([2, 3])
+        else:
+            return tf.ones([4], dtype=tf.int32)
+
+
 @click.command()
 @click.option("--wide", default=False)
 @click.option("--width", default=6)
-def main(wide, width):
+@click.option("--mode", default="narrow")
+@click.option("--dims", default=(2, 3), nargs=2, type=int)
+def main(wide, width, mode, dims):
     if wide:
         x = tf.ones([2, 3])
     else:
@@ -55,6 +93,30 @@ def main(wide, width):
     w = tf.zeros([5])
     assert w.dtype == tf.float32
     consume_plain(w)
+
+    # The flag read back from an attribute decides nothing either.
+    h = Holder(wide)
+    f = h.pick()
+    assert f.shape == (4,)
+    consume_field(f)
+
+    # The flag passed to a function decides nothing at that call site either.
+    g = pick_by_arg(wide)
+    assert g.shape == (4,)
+    consume_arg(g)
+
+    # A string default: `mode == "wide"` decides nothing, and the string still dispatches.
+    if mode.lower() == "wide":
+        m = tf.ones([2])
+    else:
+        m = tf.ones([3], dtype=tf.int32)
+    assert m.shape == (3,)
+    consume_mode(m)
+
+    # A tuple default is no constant; it passes through as it is and reads as a shape.
+    t = tf.ones(dims)
+    assert t.shape == (2, 3)
+    consume_tuple(t)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,51 @@ public class TestClickGuard extends AbstractTensorTest {
     test(FILE, "consume_plain", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 5))));
   }
 
+  /**
+   * A click-defaulted flag read back from an attribute decides nothing: the field rule declines.
+   */
+  @Test
+  public void testClickDefaultOnAttributeKeepsBothArms()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_field",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 4))));
+  }
+
+  /** A click-defaulted flag passed as an argument decides nothing at that call site. */
+  @Test
+  public void testClickDefaultAsArgumentKeepsBothArms()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_arg",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 4))));
+  }
+
+  /** A string click default decides nothing, and a method call on it still dispatches. */
+  @Test
+  public void testStringClickDefaultKeepsBothArms()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_mode",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2), TensorType.of(INT_32, 3))));
+  }
+
+  /** A tuple click default is no constant key; it passes through and reads as a shape. */
+  @Test
+  public void testTupleClickDefaultReadsAsShape()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_tuple", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
   /** A shape read of a click default keeps the default's value (wala/ML#875). */
   @Test
   public void testClickDefaultShapeKept()
