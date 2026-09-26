@@ -2849,6 +2849,52 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       }
       int phiCount = phiSuppressions;
       LOGGER.fine(() -> "wala/ML#763 arm-suppressed phi edges: " + phiCount);
+      // A call site in a decidably dead block never runs, so its arguments must not reach its
+      // callees' parameters, nor its callees' returns its result: a helper dispatched on a string
+      // argument (`if mode == "embedding": ... elif mode == "projection": ...`) otherwise receives
+      // the other arm's inputs from every caller that selects the other mode, since the dataflow
+      // union has no branch sensitivity. Same criterion as the phi-arm fold, applied to the call's
+      // edges.
+      int callSuppressions = 0;
+      for (CGNode node : builder.getCallGraph()) {
+        IR ir = node.getIR();
+        if (ir == null) continue;
+        for (ISSABasicBlock block : ir.getControlFlowGraph()) {
+          if (!Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block)))
+            continue;
+          for (SSAInstruction inst : block) {
+            if (!(inst instanceof SSAAbstractInvokeInstruction call)) continue;
+            for (CGNode callee :
+                builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+              IR calleeIr = callee.getIR();
+              if (calleeIr == null) continue;
+              int calleeParameters = calleeIr.getNumberOfParameters();
+              for (int u = 0; u < call.getNumberOfUses(); u++) {
+                PointsToSetVariable argVar =
+                    flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getUse(u)));
+                if (argVar == null) continue;
+                for (int p = 1; p <= calleeParameters; p++) {
+                  PointsToSetVariable paramVar =
+                      flowVarsByKey.get(heapModel.getPointerKeyForLocal(callee, p));
+                  if (paramVar == null || !dataflow.hasEdge(argVar, paramVar)) continue;
+                  armSuppressions.computeIfAbsent(paramVar, k -> HashSetFactory.make()).add(argVar);
+                  callSuppressions++;
+                }
+              }
+              if (!call.hasDef()) continue;
+              PointsToSetVariable defVar =
+                  flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getDef()));
+              PointsToSetVariable retVar =
+                  flowVarsByKey.get(heapModel.getPointerKeyForReturnValue(callee));
+              if (defVar == null || retVar == null || !dataflow.hasEdge(retVar, defVar)) continue;
+              armSuppressions.computeIfAbsent(defVar, k -> HashSetFactory.make()).add(retVar);
+              callSuppressions++;
+            }
+          }
+        }
+      }
+      int callCount = callSuppressions;
+      LOGGER.fine(() -> "Dead-call-site suppressed argument and result edges: " + callCount);
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(

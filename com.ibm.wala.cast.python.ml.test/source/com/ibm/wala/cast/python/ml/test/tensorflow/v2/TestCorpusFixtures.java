@@ -378,38 +378,16 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   }
 
   /**
-   * In-vivo anchor for wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul} ({@code
-   * nlpgnn/layers/dense.py}). The {@code input_tensor} parameter now carries concrete batch and
-   * sequence dimensions with a dynamic trailing (hidden) dimension, delivered from the entry
-   * scripts' explicit {@code model.build} contracts through the embedding's output reshape
-   * (wala/ML#716, wala/ML#717): {@code (8, 100)} and {@code (8, 10)} leading pairs from the entries
-   * whose pipelines reach this layer, each with the trailing {@code input_shape[-1] *
-   * self.embedding_size} element unresolved, since the factor comes from a checkpoint config the
-   * analysis cannot read — a fixed runtime size of unknown value ({@link UnresolvedDim},
-   * wala/ML#721), not a runtime-{@code None} axis. The rank-2 {@code (8, D)} member that this layer
-   * formerly carried — the embedding guard-φ's path-insensitive phantom, the pre-{@code
-   * expand_dims} member — is gone: wala/ML#900 resolves the {@code get_shape_list} parameter
-   * through its caller argument, whose φ feasibility prunes the pre-{@code expand_dims} arm that
-   * the raw points-to union retained as an allocation. This layer is one of the manifestations the
-   * einsum entry exercises, not wala/ML#900's named subject (the {@code bert_ner_crf} sequence
-   * output). The {@code tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return
-   * descent for layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D,
-   * D)}, {@code (8, D, D)}): the einsum body's own reshapes now compute generator-side through the
-   * {@code get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The
-   * rank-4 {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj}
-   * contexts' inputs (the attention's return value): the worklist engine converges the loop-carried
-   * union from its non-cyclic base and all four proj contexts carry them (wala/ML#365 Phase 3
-   * resolved the fourth, the wala/ML#718 residual under the retired round-based resolution). The
-   * formerly shape-⊤ members carry equation-proven ranks since the einsum-operand refinement
-   * (wala/ML#704): {@code DenseLayer3d.call}'s {@code use_einsum} arm makes its input an operand of
-   * the rank-3 {@code "BFH"} term and {@code DenseLayer3dProj.call}'s of the rank-4 {@code "BFND"}
-   * term, and the refined parameter states transport through the call boundary into this helper;
-   * the dead-site rank-2/3 matmul artifacts are gone with the caller-walk filtering (wala/ML#763).
-   * Every proven axis stays {@link UnresolvedDim} in vivo, since {@code w}'s extents are
-   * config-derived; the union is dtype-homogeneous {@code float32} since the dtype feed
-   * (wala/ML#736) replaced the attention path's pure-⊤ seeds. The {@code w} parameter keeps rank 3
-   * and {@code float32} (its chain is layer-local) but no numeric dimensions, since the {@code
-   * build}-computed head sizes also derive from the config.
+   * The vendored NLPGNN {@code einsum_via_matmul} helper is unreachable: every {@code DenseLayer3d}
+   * and {@code DenseLayer3dProj} is constructed with {@code use_einsum=True} (the default at every
+   * construction site, and no site passes {@code False}), so the {@code else} arm that calls the
+   * helper is decidably dead in every context and contributes no argument (wala/ML#968). Its two
+   * tensor parameters therefore read no state, and the twelve remaining locals are the values the
+   * helper builds from its own constants. Before wala/ML#968 the dead arm fed the helper every
+   * caller's input and weight, and this pin asserted the union that produced (the einsum arm's
+   * rank-3 and rank-4 operands with config-derived extents, wala/ML#704). The runtime captures
+   * never reach the helper's callers, so the empty reading is checked against the program text, not
+   * a signature.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -424,49 +402,9 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "nlpgnn/layers/dense.py",
         "einsum_via_matmul",
         "nlpgnn_full_proj",
-        2,
-        14,
-        Map.of(
-            2,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(8),
-                        new NumericDim(10),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(8),
-                        new NumericDim(100),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE))),
-            3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+        0,
+        12,
+        Map.of());
   }
 
   /**

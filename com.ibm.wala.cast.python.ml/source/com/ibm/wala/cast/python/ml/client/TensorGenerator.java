@@ -3264,6 +3264,43 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Decides a basic block's feasibility from the governing branches above it: the block is
+   * decidably dead when every normal predecessor either reaches it over an edge that folds to not
+   * taken (the wala/ML#746 comparison fold, per node, so a parameter bound to one string constant
+   * in this node's context decides an {@code if mode == "..."} arm) or is itself decidably dead.
+   * The entry block is live; a block on a cycle is undecidable and kept.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR contains the block.
+   * @param block The block.
+   * @return {@link Boolean#FALSE} iff the block is decidably dead; {@code null} otherwise (kept).
+   */
+  static Boolean computeBlockFeasibility(
+      PropagationCallGraphBuilder builder, CGNode node, ISSABasicBlock block) {
+    return computeBlockFeasibility(builder, node, block, HashSetFactory.make());
+  }
+
+  private static Boolean computeBlockFeasibility(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      ISSABasicBlock block,
+      Set<ISSABasicBlock> visited) {
+    IR ir = node.getIR();
+    if (ir == null || block.isEntryBlock() || !visited.add(block)) return null;
+    SSACFG cfg = ir.getControlFlowGraph();
+    boolean anyPredecessor = false;
+    for (ISSABasicBlock pred : cfg.getNormalPredecessors(block)) {
+      anyPredecessor = true;
+      if (Boolean.FALSE.equals(decideEdgeFromBranchBlock(builder, node, cfg, pred, block)))
+        continue; // The edge into this block is never taken.
+      if (Boolean.FALSE.equals(computeBlockFeasibility(builder, node, pred, visited)))
+        continue; // The predecessor itself never runs.
+      return null; // A live way in: not provably dead.
+    }
+    return anyPredecessor ? Boolean.FALSE : null;
+  }
+
+  /**
    * Decides a φ arm's feasibility from its governing branch condition (wala/ML#746): when the arm's
    * incoming edge is controlled by a conditional branch whose comparison folds to a constant in
    * this node's context, the runtime takes exactly one edge, and the other arm prunes. Recognizes
