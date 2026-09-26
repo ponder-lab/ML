@@ -1841,6 +1841,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * PythonTypes#clickDefault} otherwise, so {@link #isClickDefault(InstanceKey)} tells it from an
    * ordinary constant while its value reads unchanged. A member that is not a constant key (a list
    * or tuple default) passes through as it is.
+   *
+   * <p>The operator is wired on every unpassed defaulted parameter, not only on those with a click
+   * option, because the reader cannot tell them apart by name: a parameter without a click option
+   * has an empty click-defaults global, so the operator contributes nothing there.
    */
   private final class ClickDefaultOperator extends UnaryOperator<PointsToSetVariable> {
     @Override
