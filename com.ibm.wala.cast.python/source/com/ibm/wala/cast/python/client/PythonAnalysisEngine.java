@@ -17,13 +17,13 @@ import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static java.util.Collections.emptyList;
 import static java.util.logging.Level.SEVERE;
 
+import com.ibm.wala.cast.ipa.callgraph.AstCFAPointerKeys;
 import com.ibm.wala.cast.ipa.callgraph.AstContextInsensitiveSSAContextInterpreter;
 import com.ibm.wala.cast.ir.ssa.AstIRFactory;
 import com.ibm.wala.cast.loader.AstDynamicField;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonClassMethodTrampolineTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonInstanceMethodTrampolineTargetSelector;
-import com.ibm.wala.cast.python.ipa.callgraph.PythonPointerKeys;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonScopeMappingInstanceKeys;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
@@ -953,7 +953,7 @@ public abstract class PythonAnalysisEngine<T>
 
   protected PythonSSAPropagationCallGraphBuilder makeBuilder(
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
-    return new PythonSSAPropagationCallGraphBuilder(cha, options, cache, new PythonPointerKeys());
+    return new PythonSSAPropagationCallGraphBuilder(cha, options, cache, new AstCFAPointerKeys());
   }
 
   public abstract T performAnalysis(PropagationCallGraphBuilder builder) throws CancelException;

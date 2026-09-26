@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static org.junit.Assert.assertEquals;
 
-import com.ibm.wala.cast.python.ipa.callgraph.PythonPointerKeys;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
@@ -70,8 +69,8 @@ public class TestNoneField extends AbstractTensorTest {
     for (Iterator<PointerKey> it = system.iteratePointerKeys(); it.hasNext(); ) {
       PointerKey pk = it.next();
       if (pk instanceof AbstractFieldPointerKey
-          && PythonPointerKeys.isNoneConstant(((AbstractFieldPointerKey) pk).getInstanceKey()))
-        noneFieldKeys++;
+          && PythonSSAPropagationCallGraphBuilder.isNoneConstant(
+              ((AbstractFieldPointerKey) pk).getInstanceKey())) noneFieldKeys++;
     }
     assertEquals("No field key may be anchored on the None constant.", 0, noneFieldKeys);
   }

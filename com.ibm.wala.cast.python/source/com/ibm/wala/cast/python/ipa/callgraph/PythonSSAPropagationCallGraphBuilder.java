@@ -186,6 +186,47 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public static class PythonConstraintVisitor extends AstConstraintVisitor
       implements PythonInstructionVisitor {
 
+    /**
+     * The None constant has no object catalog for the pointer analysis (wala/ML#964): no field name
+     * is recorded on it, so a wildcard read over a set that includes {@code None} enumerates
+     * nothing from it. The reflected write null-guards this key; the heap model's catalog key,
+     * which consumers read, stays the factory's.
+     *
+     * @param I The instance key.
+     * @return The catalog key, or {@code null} for the None constant.
+     */
+    @Override
+    public PointerKey getPointerKeyForObjectCatalog(InstanceKey I) {
+      if (isNoneConstant(I)) return null;
+      return super.getPointerKeyForObjectCatalog(I);
+    }
+
+    /**
+     * A reflected field read on the None constant reads nothing (wala/ML#964).
+     *
+     * @param I The receiver.
+     * @param F The field name key.
+     * @return The pointer keys, none for the None constant.
+     */
+    @Override
+    public Iterator<PointerKey> getPointerKeysForReflectedFieldRead(InstanceKey I, InstanceKey F) {
+      if (isNoneConstant(I)) return Collections.emptyIterator();
+      return super.getPointerKeysForReflectedFieldRead(I, F);
+    }
+
+    /**
+     * A reflected field write on the None constant writes nothing (wala/ML#964).
+     *
+     * @param I The receiver.
+     * @param F The field name key.
+     * @return The pointer keys, none for the None constant.
+     */
+    @Override
+    public Iterator<PointerKey> getPointerKeysForReflectedFieldWrite(InstanceKey I, InstanceKey F) {
+      if (isNoneConstant(I)) return Collections.emptyIterator();
+      return super.getPointerKeysForReflectedFieldWrite(I, F);
+    }
+
     private static final String GLOBAL_IDENTIFIER = "global";
 
     private static final Atom IMPORT_FUNCTION_NAME = Atom.findOrCreateAsciiAtom("import");
@@ -1607,6 +1648,39 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   @Override
   protected InterestingVisitor makeInterestingVisitor(CGNode node, int vn) {
     return new PythonInterestingVisitor(vn);
+  }
+
+  /**
+   * Whether an instance key is the None constant. {@code None} is one global {@link ConstantKey}
+   * whose concrete type is {@code Root}, so the core builder's null-receiver filter, which asks the
+   * language whether the key's <em>type</em> is the null type, does not recognize it.
+   *
+   * @param key The instance key.
+   * @return {@code true} iff the key is the None constant.
+   */
+  public static boolean isNoneConstant(InstanceKey key) {
+    return key instanceof ConstantKey && ((ConstantKey<?>) key).getValue() == null;
+  }
+
+  /**
+   * The pointer analysis makes no field key for the None constant (wala/ML#964): an attribute write
+   * on {@code None} raises at run time and so does a read, so neither carries a value. The core put
+   * and get operators call this method and skip a {@code null} key. Without this, a write whose
+   * receiver set merely includes {@code None} (a function object local also bound to {@code None},
+   * a defaulted parameter) lands its value on the one global {@code None} key, and every wildcard
+   * element read over a container that may be {@code None} (a {@code zip} or {@code for} over a
+   * list that is {@code None} on one arm) reads that value back as an element of an unrelated
+   * container. The heap model, which ModRef and other consumers read, still resolves the key
+   * through the factory, so no {@code null} leaves the analysis.
+   *
+   * @param I The instance key.
+   * @param field The field.
+   * @return The pointer key, or {@code null} for the None constant.
+   */
+  @Override
+  public PointerKey getPointerKeyForInstanceField(InstanceKey I, IField field) {
+    if (isNoneConstant(I)) return null;
+    return super.getPointerKeyForInstanceField(I, field);
   }
 
   /**
