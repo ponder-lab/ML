@@ -540,16 +540,24 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       }
     }
 
-    // Materialize the @click.option defaults as parameter defaults, through the same globals, at
-    // the
-    // parameter indices they bind (wala/ML#875, wala/ML#886). The count passed to
-    // defineCodeBodyCode admits exactly these, so the reader's trailing range covers them;
-    // non-contiguous options have already declined to an empty map.
+    // Materialize the @click.option defaults as parameter defaults at the parameter indices they
+    // bind (wala/ML#875, wala/ML#886). The count passed to defineCodeBodyCode admits exactly
+    // these, so the reader's trailing range covers them; non-contiguous options have already
+    // declined to an empty map. They go through globals of their OWN, `<fn>_click_defaults_<i>`
+    // beside the Python defaults' `<fn>_defaults_<i>`, because the reader in
+    // `PythonSSAPropagationCallGraphBuilder` binds a click default under a constant key of its own
+    // class (wala/ML#971): a Python default is the only binding of a parameter no call passes, so
+    // a guard over it may fold, but a click default is the value of one invocation among the ones
+    // the command line admits, and a guard over it must not.
+    String clickFnName = composeEntityName(context, n) + "_click_defaults";
     for (Map.Entry<Integer, CAstNode> click : materializableClickDefaults(n).entrySet()) {
       WalkContext cc = context.codeContext();
       visitor.visit(click.getValue(), cc, visitor);
       doGlobalWrite(
-          cc, "L" + fnName + "_" + click.getKey(), PythonTypes.Root, cc.getValue(click.getValue()));
+          cc,
+          "L" + clickFnName + "_" + click.getKey(),
+          PythonTypes.Root,
+          cc.getValue(click.getValue()));
     }
   }
 

@@ -165,6 +165,25 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference file =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lfile"));
 
+  /**
+   * The class of the constant key a materialized {@code @click.option} default binds to its
+   * parameter (wala/ML#971). It is a class of its own, under {@code Root} like every non-string
+   * constant, so the key is distinct from the same value's ordinary constant key: a click default
+   * is the value of ONE invocation, the one that passes no option, not the only binding the program
+   * admits, and a comparison fold must not decide a guard from it. Shape and dtype readers, which
+   * take the value of any constant key, read it as they read a Python default.
+   */
+  public static final TypeReference clickDefault =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lclick_default"));
+
+  /**
+   * The class of a string-valued {@code @click.option} default's constant key (wala/ML#971): a
+   * subclass of {@code string}, so a method call on the option ({@code opt.split(",")}) still
+   * dispatches through the hierarchy.
+   */
+  public static final TypeReference clickDefaultString =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lclick_default_string"));
+
   /** https://docs.python.org/3/library/functions.html#staticmethod. */
   public static final TypeReference STATIC_METHOD =
       TypeReference.findOrCreate(
