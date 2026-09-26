@@ -445,15 +445,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
-                // The wala/ML#737 partial composition proves the rank-4 attention form's batch
-                // axis even when the remaining operand axes stay unresolved.
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(8),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(
@@ -491,8 +482,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * <p>The former rank-4 {@code (8, 100, ?, ?)}/{@code (8, 10, ?, ?)} members and the rank-2/3
    * dead-arm artifacts are gone (wala/ML#763): with the {@code use_einsum} guard folding
    * (wala/ML#761, wala/ML#762), the dead {@code einsum_via_matmul} sites no longer contribute, to
-   * either the caller walks or the dataflow φs. The {@code (8, ?, ?, ?)} member is the legitimate
-   * wala/ML#737 partial.
+   * either the caller walks or the dataflow φs. The rank-4 {@code (8, ?, ?, ?)} member is gone too:
+   * this layer's live arm is the rank-3 {@code "BFH"} einsum term, which cannot take a rank-4
+   * input, and the φ that carried it now decides its dead arm across the several blocks that arm
+   * spans (wala/ML#970).
    *
    * <p>The rank-2 {@code (8, D)} member this input formerly carried &mdash; the embedding guard-φ's
    * pre-{@code expand_dims} phantom, reaching here downstream of the token embedding &mdash; is
@@ -528,16 +521,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-                // The wala/ML#737 partial composition proves the rank-4 attention form's batch
-                // axis even when the remaining operand axes stay unresolved.
-                new TensorType(
-                    FLOAT_32,
                     asList(
-                        new NumericDim(8),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)))));
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -936,19 +921,12 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             // The float32 member arrives through the `self.output_layer(hidden_states)` arm:
             // the model module reaches tensorflow only through `from utils.tf_utils import *`,
             // and with a base written through that binding resolving (wala/ML#938),
-            // `OutputLayer` inherits the layer shell and its `add_weight` allocates a float32
-            // weight. That arm is dead at run time (`rev_embedding_projection` defaults to
-            // true and nothing overrides it), so the member is a runtime-infeasible arm's, not
-            // a refinement of the live arm's, whose dtype stays unknown. A decision pin, not a
-            // guard. TODO: wala/ML#889 tracks the arm; when it is pruned, this member goes.
-            Set.of(
-                new TensorType(
-                    UNKNOWN,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
-                TensorType.of(INT_32, 2, 2))));
+            // The `OutputLayer` arm, dead at run time (`rev_embedding_projection` defaults to
+            // true and nothing overrides it), no longer contributes: its guard folds and the
+            // φ now decides an arm that spans several blocks (wala/ML#970). What remains is the
+            // live projection arm's value, which in this stubbed model is the int32 input the
+            // pass-through embedding returns.
+            Set.of(TensorType.of(INT_32, 2, 2))));
   }
 
   /**
@@ -982,12 +960,13 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * (wala/ML#743), the decoder stack resolves end to end under the fit-path contexts: the logits
    * forms are {@code (32, Dynamic, 10)} float32 and its partial-batch sibling {@code (?, Dynamic,
    * 10)} (the batch axis rides the wala/ML#759-batched dataset element, the sequence axis the
-   * dataset's dynamic pad), alongside the {@code (?, ?, 10)} partial. The wala/ML#680 {@code
-   * unknown}-dtype phantom is gone: with the decoder-stack output resolving, {@code
-   * OutputLayer.call}'s dead {@code self.porj_weights} arm no longer contributes a member. The
-   * union is the order-independent fixed point (wala/ML#674): identical across runs and across
-   * suite/single-test modes. Analyzed statically here, like the consumer's vendoring; it runs in
-   * the perf-eval with its tfrecord/data setup.
+   * dataset's dynamic pad). The former {@code (?, ?, 10)} partial came from the dead {@code
+   * OutputLayer} arm of the {@code rev_embedding_projection} guard, which the φ now prunes
+   * (wala/ML#970). The wala/ML#680 {@code unknown}-dtype phantom is gone: with the decoder-stack
+   * output resolving, {@code OutputLayer.call}'s dead {@code self.porj_weights} arm no longer
+   * contributes a member. The union is the order-independent fixed point (wala/ML#674): identical
+   * across runs and across suite/single-test modes. Analyzed statically here, like the consumer's
+   * vendoring; it runs in the perf-eval with its tfrecord/data setup.
    *
    * <p>The former {@code (32, Dynamic, 8, 8)}/{@code (?, Dynamic, 8, 8)} members, the {@code
    * mode="projection"} call's rank-3 input crossing into the embedding-mode lookup, are gone: <a
@@ -1020,9 +999,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE))),
             4,
             Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
@@ -1182,19 +1158,12 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             // The float32 member arrives through the `self.output_layer(hidden_states)` arm:
             // the model module reaches tensorflow only through `from utils.tf_utils import *`,
             // and with a base written through that binding resolving (wala/ML#938),
-            // `OutputLayer` inherits the layer shell and its `add_weight` allocates a float32
-            // weight. That arm is dead at run time (`rev_embedding_projection` defaults to
-            // true and nothing overrides it), so the member is a runtime-infeasible arm's, not
-            // a refinement of the live arm's, whose dtype stays unknown. A decision pin, not a
-            // guard. TODO: wala/ML#889 tracks the arm; when it is pruned, this member goes.
-            Set.of(
-                new TensorType(
-                    UNKNOWN,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
-                TensorType.of(INT_32, 2, 2))));
+            // The `OutputLayer` arm, dead at run time (`rev_embedding_projection` defaults to
+            // true and nothing overrides it), no longer contributes: its guard folds and the
+            // φ now decides an arm that spans several blocks (wala/ML#970). What remains is the
+            // live projection arm's value, which in this stubbed model is the int32 input the
+            // pass-through embedding returns.
+            Set.of(TensorType.of(INT_32, 2, 2))));
   }
 
   /**
