@@ -2874,10 +2874,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               if (armVar != null) liveArmVars.add(armVar);
             }
           }
-          // The dataflow graph has one edge per variable pair, so a value that also leaves through
-          // a
-          // live arm (a φ over `a, b, a` whose first `a` arm is dead) shares the dead arm's edge;
-          // suppressing it would cut the live arm too (wala/ML#970).
+          // The dataflow graph has one edge per variable pair, so a value that also leaves
+          // through a live arm (a φ over `a, b, a` whose first `a` arm is dead) shares the dead
+          // arm's edge; suppressing it would cut the live arm too (wala/ML#970).
           infeasible.removeAll(liveArmVars);
           if (!liveArm || infeasible.isEmpty()) continue;
           for (PointsToSetVariable armVar : infeasible) {
