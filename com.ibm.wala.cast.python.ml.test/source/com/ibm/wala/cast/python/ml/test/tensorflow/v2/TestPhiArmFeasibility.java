@@ -70,4 +70,21 @@ public class TestPhiArmFeasibility extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FILE, "consume_loop", 1, 1, Map.of(2, Set.of(TENSOR_2_6_FLOAT32, TENSOR_2_2_FLOAT32)));
   }
+
+  /**
+   * A value that reaches the merge along a dead arm and a live arm keeps the live arm's flow: with
+   * {@code mode} bound to {@code "q"}, the {@code x} and {@code z} arms are dead, but {@code a}
+   * also leaves through the live fall-through, so the sink reads {@code a}'s {@code (3,)} int32 and
+   * not nothing.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testValueOnDeadAndLiveArmKept()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FILE, "consume_shared", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
 }

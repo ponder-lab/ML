@@ -17,6 +17,29 @@ def consume_loop(y):
     assert y.dtype == tf.float32
 
 
+def consume_shared(y):
+    assert y.shape == (3,)
+    assert y.dtype == tf.int32
+
+
+class Select:
+    def __init__(self, mode):
+        self.mode = mode
+
+    def run(self, a, b):
+        # The same value reaches the merge along two arms, one dead and one live: `mode` is "q",
+        # so the `x` and `z` arms are dead and only the fall-through keeps `a`. Pruning a dead
+        # arm must not cut `a`, which the live arm still carries.
+        y = a
+        if self.mode == "x":
+            y = b
+        elif self.mode == "z":
+            pass
+        else:
+            y = y
+        consume_shared(y)
+
+
 class Merge:
     def __init__(self, concat):
         self.concat = concat
@@ -53,3 +76,4 @@ m.multi(tf.ones((2, 3, 2)))
 m.single(tf.ones((2, 3, 2)))
 m.looped(tf.ones((2, 3, 2)), 0)
 m.looped(tf.ones((2, 3, 2)), 2)
+Select("q").run(tf.zeros((3,), dtype=tf.int32), tf.ones((2, 2)))
