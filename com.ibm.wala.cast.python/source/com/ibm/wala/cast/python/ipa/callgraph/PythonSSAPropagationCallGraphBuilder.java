@@ -1199,24 +1199,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           // A synthesized constructor's trailing formal i mirrors `__init__`'s parameter i + 1,
           // and the default globals are written under `__init__`'s entity name, so the lookup
           // follows that mapping (wala/ML#762). Every other target reads its own entity's global.
-          String name =
-              target.getMethod() instanceof PythonConstructorFunction
-                  ? target.getMethod().getDeclaringClass().getName()
-                      + "/"
-                      + INIT_METHOD_NAME
-                      + "_defaults_"
-                      + (i + 1)
-                  : target.getMethod().getDeclaringClass().getName() + "_defaults_" + i;
-          FieldReference global =
-              FieldReference.findOrCreate(
-                  PythonTypes.Root,
-                  Atom.findOrCreateUnicodeAtom("global " + name),
-                  PythonTypes.Root);
-          IField f = getClassHierarchy().resolveField(global);
+          String name = defaultsGlobalName(target, i, "_defaults_");
+          IField f = resolveGlobal(name);
           logger.fine(
               "DEFAULTS-BIND target " + target + " param " + i + " global " + name + " field " + f);
           PointerKey lval = getPointerKeyForLocal(target, i + 1);
           getSystem().newConstraint(lval, assignOperator, new StaticFieldKey(f));
+          // A `@click.option` default is written under a global of its own and binds under a
+          // constant key of its own class (wala/ML#971); the global of a parameter with no click
+          // option holds nothing and contributes nothing. Globals are dynamic fields of `Root`, so
+          // the name always resolves.
+          String clickName = defaultsGlobalName(target, i, "_click_defaults_");
+          getSystem()
+              .newConstraint(
+                  lval, new ClickDefaultOperator(), new StaticFieldKey(resolveGlobal(clickName)));
         }
       }
 
@@ -1783,6 +1779,112 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   @Override
   protected InterestingVisitor makeInterestingVisitor(CGNode node, int vn) {
     return new PythonInterestingVisitor(vn);
+  }
+
+  /**
+   * The name of the global holding a defaulted parameter's materialized default: {@code
+   * <entity>_defaults_<i>} for a Python default, {@code <entity>_click_defaults_<i>} for a {@code
+   * @click.option} default (wala/ML#971). A synthesized constructor's trailing formal i mirrors
+   * {@code __init__}'s parameter i + 1, and the default globals are written under {@code
+   * __init__}'s entity name, so the lookup follows that mapping (wala/ML#762). Every other target
+   * reads its own entity's global.
+   *
+   * @param target The callee.
+   * @param i The zero-based parameter index in the callee's formals.
+   * @param infix {@code "_defaults_"} or {@code "_click_defaults_"}.
+   * @return The global's name, without the {@code global } prefix.
+   */
+  private static String defaultsGlobalName(CGNode target, int i, String infix) {
+    return target.getMethod() instanceof PythonConstructorFunction
+        ? target.getMethod().getDeclaringClass().getName()
+            + "/"
+            + INIT_METHOD_NAME
+            + infix
+            + (i + 1)
+        : target.getMethod().getDeclaringClass().getName() + infix + i;
+  }
+
+  /**
+   * Resolves a global by name to its field on {@code Root}.
+   *
+   * @param name The global's name, without the {@code global } prefix.
+   * @return The field; never {@code null}, since globals are dynamic fields created on lookup.
+   */
+  private IField resolveGlobal(String name) {
+    FieldReference global =
+        FieldReference.findOrCreate(
+            PythonTypes.Root, Atom.findOrCreateUnicodeAtom("global " + name), PythonTypes.Root);
+    return getClassHierarchy().resolveField(global);
+  }
+
+  /**
+   * Whether a key is a materialized {@code @click.option} default (wala/ML#971): a constant key of
+   * the {@link PythonTypes#clickDefault} or {@link PythonTypes#clickDefaultString} class. Such a
+   * key carries its value like any constant key, so a shape or dtype reader takes it as it takes a
+   * Python default, but a comparison fold must decline it: the default is the value of the one
+   * invocation that passes no option, and every other invocation the command line admits binds the
+   * parameter otherwise, so a guard folded from it prunes arms the program runs.
+   *
+   * @param key The instance key.
+   * @return {@code true} for a click default's constant key.
+   */
+  public static boolean isClickDefault(InstanceKey key) {
+    if (!(key instanceof ConstantKey)) return false;
+    TypeReference type = key.concreteType().getReference();
+    return type.equals(PythonTypes.clickDefault) || type.equals(PythonTypes.clickDefaultString);
+  }
+
+  /**
+   * Binds a {@code @click.option} default to its parameter under a constant key of the click
+   * default's own class (wala/ML#971): each constant key in the click-defaults global becomes the
+   * same value under {@link PythonTypes#clickDefaultString} for a string and {@link
+   * PythonTypes#clickDefault} otherwise, so {@link #isClickDefault(InstanceKey)} tells it from an
+   * ordinary constant while its value reads unchanged. A member that is not a constant key (a list
+   * or tuple default) passes through as it is.
+   *
+   * <p>The operator is wired on every unpassed defaulted parameter, not only on those with a click
+   * option, because the reader cannot tell them apart by name: a parameter without a click option
+   * has an empty click-defaults global, so the operator contributes nothing there.
+   */
+  private final class ClickDefaultOperator extends UnaryOperator<PointsToSetVariable> {
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      MutableIntSet out = IntSetUtil.make();
+      rhs.getValue()
+          .foreach(
+              i -> {
+                InstanceKey key = getSystem().getInstanceKey(i);
+                if (!(key instanceof ConstantKey) || isClickDefault(key)) {
+                  out.add(i);
+                  return;
+                }
+                Object value = ((ConstantKey<?>) key).getValue();
+                TypeReference type =
+                    value instanceof String
+                        ? PythonTypes.clickDefaultString
+                        : PythonTypes.clickDefault;
+                out.add(
+                    getSystem()
+                        .findOrCreateIndexForInstanceKey(getInstanceKeyForConstant(type, value)));
+              });
+      return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return ClickDefaultOperator.class.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ClickDefaultOperator;
+    }
+
+    @Override
+    public String toString() {
+      return "click default";
+    }
   }
 
   /**

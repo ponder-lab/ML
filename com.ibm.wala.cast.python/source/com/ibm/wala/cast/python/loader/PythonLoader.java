@@ -614,6 +614,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       new CoreClass(PythonTypes.iterator.getName(), PythonTypes.object.getName(), this, null);
   final CoreClass file =
       new CoreClass(PythonTypes.file.getName(), PythonTypes.object.getName(), this, null);
+  final CoreClass clickDefault =
+      new CoreClass(PythonTypes.clickDefault.getName(), PythonTypes.rootTypeName, this, null);
+  final CoreClass clickDefaultString =
+      new CoreClass(
+          PythonTypes.clickDefaultString.getName(), PythonTypes.string.getName(), this, null);
 
   /**
    * The <a href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to

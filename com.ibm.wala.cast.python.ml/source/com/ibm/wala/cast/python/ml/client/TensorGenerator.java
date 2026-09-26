@@ -3579,6 +3579,9 @@ public abstract class TensorGenerator {
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
+    // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
+    // invocation that passes no option, not the only binding the command line admits.
+    if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
     return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
   }
 
@@ -3642,6 +3645,10 @@ public abstract class TensorGenerator {
       InstanceKey only = fieldPts.iterator().next();
       if (!(only instanceof ConstantKey)) {
         LOGGER.fine(() -> "ATTR-FOLD non-constant field value for " + fn + ".");
+        return null;
+      }
+      if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) {
+        LOGGER.fine(() -> "ATTR-FOLD click-default field value for " + fn + " declines.");
         return null;
       }
       Object value = ((ConstantKey<?>) only).getValue();
@@ -3832,6 +3839,9 @@ public abstract class TensorGenerator {
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
+    // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
+    // invocation that passes no option, not the only binding the command line admits.
+    if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
     return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
   }
 
@@ -3857,6 +3867,11 @@ public abstract class TensorGenerator {
         builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
+    // A `@click.option` default is written under a global of its own, but it reaches this one
+    // when a nested function's Python default IS the click parameter (`def pick(flag=wide)`):
+    // the parameter's marker key flows into the nested function's defaults global through an
+    // ordinary assignment, so the refusal is needed here as well (wala/ML#971).
+    if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
     return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
   }
 
