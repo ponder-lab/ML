@@ -1963,4 +1963,87 @@ public class TestMathOps extends AbstractTensorTest {
                     asList(
                         UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * An {@code unsorted_segment_sum} whose {@code data} is passed by keyword and typed by dataflow
+   * alone (a concat over a list built in a loop) takes {@code data}'s float32 through its feed, as
+   * the positional call does (wala/ML#967). Before the fix the feed located its input by position
+   * only, so the keyword call read {@code ? of unknown}. The shape stays unknown, since the concat
+   * itself is rankless here.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentReductionKeywordDataIsFed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_feed_keyword_input.py",
+        "consume_seg_kw",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The positional control for {@link #testSegmentReductionKeywordDataIsFed}: the same reduction
+   * with {@code data} passed by position reads float32.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentReductionPositionalDataIsFed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_feed_keyword_input.py",
+        "consume_seg_pos",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A shape-preserving pass-through op ({@code tf.math.cos(x=...)}) whose input is passed by
+   * keyword and typed by dataflow alone reads the input's float32 (wala/ML#967).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnaryKeywordInputIsFed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_feed_keyword_input.py",
+        "consume_cos_kw",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The positional control for {@link #testUnaryKeywordInputIsFed}: {@code tf.math.cos(...)} with
+   * its input passed by position reads float32.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnaryPositionalInputIsFed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_feed_keyword_input.py",
+        "consume_cos_pos",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
 }

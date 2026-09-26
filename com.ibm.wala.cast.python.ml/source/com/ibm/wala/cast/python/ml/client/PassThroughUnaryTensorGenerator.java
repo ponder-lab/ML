@@ -225,8 +225,15 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
         // Any other negative position names no argument; a non-negative one starts at use 1,
         // since use 0 is the function object.
         if (position < 0) continue;
-        if (invoke.getNumberOfPositionalParameters() < position + 2) continue;
-        argValueNumber = invoke.getUse(position + 1);
+        if (invoke.getNumberOfPositionalParameters() >= position + 2)
+          argValueNumber = invoke.getUse(position + 1);
+        else {
+          // The input passed by keyword (`data=...`), which the points-to reads already resolve,
+          // so the feed resolves it too rather than leaving a dataflow-typed input unfed.
+          String name = getInputParameterName();
+          if (name == null || !invoke.getKeywords().contains(name)) continue;
+          argValueNumber = invoke.getUse(name);
+        }
       }
       ret.add(
           builder
