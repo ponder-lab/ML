@@ -76,4 +76,22 @@ public class TestModeDispatch extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
   }
+
+  /**
+   * A three-arm dispatch: the third arm's call sits under an {@code if} and an {@code elif}, so the
+   * walk from its block climbs two branch blocks. For the caller that selects the default mode both
+   * edges fold to not taken and the helper receives nothing from it; the helper reads the float32
+   * hidden states of the caller that selects the third mode alone.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testThirdArmUnderTwoGuards()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        FILE, "consume_third_arm_input", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
+  }
 }

@@ -105,3 +105,44 @@ assert (
     undecided_out.shape in ((2, 3, 8, 8), (2, 3, 10))
     and undecided_out.dtype == tf.float32
 )
+
+
+def consume_third_arm_input(x):
+    return x
+
+
+class ThreeWayEmbedding(tf.keras.layers.Layer):
+    # A three-arm dispatch: the third arm's call sits under two folded guards, one `if` and one
+    # `elif`, and is dead for a caller that selects the first mode.
+    def __init__(self, vocab_size, embedding_size):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.embedding_size = embedding_size
+
+    def build(self, input_shape):
+        self.embedding_weights = self.add_weight(
+            "weights", shape=[self.vocab_size, self.embedding_size], dtype="float32"
+        )
+
+    def call(self, inputs, mode="embedding"):
+        if mode == "embedding":
+            return tf.nn.embedding_lookup(
+                self.embedding_weights, tf.cast(inputs, tf.int32)
+            )
+        elif mode == "identity":
+            return inputs
+        elif mode == "third":
+            return self.third(inputs)
+        else:
+            raise ValueError("mode {} is not valid.".format(mode))
+
+    def third(self, inputs):
+        consume_third_arm_input(inputs)
+        return inputs * 2.0
+
+
+three = ThreeWayEmbedding(10, 8)
+three_hidden = three(ids)
+assert three_hidden.shape == (2, 3, 8) and three_hidden.dtype == tf.float32
+three_out = three(three_hidden, mode="third")
+assert three_out.shape == (2, 3, 8) and three_out.dtype == tf.float32
