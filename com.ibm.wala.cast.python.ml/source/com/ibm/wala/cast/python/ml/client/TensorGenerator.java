@@ -3311,14 +3311,38 @@ public abstract class TensorGenerator {
     ISSABasicBlock armPred = preds.get(armIndex);
 
     // The governing branch either ends the arm's predecessor (the skip edge of a triangle) or
-    // ends that block's sole predecessor (the then/else blocks of a triangle or diamond).
+    // heads the chain of blocks the arm runs through. An arm with several calls spans several
+    // blocks, since each call ends one, so walk up the chain while each block has exactly one
+    // predecessor: every block on it runs iff the chain's first edge is taken, and the first
+    // block reached that ends with a conditional branch governs that edge.
     Boolean viaOwn = decideEdgeFromBranchBlock(builder, node, cfg, armPred, merge);
     if (viaOwn != null) return viaOwn;
-    List<ISSABasicBlock> armPredPreds = new ArrayList<>();
-    for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(armPred); it.hasNext(); )
-      armPredPreds.add(it.next());
-    if (armPredPreds.size() != 1) return null;
-    return decideEdgeFromBranchBlock(builder, node, cfg, armPredPreds.get(0), armPred);
+    ISSABasicBlock current = armPred;
+    Set<ISSABasicBlock> visited = HashSetFactory.make();
+    while (visited.add(current)) {
+      List<ISSABasicBlock> currentPreds = new ArrayList<>();
+      for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(current); it.hasNext(); )
+        currentPreds.add(it.next());
+      if (currentPreds.size() != 1) return null;
+      ISSABasicBlock pred = currentPreds.get(0);
+      if (endsWithConditionalBranch(pred))
+        return decideEdgeFromBranchBlock(builder, node, cfg, pred, current);
+      current = pred;
+    }
+    return null;
+  }
+
+  /**
+   * Whether a block ends with a conditional branch.
+   *
+   * @param block The block.
+   * @return {@code true} iff the block is non-empty and its last instruction is an {@link
+   *     SSAConditionalBranchInstruction}.
+   */
+  private static boolean endsWithConditionalBranch(ISSABasicBlock block) {
+    return block.getLastInstructionIndex() >= 0
+        && block.getLastInstructionIndex() >= block.getFirstInstructionIndex()
+        && block.getLastInstruction() instanceof SSAConditionalBranchInstruction;
   }
 
   /**

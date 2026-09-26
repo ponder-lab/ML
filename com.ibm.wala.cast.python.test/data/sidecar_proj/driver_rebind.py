@@ -35,4 +35,6 @@ def branched(flag):
 
 
 reassigned()
+# Both arms run, so both bindings are terminal on a reachable path.
 branched(True)
+branched(False)

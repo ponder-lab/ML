@@ -1596,8 +1596,9 @@ public class TestDatasets extends AbstractTensorTest {
    * rank-3-dominated tensor union. Receiver-keyed trampoline contexts (wala/ML#679) removed the
    * spurious {@code (?, ?, 4)}/{@code (?, ?, 12)} constructor-collapse members, and the wala/ML#739
    * operand-walk repairs with parameter defaults materializing (wala/ML#743) recover the
-   * runtime-true logits member fully concrete: {@code (2, 3, 10)} float32, alongside the {@code (?,
-   * ?, 10)} partial from the fit-path contexts. The wala/ML#680 {@code unknown}-dtype phantom is
+   * runtime-true logits member fully concrete: {@code (2, 3, 10)} float32. The former {@code (?, ?,
+   * 10)} partial came from the dead {@code OutputLayer} arm of the {@code rev_embedding_projection}
+   * guard, which the φ now prunes (wala/ML#970). The wala/ML#680 {@code unknown}-dtype phantom is
    * gone: with the decoder-stack output resolving, {@code OutputLayer.call}'s dead {@code
    * self.porj_weights} arm no longer contributes a member.
    *
@@ -1628,13 +1629,7 @@ public class TestDatasets extends AbstractTensorTest {
         "gpt2_vendored",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 3, 10),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 10))));
   }
 
   /**
