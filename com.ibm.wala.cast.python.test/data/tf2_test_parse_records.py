@@ -56,3 +56,18 @@ for piece in data3:
     assert piece.shape == () and piece.dtype == tf.string
     consume_split_piece(piece)
     break
+
+
+def consume_reader_result(t):
+    return t
+
+
+class Reader:
+    # A `read` of its own: the text-read model checks the receiver and leaves this one alone.
+    def read(self):
+        return tf.ones((2, 2))
+
+
+reader_result = Reader().read()
+assert reader_result.shape == (2, 2) and reader_result.dtype == tf.float32
+consume_reader_result(reader_result)

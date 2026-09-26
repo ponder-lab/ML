@@ -77,4 +77,25 @@ public class TestTextReads extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
   }
+
+  /**
+   * The control: a user class's own {@code read} is not a file's. The text-read model checks the
+   * receiver when its points-to set arrives and leaves this call alone, so the result keeps the
+   * tensor type the method returns.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testOtherReadIsUntouched()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_parse_records.py",
+        "consume_reader_result",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
 }
