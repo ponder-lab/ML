@@ -744,6 +744,9 @@
         <new def="fill" class="Ltensorflow/functions/fill"/>
         <putfield class="LRoot" field="fill" fieldType="LRoot" ref="x" value="fill"/>
         <putfield class="LRoot" field="fill" fieldType="LRoot" ref="array_ops" value="fill"/>
+        <new def="scatter_nd" class="Ltensorflow/functions/scatter_nd"/>
+        <putfield class="LRoot" field="scatter_nd" fieldType="LRoot" ref="x" value="scatter_nd"/>
+        <putfield class="LRoot" field="scatter_nd" fieldType="LRoot" ref="array_ops" value="scatter_nd"/>
         <new def="group" class="Ltensorflow/functions/group"/>
         <putfield class="LRoot" field="group" fieldType="LRoot" ref="x" value="group"/>
         <new def="no_op" class="Ltensorflow/functions/no_op"/>
@@ -2153,6 +2156,13 @@
       <class name="sparse_to_dense" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/to_dense. Fresh allocation, not pass-through; the dense result's shape (from `dense_shape`) and dtype (from `values`) of the `sp_input` SparseTensor are inferred in the `SparseToDense` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self sp_input default_value validate_indices name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="scatter_nd" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/scatter_nd. A fresh tensor whose shape is the `shape` argument and whose dtype is that of `updates`; paired with the `ScatterNd` generator. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self indices updates shape name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>

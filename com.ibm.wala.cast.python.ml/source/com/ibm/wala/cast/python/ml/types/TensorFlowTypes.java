@@ -618,6 +618,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ONES_LIKE_SIGNATURE = "tf.ones_like()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/scatter_nd. */
+  public static final MethodReference SCATTER_ND =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/scatter_nd")),
+          AstMethodReference.fnSelector);
+
+  private static final String SCATTER_ND_SIGNATURE = "tf.scatter_nd()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/fill. */
   public static final MethodReference FILL =
       MethodReference.findOrCreate(
@@ -2431,6 +2441,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ZEROS_LIKE.getDeclaringClass(), ZEROS_LIKE_SIGNATURE),
           Map.entry(ONES_LIKE.getDeclaringClass(), ONES_LIKE_SIGNATURE),
           Map.entry(FILL.getDeclaringClass(), FILL_SIGNATURE),
+          Map.entry(SCATTER_ND.getDeclaringClass(), SCATTER_ND_SIGNATURE),
           Map.entry(LINSPACE.getDeclaringClass(), LINSPACE_SIGNATURE),
           Map.entry(BROADCAST_TO.getDeclaringClass(), BROADCAST_TO_SIGNATURE),
           Map.entry(CONVERT_TO_TENSOR.getDeclaringClass(), CONVERT_TO_TENSOR_SIGNATURE),

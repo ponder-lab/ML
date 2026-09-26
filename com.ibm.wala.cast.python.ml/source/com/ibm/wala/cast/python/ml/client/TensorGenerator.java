@@ -10272,6 +10272,8 @@ public abstract class TensorGenerator {
       return new Concat(node);
     } else if (type.equals(TensorFlowTypes.FILL.getDeclaringClass())) {
       return new Fill(node);
+    } else if (type.equals(TensorFlowTypes.SCATTER_ND.getDeclaringClass())) {
+      return new ScatterNd(node);
     } else if (type.equals(TensorFlowTypes.ONE_HOT.getDeclaringClass())) {
       return new OneHot(node);
     } else if (type.equals(TensorFlowTypes.CONVERT_TO_TENSOR.getDeclaringClass())) {
