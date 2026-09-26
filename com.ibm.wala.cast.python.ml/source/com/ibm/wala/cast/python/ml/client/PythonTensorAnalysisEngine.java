@@ -2134,6 +2134,45 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * The argument bindings a call site induces in the dataflow graph: its positional argument {@code
+   * i} flows into parameter {@code i + 1} of each possible callee (the builder's calling
+   * constraints bind positionally; a keyword call binds through its trampoline, whose parameters
+   * are positional in turn). Only bindings whose two variables exist are returned.
+   *
+   * @param builder The builder.
+   * @param node The caller.
+   * @param call The call.
+   * @param flowVarsByKey The dataflow variables by pointer key.
+   * @param heapModel The heap model.
+   * @return The (argument variable, parameter variable) pairs.
+   */
+  private static Set<Pair<PointsToSetVariable, PointsToSetVariable>> callBindings(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      Map<PointerKey, PointsToSetVariable> flowVarsByKey,
+      HeapModel heapModel) {
+    Set<Pair<PointsToSetVariable, PointsToSetVariable>> bindings = HashSetFactory.make();
+    int positional =
+        call instanceof PythonInvokeInstruction python
+            ? python.getNumberOfPositionalParameters()
+            : call.getNumberOfUses();
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+      IR calleeIr = callee.getIR();
+      if (calleeIr == null) continue;
+      int parameters = calleeIr.getNumberOfParameters();
+      for (int i = 0; i < positional && i + 1 <= parameters; i++) {
+        PointsToSetVariable argVar =
+            flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getUse(i)));
+        PointsToSetVariable paramVar =
+            flowVarsByKey.get(heapModel.getPointerKeyForLocal(callee, i + 1));
+        if (argVar != null && paramVar != null) bindings.add(Pair.make(argVar, paramVar));
+      }
+    }
+    return bindings;
+  }
+
+  /**
    * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
    * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
    * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
@@ -2849,6 +2888,55 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       }
       int phiCount = phiSuppressions;
       LOGGER.fine(() -> "wala/ML#763 arm-suppressed phi edges: " + phiCount);
+      // A call site in a decidably dead block never runs, so its arguments must not reach its
+      // callees' parameters, nor its callees' returns its result: a helper dispatched on a string
+      // argument (`if mode == "embedding": ... elif mode == "projection": ...`) otherwise receives
+      // the other arm's inputs from every caller that selects the other mode, since the dataflow
+      // union has no branch sensitivity. Same criterion as the phi-arm fold, applied to the call's
+      // edges. The dataflow graph holds one edge per variable pair, so a binding a LIVE site in the
+      // same node also induces (`if mode == "a": helper(x)` above an unconditional `helper(x)`)
+      // must stay: only the dead site's own positional bindings that no live site shares go.
+      int callSuppressions = 0;
+      for (CGNode node : builder.getCallGraph()) {
+        IR ir = node.getIR();
+        if (ir == null) continue;
+        Set<Pair<PointsToSetVariable, PointsToSetVariable>> liveBindings = HashSetFactory.make();
+        List<SSAAbstractInvokeInstruction> deadCalls = new ArrayList<>();
+        for (ISSABasicBlock block : ir.getControlFlowGraph()) {
+          boolean dead =
+              Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block));
+          for (SSAInstruction inst : block) {
+            if (!(inst instanceof SSAAbstractInvokeInstruction call)) continue;
+            if (dead) deadCalls.add(call);
+            else liveBindings.addAll(callBindings(builder, node, call, flowVarsByKey, heapModel));
+          }
+        }
+        for (SSAAbstractInvokeInstruction call : deadCalls) {
+          for (Pair<PointsToSetVariable, PointsToSetVariable> binding :
+              callBindings(builder, node, call, flowVarsByKey, heapModel)) {
+            if (liveBindings.contains(binding) || !dataflow.hasEdge(binding.fst, binding.snd))
+              continue;
+            armSuppressions
+                .computeIfAbsent(binding.snd, k -> HashSetFactory.make())
+                .add(binding.fst);
+            callSuppressions++;
+          }
+          if (!call.hasDef()) continue;
+          PointsToSetVariable defVar =
+              flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getDef()));
+          if (defVar == null) continue;
+          for (CGNode callee :
+              builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+            PointsToSetVariable retVar =
+                flowVarsByKey.get(heapModel.getPointerKeyForReturnValue(callee));
+            if (retVar == null || !dataflow.hasEdge(retVar, defVar)) continue;
+            armSuppressions.computeIfAbsent(defVar, k -> HashSetFactory.make()).add(retVar);
+            callSuppressions++;
+          }
+        }
+      }
+      int callCount = callSuppressions;
+      LOGGER.fine(() -> "Dead-call-site suppressed argument and result edges: " + callCount);
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
