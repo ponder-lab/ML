@@ -10268,6 +10268,8 @@ public abstract class TensorGenerator {
       return new Reshape(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
       return new Squeeze(node);
+    } else if (type.equals(TensorFlowTypes.REVERSE_SEQUENCE.getDeclaringClass())) {
+      return new ReverseSequence(node);
     } else if (type.equals(TensorFlowTypes.CONCAT.getDeclaringClass())) {
       return new Concat(node);
     } else if (type.equals(TensorFlowTypes.FILL.getDeclaringClass())) {

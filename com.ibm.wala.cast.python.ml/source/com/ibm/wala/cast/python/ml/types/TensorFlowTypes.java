@@ -1440,6 +1440,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SQUEEZE_SIGNATURE = "tf.squeeze()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/reverse_sequence. */
+  public static final MethodReference REVERSE_SEQUENCE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/reverse_sequence")),
+          AstMethodReference.fnSelector);
+
+  private static final String REVERSE_SEQUENCE_SIGNATURE = "tf.reverse_sequence()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/split. */
   public static final MethodReference SPLIT =
       MethodReference.findOrCreate(
@@ -2539,6 +2549,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(SLICE.getDeclaringClass(), SLICE_SIGNATURE),
           Map.entry(SQUEEZE.getDeclaringClass(), SQUEEZE_SIGNATURE),
+          Map.entry(REVERSE_SEQUENCE.getDeclaringClass(), REVERSE_SEQUENCE_SIGNATURE),
           Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
           Map.entry(UNSTACK.getDeclaringClass(), UNSTACK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),

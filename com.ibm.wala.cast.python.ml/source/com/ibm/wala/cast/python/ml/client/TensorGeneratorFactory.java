@@ -179,6 +179,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REVERSE_SEQUENCE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SCATTER_ND;
@@ -2079,6 +2080,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EMBEDDING_LOOKUP.getDeclaringClass()))
       return new EmbeddingLookup(source);
     else if (isType(calledFunction, SQUEEZE.getDeclaringClass())) return new Squeeze(source);
+    else if (isType(calledFunction, REVERSE_SEQUENCE.getDeclaringClass()))
+      return new ReverseSequence(source);
     else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);
     else if (isType(calledFunction, UNSTACK.getDeclaringClass())) return new Unstack(source);
     else if (isType(calledFunction, SQUARE.getDeclaringClass())) return new Square(source);

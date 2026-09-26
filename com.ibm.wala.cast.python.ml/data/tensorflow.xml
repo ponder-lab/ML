@@ -838,6 +838,9 @@
         <new def="squeeze" class="Ltensorflow/functions/squeeze"/>
         <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="x" value="squeeze"/>
         <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="array_ops" value="squeeze"/>
+        <new def="reverse_sequence" class="Ltensorflow/functions/reverse_sequence"/>
+        <putfield class="LRoot" field="reverse_sequence" fieldType="LRoot" ref="x" value="reverse_sequence"/>
+        <putfield class="LRoot" field="reverse_sequence" fieldType="LRoot" ref="array_ops" value="reverse_sequence"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/io/decode_png -->
         <!-- TODO: Return a dtype other than the input -->
         <putfield class="LRoot" field="decode_png" fieldType="LRoot" ref="image" value="pass_through"/>
@@ -2517,6 +2520,13 @@
       <class name="slice" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (computing it from constant `begin`/`size` is wala/ML#569). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_ begin size name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="reverse_sequence" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reverse_sequence. Direct `<new>+<return>` paired with the `ReverseSequence` generator: reversing variable-length slices permutes elements within `input`, so the result has `input`'s shape and dtype. -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input seq_lengths seq_axis batch_axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
