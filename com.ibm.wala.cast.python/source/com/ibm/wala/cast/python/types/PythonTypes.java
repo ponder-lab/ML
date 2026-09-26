@@ -161,6 +161,10 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference iterator =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Literator"));
 
+  /** The object {@code open} returns: a text file whose reads yield strings. */
+  public static final TypeReference file =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lfile"));
+
   /** https://docs.python.org/3/library/functions.html#staticmethod. */
   public static final TypeReference STATIC_METHOD =
       TypeReference.findOrCreate(

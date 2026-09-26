@@ -568,6 +568,7 @@ public class BuiltinFunctions {
     // generator content field through so that `next(iter(gen()))` recovers the yields
     // (wala/ML#698).
     builtinFunctions.put("iter", Either.forLeft(PythonTypes.iterator));
+    builtinFunctions.put("open", Either.forLeft(PythonTypes.file));
     // https://docs.python.org/3/library/functions.html#next
     builtinFunctions.put("next", Either.forLeft(PythonTypes.object));
     // https://docs.python.org/3/library/functions.html#isinstance
