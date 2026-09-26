@@ -29,6 +29,17 @@ def m(a):
     assert a.dtype == np.float64
 
 
+def keep(t):
+    assert t.shape == (4,)
+    assert t.dtype == tf.float32
+    return True
+
+
+def n(t):
+    assert t.shape == (4,)
+    assert t.dtype == tf.float32
+
+
 class Doubler:
     # A forward-style method, which the analysis analyses per caller, so the comprehension inside
     # it can keep each caller's element type.
@@ -47,3 +58,6 @@ g(doubler.predict([tf.ones([3])])[0])
 h(doubler.predict([tf.ones([3], dtype=tf.int32)])[0])
 k(as_arrays([[1, 2]])[0])
 m(as_arrays([[1.0, 2.0]])[0])
+# A filter reads the destructured name too, and the element is still the comprehension's value.
+kept = [w * 2.0 for i, w in enumerate([tf.ones([4]), tf.zeros([4])]) if keep(w)]
+n(kept[0])

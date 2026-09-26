@@ -35,6 +35,39 @@ public class TestComprehensionTargets extends AbstractTensorTest {
   }
 
   /**
+   * An {@code if} filter over a destructuring target binds the name it reads: {@code keep(w)} in
+   * {@code [w * 2.0 for i, w in enumerate(xs) if keep(w)]} receives the {@code (4,)} float32 tensor
+   * {@code w} is at run time. The filter function unpacks its one formal before the test, as the
+   * element function does, so this pins that the unpacking reaches the filter's test.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDestructuringTargetInFilter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FILE, "keep", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /**
+   * The element of a filtered comprehension over a destructuring target is still the element
+   * expression's value, with the unpacking prepended to the filter: {@code w * 2.0} is the {@code
+   * (4,)} float32 tensor it is at run time.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFilteredDestructuringElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FILE, "n", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /**
    * A comprehension inside a per-caller method keeps each caller's element type: {@code predict}
    * called with a float32 list reads float32 alone, where one shared comprehension node had joined
    * the int32 caller's element in.
