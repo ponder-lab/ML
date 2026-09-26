@@ -1866,13 +1866,10 @@ public class TestConstructors extends AbstractTensorTest {
    * The dtype half of the {@code np.finfo} model (wala/ML#907): the queried type's dtype, with the
    * Python {@code float} builtin naming {@code float64} and a type the program decides at run time
    * between two reading as both. The fixture holds three sites of two dtypes on purpose. The
-   * attribute values come from one summary helper the analysis shares across every {@code np.finfo}
-   * call site in the program, so the dtype read at any one site is the union over all the sites:
-   * exact for a program with one site or one type, and loosening as a program queries more types.
-   * That is an unusual shape of imprecision (a property of how often the program uses the API
-   * rather than of the construct), the union is sound (the true dtype is a member), and a
-   * disagreeing dtype set declines downstream rather than picking a member. The shape half is rank
-   * 0 at every site regardless.
+   * attribute values come from one summary helper, which read as the union over every call site
+   * while that helper had a single context; since numpy summaries take the targeted context
+   * (wala/ML#955) each site reads its own queried type, so the float64 site reads float64 alone.
+   * The shape half is rank 0 at every site regardless.
    *
    * <p>Two kinds of assertion sit here. The scalar's dtype set is what this test exists for. The
    * scaled products' dtype, {@code float32} for a {@code float32} tensor whatever the scalar's set
@@ -1891,8 +1888,11 @@ public class TestConstructors extends AbstractTensorTest {
   public void testNumpyFinfoDTypes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     String file = "tf2_test_numpy_finfo_dtypes.py";
-    Set<TensorType> scalarUnion = Set.of(SCALAR_TENSOR_OF_FLOAT64, SCALAR_TENSOR_OF_FLOAT32);
-    test(file, "consume_eps64", 1, 1, Map.of(2, scalarUnion));
+    // Each `np.finfo` site now has a context of its own (wala/ML#955: numpy summaries take the
+    // targeted context), so the float64 query no longer shares a node with the float32 one and
+    // reads
+    // its own dtype alone, which is the run-time dtype the fixture asserts.
+    test(file, "consume_eps64", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT64)));
     // A float32 tensor scaled by the attribute stays float32: the elementwise rule keeps the tensor
     // operand's dtype against a scalar co-operand, whatever the scalar's own dtype set holds.
     Set<TensorType> scaled = Set.of(TENSOR_3_4_FLOAT32);

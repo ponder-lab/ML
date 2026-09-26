@@ -139,6 +139,7 @@ import org.python.antlr.ast.arg;
 import org.python.antlr.ast.arguments;
 import org.python.antlr.ast.cmpopType;
 import org.python.antlr.ast.comprehension;
+import org.python.antlr.ast.expr_contextType;
 import org.python.antlr.ast.keyword;
 import org.python.antlr.ast.operatorType;
 import org.python.antlr.ast.unaryopType;
@@ -2180,38 +2181,75 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           }
         };
 
+    /**
+     * Numbers the formals synthesized for destructuring comprehension targets, kept apart from
+     * {@code tmpIndex} so that no existing synthetic function name shifts (wala/ML#955).
+     */
+    private int comprehensionTargetIndex = 0;
+
     private CAstNode comprehensionLambda(expr value, java.util.List<comprehension> gen)
         throws Exception {
       String name = "comprehension" + (++tmpIndex);
 
       java.util.List<expr> arguments = new LinkedList<>();
-      gen.forEach(
-          (x) -> {
-            getComprehensionArguments(x.getInternalTarget(), arguments);
-          });
+      java.util.List<PythonTree> body = new LinkedList<>();
+      addComprehensionParameters(gen, arguments, body);
+      body.add(value);
 
       return defineFunction(
-          name,
-          arguments,
-          Collections.singletonList(value),
-          value,
-          null,
-          comprehension,
-          null,
-          Collections.emptyList());
+          name, arguments, body, value, null, comprehension, null, Collections.emptyList());
     }
 
-    private void getComprehensionArguments(expr arg, java.util.List<expr> arguments) {
-      if (arg instanceof Tuple) {
-        ((Tuple) arg)
-            .getInternalElts()
-            .forEach(
-                elt -> {
-                  getComprehensionArguments(elt, arguments);
-                });
-      } else {
-        arguments.add(arg);
+    /**
+     * Adds one formal per generator to a comprehension's element or filter function, and, for a
+     * generator whose target destructures (`for i, w in enumerate(xs)`), a statement assigning the
+     * target from that formal ahead of the function's body (wala/ML#955). The comprehension
+     * trampoline calls the function with ONE value per iterable, the element itself, so a
+     * destructuring target flattened into several formals left every formal but the first unbound:
+     * the first received the whole tuple and the rest nothing, and every value computed from them
+     * was lost. A simple-name target stays its own formal, so those functions are unchanged.
+     *
+     * @param gen The comprehension's generators, in source order.
+     * @param arguments Receives the formals, one per generator.
+     * @param body Receives the destructuring assignments, one per destructuring generator.
+     */
+    private void addComprehensionParameters(
+        java.util.List<comprehension> gen,
+        java.util.List<expr> arguments,
+        java.util.List<PythonTree> body) {
+      for (comprehension g : gen) {
+        expr target = g.getInternalTarget();
+        if (target instanceof Name) {
+          arguments.add(target);
+          continue;
+        }
+        String formal = "comprehension target " + (++comprehensionTargetIndex);
+        arguments.add(syntheticName(target, formal, expr_contextType.Param));
+        body.add(
+            new Assign(
+                target,
+                Collections.singletonList(target),
+                syntheticName(target, formal, expr_contextType.Load)));
       }
+    }
+
+    /**
+     * A name the parser synthesizes, positioned at the given node. {@link Name#getText()} of a
+     * constructed node reads the source token, not the identifier, so it is answered from the
+     * identifier here, which is what every consumer of a {@link Name} reads.
+     *
+     * @param at The node whose position the name takes.
+     * @param id The identifier.
+     * @param ctx The name's context.
+     * @return The name.
+     */
+    private static Name syntheticName(PythonTree at, String id, expr_contextType ctx) {
+      return new Name(at, id, ctx) {
+        @Override
+        public String getText() {
+          return id;
+        }
+      };
     }
 
     private CAstType filter =
@@ -2236,26 +2274,18 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       // would replace the earlier (wala/ML#917).
       int index = ++tmpIndex;
 
-      java.util.List<expr> arguments = new LinkedList<>();
-      gen.forEach(
-          (x) -> {
-            getComprehensionArguments(x.getInternalTarget(), arguments);
-          });
-
       java.util.List<CAstNode> filters = new LinkedList<>();
       for (comprehension g : gen) {
         for (expr test : g.getInternalIfs()) {
           String name = "filter" + (filters.isEmpty() ? index : ++tmpIndex);
+          // Each filter takes the same one-formal-per-generator shape as the element function,
+          // since the trampoline calls both with the same arguments (wala/ML#955).
+          java.util.List<expr> arguments = new LinkedList<>();
+          java.util.List<PythonTree> body = new LinkedList<>();
+          addComprehensionParameters(gen, arguments, body);
+          body.add(test);
           CAstNode filter_f =
-              defineFunction(
-                  name,
-                  arguments,
-                  Collections.singletonList(test),
-                  g,
-                  null,
-                  filter,
-                  null,
-                  Collections.emptyList());
+              defineFunction(name, arguments, body, g, null, filter, null, Collections.emptyList());
           if (filter_f != null) {
             filters.add(filter_f);
           }

@@ -667,6 +667,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     final ContextSelector targetedCFA =
         new nCFAContextSelector(this.targetedCfaDepth, new ContextInsensitiveSelector());
     final IClass modelClass = cha.lookupClass(TensorFlowTypes.MODEL.getDeclaringClass());
+    final IClass comprehensionClass = cha.lookupClass(PythonTypes.comprehension);
+    final IClass filterClass = cha.lookupClass(PythonTypes.filter);
 
     // The trampoline-receiver rules must stay outermost: the targeted-CFA routing below matches
     // trampoline classes too (a `$Foo/call` trampoline ends in a forward-method segment), and
@@ -686,6 +688,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 // sites (train vs. test) merges into one context-insensitive node, collapsing its
                 // layer-output allocations across callers and losing per-context shape
                 // (wala/ML#530).
+                //
+                // A comprehension's machinery (its trampoline, element function and filters) takes
+                // the context of the function the comprehension is written in (wala/ML#955).
+                // Given a context of its own, one node served every caller, so a value computed
+                // per element joined across all of them: a merger called by drivers whose loaders
+                // yield int32 and int64 read both in every context. Inheriting, rather than
+                // extending the call string, also keeps every call MADE from an element function
+                // on the enclosing function's string, since a deeper string would still end in
+                // the trampoline's and the element function's own sites and merge again.
+                if (isComprehensionMachinery(callee, comprehensionClass, filterClass))
+                  return caller.getContext();
                 if (receivesTargetedContext(callee, modelClass)) {
                   return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
                 }
@@ -699,6 +712,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             }));
 
     return builder;
+  }
+
+  /**
+   * Whether the given method belongs to a comprehension's machinery: the trampoline that drives it,
+   * its element function, or one of its {@code if} filters. All three are declared on subclasses of
+   * the front end's {@code comprehension} and {@code filter} code-body types.
+   *
+   * @param callee The method.
+   * @param comprehensionClass The front end's comprehension type, or {@code null}.
+   * @param filterClass The front end's filter type, or {@code null}.
+   * @return Whether {@code callee} belongs to a comprehension's machinery.
+   */
+  private static boolean isComprehensionMachinery(
+      IMethod callee, IClass comprehensionClass, IClass filterClass) {
+    IClassHierarchy cha = callee.getClassHierarchy();
+    IClass c = callee.getDeclaringClass();
+    return (comprehensionClass != null && cha.isSubclassOf(c, comprehensionClass))
+        || (filterClass != null && cha.isSubclassOf(c, filterClass));
   }
 
   /**
@@ -722,6 +753,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * The class-name prefix of the numpy summaries. They receive the same targeted context as the
+   * framework's own methods (wala/ML#955): a numpy summary such as {@code np.array} allocates a
+   * tensor-like value whose generator reads its argument through the summary's callers, so one
+   * context-insensitive node served every caller and a call made from one driver's data typed the
+   * value for all of them.
+   */
+  private static final String NUMPY_SUMMARY_CLASS_PREFIX = "Lnumpy/";
+
+  /**
    * Determines whether {@code method} receives deep ({@code targetedCfaDepth}) k-CFA context rather
    * than the context-insensitive base. This is the routing decision the call-graph builder's
    * context selector applies (framework-API methods and {@code tf.keras.Model} forward methods); it
@@ -736,6 +776,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private boolean receivesTargetedContext(IMethod method, IClass modelClass) {
     String declaringClass = method.getDeclaringClass().getName().toString();
     return declaringClass.contains(targetFramework)
+        || declaringClass.startsWith(NUMPY_SUMMARY_CLASS_PREFIX)
         || isModelSubclassMethod(method, modelClass)
         || isUserModelForwardMethod(declaringClass);
   }

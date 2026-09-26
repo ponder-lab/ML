@@ -1,9 +1,9 @@
 # The dtype half of the `np.finfo` model (wala/ML#907): the attribute's dtype is the queried type's,
 # the Python `float` builtin naming float64, and a dtype the program decides at run time between two
 # types reading as both. The shape half is rank 0 whatever the dtype. Three sites of two dtypes
-# share this file on purpose: the attribute values are produced by one summary helper the analysis
-# shares across every `np.finfo` call site, so the dtype read at any one site is the union over all
-# the sites in the program, and the union is what the tests pin.
+# share this file on purpose: the attribute values are produced by one summary helper, which read as
+# the union over every `np.finfo` call site while the helper had a single context, and reads each
+# site's own queried type since numpy summaries take the targeted context (wala/ML#955).
 import numpy as np
 import tensorflow as tf
 
