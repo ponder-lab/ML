@@ -419,6 +419,7 @@ public class Concat extends TensorGenerator {
       IField f = builder.getClassHierarchy().resolveField(subscript);
       if (f == null) continue;
       PointerKey pk = builder.getPointerKeyForInstanceField(listAsin, f);
+      if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
       return builder.getPointerAnalysis().getPointsToSet(pk);
     }
     return null;

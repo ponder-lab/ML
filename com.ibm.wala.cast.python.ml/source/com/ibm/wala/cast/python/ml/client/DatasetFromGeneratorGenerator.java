@@ -158,6 +158,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
                 OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
                 // Soundness: empty field PTS would throw `IllegalArgumentException` from the
                 // helper; treat as ⊤ for this index instead. Same for an unparseable result.
@@ -202,6 +203,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
                 OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
                 // Same empty-PTS guard as the structured-signature path above.
                 if (fieldPts == null || fieldPts.isEmpty()) return null;
@@ -313,6 +315,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             IField f = builder.getClassHierarchy().resolveField(subscript);
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+              if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
               OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
               // Soundness: empty field PTS would throw `IllegalArgumentException` from the
               // helper; treat as ⊤ instead. Same for an unparseable result.
@@ -397,6 +400,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
                 ret.addAll(
                     this.getDTypesFromDTypeArgument(
                         builder, builder.getPointerAnalysis().getPointsToSet(pk)));
@@ -437,6 +441,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
                 ret.addAll(
                     this.getDTypesFromDTypeArgument(
                         builder, builder.getPointerAnalysis().getPointsToSet(pk)));
@@ -523,6 +528,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             IField f = builder.getClassHierarchy().resolveField(subscript);
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+              if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
               ret.addAll(
                   this.getDTypesFromDTypeArgument(
                       builder, builder.getPointerAnalysis().getPointsToSet(pk)));

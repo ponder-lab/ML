@@ -155,6 +155,8 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey fieldPK = builder.getPointerKeyForInstanceField(asin, f);
+                if (fieldPK == null)
+                  continue; // No key for the None constant's fields (wala/ML#964).
 
                 boolean preciseTypesFound = false;
                 if (!builder.getPropagationSystem().isImplicit(fieldPK)) {
@@ -280,6 +282,8 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey fieldPK = builder.getPointerKeyForInstanceField(asin, f);
+                if (fieldPK == null)
+                  continue; // No key for the None constant's fields (wala/ML#964).
 
                 boolean preciseTypesFound = false;
                 if (!builder.getPropagationSystem().isImplicit(fieldPK)) {
