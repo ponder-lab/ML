@@ -36,6 +36,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonSuper;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoaderFactory;
+import com.ibm.wala.cast.python.loader.ScriptOutsidePythonPathException;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.cast.util.Util;
@@ -218,6 +219,17 @@ public abstract class PythonAnalysisEngine<T>
     try {
       cha = SeqClassHierarchyFactory.make(scope, loader);
     } catch (ClassHierarchyException e) {
+      // A script outside every PYTHONPATH entry is the project's configuration to fix, so the
+      // failure propagates as itself, with the script and the path as fields, rather than as the
+      // cause of a cause; the whole chain is searched and the same instance rethrown, so the stack
+      // trace still points at the translator site (wala/ML#977).
+      for (Throwable cause = e; cause != null; cause = cause.getCause())
+        if (cause instanceof ScriptOutsidePythonPathException outside) {
+          // Not logged as a failure: the client decides how to deal with it, and a client that
+          // recovers should not be left with a severe line and a trace in its log.
+          logger.log(Level.FINE, outside::getMessage);
+          throw outside;
+        }
       final String msg = "Failed to build class hierarchy.";
       logger.log(SEVERE, msg, e);
       throw new WalaRuntimeException(msg, e);
