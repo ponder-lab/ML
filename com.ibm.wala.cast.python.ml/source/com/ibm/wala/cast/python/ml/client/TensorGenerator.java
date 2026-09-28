@@ -3279,27 +3279,66 @@ public abstract class TensorGenerator {
    */
   static Boolean computeBlockFeasibility(
       PropagationCallGraphBuilder builder, CGNode node, ISSABasicBlock block) {
-    return computeBlockFeasibility(builder, node, block, HashSetFactory.make());
-  }
-
-  private static Boolean computeBlockFeasibility(
-      PropagationCallGraphBuilder builder,
-      CGNode node,
-      ISSABasicBlock block,
-      Set<ISSABasicBlock> visited) {
     IR ir = node.getIR();
+    Set<ISSABasicBlock> visited = HashSetFactory.make();
     if (ir == null || block.isEntryBlock() || !visited.add(block)) return null;
     SSACFG cfg = ir.getControlFlowGraph();
-    boolean anyPredecessor = false;
-    for (ISSABasicBlock pred : cfg.getNormalPredecessors(block)) {
-      anyPredecessor = true;
-      if (Boolean.FALSE.equals(decideEdgeFromBranchBlock(builder, node, cfg, pred, block)))
-        continue; // The edge into this block is never taken.
-      if (Boolean.FALSE.equals(computeBlockFeasibility(builder, node, pred, visited)))
-        continue; // The predecessor itself never runs.
-      return null; // A live way in: not provably dead.
+
+    // The walk recurses once per predecessor on the path it follows, so a long run of blocks (a
+    // body of a few thousand sequential branches) exhausted the stack (wala/ML#981). An explicit
+    // stack visits the same blocks in the same order, marking each visited at the same point, so
+    // every answer is the recursive one's.
+    Deque<FeasibilityFrame> stack = new ArrayDeque<>();
+    stack.push(new FeasibilityFrame(block, cfg.getNormalPredecessors(block).iterator()));
+    Boolean returned = null; // The verdict of the frame just popped, for the frame below it.
+    boolean hasReturned = false;
+    while (!stack.isEmpty()) {
+      FeasibilityFrame frame = stack.peek();
+      if (hasReturned) {
+        hasReturned = false;
+        if (!Boolean.FALSE.equals(returned)) {
+          // The predecessor may run, over an edge that may be taken: not provably dead.
+          stack.pop();
+          returned = null;
+          hasReturned = true;
+          continue;
+        }
+        // The predecessor itself never runs: go on to the next one.
+      }
+      boolean resolved = false;
+      while (frame.predecessors.hasNext()) {
+        ISSABasicBlock pred = frame.predecessors.next();
+        frame.anyPredecessor = true;
+        if (Boolean.FALSE.equals(decideEdgeFromBranchBlock(builder, node, cfg, pred, frame.block)))
+          continue; // The edge into this block is never taken.
+        if (pred.isEntryBlock() || !visited.add(pred)) {
+          // The entry, or a block already on this walk: kept, so a live way in.
+          stack.pop();
+          returned = null;
+          hasReturned = true;
+        } else stack.push(new FeasibilityFrame(pred, cfg.getNormalPredecessors(pred).iterator()));
+        resolved = true;
+        break;
+      }
+      if (!resolved) {
+        stack.pop();
+        returned = frame.anyPredecessor ? Boolean.FALSE : null;
+        hasReturned = true;
+      }
     }
-    return anyPredecessor ? Boolean.FALSE : null;
+    return returned;
+  }
+
+  /** One block of {@link #computeBlockFeasibility}'s walk, with its predecessors still to read. */
+  private static final class FeasibilityFrame {
+    final ISSABasicBlock block;
+    final Iterator<ISSABasicBlock> predecessors;
+    boolean anyPredecessor;
+
+    FeasibilityFrame(ISSABasicBlock block, Iterator<ISSABasicBlock> predecessors) {
+      this.block = block;
+      this.predecessors = predecessors;
+    }
   }
 
   /**
