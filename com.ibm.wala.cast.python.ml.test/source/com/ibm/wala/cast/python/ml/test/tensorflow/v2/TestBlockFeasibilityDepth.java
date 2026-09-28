@@ -25,7 +25,11 @@ public class TestBlockFeasibilityDepth extends AbstractTensorTest {
   /** The number of sequential branches; the previous engine overflowed at this size. */
   private static final int BRANCHES = 4000;
 
-  /** The analysis thread's stack size, in bytes. */
+  /**
+   * The analysis thread's requested stack size, in bytes. A {@link Thread} stack size is a request
+   * the JVM may ignore; HotSpot on Linux honors it, which is what makes this test fail on the
+   * previous engine. Where it is ignored, the test passes whichever engine runs.
+   */
   private static final long STACK_SIZE = 512 * 1024;
 
   @Test
