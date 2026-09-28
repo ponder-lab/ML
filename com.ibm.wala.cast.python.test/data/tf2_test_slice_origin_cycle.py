@@ -1,5 +1,6 @@
 # Test for a loop-carried slice: the receiver of `context[1:]` is a phi of the slice's own result,
 # so classifying the slice's origin through its receiver must not recurse forever.
+import numpy as np
 import tensorflow as tf
 
 
@@ -27,3 +28,18 @@ t = tf.constant(p)
 assert t.shape == ()
 assert t.dtype == tf.float32
 consume(t)
+
+
+def consume_np(x):
+    pass
+
+
+def shrink(v):
+    while v.shape[0] > 2:
+        v = v[1:]
+    return v
+
+
+a = shrink(np.ones((6, 2)))
+assert isinstance(a, np.ndarray) and a.shape == (2, 2)
+consume_np(a)

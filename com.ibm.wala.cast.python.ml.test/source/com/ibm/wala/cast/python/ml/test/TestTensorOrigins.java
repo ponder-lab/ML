@@ -415,6 +415,27 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A loop-carried slice of an ndarray, {@code v = v[1:]} over a parameter {@code v} (wala/ML#979).
+   * The slice's receiver is a φ of the parameter and of the slice's own result, so classifying the
+   * slice through its receiver revisits the slice. The revisit contributes no origin evidence, so
+   * the result reads the parameter arm's hybridization-frame origin alone (wala/ML#726). Answering
+   * the revisit with the TensorFlow default instead adds {@link TensorOrigin#TENSORFLOW} to an
+   * ndarray.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testLoopCarriedSliceOrigin()
+      throws ClassHierarchyException, CancelException, IOException {
+    SinkOrigins sinkOrigins = getSinkOrigins("tf2_test_slice_origin_cycle.py", "consume_np");
+    assertEquals(
+        List.of(EnumSet.of(TensorOrigin.PARAMETER)),
+        sinkOrigins.argumentOrigins().get("consume_np"));
+  }
+
+  /**
    * Runs the tensor analysis on the given file and collects, for each named sink function, the
    * origins of its first parameter (value number 2, unioned across calling contexts) and of the
    * caller-side argument local at each of its call sites (in source order).

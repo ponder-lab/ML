@@ -30,6 +30,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -116,7 +117,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
     Set<Pair<CGNode, Integer>> inProgress = RECEIVER_ORIGINS_IN_PROGRESS.get();
     Pair<CGNode, Integer> key = Pair.make(view.callerNode(), view.receiverVn);
-    if (!inProgress.add(key)) return super.getOrigins(builder); // cycle: as if unresolved.
+    if (!inProgress.add(key))
+      // A cyclic revisit: the receiver's only producer is this slice, so no origin evidence, not
+      // the TensorFlow default (wala/ML#730, wala/ML#979).
+      return EnumSet.noneOf(TensorOrigin.class);
     try {
       TensorGenerator generator;
       try {
@@ -135,9 +139,12 @@ public class SliceBuiltinOperation extends TensorGenerator {
    *
    * <p>Breaks unbounded recursion on a loop-carried slice ({@code context = context[1:]} in a
    * loop): the receiver is a φ of the slice's own result, so its generator is this slice again,
-   * whose origin classification revisits the receiver. On re-entry the receiver reads as
-   * unresolved, keeping the TensorFlow default; the guard mirrors {@link ElementWiseOperation}'s
-   * operand guard (wala/ML#979).
+   * whose origin classification revisits the receiver. A revisit contributes no origin evidence, as
+   * for a delegating generator whose value never resolved, so the loop's other arms decide. The
+   * TensorFlow default would instead assert a library for a value whose only producer is itself,
+   * which is wrong for an ndarray carried around the loop. The guard mirrors {@link
+   * ElementWiseOperation}'s operand guard; its {@code null} lets the other operand decide, and a
+   * slice has one receiver (wala/ML#979).
    */
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RECEIVER_ORIGINS_IN_PROGRESS =
       ThreadLocal.withInitial(HashSetFactory::make);
