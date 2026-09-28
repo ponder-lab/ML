@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
@@ -474,5 +475,17 @@ public class NpPad extends TensorGenerator {
     public String toString() {
       return this.coefficients + " + " + this.constant;
     }
+  }
+
+  /**
+   * Returns the producing library of the modeled value: an {@code np.pad(...)} call, which returns
+   * an ndarray whatever its input, so the value is an ndarray (wala/ML#724, wala/ML#980).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.NUMPY);
   }
 }

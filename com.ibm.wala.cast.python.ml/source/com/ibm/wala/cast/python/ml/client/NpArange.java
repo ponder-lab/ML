@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
@@ -164,5 +165,17 @@ public class NpArange extends TensorGenerator {
   @Override
   protected String getDTypeParameterName() {
     return "dtype";
+  }
+
+  /**
+   * Returns the producing library of the modeled value: an {@code np.arange(...)} call, so the
+   * value is an ndarray (wala/ML#724, wala/ML#980).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.NUMPY);
   }
 }
