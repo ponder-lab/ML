@@ -86,6 +86,9 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     Set<List<Dimension<?>>> rowStartsShapes = emptySet();
     if (rowStartsPts != null && !rowStartsPts.isEmpty()) {
       rowStartsShapes = this.getShapesOfValue(builder, rowStartsPts);
+      // An unknown shape (null, wala/ML#978) is no evidence of the row count, like an absent
+      // argument, so it takes the dynamic-row arm below rather than dereferencing null.
+      if (rowStartsShapes == null) rowStartsShapes = emptySet();
     }
 
     Set<Dimension<?>> possibleRowDims = HashSetFactory.make();

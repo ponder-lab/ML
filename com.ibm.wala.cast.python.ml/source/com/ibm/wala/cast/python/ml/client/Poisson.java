@@ -94,6 +94,9 @@ public class Poisson extends TensorTypeAllocator {
     if (lamPTS == null || lamPTS.isEmpty()) return null;
 
     Set<List<Dimension<?>>> lamShapes = this.getShapesOfValue(builder, lamPTS);
+    // `lam`'s shape is the output's trailing axes, so an unknown one (null, wala/ML#978) leaves the
+    // output shape unknown.
+    if (lamShapes == null) return null;
 
     // return shape `tf.concat([shape, tf.shape(lam)], axis=0)`.
     shapes.forEach(

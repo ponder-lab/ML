@@ -85,6 +85,9 @@ public class RaggedFromRowLimits extends RaggedTensorFromValues {
     Set<List<Dimension<?>>> rowLimitsShapes = emptySet();
     if (rowLimitsPts != null && !rowLimitsPts.isEmpty()) {
       rowLimitsShapes = this.getShapesOfValue(builder, rowLimitsPts);
+      // An unknown shape (null, wala/ML#978) is no evidence of the row count, like an absent
+      // argument, so it takes the dynamic-row arm below rather than dereferencing null.
+      if (rowLimitsShapes == null) rowLimitsShapes = emptySet();
     }
 
     Set<Dimension<?>> possibleRowDims = HashSetFactory.make();

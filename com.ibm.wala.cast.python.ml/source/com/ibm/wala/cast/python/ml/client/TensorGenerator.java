@@ -5163,6 +5163,23 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Adds a value's shapes to a union being built, for a caller of {@link
+   * #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet)}, which returns {@code null} (⊤) for
+   * a value whose shape is unknown (wala/ML#978). A ⊤ member makes the whole union ⊤, so the caller
+   * returns {@code null} when this returns {@code false} instead of dereferencing the null.
+   *
+   * @param union The union being built.
+   * @param shapes A member's shapes, or {@code null} when unknown.
+   * @return Whether the shapes were known and added; {@code false} means the union is ⊤.
+   */
+  protected static boolean addShapesOrTop(
+      Set<List<Dimension<?>>> union, Set<List<Dimension<?>>> shapes) {
+    if (shapes == null) return false;
+    union.addAll(shapes);
+    return true;
+  }
+
+  /**
    * Mode-aware variant of {@link #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet)}
    * (wala/ML#716): in exact mode, a member whose shapes do not resolve poisons the union to ⊤
    * instead of silently dropping.

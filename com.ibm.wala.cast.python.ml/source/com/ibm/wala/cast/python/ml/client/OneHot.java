@@ -159,6 +159,9 @@ public class OneHot extends TensorTypeAllocator {
     }
 
     Set<List<Dimension<?>>> indices = this.getShapesOfValue(builder, indicesPTS);
+    // The output is the indices' shape plus the depth axis, so an unknown indices shape (null,
+    // wala/ML#978) leaves the output shape unknown.
+    if (indices == null) return null;
 
     OrdinalSet<InstanceKey> depthPTS =
         this.getArgumentPointsToSet(
