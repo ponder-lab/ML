@@ -416,7 +416,10 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
    * Per-thread set of the {@code .T} receivers whose origins are currently being classified, so a
    * receiver whose generator is this read again does not recurse without bound. This mirrors the
    * slice guard of wala/ML#979, where a loop-carried receiver did; no fixture yet reaches such a
-   * cycle through {@code .T}, whose loop-carried reads resolve through their other arms.
+   * cycle through {@code .T}, whose loop-carried reads resolve through their other arms. When every
+   * receiver is such a revisit, {@link #getOrigins} answers {@link TensorOrigin#NUMPY}, as for any
+   * unresolved receiver, whereas the slice answers no evidence: a self-produced {@code .T} value is
+   * unresolved, and {@code .T} is numpy's in every case but the numpy-behavior opt-in.
    */
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RECEIVER_ORIGINS_IN_PROGRESS =
       ThreadLocal.withInitial(HashSetFactory::make);
