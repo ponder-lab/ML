@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
@@ -9,6 +10,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
@@ -365,4 +367,57 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
     return new AxesResolution(
         sawNone ? AxesKind.MIXED_WITH_NONE : AxesKind.CONSTANT, candidates.iterator().next());
   }
+
+  /**
+   * Returns the producing library of the modeled value (wala/ML#724, wala/ML#980). The function
+   * form returns an ndarray whatever its input, and the method form is an ndarray's, so both are
+   * {@link TensorOrigin#NUMPY}. The attribute form {@code x.T} follows its receiver: on an ndarray
+   * it is an ndarray, and on a {@code tf.Tensor} it exists only under numpy behavior, where it
+   * returns a {@code Tensor}. A receiver that does not resolve reads as an ndarray, the attribute's
+   * owner in every case but that opt-in.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The receiver's origins for the attribute form when it resolves; otherwise {@link
+   *     TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    if (!this.attributeForm) return EnumSet.of(TensorOrigin.NUMPY);
+    Set<TensorOrigin> ret = EnumSet.noneOf(TensorOrigin.class);
+    Set<Pair<CGNode, Integer>> inProgress = RECEIVER_ORIGINS_IN_PROGRESS.get();
+    for (Pair<CGNode, Integer> receiver : this.receiverValueNumbers(builder)) {
+      // A cyclic revisit (`x = x.T` in a loop) contributes no origin evidence (wala/ML#979).
+      if (!inProgress.add(receiver)) continue;
+      try {
+        PointerKey pk =
+            builder
+                .getPointerAnalysis()
+                .getHeapModel()
+                .getPointerKeyForLocal(receiver.fst, receiver.snd);
+        if (builder.getPropagationSystem().isImplicit(pk)) continue;
+        PointsToSetVariable receiverVar =
+            builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+        if (receiverVar == null) continue;
+        TensorGenerator generator;
+        try {
+          generator = TensorGeneratorFactory.getGenerator(receiverVar, builder);
+        } catch (IllegalArgumentException e) {
+          continue;
+        }
+        if (generator != null) ret.addAll(generator.getOrigins(builder));
+      } finally {
+        inProgress.remove(receiver);
+      }
+    }
+    return ret.isEmpty() ? EnumSet.of(TensorOrigin.NUMPY) : ret;
+  }
+
+  /**
+   * Per-thread set of the {@code .T} receivers whose origins are currently being classified, so a
+   * receiver whose generator is this read again does not recurse without bound. This mirrors the
+   * slice guard of wala/ML#979, where a loop-carried receiver did; no fixture yet reaches such a
+   * cycle through {@code .T}, whose loop-carried reads resolve through their other arms.
+   */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RECEIVER_ORIGINS_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
 }

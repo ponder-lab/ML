@@ -436,6 +436,43 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The {@code .T} attribute follows its receiver (wala/ML#980): under numpy behavior a {@code
+   * tf.Tensor}'s {@code .T} returns a {@code Tensor}, so it reads {@link TensorOrigin#TENSORFLOW},
+   * while an ndarray's reads {@link TensorOrigin#NUMPY}. A constant numpy answer would mislabel the
+   * first, the only {@code .T} on a {@code Tensor} that runs.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testTransposeAttributeOrigin()
+      throws ClassHierarchyException, CancelException, IOException {
+    SinkOrigins sinkOrigins = getSinkOrigins("tf2_test_tensor_transpose_attribute.py", "consume");
+    assertEquals(
+        List.of(EnumSet.of(TensorOrigin.TENSORFLOW), EnumSet.of(TensorOrigin.NUMPY)),
+        sinkOrigins.argumentOrigins().get("consume"));
+  }
+
+  /**
+   * Every numpy API the summaries model produces an ndarray, so each result in {@code
+   * tf2_test_numpy_origin_audit.py} reads {@link TensorOrigin#NUMPY} at its sink's call site
+   * (wala/ML#724). Before wala/ML#980, {@code np.arange}, {@code np.pad} and the three transpose
+   * forms ({@code np.transpose}, {@code ndarray.transpose} and {@code ndarray.T}) read {@link
+   * TensorOrigin#TENSORFLOW}, the base class's default, since their generators did not override it.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testNumpyApiOrigins() throws ClassHierarchyException, CancelException, IOException {
+    SinkOrigins sinkOrigins = getSinkOrigins("tf2_test_numpy_origin_audit.py", "consume");
+    assertEquals(
+        nCopies(23, EnumSet.of(TensorOrigin.NUMPY)), sinkOrigins.argumentOrigins().get("consume"));
+  }
+
+  /**
    * Runs the tensor analysis on the given file and collects, for each named sink function, the
    * origins of its first parameter (value number 2, unioned across calling contexts) and of the
    * caller-side argument local at each of its call sites (in source order).
