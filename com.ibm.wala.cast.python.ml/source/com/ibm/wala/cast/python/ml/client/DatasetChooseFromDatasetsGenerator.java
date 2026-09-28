@@ -307,18 +307,19 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                 if (!preciseTypesFound) {
                   OrdinalSet<InstanceKey> fieldPTS =
                       builder.getPointerAnalysis().getPointsToSet(fieldPK);
-                  ret.addAll(this.getShapesOfValue(builder, fieldPTS));
+                  if (!addShapesOrTop(ret, this.getShapesOfValue(builder, fieldPTS))) return null;
                 }
               }
             }
           }
         } else {
-          ret.addAll(
+          if (!addShapesOrTop(
+              ret,
               this.getShapesOfValue(
                   builder,
                   OrdinalSet.toOrdinalSet(
                       Collections.singleton(ik),
-                      builder.getPointerAnalysis().getInstanceKeyMapping())));
+                      builder.getPointerAnalysis().getInstanceKeyMapping())))) return null;
         }
       }
       return ret.isEmpty() ? null : ret;

@@ -39,6 +39,8 @@ public class Flatten extends TensorGenerator {
     OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 0, "inputs");
     if (inputPts.isEmpty()) return null;
     Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    // An input of unknown shape (null, wala/ML#978) flattens to an unknown shape.
+    if (inputShapes == null) return null;
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> inputShape : inputShapes) {

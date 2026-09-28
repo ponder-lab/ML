@@ -128,6 +128,8 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
               OrdinalSet.toOrdinalSet(
                   Collections.singleton(ik), builder.getPointerAnalysis().getInstanceKeyMapping());
           Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, singletonPTS);
+          // An unknown shape (null, wala/ML#978) is one type of unknown rank, not a dereference.
+          if (shapes == null) shapes = Collections.singleton(null);
           Set<DType> dTypes = this.getDTypesOfValue(builder, singletonPTS);
           for (List<Dimension<?>> shape : shapes) {
             for (DType dtype : dTypes) {
@@ -178,9 +180,10 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                ret.addAll(
+                if (!addShapesOrTop(
+                    ret,
                     this.getShapesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)))) return null;
               }
             }
           }
@@ -313,19 +316,21 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                ret.addAll(
+                if (!addShapesOrTop(
+                    ret,
                     this.getShapesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)))) return null;
               }
             }
           }
         } else {
-          ret.addAll(
+          if (!addShapesOrTop(
+              ret,
               this.getShapesOfValue(
                   builder,
                   OrdinalSet.toOrdinalSet(
                       Collections.singleton(ik),
-                      builder.getPointerAnalysis().getInstanceKeyMapping())));
+                      builder.getPointerAnalysis().getInstanceKeyMapping())))) return null;
         }
       }
       if (!ret.isEmpty()) {

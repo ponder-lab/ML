@@ -147,6 +147,9 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
                 if (firstElemPts != null && !firstElemPts.isEmpty()) {
                   Set<List<Dimension<?>>> shapesOfFirstElem =
                       this.getShapesOfValue(builder, firstElemPts);
+                  // An unknown first-element shape (null, wala/ML#978) finds no row dimension, so
+                  // the dynamic fallback below applies.
+                  if (shapesOfFirstElem == null) shapesOfFirstElem = emptySet();
                   for (List<Dimension<?>> shape : shapesOfFirstElem) {
                     if (!shape.isEmpty()) {
                       Dimension<?> dim = shape.get(0);
@@ -188,6 +191,9 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);
       LOGGER.fine("Found value shapes: " + valuesShapes);
+      // An unknown `values` shape (null, wala/ML#978) leaves the trailing dimensions unknown, so
+      // the result is ⊤ rather than a dereference of null.
+      if (valuesShapes == null) return null;
     } else {
       valuesShapes = new java.util.HashSet<>();
       valuesShapes.add(emptyList());

@@ -273,6 +273,9 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);
+      // An unknown `values` shape (null, wala/ML#978) leaves the trailing dimensions unknown, so
+      // the result is ⊤ rather than a dereference of null.
+      if (valuesShapes == null) return null;
     } else {
       valuesShapes = new java.util.HashSet<>();
       valuesShapes.add(emptyList());

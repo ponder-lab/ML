@@ -61,8 +61,19 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
     return EnumSet.of(DType.UNKNOWN);
   }
 
+  /**
+   * Builds the shape {@code [nrows, (ragged)] + values.shape[1:]} of a ragged tensor from its
+   * possible row counts and its values' shapes.
+   *
+   * @param possibleRowDims The possible row counts.
+   * @param valuesShapes The values' shapes: {@code null} when unknown, as {@code getShapesOfValue}
+   *     reports it; empty when there is no evidence, which is read as rank-1 values.
+   * @return The possible shapes, or {@code null} (⊤) when the values' shape is unknown, since their
+   *     trailing axes, and so the result's rank, are then unknown (wala/ML#978).
+   */
   protected Set<List<Dimension<?>>> constructRaggedShape(
       Set<Dimension<?>> possibleRowDims, Set<List<Dimension<?>>> valuesShapes) {
+    if (valuesShapes == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     if (valuesShapes.isEmpty()) {
