@@ -81,7 +81,10 @@ public class TestUnknownShapeArgument extends AbstractTensorTest {
 
   /**
    * A Keras {@code Flatten} over an input of unknown shape reads as an unknown shape, in the
-   * input's float32.
+   * input's float32. The layer call is {@code FlattenCall}'s, which already declined on an unknown
+   * input shape; this pins that it keeps doing so. The TF1 {@code tf.layers.flatten} generator,
+   * {@code Flatten}, carries the same guard, but no summary allocates its type, so no fixture can
+   * reach it.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -124,6 +127,48 @@ public class TestUnknownShapeArgument extends AbstractTensorTest {
     test(
         OTHER,
         "consume_dataset_element",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The element of {@code tf.data.Dataset.choose_from_datasets} over a dataset whose element has an
+   * unknown shape reads as a tensor of unknown type: an unknown input shape is ⊤ for the union of
+   * the input datasets' element shapes, not an absent member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDatasetChooseFromDatasets()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        OTHER,
+        "consume_chosen_element",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * The element of {@code tf.data.Dataset.sample_from_datasets} over a dataset whose element has an
+   * unknown shape reads as a tensor of unknown type: an unknown input shape is ⊤ for the union of
+   * the input datasets' element shapes, not an absent member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDatasetSampleFromDatasets()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        OTHER,
+        "consume_sampled_element",
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));

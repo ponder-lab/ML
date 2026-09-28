@@ -18,12 +18,20 @@ def consume_dataset_element(x):
     pass
 
 
+def consume_chosen_element(x):
+    pass
+
+
+def consume_sampled_element(x):
+    pass
+
+
 tokens = tf.constant([1, 2, 1, 3])
 # Positions of the ones: data-dependent length, so its shape is unknown to the analysis.
 starts = tf.squeeze(tf.where(tf.equal(tokens, 1)), -1)
 assert starts.shape == (2,) and starts.dtype == tf.int64
 
-flat = tf.keras.layers.Flatten()(tf.cast(tf.where(tf.equal(tokens, 1)), tf.float32))
+flat = tf.keras.layers.Flatten()(tf.cast(starts, tf.float32))
 assert flat.shape == (2, 1)
 consume_flatten(flat)
 
@@ -33,3 +41,17 @@ consume_poisson(p)
 
 for element in tf.data.Dataset.from_tensors(starts):
     consume_dataset_element(element)
+
+chosen = tf.data.Dataset.choose_from_datasets(
+    [tf.data.Dataset.from_tensors(starts)], tf.data.Dataset.range(1)
+)
+for element in chosen:
+    assert element.shape == (2,)
+    consume_chosen_element(element)
+
+sampled = tf.data.Dataset.sample_from_datasets(
+    [tf.data.Dataset.from_tensors(starts)], weights=[1.0]
+)
+for element in sampled:
+    assert element.shape == (2,)
+    consume_sampled_element(element)
