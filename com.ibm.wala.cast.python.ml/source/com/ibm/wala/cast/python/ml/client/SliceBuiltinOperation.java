@@ -27,6 +27,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -112,14 +113,34 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (builder.getPropagationSystem().isImplicit(pk)) return super.getOrigins(builder);
     PointsToSetVariable receiver = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
     if (receiver == null) return super.getOrigins(builder);
-    TensorGenerator generator;
+
+    Set<Pair<CGNode, Integer>> inProgress = RECEIVER_ORIGINS_IN_PROGRESS.get();
+    Pair<CGNode, Integer> key = Pair.make(view.callerNode(), view.receiverVn);
+    if (!inProgress.add(key)) return super.getOrigins(builder); // cycle: as if unresolved.
     try {
-      generator = TensorGeneratorFactory.getGenerator(receiver, builder);
-    } catch (IllegalArgumentException e) {
-      return super.getOrigins(builder);
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(receiver, builder);
+      } catch (IllegalArgumentException e) {
+        return super.getOrigins(builder);
+      }
+      return generator == null ? super.getOrigins(builder) : generator.getOrigins(builder);
+    } finally {
+      inProgress.remove(key);
     }
-    return generator == null ? super.getOrigins(builder) : generator.getOrigins(builder);
   }
+
+  /**
+   * Per-thread set of the slice receivers whose origins are currently being classified.
+   *
+   * <p>Breaks unbounded recursion on a loop-carried slice ({@code context = context[1:]} in a
+   * loop): the receiver is a φ of the slice's own result, so its generator is this slice again,
+   * whose origin classification revisits the receiver. On re-entry the receiver reads as
+   * unresolved, keeping the TensorFlow default; the guard mirrors {@link ElementWiseOperation}'s
+   * operand guard (wala/ML#979).
+   */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RECEIVER_ORIGINS_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
