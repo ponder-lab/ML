@@ -26,6 +26,7 @@ import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.loader.ScriptOutsidePythonPathException;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.parser.AbstractParser.MissingType;
 import com.ibm.wala.cast.python.parser.AbstractParser.PythonGlobalsEntity;
@@ -899,9 +900,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                     return instructions;
                   }
                 }
-                //  Not found.
-                throw new IllegalStateException(
-                    "Cannot find module: " + m + " in PYTHONPATH: " + pythonPath);
+                //  Not found (wala/ML#977).
+                throw new ScriptOutsidePythonPathException(
+                    m.getName(),
+                    pythonPath,
+                    "the module initialization script " + scriptName + " lists it as a member.");
               })
           .flatMap(List::stream)
           .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
@@ -1448,13 +1451,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       // the missing name (wala/ML#977).
       String contextName = context.getName();
       if (contextName == null)
-        throw new IllegalStateException(
-            "Cannot find script: "
-                + context.getModule().getName()
-                + " in PYTHONPATH: "
-                + ((PythonLoader) loader).getPythonPath()
-                + "; the script contains an import, and an import can be bound only for a script"
-                + " under a PYTHONPATH entry.");
+        throw new ScriptOutsidePythonPathException(
+            context.getModule().getName(),
+            ((PythonLoader) loader).getPythonPath(),
+            "the script contains an import, and an import can be bound only for a script under a"
+                + " PYTHONPATH entry.");
 
       // if the module is the special initialization module and it's not a wildcard import.
       if (contextName.endsWith("/" + MODULE_INITIALIZATION_FILENAME)
