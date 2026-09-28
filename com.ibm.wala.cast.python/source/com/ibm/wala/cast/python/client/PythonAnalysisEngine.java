@@ -225,7 +225,9 @@ public abstract class PythonAnalysisEngine<T>
       // trace still points at the translator site (wala/ML#977).
       for (Throwable cause = e; cause != null; cause = cause.getCause())
         if (cause instanceof ScriptOutsidePythonPathException outside) {
-          logger.log(SEVERE, outside.getMessage(), outside);
+          // Not logged as a failure: the client decides how to deal with it, and a client that
+          // recovers should not be left with a severe line and a trace in its log.
+          logger.log(Level.FINE, outside::getMessage);
           throw outside;
         }
       final String msg = "Failed to build class hierarchy.";
