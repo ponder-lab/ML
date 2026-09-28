@@ -86,7 +86,9 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
     if (rowLengthsPts != null && !rowLengthsPts.isEmpty()) {
       rowLengthsShapes = this.getShapesOfValue(builder, rowLengthsPts);
       // An unknown shape (null, wala/ML#978) is no evidence of the row count, like an absent
-      // argument, so it takes the dynamic-row arm below rather than dereferencing null.
+      // argument, so it takes the dynamic-row arm below rather than dereferencing null. That arm
+      // reads Dynamic by the absent-argument precedent, not from runtime-None evidence, which an
+      // unknown shape does not carry (wala/ML#721 would otherwise call it Unresolved).
       if (rowLengthsShapes == null) rowLengthsShapes = emptySet();
     }
 
