@@ -1441,8 +1441,23 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                   .PropertyRead(
                       idx, resultVal, resultVal, context.currentScope().getConstantValue(eltName)));
 
+      // A script outside every PYTHONPATH entry has no signature (the parser finds no entry to
+      // relativize it against), so its context has no name. The script is the project's
+      // misconfiguration, and its import cannot be bound to a module; fail naming the script and
+      // the path, as visitScriptEntity does for a module it cannot find, instead of dereferencing
+      // the missing name (wala/ML#977).
+      String contextName = context.getName();
+      if (contextName == null)
+        throw new IllegalStateException(
+            "Cannot find script: "
+                + context.getModule().getName()
+                + " in PYTHONPATH: "
+                + ((PythonLoader) loader).getPythonPath()
+                + "; the script contains an import, and an import can be bound only for a script"
+                + " under a PYTHONPATH entry.");
+
       // if the module is the special initialization module and it's not a wildcard import.
-      if (context.getName().endsWith("/" + MODULE_INITIALIZATION_FILENAME)
+      if (contextName.endsWith("/" + MODULE_INITIALIZATION_FILENAME)
           && !Objects.equals(eltName, IMPORT_WILDCARD_CHARACTER)) {
         // add the imported name to the module so that other files can use it.
         FieldReference eltField =
