@@ -20,6 +20,14 @@ def consume_row_lengths(x):
     pass
 
 
+def consume_unknown_values(x):
+    pass
+
+
+def consume_unknown_values_rowids(x):
+    pass
+
+
 tokens = tf.constant([1, 2, 1, 3])
 # Positions of the ones: data-dependent length, so its shape is unknown to the analysis.
 starts = tf.squeeze(tf.where(tf.equal(tokens, 1)), -1)
@@ -37,3 +45,14 @@ consume_row_splits(tf.RaggedTensor.from_row_splits(tokens, splits))
 
 lengths = limits - starts
 consume_row_lengths(tf.RaggedTensor.from_row_lengths(tokens, lengths))
+
+# The values, not the partition, of unknown shape: their trailing axes, and so the result's rank,
+# are unknown.
+vals = tf.squeeze(tf.where(tf.equal(tokens, 1)), -1)
+uv = tf.RaggedTensor.from_row_starts(vals, [0, 1])
+assert uv.shape.rank == 2
+consume_unknown_values(uv)
+
+uvr = tf.RaggedTensor.from_value_rowids(vals, [0, 0])
+assert uvr.shape.rank == 2
+consume_unknown_values_rowids(uvr)

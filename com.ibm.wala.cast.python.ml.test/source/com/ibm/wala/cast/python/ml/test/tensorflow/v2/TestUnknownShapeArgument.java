@@ -128,4 +128,46 @@ public class TestUnknownShapeArgument extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /**
+   * {@code tf.RaggedTensor.from_row_starts} whose values, not its partition, have an unknown shape:
+   * the result's trailing axes, and so its rank, are unknown, so its shape is ⊤. Every
+   * row-partition constructor builds its shape through {@code
+   * RaggedTensorFromValues.constructRaggedShape}, which dereferenced the unknown values shape.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnknownValuesRowStarts()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        RAGGED,
+        "consume_unknown_values",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * {@code tf.RaggedTensor.from_value_rowids} with values of unknown shape, through the same shape
+   * construction as {@link #testUnknownValuesRowStarts}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnknownValuesValueRowIds()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        RAGGED,
+        "consume_unknown_values_rowids",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
