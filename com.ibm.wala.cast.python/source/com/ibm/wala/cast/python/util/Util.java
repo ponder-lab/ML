@@ -33,6 +33,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.TypeReference;
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -43,6 +44,27 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class Util {
+
+  /**
+   * Returns the PYTHONPATH entry a file is named against: the most specific entry that contains it.
+   * Entries may nest (a project root and its {@code src} folder, say), and the inner entry is the
+   * one that makes the file importable by the name its package's own imports use, so a file under
+   * both is named relative to the inner one. Naming it against whichever entry came first named a
+   * {@code src} layout's package {@code src/pkg/...} under a root-first path, which its {@code
+   * import pkg} statements never reach (wala/ML#984). Containment is by path component, so an entry
+   * {@code a/src} does not contain {@code a/srcx/m.py}.
+   *
+   * @param pythonPath The PYTHONPATH entries, as absolute paths.
+   * @param file The file's absolute path.
+   * @return The deepest entry containing the file, or empty when none does.
+   */
+  public static Optional<Path> getNamingPathEntry(List<Path> pythonPath, Path file) {
+    Path ret = null;
+    for (Path entry : pythonPath)
+      if (file.startsWith(entry) && (ret == null || entry.getNameCount() > ret.getNameCount()))
+        ret = entry;
+    return Optional.ofNullable(ret);
+  }
 
   private static final Logger LOGGER = Logger.getLogger(Util.class.getName());
 
