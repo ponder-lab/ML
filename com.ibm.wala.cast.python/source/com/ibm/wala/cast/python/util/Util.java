@@ -52,7 +52,9 @@ public class Util {
    * both is named relative to the inner one. Naming it against whichever entry came first named a
    * {@code src} layout's package {@code src/pkg/...} under a root-first path, which its {@code
    * import pkg} statements never reach (wala/ML#984). Containment is by path component, so an entry
-   * {@code a/src} does not contain {@code a/srcx/m.py}.
+   * {@code a/src} does not contain {@code a/srcx/m.py}. A package imported through the outer entry
+   * instead ({@code import src.pkg}) is a different module in Python too, and is deliberately left
+   * unbound when the inner entry is also on the path.
    *
    * @param pythonPath The PYTHONPATH entries, as absolute paths.
    * @param file The file's absolute path.
