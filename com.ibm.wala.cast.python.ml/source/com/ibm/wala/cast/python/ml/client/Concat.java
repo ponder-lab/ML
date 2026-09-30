@@ -329,43 +329,72 @@ public class Concat extends TensorGenerator {
     // ambiguous (multi-shape) element makes the output unknown (wala/ML#758). The previous
     // arbitrary pick from a multi-shape element followed hash order, itself a run-to-run
     // nondeterminism.
-    OrdinalSet<InstanceKey> firstElemPts = getElementPts(builder, listAsin, catalog, 0);
-    if (firstElemPts == null) return ShapeResult.unknown();
-    // An element that is exactly the None constant cannot be concatenated: the call cannot execute
-    // and its result is no tensor (wala/ML#961); an empty set is no evidence.
-    if (allNullConstants(firstElemPts)) return ShapeResult.bottom();
-    if (allInfeasible(builder, firstElemPts)) return ShapeResult.bottom(); // wala/ML#962
-    ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, false);
-    if (firstResult.isBottom()) return ShapeResult.bottom();
-    if (firstResult.hasUnknown() || firstResult.members().size() != 1) return ShapeResult.unknown();
-    List<Dimension<?>> firstShape = firstResult.members().iterator().next();
-    int rank = firstShape.size();
-    int normalizedAxis = axis < 0 ? axis + rank : axis;
-    if (normalizedAxis < 0 || normalizedAxis >= rank) return ShapeResult.unknown();
-
-    // Sum the axis dim across all elements.
-    long sum = 0;
+    // Every element must be read. An element that cannot execute makes the call not a tensor
+    // (wala/ML#961, wala/ML#962); a still-unresolved element is the engine's ⊥ and propagates so
+    // the
+    // evaluation ascends when it resolves (wala/ML#758). An element whose shape is unknown or
+    // ambiguous no longer decides the result by itself: `tf.concat` requires every element to have
+    // the same rank and the same non-axis dimensions, so any element whose shape is known fixes
+    // both, and only the axis extent stays open (wala/ML#985).
+    List<List<Dimension<?>>> known = new ArrayList<>();
+    boolean anyUnknown = false;
     for (InstanceKey catalogIK : catalog) {
       if (!(catalogIK instanceof ConstantKey)) return ShapeResult.unknown();
       Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
       if (fieldIndex == null) return ShapeResult.unknown();
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
-      if (elemPts == null) return ShapeResult.unknown();
+      if (elemPts == null) {
+        anyUnknown = true;
+        continue;
+      }
       if (allNullConstants(elemPts)) return ShapeResult.bottom(); // wala/ML#961
       if (allInfeasible(builder, elemPts)) return ShapeResult.bottom(); // wala/ML#962
       ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
       if (elemResult.isBottom()) return ShapeResult.bottom();
-      if (elemResult.hasUnknown() || elemResult.members().size() != 1) return ShapeResult.unknown();
-      List<Dimension<?>> elemShape = elemResult.members().iterator().next();
-      if (elemShape.size() != rank)
+      if (elemResult.hasUnknown() || elemResult.members().size() != 1) anyUnknown = true;
+      else known.add(elemResult.members().iterator().next());
+    }
+    if (known.isEmpty()) return ShapeResult.unknown();
+
+    int rank = known.get(0).size();
+    for (List<Dimension<?>> shape : known)
+      if (shape.size() != rank)
         return ShapeResult.unknown(); // rank mismatch — can't concat soundly
-      Dimension<?> axisDim = elemShape.get(normalizedAxis);
-      if (!(axisDim instanceof NumericDim)) return ShapeResult.unknown(); // non-numeric → can't sum
-      sum += ((NumericDim) axisDim).value();
+    int normalizedAxis = axis < 0 ? axis + rank : axis;
+    if (normalizedAxis < 0 || normalizedAxis >= rank) return ShapeResult.unknown();
+
+    List<Dimension<?>> outShape = new ArrayList<>(known.get(0));
+    // A non-axis dimension is the same in every element at run time, so a numeric reading from any
+    // known element stands for all of them; two different numeric readings cannot both hold.
+    for (int d = 0; d < rank; d++) {
+      if (d == normalizedAxis) continue;
+      for (List<Dimension<?>> shape : known) {
+        Dimension<?> dim = shape.get(d);
+        if (!(dim instanceof NumericDim)) continue;
+        Dimension<?> current = outShape.get(d);
+        if (!(current instanceof NumericDim)) outShape.set(d, dim);
+        else if (!current.equals(dim)) return ShapeResult.unknown();
+      }
     }
 
-    List<Dimension<?>> outShape = new ArrayList<>(firstShape);
-    outShape.set(normalizedAxis, new NumericDim((int) sum));
+    // The axis extent is the sum of the elements' extents when every one is known and numeric. An
+    // element whose shape is unknown may carry a data-dependent extent (a boolean-mask subscript, a
+    // `tf.where`), so the sum is then dynamic, as the absent-argument precedent reads an unknown
+    // extent (wala/ML#721, wala/ML#978); so it is when a known element's extent is itself dynamic.
+    // Only a sum over known elements with no dynamic extent is fixed but not computed here.
+    long sum = 0;
+    boolean summable = !anyUnknown;
+    boolean dynamic = anyUnknown;
+    for (List<Dimension<?>> shape : known) {
+      Dimension<?> axisDim = shape.get(normalizedAxis);
+      if (axisDim instanceof NumericDim numeric) sum += numeric.value();
+      else {
+        summable = false;
+        if (axisDim instanceof DynamicDim) dynamic = true;
+      }
+    }
+    if (summable) outShape.set(normalizedAxis, new NumericDim((int) sum));
+    else outShape.set(normalizedAxis, dynamic ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
     return ShapeResult.of(Collections.singleton(outShape));
   }
 
