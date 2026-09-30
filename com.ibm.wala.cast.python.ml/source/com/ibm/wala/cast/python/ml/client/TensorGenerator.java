@@ -8391,15 +8391,8 @@ public abstract class TensorGenerator {
     if (st.isConstant(vn)) return st.isNumberConstant(vn);
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof PythonPropertyRead read) {
-      int memberVn = read.getMemberRef();
-      if (!st.isStringConstant(memberVn)) return false;
-      // A subscript surfaces as a numeric string; an attribute name does not parse as one.
-      try {
-        Integer.parseInt(st.getStringValue(memberVn));
-        return false;
-      } catch (NumberFormatException e) {
-        // An attribute read.
-      }
+      // A subscript's member is an Integer constant, so a string constant names an attribute.
+      if (!st.isStringConstant(read.getMemberRef())) return false;
       return node.getMethod().getNumberOfParameters() >= 2
           && read.getObjectRef() == node.getIR().getParameter(1);
     }

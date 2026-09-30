@@ -89,6 +89,32 @@ public class TestConv1dReshapeRank extends AbstractTensorTest {
                     asList(new NumericDim(2), new NumericDim(5), UnresolvedDim.INSTANCE)))));
   }
 
+  /**
+   * A shape element that is arithmetic over stored attributes, one of which the analysis cannot
+   * compute ({@code self.wide_size // self.n_head}, a transformer's head size), reads as an
+   * unresolved axis, so the reshape keeps its rank (wala/ML#986); the computable attribute beside
+   * it reads as its value.
+   */
+  @Test
+  public void testArithmeticOverAttributesKeepsRank()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_heads",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        new NumericDim(5),
+                        new NumericDim(3),
+                        UnresolvedDim.INSTANCE)))));
+  }
+
   /** A {@code tf.split} over a third instance's result: each piece keeps the rank. */
   @Test
   public void testSplitOfLayerResultKeepsRank()

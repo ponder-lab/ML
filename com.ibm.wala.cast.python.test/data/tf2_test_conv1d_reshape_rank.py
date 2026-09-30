@@ -31,6 +31,10 @@ def consume_wide_split(x):
     pass
 
 
+def consume_heads(x):
+    pass
+
+
 class Conv1d(tf.keras.layers.Layer):
     def __init__(self, hidden_size, filter_size):
         super(Conv1d, self).__init__()
@@ -63,7 +67,9 @@ class Block(tf.keras.layers.Layer):
         # A filter size the analysis cannot compute (a configuration value times three, as a
         # transformer's attention projection sizes itself): the rank must survive, with an
         # unresolved last axis.
-        self.wide = Conv1d(8, json.loads("8") * 3)
+        self.n_head = 3
+        self.wide_size = json.loads("8") * 3
+        self.wide = Conv1d(8, self.wide_size)
 
     def call(self, x):
         first = self.dense_layer(x)
@@ -76,6 +82,11 @@ class Block(tf.keras.layers.Layer):
         consume_wide(wide)
         wq, wk, wv = tf.split(wide, 3, axis=2)
         consume_wide_split(wk)
+        # A shape element that is arithmetic over stored attributes, one of them a size the
+        # analysis cannot compute (a transformer's `hidden // n_head` head size): the rank must
+        # survive, with that axis unresolved.
+        heads = tf.reshape(wide, [2, 5, self.n_head, self.wide_size // self.n_head])
+        consume_heads(heads)
         return second, key
 
 
@@ -90,3 +101,9 @@ consume_opaque(tf.reshape(second, opaque_shape))
 assert second.shape == (2, 5, 8) and second.dtype == tf.float32
 assert key.shape == (2, 5, 8)
 assert block.wide(tf.ones((2, 5, 8))).shape == (2, 5, 24)
+assert tf.reshape(block.wide(tf.ones((2, 5, 8))), [2, 5, 3, 24 // 3]).shape == (
+    2,
+    5,
+    3,
+    8,
+)
