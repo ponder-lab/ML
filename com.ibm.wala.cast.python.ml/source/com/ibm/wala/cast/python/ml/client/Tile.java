@@ -3,7 +3,10 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -98,16 +101,26 @@ public class Tile extends PassThroughUnaryTensorGenerator {
    *
    * @param input The input shape.
    * @param multiples The per-axis tiling counts.
+   *     <p>The result keeps the input's rank whatever its extents, so an axis that is not
+   *     statically numeric no longer makes the whole result ⊤ (wala/ML#985). Such an axis is
+   *     unchanged by a multiple of {@code 1}, is {@code 0} under a multiple of {@code 0}, and
+   *     otherwise stays {@link DynamicDim} when it is dynamic and becomes {@link UnresolvedDim}
+   *     when it is not, by the wala/ML#721 criterion: a product is dynamic only over a dynamic
+   *     factor.
    * @return The tiled shape, or {@code null} (⊤) when {@code multiples}'s length differs from the
-   *     input rank or an input axis is not statically numeric.
+   *     input rank or an input axis is ragged.
    */
   private static List<Dimension<?>> tileShape(List<Dimension<?>> input, List<Integer> multiples) {
     if (multiples.size() != input.size()) return null;
     List<Dimension<?>> out = new ArrayList<>(input.size());
     for (int i = 0; i < input.size(); i++) {
       Dimension<?> dim = input.get(i);
-      if (!(dim instanceof NumericDim)) return null;
-      out.add(new NumericDim(((NumericDim) dim).value() * multiples.get(i)));
+      int multiple = multiples.get(i);
+      if (dim instanceof NumericDim numeric) out.add(new NumericDim(numeric.value() * multiple));
+      else if (dim instanceof RaggedDim) return null;
+      else if (multiple == 1) out.add(dim);
+      else if (multiple == 0) out.add(new NumericDim(0));
+      else out.add(dim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
     }
     return out;
   }

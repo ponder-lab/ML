@@ -1016,6 +1016,18 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(2),
                         new NumericDim(2),
                         new SymbolicDim("?"),
+                        new NumericDim(4))),
+                // `past_layer` in the sampling contexts, where `key` concatenates the unstacked
+                // past
+                // with the fresh key: the concatenation keeps the rank now, and its extent grows
+                // with each sampling call, so it is dynamic (wala/ML#985).
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(2),
+                        new NumericDim(2),
+                        DynamicDim.INSTANCE,
                         new NumericDim(4))))));
   }
 
