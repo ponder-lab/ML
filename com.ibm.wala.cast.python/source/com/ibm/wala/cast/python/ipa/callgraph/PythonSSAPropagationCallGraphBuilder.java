@@ -1489,16 +1489,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != tupleVn) continue;
       if (!symtab.isConstant(write.getMemberRef())) return -1;
       Object member = symtab.getConstantValue(write.getMemberRef());
-      Integer index = null;
-      if (member instanceof Integer i) index = i;
-      else if (member instanceof Long l && l <= Integer.MAX_VALUE) index = l.intValue();
-      else if (member instanceof String str)
-        try {
-          index = Integer.parseInt(str);
-        } catch (NumberFormatException e) {
-          return -1;
-        }
-      if (index == null || index < 0) return -1;
+      // Every writer of a tuple's elements (the translator's literals, the `zip` and `enumerate`
+      // summaries) names them by an Integer constant.
+      if (!(member instanceof Integer index) || index < 0) return -1;
       indices.add(index);
     }
     for (int i = 0; i < indices.size(); i++) if (!indices.contains(i)) return -1;

@@ -68,3 +68,23 @@ joined = (2,) + (4,)
 from_joined = np.zeros(joined[-1])
 assert from_joined.shape == (4,)
 consume_concatenated(from_joined)
+
+
+def consume_literal(x):
+    pass
+
+
+def consume_out_of_range(x):
+    pass
+
+
+# A tuple literal subscripted directly is read without a side effect on its points-to set.
+from_literal = np.zeros((2, 4)[-1])
+assert from_literal.shape == (4,)
+consume_literal(from_literal)
+
+# A negative subscript past the tuple's start denotes no element, so nothing is read.
+try:
+    consume_out_of_range(np.zeros(shape[-3]))
+except IndexError:
+    pass

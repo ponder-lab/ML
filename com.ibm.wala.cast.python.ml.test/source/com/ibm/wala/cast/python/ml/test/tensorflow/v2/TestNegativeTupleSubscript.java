@@ -71,4 +71,19 @@ public class TestNegativeTupleSubscript extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_64, 4), TensorType.of(FLOAT_64, 2))));
   }
+
+  /** A tuple literal subscripted directly, read without a side effect on its points-to set. */
+  @Test
+  public void testLiteralSubscript() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_literal", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 4))));
+  }
+
+  /**
+   * Control: a negative subscript past the tuple's start denotes no element, so nothing is read and
+   * the shape stays unknown.
+   */
+  @Test
+  public void testOutOfRangeUnread() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_out_of_range", 1, 1, Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
+  }
 }
