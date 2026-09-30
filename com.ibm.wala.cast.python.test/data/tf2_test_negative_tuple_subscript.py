@@ -55,3 +55,16 @@ lengths = [2, 4]
 from_list = np.zeros(lengths[-1])
 assert from_list.shape == (4,)
 consume_list(from_list)
+
+
+def consume_concatenated(x):
+    pass
+
+
+# A tuple built by concatenation is allocated by the operation, not by a literal, so its length is
+# not known at the allocation and its negative subscript is not read as one element; the operation
+# model still reads any subscript of it as all of its elements.
+joined = (2,) + (4,)
+from_joined = np.zeros(joined[-1])
+assert from_joined.shape == (4,)
+consume_concatenated(from_joined)

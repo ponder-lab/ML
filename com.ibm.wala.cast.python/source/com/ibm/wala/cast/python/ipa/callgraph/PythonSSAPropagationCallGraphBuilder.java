@@ -1473,6 +1473,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     CGNode node = asin.getNode();
     IR ir = node.getIR();
     if (ir == null || node.getDU() == null) return -1;
+    // A tuple built by an operation (`(a,) + (b,)`, wala/ML#960) is allocated at a site that is not
+    // a `new` of this IR, and `IR.getNew` throws rather than answering null for such a site.
+    boolean allocatedHere = false;
+    for (Iterator<NewSiteReference> sites = ir.iterateNewSites(); sites.hasNext(); )
+      if (sites.next().equals(asin.getSite())) allocatedHere = true;
+    if (!allocatedHere) return -1;
     SSANewInstruction alloc = ir.getNew(asin.getSite());
     if (alloc == null) return -1;
     int tupleVn = alloc.getDef();

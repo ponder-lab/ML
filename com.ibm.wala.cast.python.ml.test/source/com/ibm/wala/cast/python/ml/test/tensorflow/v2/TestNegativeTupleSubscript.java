@@ -53,4 +53,22 @@ public class TestNegativeTupleSubscript extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_list", 1, 1, Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
   }
+
+  /**
+   * Control: a tuple built by concatenation is allocated by the operation (wala/ML#960), not by a
+   * literal, so its length is unknown at the allocation. Its negative subscript is not read as one
+   * element, and the operation model still reads it as all of the tuple's elements, as before.
+   * Reading this allocation's length used to throw, since {@code IR.getNew} throws for a site that
+   * is not a {@code new} of that IR.
+   */
+  @Test
+  public void testConcatenatedTupleUnread()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_concatenated",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 4), TensorType.of(FLOAT_64, 2))));
+  }
 }
