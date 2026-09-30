@@ -26,6 +26,7 @@ import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
+import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
@@ -50,6 +51,7 @@ import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
@@ -61,6 +63,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
+import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
@@ -68,6 +71,7 @@ import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInvokeInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.Descriptor;
@@ -476,6 +480,35 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Reads a negative constant subscript of a tuple as the element it denotes, by a side effect on
+     * the subscripted object's points-to set (wala/ML#988). A literal or otherwise implicitly
+     * represented object is read directly, since a side effect must not materialize its key (the
+     * wala/ML#668 trap).
+     *
+     * @param instruction The property read.
+     */
+    private void processNegativeSubscript(AstPropertyRead instruction) {
+      SymbolTable symtab = ir.getSymbolTable();
+      int memberRef = instruction.getMemberRef();
+      // A Python integer literal is a `Long` constant; a string key is an attribute name.
+      if (!symtab.isConstant(memberRef)
+          || !(symtab.getConstantValue(memberRef) instanceof Long member)
+          || member >= 0
+          || member < Integer.MIN_VALUE) return;
+      int index = member.intValue();
+      NegativeSubscriptOperator operator =
+          getBuilder()
+          .new NegativeSubscriptOperator(getPointerKeyForLocal(instruction.getDef()), index);
+      int objectVn = instruction.getObjectRef();
+      PointerKey objectKey = getPointerKeyForLocal(objectVn);
+      if (contentsAreInvariant(symtab, du, objectVn) || system.isImplicit(objectKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, objectVn)) operator.read(key);
+        return;
+      }
+      system.newSideEffect(operator, objectKey);
+    }
+
+    /**
      * Surfaces append-accumulated list contents at subscript reads (<a
      * href="https://github.com/wala/ML/issues/661">wala/ML#661</a>): a property read whose member
      * is not a constant string also reads the synthetic {@value #LIST_APPEND_CONTENTS_FIELD}
@@ -676,6 +709,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public void visitPropertyRead(AstPropertyRead instruction) {
       super.visitPropertyRead(instruction);
       processListContentsRead(instruction);
+      processNegativeSubscript(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
@@ -1355,6 +1389,114 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public String toString() {
       return "text read " + kind + " at " + pc + " in " + node;
     }
+  }
+
+  /**
+   * Reads a negative constant subscript of a tuple, {@code t[-k]}, as element {@code n - k} of each
+   * tuple {@code t} may be, where {@code n} is that tuple's length (wala/ML#988). A tuple's
+   * elements are fields named by their index from {@code 0}, so the ordinary field read names a
+   * field no tuple has, and the read's result was empty. The length is taken from the tuple's
+   * allocation: the constant-index writes to the fresh tuple in the allocating method, which must
+   * be exactly {@code 0} through {@code n - 1}. A tuple whose length is not known that way, and any
+   * key that is not a tuple, contributes nothing, as before. A list is left alone, since its length
+   * can change after it is built.
+   */
+  public final class NegativeSubscriptOperator extends UnaryOperator<PointsToSetVariable> {
+    private final PointerKey resultKey;
+    private final int index;
+    private final Set<InstanceKey> read = HashSetFactory.make();
+
+    private NegativeSubscriptOperator(PointerKey resultKey, int index) {
+      this.resultKey = resultKey;
+      this.index = index;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds the constraint reading element {@code n + index} of the given key into the result, if
+     * the key is a tuple of known length {@code n} and the element exists.
+     *
+     * @param key A key the subscripted object may be.
+     */
+    private void read(InstanceKey key) {
+      if (!read.add(key)) return;
+      if (!(key instanceof AllocationSiteInNode asin)) return;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass tupleClass = cha.lookupClass(PythonTypes.tuple);
+      if (tupleClass == null || !key.concreteType().equals(tupleClass)) return;
+      int length = tupleLength(asin);
+      int element = length + index;
+      if (length < 0 || element < 0) return;
+      IField field = resolveRootField(cha, Integer.toString(element));
+      if (field == null) return;
+      logger.fine(() -> "negative subscript " + index + " of " + key + " reads element " + element);
+      getSystem()
+          .newConstraint(
+              resultKey,
+              assignOperator,
+              ((AstPointerKeyFactory) getPointerKeyFactory())
+                  .getPointerKeyForInstanceField(key, field));
+    }
+
+    @Override
+    public int hashCode() {
+      return resultKey.hashCode() * 31 + index;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof NegativeSubscriptOperator other
+          && resultKey.equals(other.resultKey)
+          && index == other.index;
+    }
+
+    @Override
+    public String toString() {
+      return "negative subscript " + index + " into " + resultKey;
+    }
+  }
+
+  /**
+   * The length of a tuple, read off its allocation: the constant-index property writes to the fresh
+   * tuple in the allocating method, which must be exactly {@code 0} through {@code n - 1}
+   * (wala/ML#988).
+   *
+   * @param asin The tuple's allocation.
+   * @return The length, or {@code -1} when the allocation does not determine it.
+   */
+  private static int tupleLength(AllocationSiteInNode asin) {
+    CGNode node = asin.getNode();
+    IR ir = node.getIR();
+    if (ir == null || node.getDU() == null) return -1;
+    SSANewInstruction alloc = ir.getNew(asin.getSite());
+    if (alloc == null) return -1;
+    int tupleVn = alloc.getDef();
+    SymbolTable symtab = ir.getSymbolTable();
+    Set<Integer> indices = HashSetFactory.make();
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(tupleVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != tupleVn) continue;
+      if (!symtab.isConstant(write.getMemberRef())) return -1;
+      Object member = symtab.getConstantValue(write.getMemberRef());
+      Integer index = null;
+      if (member instanceof Integer i) index = i;
+      else if (member instanceof Long l && l <= Integer.MAX_VALUE) index = l.intValue();
+      else if (member instanceof String str)
+        try {
+          index = Integer.parseInt(str);
+        } catch (NumberFormatException e) {
+          return -1;
+        }
+      if (index == null || index < 0) return -1;
+      indices.add(index);
+    }
+    for (int i = 0; i < indices.size(); i++) if (!indices.contains(i)) return -1;
+    return indices.size();
   }
 
   /**
