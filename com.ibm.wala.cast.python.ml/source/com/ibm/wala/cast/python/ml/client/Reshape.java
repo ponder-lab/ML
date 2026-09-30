@@ -13,6 +13,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -145,6 +146,14 @@ public class Reshape extends TensorGenerator {
     if (this.isShapeVectorArgument(
         builder, this.getShapeParameterPosition(), this.getShapeParameterName()))
       return ShapeResult.unknown();
+    // A shape argument that is present but opaque to every reader (an unmodeled call's result,
+    // with no points-to set and no recognized form) determines the output shape too, so the
+    // output is ⊤; the input-shape fallback below is for a call with no shape argument at all.
+    // Before, such a reshape seeded nothing (its dtype read was empty), and the input-shape
+    // member never surfaced; with the dtype now resolving it would (wala/ML#987).
+    if (this.getArgumentValueNumber(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName(), true)
+        > 0) return ShapeResult.unknown();
     return null;
   }
 
@@ -323,7 +332,21 @@ public class Reshape extends TensorGenerator {
     OrdinalSet<InstanceKey> tensorPts =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
-    return this.getDTypesOfValue(builder, tensorPts);
+    if (tensorPts != null && !tensorPts.isEmpty()) {
+      Set<DType> fromValue = this.getDTypesOfValue(builder, tensorPts);
+      if (fromValue != null && !fromValue.isEmpty()) return fromValue;
+    }
+    // A caller-side operator-produced input (the matmul-plus-bias feeding a layer's output
+    // reshape) has no allocation site and so no points-to set, exactly as for the shape read
+    // above (wala/ML#739); read its dtype through the caller's value number. A reshape always
+    // produces a tensor, so an input whose dtype nothing resolves yields a tensor of unknown
+    // dtype, not no tensor: an empty dtype set beside a resolved shape emptied the whole seed, and
+    // the dataflow's reshape pin then replaced the result with an unknown rank (wala/ML#987).
+    Set<DType> viaCallers =
+        this.getArgumentDTypesViaCallers(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
+    if (viaCallers != null && !viaCallers.isEmpty()) return viaCallers;
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override

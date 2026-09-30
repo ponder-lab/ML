@@ -1702,6 +1702,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return new TensorType(cellType, merged);
   }
 
+  /**
+   * Whether a shape operand has a non-empty points-to set (wala/ML#987): a computed list (a
+   * concatenation's result, a list carried through a parameter) does, and the generator's
+   * shape-vector walk may resolve it; an opaque runtime value has none.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose IR defines the operand.
+   * @param vn The operand's value number.
+   * @return {@code true} iff the operand's points-to set is non-empty.
+   */
+  private static boolean shapeOperandHasPointsTo(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (builder.getPropagationSystem().isImplicit(key)) return true; // A constant or literal.
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(key);
+    return pts != null && !pts.isEmpty();
+  }
+
   private Map<PointsToSetVariable, Set<TensorType>> getShapeSourceCalls(
       MethodReference op, PropagationCallGraphBuilder builder, int param) {
     Map<PointsToSetVariable, Set<TensorType>> targets = HashMapFactory.make();
@@ -1748,7 +1766,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // unique value is the chain the generator resolves to nothing at all, so only that
             // falls through to the unknown-rank pin below; the bare structural skip withdrew the
             // pin there too and starved consumers whose only tensor evidence it was (wala/ML#765).
-            if (TensorGenerator.isShapeVectorChain(builder, src, shapeVn)) {
+            // The same holds for every other non-literal operand (wala/ML#987): a shape list
+            // built by concatenation from `tf.shape(...)` subscripts and a stored attribute is
+            // neither a literal container nor a recognized chain, yet the generator's shape-vector
+            // walk resolves it; the unknown-rank pin below would replace that resolution with an
+            // unknown rank, so it applies only when the generator resolves nothing.
+            // Beyond a chain, the consult needs the operand to have a points-to set: an opaque
+            // runtime value (an unmodeled call's result) has none, and the generator then falls
+            // back to the input's shape, which the pin's unknown rank must keep overriding. A
+            // chain has none either (a `.shape` read allocates nothing) and is consulted as before.
+            if (!literalContainer
+                && (TensorGenerator.isShapeVectorChain(builder, src, shapeVn)
+                    || shapeOperandHasPointsTo(builder, src, shapeVn))) {
               Set<TensorType> generatorTypes = this.getTensorTypes(defVariable, builder);
               if (generatorTypes != null && !generatorTypes.isEmpty()) return;
             }

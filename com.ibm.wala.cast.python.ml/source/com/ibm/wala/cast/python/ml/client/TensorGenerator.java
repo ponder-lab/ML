@@ -8356,7 +8356,54 @@ public abstract class TensorGenerator {
     Set<Dimension<?>> products = this.prodOfShapeVectorDims(builder, node, st, vn);
     if (products != null) return products;
     Dimension<?> single = this.elementDim(builder, node, st, vn);
-    return single == null ? null : Collections.singleton(single);
+    if (single != null) return Collections.singleton(single);
+    // A stored attribute the chase cannot resolve, or arithmetic over one (a projection sized
+    // from a configuration value times three), is one axis of a fixed size the analysis cannot
+    // compute: an {@link UnresolvedDim} under the wala/ML#721 criterion, not evidence against the
+    // list's rank. Declining it emptied the whole target and lost the rank (wala/ML#986).
+    return isAttributeSizedElement(node, st, vn)
+        ? Collections.singleton(UnresolvedDim.INSTANCE)
+        : null;
+  }
+
+  /**
+   * Whether a shape-list element is a read of a stored attribute of the enclosing method's {@code
+   * self} ({@code self.filter_size}), or arithmetic whose operands are such reads and constants
+   * ({@code self.d_model * 3}), so its value is an integer size the analysis may not be able to
+   * compute but whose axis exists (wala/ML#986).
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The element's value number.
+   * @return {@code true} iff the element has that form.
+   */
+  private static boolean isAttributeSizedElement(CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0 || node.getIR() == null || node.getDU() == null) return false;
+    if (st.isConstant(vn)) return st.isNumberConstant(vn);
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof PythonPropertyRead read) {
+      int memberVn = read.getMemberRef();
+      if (!st.isStringConstant(memberVn)) return false;
+      // A subscript surfaces as a numeric string; an attribute name does not parse as one.
+      try {
+        Integer.parseInt(st.getStringValue(memberVn));
+        return false;
+      } catch (NumberFormatException e) {
+        // An attribute read.
+      }
+      return node.getMethod().getNumberOfParameters() >= 2
+          && read.getObjectRef() == node.getIR().getParameter(1);
+    }
+    if (def instanceof SSABinaryOpInstruction binop) {
+      boolean anyAttribute = false;
+      for (int i = 0; i < binop.getNumberOfUses(); i++) {
+        int use = binop.getUse(i);
+        if (!isAttributeSizedElement(node, st, use)) return false;
+        anyAttribute |= !st.isConstant(use);
+      }
+      return anyAttribute;
+    }
+    return false;
   }
 
   /**

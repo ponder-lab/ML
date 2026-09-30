@@ -1652,6 +1652,9 @@ public class TestDatasets extends AbstractTensorTest {
    * import (wala/ML#665) and the {@code add_weight}-built kernel dispatches, so the result is
    * tensor-classified.
    *
+   * <p>The rankless twin it once carried beside the resolved shape was the dataflow's reshape pin
+   * over the layer's concatenated shape list (wala/ML#987).
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -1682,7 +1685,7 @@ public class TestDatasets extends AbstractTensorTest {
         // seed (a probe of the unfed-seed restore found none in `Conv1d.call`): the seed takes
         // SHAPE_FILL, whose rule maps each operand member, and the operand's own rankless member
         // maps to a rankless output.
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TensorType.of(FLOAT_32, 2, 3, 16))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16))));
   }
 
   /**
@@ -1710,6 +1713,9 @@ public class TestDatasets extends AbstractTensorTest {
    * [tf.shape(x)[0], tf.shape(x)[1]] + [n]}, the vendored {@code Conv1d} idiom, wala/ML#618): the
    * interpreter evaluates the expression and the output shape is concrete.
    *
+   * <p>The rankless twin it once carried was the dataflow's reshape pin over the non-literal
+   * operand (wala/ML#987).
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -1727,7 +1733,7 @@ public class TestDatasets extends AbstractTensorTest {
         // (2, 3, 16); the opaque-shape-operand unknown-rank pin (wala/ML#703) rides along in the
         // union. TODO(https://github.com/wala/ML/issues/703): drop the ⊤ member once the pin
         // defers to interpreter-resolved shape operands.
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16))));
   }
 
   /**
