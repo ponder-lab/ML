@@ -378,10 +378,14 @@ public class Concat extends TensorGenerator {
     }
 
     // The axis extent is the sum of the elements' extents when every one is known and numeric. An
-    // element whose shape is unknown may carry a data-dependent extent (a boolean-mask subscript, a
-    // `tf.where`), so the sum is then dynamic, as the absent-argument precedent reads an unknown
-    // extent (wala/ML#721, wala/ML#978); so it is when a known element's extent is itself dynamic.
-    // Only a sum over known elements with no dynamic extent is fixed but not computed here.
+    // element whose shape is unknown gives no evidence either way about its extent, which may be
+    // data-dependent (a boolean-mask subscript, a `tf.where`). The letter of the wala/ML#721
+    // criterion would read "no None-evidence" as unresolved, but that asserts a fixed size the
+    // analysis has not seen, whereas a dynamic extent is the over-approximation that is correct
+    // whether the true extent is fixed or data-dependent. So the sum is dynamic then, as the
+    // absent-argument precedent reads an unknown extent (wala/ML#978); it is also dynamic when a
+    // known element's extent is. Only a sum over known elements with no dynamic extent is fixed
+    // but not computed here.
     long sum = 0;
     boolean summable = !anyUnknown;
     boolean dynamic = anyUnknown;
