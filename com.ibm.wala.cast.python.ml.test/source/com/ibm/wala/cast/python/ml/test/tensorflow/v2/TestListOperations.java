@@ -69,6 +69,9 @@ public class TestListOperations extends AbstractTensorTest {
    * A reshape whose target is a concatenated shape vector keeps resolving through the def-use
    * vector walk: the synthesized list is no literal evidence, so the walk runs as before.
    *
+   * <p>The rankless twin this once carried beside the resolved shape was the dataflow's reshape pin
+   * over the non-literal operand, which now yields to the generator's resolution (wala/ML#987).
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -77,12 +80,7 @@ public class TestListOperations extends AbstractTensorTest {
   @Test
   public void testReshapeOverConcatenatedShapeVector()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_reshaped",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_reshaped", 1, 1, Map.of(2, Set.of(TENSOR_2_3_4_FLOAT32)));
   }
 
   /**

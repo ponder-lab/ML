@@ -8356,7 +8356,43 @@ public abstract class TensorGenerator {
     Set<Dimension<?>> products = this.prodOfShapeVectorDims(builder, node, st, vn);
     if (products != null) return products;
     Dimension<?> single = this.elementDim(builder, node, st, vn);
-    return single == null ? null : Collections.singleton(single);
+    if (single != null) return Collections.singleton(single);
+    // A stored attribute the chase cannot resolve (a projection sized from a configuration value
+    // times three) is one axis of a fixed size the analysis cannot compute: an {@link
+    // UnresolvedDim} under the wala/ML#721 criterion (see isAttributeSizedElement for why not
+    // Dynamic), not evidence against the list's rank. Declining it emptied the whole target and
+    // lost the rank (wala/ML#986).
+    return isAttributeSizedElement(node, st, vn)
+        ? Collections.singleton(UnresolvedDim.INSTANCE)
+        : null;
+  }
+
+  /**
+   * Whether a shape-list element is a read of a stored attribute off the enclosing code body's
+   * first parameter (a method's {@code self}, as in {@code self.filter_size}; for a plain function,
+   * its first argument, as in {@code cfg.size}), so its value is an integer size the analysis may
+   * not be able to compute but whose axis exists (wala/ML#986). Arithmetic over such reads is
+   * answered by the resolvers that run before this one.
+   *
+   * <p>Such an element reads as {@link UnresolvedDim}, not {@link DynamicDim}: it is a fixed
+   * runtime integer the analysis could not compute (a configuration value, unfoldable arithmetic),
+   * the wala/ML#721 criterion's own examples of Unresolved. A {@code None}-valued attribute, which
+   * would be Dynamic, cannot occur here: this resolver serves the shape vectors of {@code
+   * tf.reshape} targets and {@code tf.concat} operands, where {@code None} is not a legal element
+   * and the call would not run.
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The element's value number.
+   * @return {@code true} iff the element has that form.
+   */
+  private static boolean isAttributeSizedElement(CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0 || node.getIR() == null || node.getDU() == null) return false;
+    // A subscript's member is an Integer constant, so a string constant names an attribute.
+    return node.getDU().getDef(vn) instanceof PythonPropertyRead read
+        && st.isStringConstant(read.getMemberRef())
+        && node.getMethod().getNumberOfParameters() >= 2
+        && read.getObjectRef() == node.getIR().getParameter(1);
   }
 
   /**

@@ -1662,6 +1662,9 @@ public class TestShapeOps extends AbstractTensorTest {
    * tolist} nodes vanished from a whole-program call graph when the array type was named), and it
    * already reads its own extent through the slice pin.
    *
+   * <p>The list slice's rankless twin was the dataflow's reshape pin over the non-literal operand,
+   * gone with wala/ML#987; the wrong pass-through member stays as read.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -1688,7 +1691,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume_list_slice_shape",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(FLOAT_32, null), TensorType.of(FLOAT_32, 4, 6, 7))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6, 7))));
     test(file, "consume_ndarray_slice", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
   }
 

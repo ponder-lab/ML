@@ -956,6 +956,12 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * carries; before, it read that shape with an unknown dtype in every sampling context. The
    * parameters {@code x} and {@code mask} union the sampling contexts ({@code (2, 1, ...)} and
    * {@code (2, 3, ...)}) with the module driver's training contexts.
+   *
+   * <p>{@code past_layer}'s batch axis reads its runtime {@code 2} (wala/ML#986): the stacked
+   * {@code key} and {@code value} come from {@code split_heads} over {@code c_attn}'s output, whose
+   * reshape target now resolves with the projection's unresolvable filter size as an unresolved
+   * axis instead of emptying, so {@code tf.shape(x)[0]} reaches the stack; before, the axis was
+   * unresolved.
    */
   @Test
   public void testGpt2SamplingLoopPastLayer()
@@ -1012,19 +1018,19 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(
-                        UnresolvedDim.INSTANCE,
+                        new NumericDim(2),
                         new NumericDim(2),
                         new NumericDim(2),
                         new SymbolicDim("?"),
                         new NumericDim(4))),
                 // `past_layer` in the sampling contexts, where `key` concatenates the unstacked
-                // past
-                // with the fresh key: the concatenation keeps the rank now, and its extent grows
-                // with each sampling call, so it is dynamic (wala/ML#985).
+                // past with the fresh key: the concatenation keeps the rank now, and its extent
+                // grows with each sampling call, so it is dynamic (wala/ML#985); its batch axis
+                // reads its runtime 2 by the same route as the first member's (wala/ML#986).
                 new TensorType(
                     FLOAT_32,
                     asList(
-                        UnresolvedDim.INSTANCE,
+                        new NumericDim(2),
                         new NumericDim(2),
                         new NumericDim(2),
                         DynamicDim.INSTANCE,
@@ -1416,7 +1422,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * past_layer is not None:} arm reads no tensor instead of an unknown-dtype tensor, and the twin
    * it used to carry through the key/value concat, the attention, and {@code merge_heads} into
    * {@code c_proj}'s input is gone: every member of {@code Conv1d.call}'s {@code x}, over its
-   * contexts, is float32.
+   * contexts, is float32. The rankless float32 member it also carried was {@code Conv1d}'s own
+   * output under the dataflow's reshape pin, gone with wala/ML#987: every member now has rank 3.
+   * The union also carries the feed-forward layers' inputs at their concrete extents and the merged
+   * heads' {@code (S, S, 8)}/{@code (32, S, 8)} forms, which read the pin before.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1443,20 +1452,30 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         Map.of(
             3,
             Set.of(
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
-                new TensorType(
-                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
                     FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
                     FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
+                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))))));
   }
 
   /**
@@ -1468,8 +1487,17 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * its seed's unknown dtype: the multiply is a temporary with no points-to variable, never seeded,
    * so the add's feed has one operand to fill from and fills nothing over a shapeless seed
    * (wala/ML#963). The twin then rides softmax, the value matmul, and {@code merge_heads} into the
-   * projection, whose input is float32 at run time. Pinned as read so the member is on record and
-   * wala/ML#963's repair fails this pin on purpose.
+   * projection, whose input is float32 at run time. It was pinned as read so the member was on
+   * record for wala/ML#963's repair; wala/ML#987 removed it first, by another route: the
+   * projection's input is {@code Conv1d}'s output, and that layer's final reshape now takes its
+   * dtype from the caller-side read of its matmul-plus-bias input, whose float32 bias fixes the
+   * add's dtype at run time whatever the matmul's, so the unknown-dtype twin no longer reaches the
+   * projection. wala/ML#963 stays open for the mask add itself.
+   *
+   * <p>The union also carries the feed-forward layers' inputs at their concrete extents ({@code
+   * (32, S, 16)} and the {@code (S, S, 8)}/{@code (32, S, 8)} forms of the merged heads), since
+   * every {@code Conv1d} output now resolves to rank 3 (wala/ML#987, wala/ML#986): those contexts
+   * read the rankless pin before.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1497,22 +1525,29 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             3,
             Set.of(
                 TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(16))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
-                new TensorType(
-                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
                     FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))),
                 new TensorType(
-                    UNKNOWN,
-                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(32), new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))))));
   }
 }
