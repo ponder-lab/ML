@@ -92,8 +92,9 @@ public class TestConv1dReshapeRank extends AbstractTensorTest {
   /**
    * A shape element that is arithmetic over stored attributes, one of which the analysis cannot
    * compute ({@code self.wide_size // self.n_head}, a transformer's head size), reads as an
-   * unresolved axis, so the reshape keeps its rank (wala/ML#986); the computable attribute beside
-   * it reads as its value.
+   * unresolved axis, so the reshape keeps its rank; the computable attribute beside it reads as its
+   * value. The arithmetic resolvers answer this element before the attribute-read fallback of
+   * wala/ML#986, which serves the bare attribute read only.
    */
   @Test
   public void testArithmeticOverAttributesKeepsRank()
