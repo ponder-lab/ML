@@ -8359,18 +8359,27 @@ public abstract class TensorGenerator {
     if (single != null) return Collections.singleton(single);
     // A stored attribute the chase cannot resolve, or arithmetic over one (a projection sized
     // from a configuration value times three), is one axis of a fixed size the analysis cannot
-    // compute: an {@link UnresolvedDim} under the wala/ML#721 criterion, not evidence against the
-    // list's rank. Declining it emptied the whole target and lost the rank (wala/ML#986).
+    // compute: an {@link UnresolvedDim} under the wala/ML#721 criterion (see
+    // isAttributeSizedElement for why not Dynamic), not evidence against the list's rank.
+    // Declining it emptied the whole target and lost the rank (wala/ML#986).
     return isAttributeSizedElement(node, st, vn)
         ? Collections.singleton(UnresolvedDim.INSTANCE)
         : null;
   }
 
   /**
-   * Whether a shape-list element is a read of a stored attribute of the enclosing method's {@code
-   * self} ({@code self.filter_size}), or arithmetic whose operands are such reads and constants
-   * ({@code self.d_model * 3}), so its value is an integer size the analysis may not be able to
-   * compute but whose axis exists (wala/ML#986).
+   * Whether a shape-list element is a read of a stored attribute off the enclosing code body's
+   * first parameter (a method's {@code self}, as in {@code self.filter_size}; for a plain function,
+   * its first argument, as in {@code cfg.size}), or arithmetic whose operands are such reads and
+   * constants ({@code self.d_model * 3}), so its value is an integer size the analysis may not be
+   * able to compute but whose axis exists (wala/ML#986).
+   *
+   * <p>Such an element reads as {@link UnresolvedDim}, not {@link DynamicDim}: it is a fixed
+   * runtime integer the analysis could not compute (a configuration value, unfoldable arithmetic),
+   * the wala/ML#721 criterion's own examples of Unresolved. A {@code None}-valued attribute, which
+   * would be Dynamic, cannot occur here: this resolver serves the shape vectors of {@code
+   * tf.reshape} targets and {@code tf.concat} operands, where {@code None} is not a legal element
+   * and the call would not run.
    *
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param st The node's symbol table.
