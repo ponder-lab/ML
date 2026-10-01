@@ -47,6 +47,7 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.types.annotations.Annotation;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayList;
@@ -243,6 +244,45 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           }
 
           for (MethodReference r : methodReferences) {
+            // A method declared with `@property` is a getter: the instance's attribute of that
+            // name is the getter's VALUE, `inst.name = name(inst)`, not a bound method
+            // (wala/ML#993). Evaluating it here, at construction, is exact for a flow-insensitive
+            // heap: the body's reads of `self` resolve to whatever the initializer ever stores.
+            // Only instances built through this synthesized constructor get the value; a read on
+            // the class itself, or on an instance made another way, keeps the previous behavior.
+            if (!summaryDeclaredMethods.contains(r)
+                && isProperty(r, receiver.getClassHierarchy())) {
+              int getter = v++;
+              ctor.addStatement(
+                  insts.GetInstruction(
+                      pc++,
+                      getter,
+                      1,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
+              int value = v++;
+              int valueException = v++;
+              @SuppressWarnings({"unchecked", "rawtypes"})
+              Pair<String, Integer>[] noKeywords = new Pair[0];
+              ctor.addStatement(
+                  new PythonInvokeInstruction(
+                      pc,
+                      value,
+                      valueException,
+                      new DynamicCallSiteReference(site.getDeclaredTarget(), pc),
+                      new int[] {getter, inst},
+                      noKeywords));
+              pc++;
+              ctor.addStatement(
+                  insts.PutInstruction(
+                      pc++,
+                      inst,
+                      value,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, instanceFieldName(r, false), PythonTypes.Root)));
+              continue;
+            }
+
             int f = v++;
             ctor.addStatement(
                 insts.NewInstruction(
@@ -448,6 +488,21 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     n.equals("NamedTuple")
                         || n.endsWith(".NamedTuple")
                         || n.endsWith("/NamedTuple"));
+  }
+
+  /**
+   * Whether the given method is declared with {@code @property} (wala/ML#993): its class carries
+   * the annotation of that name, as a static method carries {@link PythonTypes#STATIC_METHOD}.
+   *
+   * @param r The method.
+   * @param cha The class hierarchy that resolves the method's class.
+   * @return {@code true} iff the method is a property getter.
+   */
+  private static boolean isProperty(MethodReference r, IClassHierarchy cha) {
+    IClass cls = cha.lookupClass(r.getDeclaringClass());
+    return cls != null
+        && cls.getAnnotations() != null
+        && cls.getAnnotations().contains(Annotation.make(PythonTypes.PROPERTY));
   }
 
   /**
