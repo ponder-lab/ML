@@ -27,6 +27,7 @@ import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
+import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
@@ -509,6 +510,49 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Reads a subscript of a list or tuple by a loop variable, {@code xs[i]} inside {@code for i in
+     * ...}, as any of the collection's elements (wala/ML#993). The ordinary read names the field by
+     * the index's points-to set, and the loop variable of {@code for i in range(n)} has none (the
+     * elements of {@code range} are not modeled as integers), so the read was empty, and a call
+     * through it, such as {@code self.subnets[i](x)}, reached nothing. Iteration already reads a
+     * collection this way, through its catalog of element keys; this does the same for an indexed
+     * read. Only a loop variable triggers it: an index bound to a constant some other way (a local
+     * or a parameter fed a literal) keeps the exact ordinary read, and a receiver that is neither a
+     * list nor a tuple contributes nothing.
+     *
+     * @param instruction The property read.
+     */
+    private void processUnknownIndexRead(AstPropertyRead instruction) {
+      SymbolTable symtab = ir.getSymbolTable();
+      if (symtab.isConstant(instruction.getMemberRef())
+          || !isLoopVariable(instruction.getMemberRef())) return;
+      UnknownIndexReadOperator operator =
+          getBuilder()
+          .new UnknownIndexReadOperator(
+              getPointerKeyForLocal(instruction.getDef()), instruction.iIndex());
+      int objectVn = instruction.getObjectRef();
+      PointerKey objectKey = getPointerKeyForLocal(objectVn);
+      if (contentsAreInvariant(symtab, du, objectVn) || system.isImplicit(objectKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, objectVn)) operator.read(key);
+        return;
+      }
+      system.newSideEffect(operator, objectKey);
+    }
+
+    /**
+     * Whether a value is the variable of a {@code for} loop. The loop lowers to an element read of
+     * the iterated collection keyed by one of its property names, {@code i = coll[name]} with
+     * {@code name} drawn by an {@link EachElementGetInstruction}.
+     *
+     * @param vn The value number.
+     * @return {@code true} iff the value is defined by such a read.
+     */
+    private boolean isLoopVariable(int vn) {
+      return du.getDef(vn) instanceof AstPropertyRead read
+          && du.getDef(read.getMemberRef()) instanceof EachElementGetInstruction;
+    }
+
+    /**
      * Surfaces append-accumulated list contents at subscript reads (<a
      * href="https://github.com/wala/ML/issues/661">wala/ML#661</a>): a property read whose member
      * is not a constant string also reads the synthetic {@value #LIST_APPEND_CONTENTS_FIELD}
@@ -710,6 +754,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       super.visitPropertyRead(instruction);
       processListContentsRead(instruction);
       processNegativeSubscript(instruction);
+      processUnknownIndexRead(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
@@ -1458,6 +1503,67 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "negative subscript " + index + " into " + resultKey;
+    }
+  }
+
+  /**
+   * Reads every element of each list or tuple a subscripted object may be into the result of a read
+   * whose index is a loop variable (wala/ML#993). The elements are read through the collection's
+   * catalog of field names as the names arrive, the way iteration and the list operations read
+   * them, so elements written after the read is registered still reach it.
+   */
+  public final class UnknownIndexReadOperator extends UnaryOperator<PointsToSetVariable> {
+    private final PointerKey resultKey;
+    private final int pc;
+    private final Set<InstanceKey> read = HashSetFactory.make();
+
+    private UnknownIndexReadOperator(PointerKey resultKey, int pc) {
+      this.resultKey = resultKey;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      // A side effect: the elements reach the result through the element copies registered here.
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Registers the read of every element of the given key, if it is a list or a tuple.
+     *
+     * @param key A key the subscripted object may be.
+     */
+    private void read(InstanceKey key) {
+      if (!read.add(key)) return;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass list = cha.lookupClass(PythonTypes.list);
+      IClass tuple = cha.lookupClass(PythonTypes.tuple);
+      IClass type = key.concreteType();
+      if (!(list != null && cha.isSubclassOf(type, list))
+          && !(tuple != null && cha.isSubclassOf(type, tuple))) return;
+      logger.fine(() -> "unknown-index read of every element of " + key + " into " + resultKey);
+      getSystem()
+          .newSideEffect(
+              new ElementCopyOperator(key, resultKey, pc),
+              ((AstPointerKeyFactory) getPointerKeyFactory()).getPointerKeyForObjectCatalog(key));
+    }
+
+    @Override
+    public int hashCode() {
+      return resultKey.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof UnknownIndexReadOperator other
+          && resultKey.equals(other.resultKey)
+          && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "unknown-index read at " + pc + " into " + resultKey;
     }
   }
 
