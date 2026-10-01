@@ -1480,14 +1480,18 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       // Anything locating the defaulted range by counting back from the end of the combined array
       // must discount them or it binds every default one slot to the right (wala/ML#843).
       int trailingNonDefaultable = 0;
-      if (aa.getInternalKwarg() != null) {
-        args = new LinkedList<>(args);
-        args.add(aa.getInternalKwarg());
-        trailingNonDefaultable++;
-      }
+      // `*args` precedes `**kwargs`, as in the declaration: the formal right after the plain
+      // positionals is the one an extra positional argument binds to, and with `**kwargs` there
+      // a wrapper's forwarded argument landed in `kwargs` and its `args` stayed empty
+      // (wala/ML#188).
       if (aa.getInternalVararg() != null) {
         args = new LinkedList<>(args);
         args.add(aa.getInternalVararg());
+        trailingNonDefaultable++;
+      }
+      if (aa.getInternalKwarg() != null) {
+        args = new LinkedList<>(args);
+        args.add(aa.getInternalKwarg());
         trailingNonDefaultable++;
       }
       // Keyword-only parameters (declared after a bare `*` or `*args`) are formal parameters too;
