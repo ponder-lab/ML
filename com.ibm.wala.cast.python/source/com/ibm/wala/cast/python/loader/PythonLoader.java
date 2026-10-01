@@ -723,7 +723,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       AstLexicalInformation lexicalInfo,
       DebuggingInformation debugInfo,
       int defaultArgs,
-      int trailingNonDefaultableArgs) {
+      int trailingNonDefaultableArgs,
+      int varargsParameter,
+      int keywordsParameter) {
     DynamicCodeBody C = (DynamicCodeBody) lookupClass(clsName, cha);
     assert C != null : clsName;
     return C.setCodeBody(
@@ -737,7 +739,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
             debugInfo,
             C,
             defaultArgs,
-            trailingNonDefaultableArgs));
+            trailingNonDefaultableArgs,
+            varargsParameter,
+            keywordsParameter));
   }
 
   public DynamicMethodObject makeCodeBodyCode(
@@ -750,7 +754,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       DebuggingInformation debugInfo,
       IClass C,
       int defaultArgs,
-      int trailingNonDefaultableArgs) {
+      int trailingNonDefaultableArgs,
+      int varargsParameter,
+      int keywordsParameter) {
     return new PythonCodeBodyMethod(
         C,
         cfg,
@@ -761,7 +767,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
         lexicalInfo,
         debugInfo,
         defaultArgs,
-        trailingNonDefaultableArgs);
+        trailingNonDefaultableArgs,
+        varargsParameter,
+        keywordsParameter);
   }
 
   /**
@@ -777,6 +785,10 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
     private final int trailingNonDefaultableArgs;
 
+    private final int varargsParameter;
+
+    private final int keywordsParameter;
+
     public PythonCodeBodyMethod(
         IClass C,
         AbstractCFG<?, ?> cfg,
@@ -787,7 +799,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
         AstLexicalInformation lexicalInfo,
         DebuggingInformation debugInfo,
         int defaultArgs,
-        int trailingNonDefaultableArgs) {
+        int trailingNonDefaultableArgs,
+        int varargsParameter,
+        int keywordsParameter) {
       super(
           C,
           Collections.emptySet(),
@@ -800,6 +814,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
           debugInfo);
       this.defaultArgs = defaultArgs;
       this.trailingNonDefaultableArgs = trailingNonDefaultableArgs;
+      this.varargsParameter = varargsParameter;
+      this.keywordsParameter = keywordsParameter;
     }
 
     @Override
@@ -810,6 +826,16 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     @Override
     public int getNumberOfTrailingNonDefaultableParameters() {
       return this.trailingNonDefaultableArgs;
+    }
+
+    @Override
+    public int getVarargsParameter() {
+      return this.varargsParameter;
+    }
+
+    @Override
+    public int getKeywordsParameter() {
+      return this.keywordsParameter;
     }
   }
 

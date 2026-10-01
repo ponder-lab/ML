@@ -1809,12 +1809,35 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         argIndex++;
       }
 
+      // The `*args` and `**kwargs` formals follow the plain positionals, in that order, after the
+      // function object at index 0 (wala/ML#991).
+      int varargsParameter = -1;
+      int keywordsParameter = -1;
+      if (function instanceof FunctionDef) {
+        arguments declared = ((FunctionDef) function).getInternalArgs();
+        int next = 1 + declared.getInternalArgs().size();
+        if (declared.getInternalVararg() != null) varargsParameter = next++;
+        if (declared.getInternalKwarg() != null) keywordsParameter = next;
+      }
+      int varargs = varargsParameter;
+      int keywords = keywordsParameter;
+
       class PythonCodeEntity extends AbstractCodeEntity
           implements PythonGlobalsEntity, DynamicAnnotatableEntity, StarFormalDeclaration {
 
         @Override
         public int getNumberOfTrailingNonDefaultableParameters() {
           return trailingNonDefaultable;
+        }
+
+        @Override
+        public int getVarargsParameter() {
+          return varargs;
+        }
+
+        @Override
+        public int getKeywordsParameter() {
+          return keywords;
         }
 
         private final java.util.Set<String> downwardGlobals;

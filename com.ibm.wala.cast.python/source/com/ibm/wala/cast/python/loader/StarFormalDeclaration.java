@@ -24,4 +24,25 @@ public interface StarFormalDeclaration {
    * @return The count, zero when every formal is a plain positional parameter.
    */
   int getNumberOfTrailingNonDefaultableParameters();
+
+  /**
+   * The index of the {@code *args} formal among the function's arguments, counting the function
+   * object itself as argument {@code 0}, so that it is also the positional slot of a call that
+   * would bind it (wala/ML#991).
+   *
+   * @return The index, or {@code -1} when the function declares no {@code *args}.
+   */
+  default int getVarargsParameter() {
+    return -1;
+  }
+
+  /**
+   * The index of the {@code **kwargs} formal among the function's arguments, counting as {@link
+   * #getVarargsParameter()} does (wala/ML#991).
+   *
+   * @return The index, or {@code -1} when the function declares no {@code **kwargs}.
+   */
+  default int getKeywordsParameter() {
+    return -1;
+  }
 }
