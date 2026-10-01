@@ -20,6 +20,24 @@ def consume_appended(x):
     assert x.shape == (6, 3) and x.dtype == tf.float32
 
 
+def consume_expanded(x):
+    assert x.shape == (4, 3, 1) and x.dtype == tf.float32
+
+
+def consume_reshaped(x):
+    assert x.shape == (2, 6) and x.dtype == tf.float32
+
+
+def expand(x, axes):
+    # A slice's collection reaches the reader of a single-element axis list.
+    consume_expanded(tf.expand_dims(x, axes[0:1]))
+
+
+def reshape(x, shape):
+    # A slice's collection reaches the reader of a shape list.
+    consume_reshaped(tf.reshape(x, shape[0:2]))
+
+
 def slice_list(xs):
     consume_list(tf.concat(xs[0:-1], 0))
 
@@ -49,3 +67,5 @@ slice_tail([a, b, g])
 grown = [a, h]
 grown.append(a)
 slice_grown(grown)
+expand(a, [-1, 0])
+reshape(a, [2, 6, 1])

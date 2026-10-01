@@ -52,4 +52,21 @@ public class TestListSlice extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_appended", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 6, 3))));
   }
+
+  /**
+   * A slice's collection reaching the reader of a single-element axis list, which looked up the
+   * collection's {@code new} instruction: the slice is allocated at its call, not at a {@code new},
+   * and the lookup threw for it rather than declining. The reader now declines, so the result is a
+   * float32 tensor of unknown shape (the axis list itself is not resolved through the slice).
+   */
+  @Test
+  public void testSliceAsAxisList() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_expanded", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /** As {@link #testSliceAsAxisList()}, through the reader of a shape list. */
+  @Test
+  public void testSliceAsShapeList() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_reshaped", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
 }
