@@ -11,6 +11,7 @@
 package com.ibm.wala.cast.python.types;
 
 import static com.ibm.wala.cast.python.util.Util.CLASS_METHOD_ANNOTATION_NAME;
+import static com.ibm.wala.cast.python.util.Util.PROPERTY_ANNOTATION_NAME;
 import static com.ibm.wala.cast.python.util.Util.STATIC_METHOD_ANNOTATION_NAME;
 
 import com.ibm.wala.cast.tree.CAstType;
@@ -193,6 +194,14 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference CLASS_METHOD =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("L" + CLASS_METHOD_ANNOTATION_NAME));
+
+  /**
+   * https://docs.python.org/3/library/functions.html#property. The annotation a method class
+   * carries when the method is declared with {@code @property} (wala/ML#993).
+   */
+  public static final TypeReference PROPERTY =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("L" + PROPERTY_ANNOTATION_NAME));
 
   /**
    * Sentinel constant used as the {@code CAstNode} value for Python's ellipsis literal ({@code

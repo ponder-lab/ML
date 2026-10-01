@@ -98,6 +98,9 @@ public class Util {
   /** Name of the annotation (decorator) that marks methods as static. */
   public static final String STATIC_METHOD_ANNOTATION_NAME = "staticmethod";
 
+  /** The name of the decorator that makes a method a property getter (wala/ML#993). */
+  public static final String PROPERTY_ANNOTATION_NAME = "property";
+
   /** Name of the annotation (decorator) that marks methods as a class method. */
   public static final String CLASS_METHOD_ANNOTATION_NAME = "classmethod";
 

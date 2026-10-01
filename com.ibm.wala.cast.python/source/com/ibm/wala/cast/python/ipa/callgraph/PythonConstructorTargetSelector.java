@@ -47,6 +47,7 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.types.annotations.Annotation;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayList;
@@ -243,6 +244,63 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           }
 
           for (MethodReference r : methodReferences) {
+            // A method declared with `@property` is a getter: the instance's attribute of that
+            // name is the getter's VALUE, `inst.name = name(inst)`, not a bound method
+            // (wala/ML#993). Evaluating it here, at construction, is exact for a flow-insensitive
+            // heap: the body's reads of `self` resolve to whatever the initializer ever stores.
+            // Only instances built through this synthesized constructor get the value; a read on
+            // the class itself, or on an instance made another way, keeps the previous behavior.
+            // A property's setter or deleter (`@name.setter`) is not an attribute of the instance:
+            // a write to the attribute reaches the field directly, and binding the accessor under
+            // the property's name would make a call through the attribute dispatch it beside the
+            // getter's value (wala/ML#993). The analysis never invokes the accessor (measured: its
+            // body is absent from the call graph unless called directly); the written value
+            // reaches the attribute as written.
+            if (!summaryDeclaredMethods.contains(r)
+                && isPropertyAccessor(r, receiver.getClassHierarchy())) continue;
+            if (!summaryDeclaredMethods.contains(r)
+                && isProperty(r, receiver.getClassHierarchy())) {
+              // The getter is read off the class attribute of its name, where the class body
+              // bound it, so its lexical reads of module names resolve through that creator (a
+              // fresh allocation here would have no module scope: measured, a getter calling a
+              // module function or a library API read as nothing). A setter's definition rebinds
+              // that attribute to both functions, so the read is filtered to the getter's own
+              // function class; reading it unfiltered ran the setter with the instance as its
+              // value (measured).
+              int attribute = v++;
+              ctor.addStatement(
+                  insts.GetInstruction(
+                      pc++,
+                      attribute,
+                      1,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
+              int getter = v++;
+              ctor.addStatement(
+                  insts.CheckCastInstruction(pc++, getter, attribute, r.getDeclaringClass(), true));
+              int value = v++;
+              int valueException = v++;
+              @SuppressWarnings({"unchecked", "rawtypes"})
+              Pair<String, Integer>[] noKeywords = new Pair[0];
+              ctor.addStatement(
+                  new PythonInvokeInstruction(
+                      pc,
+                      value,
+                      valueException,
+                      new DynamicCallSiteReference(site.getDeclaredTarget(), pc),
+                      new int[] {getter, inst},
+                      noKeywords));
+              pc++;
+              ctor.addStatement(
+                  insts.PutInstruction(
+                      pc++,
+                      inst,
+                      value,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, instanceFieldName(r, false), PythonTypes.Root)));
+              continue;
+            }
+
             int f = v++;
             ctor.addStatement(
                 insts.NewInstruction(
@@ -448,6 +506,39 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     n.equals("NamedTuple")
                         || n.endsWith(".NamedTuple")
                         || n.endsWith("/NamedTuple"));
+  }
+
+  /**
+   * Whether the given method is declared with {@code @property} (wala/ML#993): its class carries
+   * the annotation of that name, as a static method carries {@link PythonTypes#STATIC_METHOD}.
+   *
+   * @param r The method.
+   * @param cha The class hierarchy that resolves the method's class.
+   * @return {@code true} iff the method is a property getter.
+   */
+  private static boolean isProperty(MethodReference r, IClassHierarchy cha) {
+    IClass cls = cha.lookupClass(r.getDeclaringClass());
+    return cls != null
+        && cls.getAnnotations() != null
+        && cls.getAnnotations().contains(Annotation.make(PythonTypes.PROPERTY));
+  }
+
+  /**
+   * Whether the given method is a property's setter or deleter (wala/ML#993): its class carries an
+   * annotation named {@code <property>.setter} or {@code <property>.deleter}.
+   *
+   * @param r The method.
+   * @param cha The class hierarchy that resolves the method's class.
+   * @return {@code true} iff the method is a property accessor other than the getter.
+   */
+  private static boolean isPropertyAccessor(MethodReference r, IClassHierarchy cha) {
+    IClass cls = cha.lookupClass(r.getDeclaringClass());
+    if (cls == null || cls.getAnnotations() == null) return false;
+    for (Annotation annotation : cls.getAnnotations()) {
+      String name = annotation.getType().getName().toString();
+      if (name.endsWith(".setter") || name.endsWith(".deleter")) return true;
+    }
+    return false;
   }
 
   /**
