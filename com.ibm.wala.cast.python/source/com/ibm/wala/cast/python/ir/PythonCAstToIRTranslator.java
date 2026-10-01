@@ -1384,6 +1384,19 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     return Exception;
   }
 
+  /**
+   * Whether the analysis defines the script of the given file name, translated or in scope.
+   *
+   * @param fileName The script's file name relative to its PYTHONPATH entry, e.g. {@code
+   *     pkg/__init__.py}.
+   * @return {@code true} iff the script is translated already or is in the analysis scope.
+   */
+  private boolean definesScript(String fileName) {
+    return loader.lookupClass(TypeName.findOrCreate("Lscript " + fileName)) != null
+        || (loader instanceof PythonLoader pythonLoader
+            && pythonLoader.definesScriptInScope(fileName));
+  }
+
   @Override
   protected void doPrimitive(int resultVal, WalkContext context, CAstNode primitiveCall) {
     if (primitiveCall.getChildCount() == 2
@@ -1399,11 +1412,19 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       // already translated, so an importer translated before its importee silently fell through
       // to the (nonexistent) library-import path and the module never bound (wala/ML#691). The
       // scope-name check decides by what the analysis scope CONTAINS, not by translation order.
+      // A package is the script its initialization file defines, so `import pkg` binds
+      // `pkg/__init__.py` when no module `pkg.py` is in scope; its preamble holds the package's
+      // submodules and subpackages as fields, which an attribute chain then reads (wala/ML#210).
+      String script = name + ".py";
+      if (!definesScript(script)) {
+        String initialization = name + "/" + MODULE_INITIALIZATION_FILENAME;
+        if (definesScript(initialization)) script = initialization;
+      }
+      String bound = script;
       boolean alreadyTranslated =
-          loader.lookupClass(TypeName.findOrCreate("Lscript " + name + ".py")) != null;
+          loader.lookupClass(TypeName.findOrCreate("Lscript " + bound)) != null;
       boolean inScope =
-          loader instanceof PythonLoader pythonLoader
-              && pythonLoader.definesScriptInScope(name + ".py");
+          loader instanceof PythonLoader pythonLoader && pythonLoader.definesScriptInScope(bound);
 
       if (alreadyTranslated || inScope) {
         traceImportBinding(
@@ -1412,13 +1433,13 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 "Binding import of: "
                     + name
                     + " to script: "
-                    + name
-                    + ".py (already translated: "
+                    + bound
+                    + " (already translated: "
                     + alreadyTranslated
                     + ", in scope: "
                     + inScope
                     + ") (wala/ML#687).");
-        FieldReference global = makeGlobalRef("script " + name + ".py");
+        FieldReference global = makeGlobalRef("script " + bound);
         context.cfg().addInstruction(new AstGlobalRead(idx, resultVal, global));
       } else {
         traceImportBinding(

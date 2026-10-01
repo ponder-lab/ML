@@ -1520,12 +1520,8 @@ public class TestModules extends AbstractTensorTest {
                         new NumericDim(3))))));
   }
 
-  /**
-   * Test https://github.com/wala/ML/issues/210.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
-   */
-  @Test(expected = AssertionError.class)
+  /** Test https://github.com/wala/ML/issues/210. */
+  @Test
   public void testModule70()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1538,12 +1534,8 @@ public class TestModules extends AbstractTensorTest {
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
-  /**
-   * Test https://github.com/wala/ML/issues/210.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
-   */
-  @Test(expected = AssertionError.class)
+  /** Test https://github.com/wala/ML/issues/210. */
+  @Test
   public void testModule71()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
