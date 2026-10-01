@@ -1005,7 +1005,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      * value and the default otherwise (wala/ML#993). The builtin itself is not modeled, so the call
      * read as a call resolved to nothing. The rewrite is limited to an object that is a name or an
      * attribute chain, which the two arms may evaluate twice without effect; a {@code getattr} with
-     * a computed name, keywords, or another object stays a call.
+     * a computed name, keywords, or another object stays a call. The match is by name, so a module
+     * that binds its own {@code getattr} is rewritten as well.
      *
      * @param call The call expression.
      * @return The attribute read, or {@code null} when {@code call} is not such a {@code getattr}.

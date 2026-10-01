@@ -74,6 +74,37 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   }
 
   /**
+   * The inputter reached through a property that also has a setter of the same name, assigned
+   * through that setter: the attribute holds the getter's value, and calling it calls the layer.
+   */
+  @Test
+  public void testSettablePropertyInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_settable_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A property whose getter holds a plain function, called through the attribute with the
+   * embedding: the function is called, so its result is the embedding.
+   */
+  @Test
+  public void testSettableFunctionCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_settable_fn_out", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The setter of that property is reached only by the assignment in {@code __init__}, whose value
+   * is a function, so its sink sees no tensor: a call through the attribute does not dispatch the
+   * setter beside the getter's value.
+   */
+  @Test
+  public void testSetterNotDispatchedByCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_setter_value", 0, 0);
+  }
+
+  /**
    * The encoder's own {@code __call__}, declared on its base class, is not dispatched: the call
    * goes straight to {@code call} (wala/ML#994). No type is lost on this chain by it.
    *

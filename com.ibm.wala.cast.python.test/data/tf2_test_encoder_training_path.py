@@ -44,6 +44,22 @@ def consume_inherited_inputs(x):
     pass
 
 
+def consume_settable_inputs(x):
+    pass
+
+
+def consume_settable_fn_out(x):
+    pass
+
+
+def consume_setter_value(x):
+    pass
+
+
+def passthrough(x):
+    return x
+
+
 def consume_property_inputs(x):
     pass
 
@@ -136,6 +152,30 @@ class Model(BaseModel):
         self.encoder = SelfAttentionEncoder(8)
         self.plain_encoder = PlainEncoder()
         self.direct_encoder = DirectCallEncoder()
+        # Assigned through the property's setter.
+        self.settable_inputter = self.features_inputter
+        self.settable_fn = passthrough
+
+    # A property with a setter of the same name: the getter's value, not the setter, is what the
+    # instance's attribute holds.
+    @property
+    def settable_inputter(self):
+        return self._settable
+
+    @settable_inputter.setter
+    def settable_inputter(self, value):
+        self._settable = value
+
+    # A property whose setter sinks what it is given: only the assignment in `__init__` reaches
+    # the setter; a call through the attribute must not dispatch it.
+    @property
+    def settable_fn(self):
+        return self._fn
+
+    @settable_fn.setter
+    def settable_fn(self, value):
+        consume_setter_value(value)
+        self._fn = value
 
     # The inputter reached through a property, as a sequence-to-sequence model exposes it.
     @property
@@ -179,6 +219,10 @@ def training_step(source, target):
     consume_getattr_inputs(getattr_inputs)
     inherited_inputs = model.inherited_inputter(source, training=True)
     consume_inherited_inputs(inherited_inputs)
+    settable_inputs = model.settable_inputter(source, training=True)
+    consume_settable_inputs(settable_inputs)
+    fn_out = model.settable_fn(source_inputs)
+    consume_settable_fn_out(fn_out)
     return encoder_outputs
 
 
