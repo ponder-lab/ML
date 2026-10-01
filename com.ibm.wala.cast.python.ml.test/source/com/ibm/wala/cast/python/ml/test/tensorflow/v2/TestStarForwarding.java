@@ -52,4 +52,29 @@ public class TestStarForwarding extends AbstractTensorTest {
   public void testStarredMethodCall() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "forwarded_target", 2, 2, Map.of(2, Set.of(T2), 3, Set.of(T3)));
   }
+
+  /** A {@code **} argument that is a dict literal at the call binds the formal it names. */
+  @Test
+  public void testDoubleStarLiteral() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "literal_kw", 2, 2, Map.of(2, Set.of(T2), 3, Set.of(T4)));
+  }
+
+  /** As {@link #testDoubleStarLiteral()}, with the dict literal in a local. */
+  @Test
+  public void testDoubleStarLocal() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "local_kw", 2, 2, Map.of(2, Set.of(T2), 3, Set.of(T4)));
+  }
+
+  /** A {@code **} argument to a method called through an instance binds the formal it names. */
+  @Test
+  public void testDoubleStarMethod() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "Holder.take", 2, 2, Map.of(3, Set.of(T2), 4, Set.of(T4)));
+  }
+
+  /** A starred argument to a constructor unpacks into its initializer's parameters. */
+  @Test
+  public void testStarredConstructor()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "Built.__init__", 2, 2, Map.of(3, Set.of(T2), 4, Set.of(T3)));
+  }
 }

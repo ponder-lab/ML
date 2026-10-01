@@ -28,6 +28,27 @@ def forwarded_target(x, y):
     return y
 
 
+def literal_kw(x, scale=None):
+    assert scale.shape == (4,)
+    return scale
+
+
+def local_kw(x, scale=None):
+    assert scale.shape == (4,)
+    return scale
+
+
+def make_kw():
+    return {"scale": tf.ones(4)}
+
+
+class Built:
+    def __init__(self, x, y):
+        assert x.shape == (2,) and y.shape == (3,)
+        self.x = x
+        self.y = y
+
+
 class Holder:
     def collect(self, *args):
         # A method's `*args` packs the instance call's arguments.
@@ -35,6 +56,10 @@ class Holder:
 
     def forward(self, x, y):
         return forwarded_target(x, y)
+
+    def take(self, x, scale=None):
+        assert scale.shape == (4,)
+        return scale
 
 
 def wrap(fn):
@@ -50,3 +75,8 @@ wrap(mixed)(tf.ones(2), tf.ones(3), scale=tf.ones(4))
 Holder().collect(tf.ones(2), tf.ones(3))
 pair = [tf.ones(2), tf.ones(3)]
 Holder().forward(*pair)
+literal_kw(tf.ones(2), **{"scale": tf.ones(4)})
+options = {"scale": tf.ones(4)}
+local_kw(tf.ones(2), **options)
+Holder().take(tf.ones(2), **make_kw())
+Built(*pair)
