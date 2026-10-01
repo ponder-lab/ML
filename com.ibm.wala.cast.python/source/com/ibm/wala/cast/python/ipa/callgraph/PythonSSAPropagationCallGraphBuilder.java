@@ -1870,6 +1870,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && !(tuple != null && cha.isSubclassOf(type, tuple))) {
         // Kept whole through an assignment from the starred value, so the tensor dataflow, which
         // walks assignments, sees it as it did when the literal stored the value as one element.
+        // The assignment carries the value's whole points-to set: when it mixes a collection with
+        // a non-collection, the collection is stored whole as well as unpacked (a superset).
         if (!keptWhole) {
           keptWhole = true;
           getSystem().newConstraint(target, assignOperator, value);
