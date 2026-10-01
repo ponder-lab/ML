@@ -552,6 +552,26 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
+    return this.getShapesFromShapeArgument(builder, pointsToSet, HashSetFactory.make());
+  }
+
+  /**
+   * Reads a shape argument, carrying the containers already on the walk (wala/ML#990). A list
+   * rebuilt around its previous value in a loop ({@code shape = [shape, 2]}) is one abstract object
+   * that contains itself, and reading its nested elements recursed without end. A container met
+   * again on its own walk is read as an unresolvable nested form, ⊤, as an unrecognized one is
+   * (wala/ML#471). A container that appears twice without containing itself still resolves, since a
+   * container leaves the walk when its reading is done.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The shape argument's points-to set.
+   * @param onWalk The containers whose elements are being read.
+   * @return As {@link #getShapesFromShapeArgument(PropagationCallGraphBuilder, Iterable)}.
+   */
+  private Set<List<Dimension<?>>> getShapesFromShapeArgument(
+      PropagationCallGraphBuilder builder,
+      Iterable<InstanceKey> pointsToSet,
+      Set<InstanceKey> onWalk) {
     if (pointsToSet == null || !hasLiteralShapeEvidence(pointsToSet))
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + describe(this.getSource()) + ".");
@@ -573,331 +593,345 @@ public abstract class TensorGenerator {
 
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null) continue;
-      // A list produced by repetition or concatenation carries its elements under one non-numeric
-      // name and no length (wala/ML#960): reading it here would count zero numeric fields and
-      // answer a scalar shape. It is not a literal, so it contributes nothing and the caller falls
-      // through to the def-use vector walk, today's route for such a value.
-      if (isListOperationResult(asin)) continue;
-      TypeReference reference = asin.concreteType().getReference();
+      // A container met again while it is being read contains itself (wala/ML#990): its shape is
+      // not statically resolvable, as for an unrecognized nested form (wala/ML#471).
+      if (!onWalk.add(asin)) return null;
+      try {
+        // A list produced by repetition or concatenation carries its elements under one non-numeric
+        // name and no length (wala/ML#960): reading it here would count zero numeric fields and
+        // answer a scalar shape. It is not a literal, so it contributes nothing and the caller
+        // falls
+        // through to the def-use vector walk, today's route for such a value.
+        if (isListOperationResult(asin)) continue;
+        TypeReference reference = asin.concreteType().getReference();
 
-      if (reference.equals(dict)) {
-        // A dict-structured shape specification, e.g. `padded_shapes={'h_r': [None], 't':
-        // [None]}`. The values (keyed by arbitrary string names) are the per-leaf shape specs;
-        // recurse into each value and union the results, mirroring the dict-structured dtype
-        // handling (wala/ML#615). See wala/ML#673.
-        OrdinalSet<InstanceKey> dictCatalogPts =
-            pointerAnalysis.getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(asin));
+        if (reference.equals(dict)) {
+          // A dict-structured shape specification, e.g. `padded_shapes={'h_r': [None], 't':
+          // [None]}`. The values (keyed by arbitrary string names) are the per-leaf shape specs;
+          // recurse into each value and union the results, mirroring the dict-structured dtype
+          // handling (wala/ML#615). See wala/ML#673.
+          OrdinalSet<InstanceKey> dictCatalogPts =
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
 
-        for (InstanceKey catalogIK : dictCatalogPts) {
-          if (!(catalogIK instanceof ConstantKey)) continue;
-          Object keyValue = ((ConstantKey<?>) catalogIK).getValue();
-          // Dict keys are strings; the value is stored as an instance field named by the key.
-          if (!(keyValue instanceof String)) continue;
+          for (InstanceKey catalogIK : dictCatalogPts) {
+            if (!(catalogIK instanceof ConstantKey)) continue;
+            Object keyValue = ((ConstantKey<?>) catalogIK).getValue();
+            // Dict keys are strings; the value is stored as an instance field named by the key.
+            if (!(keyValue instanceof String)) continue;
 
-          FieldReference subscript =
-              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom((String) keyValue), Root);
+            FieldReference subscript =
+                FieldReference.findOrCreate(Root, findOrCreateAsciiAtom((String) keyValue), Root);
 
-          IField f = builder.getClassHierarchy().resolveField(subscript);
-          if (f != null) {
-            PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-            OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
-            if (fieldPts == null || fieldPts.isEmpty()) continue;
-            Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
-            if (sub == null) return null;
-            ret.addAll(sub);
+            IField f = builder.getClassHierarchy().resolveField(subscript);
+            if (f != null) {
+              PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+              OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
+              if (fieldPts == null || fieldPts.isEmpty()) continue;
+              Set<List<Dimension<?>>> sub =
+                  this.getShapesFromShapeArgument(builder, fieldPts, onWalk);
+              if (sub == null) return null;
+              ret.addAll(sub);
+            }
           }
-        }
-        continue;
-      }
-
-      if (reference.equals(list) || reference.equals(tuple)) {
-        // We have a list of integers that represent the shape.
-        OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            pointerAnalysis.getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(asin));
-
-        // We expect the object catalog to contain a list of integers. Each element in the array
-        // correspondences to the set of possible dimensions for that index.
-        int elementCount = integerCatalogSize(objectCatalogPointsToSet);
-        if (elementCount == 0) {
-          ret.add(Collections.emptyList());
           continue;
         }
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        Set<Dimension<?>>[] possibleDimensions = new Set[elementCount];
 
-        for (InstanceKey catalogIK : objectCatalogPointsToSet) {
-          ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-          Integer fieldIndex = getFieldIndex(constantKey);
-          // Skip non-integer attribute keys (e.g. method-name fields); they aren't elements.
-          // See wala/ML#603.
-          if (fieldIndex == null) continue;
+        if (reference.equals(list) || reference.equals(tuple)) {
+          // We have a list of integers that represent the shape.
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
 
-          FieldReference subscript =
-              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+          // We expect the object catalog to contain a list of integers. Each element in the array
+          // correspondences to the set of possible dimensions for that index.
+          int elementCount = integerCatalogSize(objectCatalogPointsToSet);
+          if (elementCount == 0) {
+            ret.add(Collections.emptyList());
+            continue;
+          }
+          @SuppressWarnings({"unchecked", "rawtypes"})
+          Set<Dimension<?>>[] possibleDimensions = new Set[elementCount];
 
-          IField f = builder.getClassHierarchy().resolveField(subscript);
-          LOGGER.fine("Found field: " + f);
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+            Integer fieldIndex = getFieldIndex(constantKey);
+            // Skip non-integer attribute keys (e.g. method-name fields); they aren't elements.
+            // See wala/ML#603.
+            if (fieldIndex == null) continue;
 
-          // We can now get the pointer key for the instance field.
-          PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
-          LOGGER.fine(
-              "Found pointer key for instance field: "
-                  + describe(pointerKeyForInstanceField)
-                  + ".");
+            FieldReference subscript =
+                FieldReference.findOrCreate(
+                    Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
-          // Get the points-to set for the instance field.
-          OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-              pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-          LOGGER.fine(
-              "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
+            IField f = builder.getClassHierarchy().resolveField(subscript);
+            LOGGER.fine("Found field: " + f);
 
-          // If the instance field points to a constant, we can use it as the shape.
-          // TODO: Is it possible to also do it for (simple) expressions?
-          Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
+            // We can now get the pointer key for the instance field.
+            PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+            LOGGER.fine(
+                "Found pointer key for instance field: "
+                    + describe(pointerKeyForInstanceField)
+                    + ".");
 
-          for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
-            if (instanceFieldIK instanceof ConstantKey) {
-              // We have a constant key.
-              ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
-              Object instanceFieldValue = instanceFieldConstant.getValue();
+            // Get the points-to set for the instance field.
+            OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+                pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+            LOGGER.fine(
+                "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
-              // A non-numeric constant (e.g., a boolean flag reaching a shape slot through a
-              // materialized default, wala/ML#762) is not a dimension; skip it rather than abort
-              // the walk.
-              if (instanceFieldValue != null && !(instanceFieldValue instanceof Number)) {
+            // If the instance field points to a constant, we can use it as the shape.
+            // TODO: Is it possible to also do it for (simple) expressions?
+            Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
+
+            for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
+              if (instanceFieldIK instanceof ConstantKey) {
+                // We have a constant key.
+                ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
+                Object instanceFieldValue = instanceFieldConstant.getValue();
+
+                // A non-numeric constant (e.g., a boolean flag reaching a shape slot through a
+                // materialized default, wala/ML#762) is not a dimension; skip it rather than abort
+                // the walk.
+                if (instanceFieldValue != null && !(instanceFieldValue instanceof Number)) {
+                  LOGGER.fine(
+                      () -> "Skipping non-numeric shape constant: " + instanceFieldValue + ".");
+                  continue;
+                }
+
+                // We have a shape value.
+                Number shapeValue = (Number) instanceFieldValue;
                 LOGGER.fine(
-                    () -> "Skipping non-numeric shape constant: " + instanceFieldValue + ".");
-                continue;
-              }
+                    "Found shape value: "
+                        + shapeValue
+                        + " for "
+                        + (this.getSource() != null ? this.getSource().getPointerKey() : "null")
+                        + ".");
 
-              // We have a shape value.
-              Number shapeValue = (Number) instanceFieldValue;
-              LOGGER.fine(
-                  "Found shape value: "
-                      + shapeValue
-                      + " for "
-                      + (this.getSource() != null ? this.getSource().getPointerKey() : "null")
-                      + ".");
+                // `None` in a shape arg (e.g., `shape=[None, 4]`) is the dynamic-dim marker.
+                // https://github.com/wala/ML/issues/545: emit `DynamicDim.INSTANCE` instead of raw
+                // `null`.
+                Dimension<?> dimension =
+                    (shapeValue != null)
+                        ? new NumericDim(shapeValue.intValue())
+                        : DynamicDim.INSTANCE;
 
-              // `None` in a shape arg (e.g., `shape=[None, 4]`) is the dynamic-dim marker.
-              // https://github.com/wala/ML/issues/545: emit `DynamicDim.INSTANCE` instead of raw
-              // `null`.
-              Dimension<?> dimension =
-                  (shapeValue != null)
-                      ? new NumericDim(shapeValue.intValue())
-                      : DynamicDim.INSTANCE;
+                LOGGER.fine("Adding dimension: " + dimension + ".");
+                tensorDimensions.add(dimension);
+              } else if (instanceFieldIK instanceof AllocationSiteInNode) {
+                AllocationSiteInNode innerAsin = (AllocationSiteInNode) instanceFieldIK;
+                TypeReference innerReference = innerAsin.concreteType().getReference();
 
-              LOGGER.fine("Adding dimension: " + dimension + ".");
-              tensorDimensions.add(dimension);
-            } else if (instanceFieldIK instanceof AllocationSiteInNode) {
-              AllocationSiteInNode innerAsin = (AllocationSiteInNode) instanceFieldIK;
-              TypeReference innerReference = innerAsin.concreteType().getReference();
+                if (innerReference.equals(tuple)
+                    || innerReference.equals(list)
+                    || innerReference.equals(TensorFlowTypes.TENSOR_SPEC)
+                    || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
+                    || innerReference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
+                  // Nested tuple/list or Spec. Recurse on the same walk, which reads an element
+                  // already
+                  // being read as unresolvable (wala/ML#990).
+                  Set<List<Dimension<?>>> nestedShapes =
+                      this.getShapesFromShapeArgument(
+                          builder, Collections.singleton(instanceFieldIK), onWalk);
 
-              if (innerReference.equals(tuple)
-                  || innerReference.equals(list)
-                  || innerReference.equals(TensorFlowTypes.TENSOR_SPEC)
-                  || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
-                  || innerReference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
-                // Nested tuple/list or Spec. Recurse.
-                Set<List<Dimension<?>>> nestedShapes =
-                    this.getShapesFromShapeArgument(
-                        builder, Collections.singleton(instanceFieldIK));
-
-                if (nestedShapes == null) return null;
-                for (List<Dimension<?>> nestedShape : nestedShapes)
-                  tensorDimensions.add(new CompoundDim(nestedShape));
+                  if (nestedShapes == null) return null;
+                  for (List<Dimension<?>> nestedShape : nestedShapes)
+                    tensorDimensions.add(new CompoundDim(nestedShape));
+                } else {
+                  // Nested element of an unrecognized form; the shape's structure isn't statically
+                  // resolvable, so return ⊤ rather than aborting (wala/ML#471).
+                  LOGGER.fine(
+                      "Unrecognized nested shape element for instance field: "
+                          + describe(pointerKeyForInstanceField)
+                          + ", got: "
+                          + describe(instanceFieldIK)
+                          + "; treating the shape as unknown (⊤).");
+                  return null;
+                }
               } else {
-                // Nested element of an unrecognized form; the shape's structure isn't statically
-                // resolvable, so return ⊤ rather than aborting (wala/ML#471).
                 LOGGER.fine(
-                    "Unrecognized nested shape element for instance field: "
+                    "Unrecognized shape element for instance field: "
                         + describe(pointerKeyForInstanceField)
                         + ", got: "
                         + describe(instanceFieldIK)
                         + "; treating the shape as unknown (⊤).");
                 return null;
               }
-            } else {
-              LOGGER.fine(
-                  "Unrecognized shape element for instance field: "
-                      + describe(pointerKeyForInstanceField)
-                      + ", got: "
-                      + describe(instanceFieldIK)
-                      + "; treating the shape as unknown (⊤).");
-              return null;
             }
+
+            // A multi-constant element is commonly a dead library default unioned with the live
+            // caller override (wala/ML#769); the same-body store's flow-refined value is the one
+            // that holds at the read, and a declined refinement keeps the union.
+            if (tensorDimensions.size() > 1) {
+              Integer refined = refineAmbiguousFieldConstant(builder, asin, fieldIndex);
+              if (refined != null) {
+                LOGGER.fine(
+                    () ->
+                        "Refined ambiguous shape element "
+                            + tensorDimensions
+                            + " to "
+                            + refined
+                            + " via the flow-sensitive store chase (wala/ML#769).");
+                tensorDimensions.clear();
+                tensorDimensions.add(new NumericDim(refined));
+              }
+            }
+
+            LOGGER.fine(
+                "Found possible shape dimensions: "
+                    + tensorDimensions
+                    + " for field: "
+                    + describe(pointerKeyForInstanceField)
+                    + " for source: "
+                    + describe(this.getSource())
+                    + ".");
+
+            // Add the shape dimensions.
+            assert possibleDimensions[fieldIndex] == null
+                : "Duplicate field index: "
+                    + fieldIndex
+                    + " in object catalog: "
+                    + objectCatalogPointsToSet
+                    + ".";
+
+            possibleDimensions[fieldIndex] = tensorDimensions;
+            LOGGER.fine(
+                "Added shape dimensions: "
+                    + tensorDimensions
+                    + " for field index: "
+                    + fieldIndex
+                    + ".");
           }
 
-          // A multi-constant element is commonly a dead library default unioned with the live
-          // caller override (wala/ML#769); the same-body store's flow-refined value is the one
-          // that holds at the read, and a declined refinement keeps the union.
-          if (tensorDimensions.size() > 1) {
-            Integer refined = refineAmbiguousFieldConstant(builder, asin, fieldIndex);
-            if (refined != null) {
-              LOGGER.fine(
-                  () ->
-                      "Refined ambiguous shape element "
-                          + tensorDimensions
-                          + " to "
-                          + refined
-                          + " via the flow-sensitive store chase (wala/ML#769).");
-              tensorDimensions.clear();
-              tensorDimensions.add(new NumericDim(refined));
+          // Build the Cartesian product of dimension possibilities across all positions. Empty
+          // positions (where `possibleDimensions[k]` has no resolved constant, e.g., a non-literal
+          // `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`) contribute
+          // `UnresolvedDim.INSTANCE` as the single fallback option — wala/ML#721 (previously
+          // `DynamicDim`, https://github.com/wala/ML/issues/545). The prior
+          // implementation iterated each
+          // position's set but only retained the last iterated element, producing a
+          // non-deterministic single shape per `i` rather than the full product.
+          List<Set<Dimension<?>>> resolved = new ArrayList<>(possibleDimensions.length);
+          for (int k = 0; k < possibleDimensions.length; k++) {
+            Set<Dimension<?>> s = possibleDimensions[k];
+            if (s != null && !s.isEmpty()) {
+              resolved.add(s);
+              continue;
             }
+            // An empty position holds no resolved constant. Before degrading, try the dimension
+            // folds — a binary op over constant-valued operands (e.g. `self.heads *
+            // self.out_features`), a shape-vector product/subscript, or a stored attribute — via
+            // the analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal
+            // source text; this generator-side path resolves field reads and globals through the
+            // PTS, reconciling the two shape-argument-extraction paths (wala/ML#581). A
+            // multi-member source contributes one option per possibility, which the product below
+            // expands into per-possibility members (wala/ML#748). An unfoldable position is a
+            // fixed runtime size the analysis could not compute — `UnresolvedDim`, not
+            // `DynamicDim`; an explicit `None` resolves through the constant path above
+            // (wala/ML#721).
+            Set<Dimension<?>> folded = this.foldArithmeticShapeDims(builder, asin, k);
+            resolved.add(
+                folded != null && !folded.isEmpty()
+                    ? folded
+                    : Collections.singleton(UnresolvedDim.INSTANCE));
           }
 
+          List<List<Dimension<?>>> shapes = new ArrayList<>();
+          shapes.add(new ArrayList<>());
+          for (Set<Dimension<?>> options : resolved) {
+            List<List<Dimension<?>>> next = new ArrayList<>(shapes.size() * options.size());
+            for (List<Dimension<?>> prefix : shapes) {
+              for (Dimension<?> d : options) {
+                List<Dimension<?>> extended = new ArrayList<>(prefix);
+                extended.add(d);
+                next.add(extended);
+              }
+            }
+            shapes = next;
+          }
+          ret.addAll(shapes);
+        } else if (asin.getNode()
+            .getMethod()
+            .getDeclaringClass()
+            .getReference()
+            .equals(CONSTANT.getDeclaringClass())) {
+          // We have a `tf.constant(...)` result. Detect this by checking the
+          // *containing method* of the allocation (the `tensorflow/functions/constant.do()`
+          // CGNode), not the alloc's concrete type — the latter is the function-name
+          // duplicate `Ltensorflow/python/framework/constant_op/constant`, which is a
+          // load-bearing function-type signal we want to be able to migrate to canonical
+          // `Ltensorflow/python/framework/ops/Tensor` later (wala/ML#459 PR 2). Reading
+          // the containing method's declaring class instead decouples this recognition
+          // from the alloc-class convention; the two are functionally equivalent today
+          // because the only place that allocates `CONSTANT_OP_CONSTANT` is inside
+          // `constant.do()`.
+          //
+          // We need the user-supplied value PTS to recurse into. The XML no longer
+          // binds it to the alloc's `value` field (wala/ML#451 reopen — that binding
+          // caused Hybridize's `Function.containsPrimitive` to traverse the alloc's
+          // fields and find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
+          // classifying receiving parameters as primitive). Fall back to walking back
+          // from the alloc's `do` CGNode to its calling sites and unioning each call's
+          // value-arg PTS. Use the already-unwrapped {@code asin} from the loop header so
+          // wrapping {@link InstanceKey}s (e.g. {@link
+          // com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey}) route through the
+          // CG-walk just like raw {@link AllocationSiteInNode}s.
+          OrdinalSet<InstanceKey> valuePts = getConstantCallValueArgPTS(asin, builder);
+          if (valuePts == null || valuePts.isEmpty()) {
+            // Defensive fallback in case the `value` field happens to be bound
+            // in some other path (e.g. a future XML model that re-introduces
+            // it for a sibling endpoint).
+            IField valueField =
+                builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
+            PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
+            valuePts = pointerAnalysis.getPointsToSet(valuePK);
+          }
+          if (valuePts == null || valuePts.isEmpty()) return null;
+          Set<List<Dimension<?>>> constantShapes =
+              this.getShapesFromShapeArgument(builder, valuePts, onWalk);
+          if (constantShapes == null) return null;
+          ret.addAll(constantShapes);
+        } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
+            || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
+            || reference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
+          // We have a TensorSpec, RaggedTensorSpec, or TensorShape. These objects carry their shape
+          // structure in a field ('shape' for the specs, the stored 'dims' argument for a
+          // TensorShape constructor, wala/ML#789); extract it and recurse to parse the actual
+          // structure (usually a tuple or list of integers).
+          IField shapeField =
+              builder
+                  .getClassHierarchy()
+                  .resolveField(
+                      reference.equals(TensorFlowTypes.TENSOR_SPEC)
+                          ? TensorFlowTypes.SPEC_SHAPE
+                          : reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
+                              ? TensorFlowTypes.RAGGED_SPEC_SHAPE
+                              : TensorFlowTypes.TENSOR_SHAPE_DIMS);
+          PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
+          OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
+          if (shapePts == null || shapePts.isEmpty()) return null;
+          Set<List<Dimension<?>>> specShapes =
+              this.getShapesFromShapeArgument(builder, shapePts, onWalk);
+          if (specShapes == null) return null;
+          ret.addAll(specShapes);
+        } else {
+          // Unrecognized top-level shape form — e.g. a runtime tensor such as the result of
+          // `tf.shape(y)`, an opaque builder value, or any type that isn't a list/tuple,
+          // `tf.constant`,
+          // `TensorSpec`, or `RaggedTensorSpec`. Return ⊤ ("tensor of unknown shape") rather than
+          // aborting the analysis on otherwise-valid programs (wala/ML#471).
           LOGGER.fine(
-              "Found possible shape dimensions: "
-                  + tensorDimensions
-                  + " for field: "
-                  + describe(pointerKeyForInstanceField)
+              "Unrecognized shape argument form: "
+                  + reference
                   + " for source: "
-                  + describe(this.getSource())
-                  + ".");
-
-          // Add the shape dimensions.
-          assert possibleDimensions[fieldIndex] == null
-              : "Duplicate field index: "
-                  + fieldIndex
-                  + " in object catalog: "
-                  + objectCatalogPointsToSet
-                  + ".";
-
-          possibleDimensions[fieldIndex] = tensorDimensions;
-          LOGGER.fine(
-              "Added shape dimensions: "
-                  + tensorDimensions
-                  + " for field index: "
-                  + fieldIndex
-                  + ".");
+                  + this.getSource()
+                  + "; treating the shape as unknown (⊤).");
+          return null;
         }
-
-        // Build the Cartesian product of dimension possibilities across all positions. Empty
-        // positions (where `possibleDimensions[k]` has no resolved constant, e.g., a non-literal
-        // `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`) contribute
-        // `UnresolvedDim.INSTANCE` as the single fallback option — wala/ML#721 (previously
-        // `DynamicDim`, https://github.com/wala/ML/issues/545). The prior
-        // implementation iterated each
-        // position's set but only retained the last iterated element, producing a
-        // non-deterministic single shape per `i` rather than the full product.
-        List<Set<Dimension<?>>> resolved = new ArrayList<>(possibleDimensions.length);
-        for (int k = 0; k < possibleDimensions.length; k++) {
-          Set<Dimension<?>> s = possibleDimensions[k];
-          if (s != null && !s.isEmpty()) {
-            resolved.add(s);
-            continue;
-          }
-          // An empty position holds no resolved constant. Before degrading, try the dimension
-          // folds — a binary op over constant-valued operands (e.g. `self.heads *
-          // self.out_features`), a shape-vector product/subscript, or a stored attribute — via
-          // the analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal
-          // source text; this generator-side path resolves field reads and globals through the
-          // PTS, reconciling the two shape-argument-extraction paths (wala/ML#581). A
-          // multi-member source contributes one option per possibility, which the product below
-          // expands into per-possibility members (wala/ML#748). An unfoldable position is a
-          // fixed runtime size the analysis could not compute — `UnresolvedDim`, not
-          // `DynamicDim`; an explicit `None` resolves through the constant path above
-          // (wala/ML#721).
-          Set<Dimension<?>> folded = this.foldArithmeticShapeDims(builder, asin, k);
-          resolved.add(
-              folded != null && !folded.isEmpty()
-                  ? folded
-                  : Collections.singleton(UnresolvedDim.INSTANCE));
-        }
-
-        List<List<Dimension<?>>> shapes = new ArrayList<>();
-        shapes.add(new ArrayList<>());
-        for (Set<Dimension<?>> options : resolved) {
-          List<List<Dimension<?>>> next = new ArrayList<>(shapes.size() * options.size());
-          for (List<Dimension<?>> prefix : shapes) {
-            for (Dimension<?> d : options) {
-              List<Dimension<?>> extended = new ArrayList<>(prefix);
-              extended.add(d);
-              next.add(extended);
-            }
-          }
-          shapes = next;
-        }
-        ret.addAll(shapes);
-      } else if (asin.getNode()
-          .getMethod()
-          .getDeclaringClass()
-          .getReference()
-          .equals(CONSTANT.getDeclaringClass())) {
-        // We have a `tf.constant(...)` result. Detect this by checking the
-        // *containing method* of the allocation (the `tensorflow/functions/constant.do()`
-        // CGNode), not the alloc's concrete type — the latter is the function-name
-        // duplicate `Ltensorflow/python/framework/constant_op/constant`, which is a
-        // load-bearing function-type signal we want to be able to migrate to canonical
-        // `Ltensorflow/python/framework/ops/Tensor` later (wala/ML#459 PR 2). Reading
-        // the containing method's declaring class instead decouples this recognition
-        // from the alloc-class convention; the two are functionally equivalent today
-        // because the only place that allocates `CONSTANT_OP_CONSTANT` is inside
-        // `constant.do()`.
-        //
-        // We need the user-supplied value PTS to recurse into. The XML no longer
-        // binds it to the alloc's `value` field (wala/ML#451 reopen — that binding
-        // caused Hybridize's `Function.containsPrimitive` to traverse the alloc's
-        // fields and find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
-        // classifying receiving parameters as primitive). Fall back to walking back
-        // from the alloc's `do` CGNode to its calling sites and unioning each call's
-        // value-arg PTS. Use the already-unwrapped {@code asin} from the loop header so
-        // wrapping {@link InstanceKey}s (e.g. {@link
-        // com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey}) route through the
-        // CG-walk just like raw {@link AllocationSiteInNode}s.
-        OrdinalSet<InstanceKey> valuePts = getConstantCallValueArgPTS(asin, builder);
-        if (valuePts == null || valuePts.isEmpty()) {
-          // Defensive fallback in case the `value` field happens to be bound
-          // in some other path (e.g. a future XML model that re-introduces
-          // it for a sibling endpoint).
-          IField valueField =
-              builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
-          PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
-          valuePts = pointerAnalysis.getPointsToSet(valuePK);
-        }
-        if (valuePts == null || valuePts.isEmpty()) return null;
-        Set<List<Dimension<?>>> constantShapes = this.getShapesFromShapeArgument(builder, valuePts);
-        if (constantShapes == null) return null;
-        ret.addAll(constantShapes);
-      } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
-          || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
-          || reference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
-        // We have a TensorSpec, RaggedTensorSpec, or TensorShape. These objects carry their shape
-        // structure in a field ('shape' for the specs, the stored 'dims' argument for a
-        // TensorShape constructor, wala/ML#789); extract it and recurse to parse the actual
-        // structure (usually a tuple or list of integers).
-        IField shapeField =
-            builder
-                .getClassHierarchy()
-                .resolveField(
-                    reference.equals(TensorFlowTypes.TENSOR_SPEC)
-                        ? TensorFlowTypes.SPEC_SHAPE
-                        : reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
-                            ? TensorFlowTypes.RAGGED_SPEC_SHAPE
-                            : TensorFlowTypes.TENSOR_SHAPE_DIMS);
-        PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
-        OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
-        if (shapePts == null || shapePts.isEmpty()) return null;
-        Set<List<Dimension<?>>> specShapes = this.getShapesFromShapeArgument(builder, shapePts);
-        if (specShapes == null) return null;
-        ret.addAll(specShapes);
-      } else {
-        // Unrecognized top-level shape form — e.g. a runtime tensor such as the result of
-        // `tf.shape(y)`, an opaque builder value, or any type that isn't a list/tuple,
-        // `tf.constant`,
-        // `TensorSpec`, or `RaggedTensorSpec`. Return ⊤ ("tensor of unknown shape") rather than
-        // aborting the analysis on otherwise-valid programs (wala/ML#471).
-        LOGGER.fine(
-            "Unrecognized shape argument form: "
-                + reference
-                + " for source: "
-                + this.getSource()
-                + "; treating the shape as unknown (⊤).");
-        return null;
+      } finally {
+        onWalk.remove(asin);
       }
     }
 
