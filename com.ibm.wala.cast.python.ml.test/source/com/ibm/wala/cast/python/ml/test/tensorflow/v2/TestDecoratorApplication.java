@@ -43,6 +43,16 @@ public class TestDecoratorApplication extends AbstractTensorTest {
   }
 
   /**
+   * A wrapper whose only formals are {@code *args} and {@code **kwargs} forwards them to the
+   * function it wraps, so the argument reaches the decorated function's parameter.
+   */
+  @Test
+  public void testForwardedStarArguments()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "f_logged", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /**
    * Stacked decorators apply from the {@code def} outward, {@code outer(inner(f))}: the function
    * receives {@code inner}'s int32 cast of {@code outer}'s float32 ones. The reverse order would
    * hand it the float32 ones instead.

@@ -33,6 +33,14 @@ def bare(function):
     return wrap
 
 
+def logged(function):
+    @functools.wraps(function)
+    def wrap(*args, **kwargs):
+        return function(*args, **kwargs)
+
+    return wrap
+
+
 def outer(function):
     def wrap(image):
         return function(tf.ones((3,)))
@@ -79,6 +87,12 @@ def f_bare(image):
     return image
 
 
+@logged
+def f_logged(image):
+    assert image.shape == (2,) and image.dtype == tf.float32
+    return image
+
+
 # Decorators apply from the `def` outward: `outer(inner(f_stacked))`, so `f_stacked` receives
 # `inner`'s cast of `outer`'s ones, an int32 tensor of shape (3,).
 @outer
@@ -98,5 +112,6 @@ f_ident(tf.ones(2))
 f_plain(tf.ones(2))
 f_qualified(tf.ones(2))
 f_bare(tf.ones(2))
+f_logged(tf.ones(2))
 f_stacked(tf.ones(2))
 f_class(tf.ones(2))
