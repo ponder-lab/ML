@@ -1,0 +1,17 @@
+# Test for a shape argument whose value holds itself: a list rebuilt in a loop around its previous
+# value is one abstract object that contains itself, so reading it as a shape must not recurse
+# forever.
+import tensorflow as tf
+
+
+def consume(x):
+    pass
+
+
+shape = [2]
+for _ in range(2):
+    shape = [shape, 2]
+try:
+    consume(tf.ones(shape))
+except (TypeError, ValueError):
+    pass
