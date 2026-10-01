@@ -16,7 +16,7 @@ import org.junit.Test;
  * {@code @property}, through the property's {@code getattr(..., default)} body, and through a
  * property inherited from a base class, then encodes the result through layers with and without
  * their own {@code __call__}. The embedding's shape is lost with the ids (see {@link
- * #testFeaturesIds()}), so the typed hops read as a {@code float32} tensor of unknown shape.
+ * #testFeaturesIds()}), so each typed hop carries the embedding's full shape.
  */
 public class TestEncoderTrainingPath extends AbstractTensorTest {
 
@@ -24,14 +24,15 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
 
   private static final TensorType IDS = TensorType.of(INT_32, 2, 3);
 
+  /** The embedding of the batched ids: the dataset element's shape with the embedding size. */
+  private static final TensorType EMBEDDED = TensorType.of(FLOAT_32, 2, 3, 8);
+
   /**
-   * The dict element of a dataset of tuples of dicts is not typed, through the loop over the
-   * dataset or through the {@code element_spec} signature, so {@code features["ids"]} reads as no
-   * tensor. This is wala/ML#993's remainder on this chain.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#993 is fully fixed.
+   * The dict element of the dataset, passed into the inputter's {@code call} and subscripted there,
+   * is typed: the parameter inherits the element's provider from the step's call, and the component
+   * is the batched ids (wala/ML#993).
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testFeaturesIds() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_features_ids", 1, 1, Map.of(2, Set.of(IDS)));
   }
@@ -39,13 +40,13 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   /** The embedding lookup over the layer's weight types its result from the weight. */
   @Test
   public void testEmbedded() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_embedded", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_embedded", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /** The inputter reached as a plain attribute returns the embedding to the step. */
   @Test
   public void testStepInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_step_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_step_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /**
@@ -54,7 +55,7 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
    */
   @Test
   public void testPropertyInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_property_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_property_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /**
@@ -63,14 +64,14 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
    */
   @Test
   public void testGetattrInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_getattr_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_getattr_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /** The inputter reached through a property declared on a base class. */
   @Test
   public void testInheritedPropertyInputs()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_inherited_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_inherited_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /**
@@ -80,7 +81,7 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   @Test
   public void testSettablePropertyInputs()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_settable_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_settable_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /**
@@ -90,7 +91,7 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   @Test
   public void testSettableFunctionCall()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_settable_fn_out", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_settable_fn_out", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /**
@@ -114,7 +115,7 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   @Test
   public void testModuleFunctionPropertyInputs()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_module_fn_property", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_module_fn_property", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /** A getter whose body calls a library API through the module name: its value is the tensor. */
@@ -130,19 +131,14 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
    */
   @Test
   public void testDunderCallInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_dunder_call_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_dunder_call_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /** Control for wala/ML#994: the same {@code __call__} declared on the class itself dispatches. */
   @Test
   public void testDirectDunderCallInputs()
       throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_direct_dunder_call_inputs",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_direct_dunder_call_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /**
@@ -152,18 +148,18 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
    */
   @Test
   public void testCallInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_call_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_call_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /** {@code build_mask} receives the scaled inputs from {@code call}. */
   @Test
   public void testMaskInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_mask_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_mask_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 
   /** Control: an encoder without its own {@code __call__} receives the same embedding. */
   @Test
   public void testPlainCallInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_plain_call_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(FILE, "consume_plain_call_inputs", 1, 1, Map.of(2, Set.of(EMBEDDED)));
   }
 }

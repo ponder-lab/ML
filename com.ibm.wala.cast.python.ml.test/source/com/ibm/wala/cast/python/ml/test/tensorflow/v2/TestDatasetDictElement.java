@@ -53,14 +53,18 @@ public class TestDatasetDictElement extends AbstractTensorTest {
 
   /**
    * The same element passed into a function and subscripted there, whose signature is the dataset's
-   * {@code element_spec}: the dict parameter's subscript is not seeded inside the callee, through
-   * the signature ({@code element_spec} is unmodeled) or through the loop's call. This is
-   * wala/ML#993's remainder on this chain.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#993 is fully fixed.
+   * {@code element_spec}: the dict parameter has no points-to set, so its subscript's generator is
+   * inherited from the loop's call, where the argument is the tuple element's first member
+   * (wala/ML#993). {@code element_spec} itself stays unmodeled; the call is what types it.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testElementSpecStep() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_spec_step", 1, 1, Map.of(2, Set.of(IDS_2_3)));
+  }
+
+  /** A whole dict element passed into a function and subscripted there. */
+  @Test
+  public void testWholeElementStep() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_whole_step", 1, 1, Map.of(2, Set.of(IDS_2_3)));
   }
 }

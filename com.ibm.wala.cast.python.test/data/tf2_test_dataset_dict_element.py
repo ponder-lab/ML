@@ -27,6 +27,10 @@ def consume_spec_step(x):
     pass
 
 
+def consume_whole_step(x):
+    pass
+
+
 ids = tf.constant([[1, 2, 3], [4, 5, 6]])
 length = tf.constant([3, 3])
 
@@ -70,3 +74,15 @@ def step(source, target):
 
 for source, target in batched:
     step(source, target)
+
+
+# A whole dict element passed into a function and subscripted there.
+def whole_step(element):
+    consume_whole_step(element["ids"])
+    return element["ids"]
+
+
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}).batch(
+    2
+):
+    whole_step(element)
