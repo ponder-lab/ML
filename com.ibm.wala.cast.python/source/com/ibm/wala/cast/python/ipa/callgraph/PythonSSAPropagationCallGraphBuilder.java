@@ -31,6 +31,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
@@ -41,6 +42,7 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.CancelRuntimeException;
 import com.ibm.wala.core.util.strings.Atom;
@@ -1165,10 +1167,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       // positional parameters
       PythonInvokeInstruction call = (PythonInvokeInstruction) instruction;
-      for (int i = 0;
-          i < call.getNumberOfPositionalParameters()
-              && i < target.getMethod().getNumberOfParameters();
-          i++) {
+      StarArguments star = new StarArguments(caller, call, target, constParams);
+      for (int i = 0; i < call.getNumberOfPositionalParameters(); i++) {
+        if (star.bindPositional(i)) continue;
+        if (i >= target.getMethod().getNumberOfParameters()) continue;
         PointerKey lval = getPointerKeyForLocal(target, i + 1);
         args.add(i);
 
@@ -1274,6 +1276,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       keywords:
       for (String argName : call.getKeywords()) {
         int src = call.getUse(argName);
+        if (star.bindDoubleStarred(
+            argName,
+            src,
+            constParams != null && paramNumber < constParams.length
+                ? constParams[paramNumber]
+                : null)) {
+          paramNumber++;
+          continue;
+        }
         for (int i = 0; i < target.getIR().getSymbolTable().getMaxValueNumber(); i++) {
           String[] paramNames = target.getIR().getLocalNames(0, i + 1);
           if (paramNames != null) {
@@ -1297,7 +1308,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
             }
           }
         }
-        // no such argument in callee
+        // no such argument in callee: a `**kwargs` formal collects it (wala/ML#991)
+        star.packKeyword(
+            argName,
+            constParams != null && paramNumber < constParams.length
+                ? constParams[paramNumber]
+                : null,
+            src);
         paramNumber++;
       }
 
@@ -1821,6 +1838,383 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "list operation result at " + pc + " in " + node + " (operand " + operandIndex + ")";
+    }
+  }
+
+  /**
+   * Binds a call's arguments to a target's {@code *args} and {@code **kwargs} formals, and unpacks
+   * a call's starred arguments into the target's formals (wala/ML#991). Before, a {@code *args}
+   * formal bound the one positional argument at its own index, every later one bound the formals
+   * after it (the {@code **kwargs} formal first) or nothing, a keyword naming no formal was
+   * dropped, and a starred argument bound its whole iterable to one formal; so a wrapper {@code def
+   * w(*args, **kwargs): return f(*args, **kwargs)} forwarded only its first argument.
+   *
+   * <p>The positional arguments from the {@code *args} formal's index on are packed into a tuple,
+   * and the keywords naming no formal into a dict, each allocated at the call (one per caller
+   * context) and bound to its formal. The site is the call's alone, so two targets of one
+   * polymorphic call with different {@code *args} indices share one pack and their elements merge
+   * (sound, and rare). A starred argument's elements bind the target's positional formals from its
+   * slot on, by the iterable's element index, those past a {@code *args} formal joining its pack;
+   * elements of unknown index (appended or operation contents) may bind any of them. A {@code **}
+   * argument binds each named formal its dict has a key for, and its whole dict to a {@code
+   * **kwargs} formal. The arguments after a starred one keep the alignment by slot they had
+   * (wala/ML#751), and an iterable whose elements are not indexed fields (a list built by an
+   * operation, wala/ML#960) binds through its unknown-index contents only.
+   */
+  private final class StarArguments {
+    private final CGNode caller;
+    private final PythonInvokeInstruction call;
+    private final CGNode target;
+    private final InstanceKey[][] constParams;
+    private final int varargs;
+    private final int keywords;
+    private final int firstStarred;
+    private final boolean forwardingBody;
+    private final int formals;
+    private InstanceKey pack;
+    private InstanceKey keywordPack;
+
+    private StarArguments(
+        CGNode caller, PythonInvokeInstruction call, CGNode target, InstanceKey[][] constParams) {
+      this.caller = caller;
+      this.call = call;
+      this.target = target;
+      this.constParams = constParams;
+      IMethod method = target.getMethod();
+      this.varargs =
+          method instanceof StarFormalDeclaration declaration
+              ? declaration.getVarargsParameter()
+              : -1;
+      this.keywords =
+          method instanceof StarFormalDeclaration declaration
+              ? declaration.getKeywordsParameter()
+              : -1;
+      // A synthesized forwarding body (a method or callable trampoline) receives a starred or
+      // `**` argument intact and forwards it still marked, so the target it forwards to unpacks
+      // it; unpacking it here as well would spread it twice. A synthesized constructor forwards
+      // its own formals to `__init__` positionally and by `__init__`'s names, so a starred or `**`
+      // argument is unpacked at the call to it instead.
+      this.forwardingBody =
+          method instanceof PythonSummarizedFunction
+              && !(method instanceof PythonConstructorFunction);
+      this.firstStarred = this.forwardingBody ? -1 : call.firstStarredPosition();
+      this.formals = method.getNumberOfParameters();
+      // A `*args` formal is a tuple even when no argument reaches it.
+      if (this.varargs >= 0 && this.varargs < this.formals) this.pack();
+    }
+
+    /**
+     * Binds a positional slot that the starred and packed arguments govern.
+     *
+     * @param slot The positional slot.
+     * @return {@code true} iff the slot was bound here.
+     */
+    private boolean bindPositional(int slot) {
+      if (slot == this.firstStarred && slot > 0) {
+        this.unpack(slot);
+        return true;
+      }
+      if (this.varargs >= 0 && slot >= this.varargs && slot > 0) {
+        InstanceKey tuple = this.pack();
+        if (tuple == null) return false;
+        if (this.constParams != null
+            && slot < this.constParams.length
+            && this.constParams[slot] != null)
+          for (InstanceKey element : this.constParams[slot])
+            this.packElement(tuple, slot - this.varargs, element);
+        else
+          this.packElement(
+              tuple,
+              slot - this.varargs,
+              getPointerKeyForLocal(this.caller, this.call.getUse(slot)));
+        return true;
+      }
+      return false;
+    }
+
+    /** The positional pack, allocated and bound to the {@code *args} formal on first use. */
+    private InstanceKey pack() {
+      if (this.pack == null) {
+        this.pack =
+            getInstanceKeyForAllocation(
+                this.caller, NewSiteReference.make(this.call.iIndex(), PythonTypes.tuple));
+        if (this.pack != null)
+          getSystem()
+              .newConstraint(getPointerKeyForLocal(this.target, this.varargs + 1), this.pack);
+      }
+      return this.pack;
+    }
+
+    private void packElement(InstanceKey tuple, int index, Object value) {
+      IField field = resolveRootField(getClassHierarchy(), Integer.toString(index));
+      if (field == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForObjectCatalog(tuple),
+              getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(index), index));
+      PointerKey slot = factory.getPointerKeyForInstanceField(tuple, field);
+      if (value instanceof InstanceKey element) getSystem().newConstraint(slot, element);
+      else getSystem().newConstraint(slot, assignOperator, (PointerKey) value);
+    }
+
+    /** Unpacks the starred argument at a slot into the target's formals and pack. */
+    private void unpack(int slot) {
+      UnaryOperator<PointsToSetVariable> operator = new UnpackOperator(slot);
+      if (this.constParams != null
+          && slot < this.constParams.length
+          && this.constParams[slot] != null)
+        for (InstanceKey iterable : this.constParams[slot])
+          ((UnpackOperator) operator).read(iterable);
+      else
+        getSystem()
+            .newSideEffect(operator, getPointerKeyForLocal(this.caller, this.call.getUse(slot)));
+    }
+
+    /** The target's formal at a positional index, or {@code null} past the plain formals. */
+    private PointerKey positionalFormal(int index) {
+      int limit = this.varargs >= 0 ? this.varargs : this.formals;
+      return index > 0 && index < limit ? getPointerKeyForLocal(this.target, index + 1) : null;
+    }
+
+    /**
+     * Unpacks a starred argument's iterables: each element at index {@code m} binds the formal at
+     * {@code slot + m}, or the pack past a {@code *args} formal; an element of unknown index binds
+     * every formal from the slot on and the pack.
+     */
+    private final class UnpackOperator extends UnaryOperator<PointsToSetVariable> {
+      private final int slot;
+      private final Set<InstanceKey> read = HashSetFactory.make();
+
+      private UnpackOperator(int slot) {
+        this.slot = slot;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        // A side effect: the elements reach the formals through the constraints registered here.
+        if (rhs.getValue() != null)
+          rhs.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+        return NOT_CHANGED;
+      }
+
+      private void read(InstanceKey iterable) {
+        if (!this.read.add(iterable)) return;
+        IClassHierarchy cha = getClassHierarchy();
+        AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+        for (String unindexed :
+            new String[] {LIST_APPEND_CONTENTS_FIELD, LIST_OPERATION_CONTENTS_FIELD}) {
+          IField field = resolveRootField(cha, unindexed);
+          if (field == null) continue;
+          PointerKey contents = factory.getPointerKeyForInstanceField(iterable, field);
+          int limit = varargs >= 0 ? varargs : formals;
+          for (int index = this.slot; index < limit; index++) {
+            PointerKey formal = positionalFormal(index);
+            if (formal != null) getSystem().newConstraint(formal, assignOperator, contents);
+          }
+          if (varargs >= 0) {
+            InstanceKey tuple = pack();
+            IField packContents = resolveRootField(cha, LIST_OPERATION_CONTENTS_FIELD);
+            if (tuple != null && packContents != null) {
+              getSystem()
+                  .newConstraint(
+                      factory.getPointerKeyForObjectCatalog(tuple),
+                      getInstanceKeyForConstant(PythonTypes.string, LIST_OPERATION_CONTENTS_FIELD));
+              getSystem()
+                  .newConstraint(
+                      factory.getPointerKeyForInstanceField(tuple, packContents),
+                      assignOperator,
+                      contents);
+            }
+          }
+        }
+        getSystem()
+            .newSideEffect(
+                new UnaryOperator<PointsToSetVariable>() {
+                  private final Set<Integer> bound = HashSetFactory.make();
+
+                  @Override
+                  public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+                    if (catalog.getValue() == null) return NOT_CHANGED;
+                    catalog
+                        .getValue()
+                        .foreach(
+                            c -> {
+                              InstanceKey name = getSystem().getInstanceKey(c);
+                              if (!(name instanceof ConstantKey<?> constant)
+                                  || !(constant.getValue() instanceof Number number)) return;
+                              int m = number.intValue();
+                              if (m < 0 || !bound.add(m)) return;
+                              IField source = resolveRootField(cha, Integer.toString(m));
+                              if (source == null) return;
+                              PointerKey element =
+                                  factory.getPointerKeyForInstanceField(iterable, source);
+                              int index = slot + m;
+                              if (varargs >= 0 && index >= varargs) {
+                                InstanceKey tuple = pack();
+                                if (tuple != null) packElement(tuple, index - varargs, element);
+                              } else {
+                                PointerKey formal = positionalFormal(index);
+                                if (formal != null)
+                                  getSystem().newConstraint(formal, assignOperator, element);
+                              }
+                            });
+                    return NOT_CHANGED;
+                  }
+
+                  @Override
+                  public int hashCode() {
+                    return System.identityHashCode(this);
+                  }
+
+                  @Override
+                  public boolean equals(Object o) {
+                    return this == o;
+                  }
+
+                  @Override
+                  public String toString() {
+                    return "unpack elements of " + iterable + " at slot " + slot;
+                  }
+                },
+                factory.getPointerKeyForObjectCatalog(iterable));
+      }
+
+      @Override
+      public int hashCode() {
+        return (caller.hashCode() * 31 + call.iIndex()) * 31 + target.hashCode() + this.slot;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof UnpackOperator other
+            && Objects.equals(other.outer(), StarArguments.this.identity())
+            && other.slot == this.slot;
+      }
+
+      private Object outer() {
+        return StarArguments.this.identity();
+      }
+
+      @Override
+      public String toString() {
+        return "unpack starred slot " + this.slot + " at " + call.iIndex() + " in " + caller;
+      }
+    }
+
+    /** The (caller, call, target) triple identifying these bindings. */
+    private Object identity() {
+      return java.util.List.of(this.caller, this.call.iIndex(), this.target);
+    }
+
+    /**
+     * Binds a {@code **} argument (the keyword the front end names {@code null}): each named formal
+     * the dict has a key for, and the whole dict to a {@code **kwargs} formal.
+     *
+     * @return {@code true} iff the keyword was a {@code **} argument and is bound here.
+     */
+    private boolean bindDoubleStarred(String argName, int src, InstanceKey[] constants) {
+      if (!"null".equals(argName) || this.forwardingBody) return false;
+      PointerKey dict = getPointerKeyForLocal(this.caller, src);
+      // A dict built in the caller's own body is an invariant argument: its keys arrive as
+      // constants and its pointer key is implicit, which no constraint may name (wala/ML#925).
+      boolean implicit = constants == null && getSystem().isImplicit(dict);
+      if (this.keywords >= 0) {
+        PointerKey formal = getPointerKeyForLocal(this.target, this.keywords + 1);
+        if (constants != null)
+          for (InstanceKey key : constants) getSystem().newConstraint(formal, key);
+        else if (!implicit) getSystem().newConstraint(formal, assignOperator, dict);
+      }
+      Map<String, PointerKey> named = HashMapFactory.make();
+      for (int index = 1; index < this.formals; index++) {
+        if (index == this.varargs || index == this.keywords) continue;
+        String[] names = this.target.getIR().getLocalNames(0, index + 1);
+        if (names == null) continue;
+        for (String name : names)
+          if (name != null) named.put(name, getPointerKeyForLocal(this.target, index + 1));
+      }
+      if (named.isEmpty()) return true;
+      DoubleStarOperator operator = new DoubleStarOperator(named);
+      if (constants != null) for (InstanceKey key : constants) operator.read(key);
+      else if (!implicit) getSystem().newSideEffect(operator, dict);
+      return true;
+    }
+
+    /** Binds each named formal from the field of that name of each dict a {@code **} value is. */
+    private final class DoubleStarOperator extends UnaryOperator<PointsToSetVariable> {
+      private final Map<String, PointerKey> named;
+      private final Set<InstanceKey> read = HashSetFactory.make();
+
+      private DoubleStarOperator(Map<String, PointerKey> named) {
+        this.named = named;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable l, PointsToSetVariable r) {
+        // A side effect: the entries reach the formals through the constraints registered here.
+        if (r.getValue() != null) r.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+        return NOT_CHANGED;
+      }
+
+      private void read(InstanceKey dict) {
+        if (!this.read.add(dict)) return;
+        IClassHierarchy cha = getClassHierarchy();
+        AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+        for (Map.Entry<String, PointerKey> entry : this.named.entrySet()) {
+          IField field = resolveRootField(cha, entry.getKey());
+          if (field != null)
+            getSystem()
+                .newConstraint(
+                    entry.getValue(),
+                    assignOperator,
+                    factory.getPointerKeyForInstanceField(dict, field));
+        }
+      }
+
+      @Override
+      public int hashCode() {
+        return Objects.hash(identity(), this.named.keySet());
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof DoubleStarOperator other
+            && Objects.equals(other.outer(), identity())
+            && other.named.keySet().equals(this.named.keySet());
+      }
+
+      private Object outer() {
+        return identity();
+      }
+
+      @Override
+      public String toString() {
+        return "unpack ** at " + call.iIndex() + " in " + caller;
+      }
+    }
+
+    /** Collects a keyword that names no formal into the {@code **kwargs} formal's dict. */
+    private void packKeyword(String argName, InstanceKey[] constants, int src) {
+      if (this.keywords < 0 || "null".equals(argName)) return;
+      if (this.keywordPack == null) {
+        this.keywordPack =
+            getInstanceKeyForAllocation(
+                this.caller, NewSiteReference.make(this.call.iIndex(), PythonTypes.dict));
+        if (this.keywordPack == null) return;
+        getSystem()
+            .newConstraint(getPointerKeyForLocal(this.target, this.keywords + 1), this.keywordPack);
+      }
+      IField field = resolveRootField(getClassHierarchy(), argName);
+      if (field == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForObjectCatalog(this.keywordPack),
+              getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(argName), argName));
+      PointerKey slot = factory.getPointerKeyForInstanceField(this.keywordPack, field);
+      if (constants != null)
+        for (InstanceKey constant : constants) getSystem().newConstraint(slot, constant);
+      else getSystem().newConstraint(slot, assignOperator, getPointerKeyForLocal(this.caller, src));
     }
   }
 

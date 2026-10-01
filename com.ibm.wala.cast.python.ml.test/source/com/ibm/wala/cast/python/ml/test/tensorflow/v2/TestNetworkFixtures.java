@@ -2419,7 +2419,9 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * so the supply detection returns its INDETERMINATE state and the window declines. This program
    * genuinely omits the stride, and the pin records the stated cost of the three-valued decision:
    * declining on indeterminate loses this window, and the alternative re-opens the default-patching
-   * bug for exactly the shapes least likely to have witnesses (wala/ML#832).
+   * bug for exactly the shapes least likely to have witnesses (wala/ML#832). The starred arguments
+   * themselves unpack into the layer's parameters (wala/ML#991), so the filter count, and with it
+   * the output channels, resolves to the run-time {@code 6}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2443,7 +2445,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
                         new NumericDim(1),
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)))));
+                        new NumericDim(6))))));
   }
 
   /**

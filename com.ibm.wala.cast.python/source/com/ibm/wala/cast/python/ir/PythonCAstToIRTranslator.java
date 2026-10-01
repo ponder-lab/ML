@@ -286,7 +286,9 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             lexicalInfo,
             debugInfo,
             N.getArgumentDefaults().length + materializableClickDefaults(N).size(),
-            numberOfTrailingNonDefaultableParameters(N));
+            numberOfTrailingNonDefaultableParameters(N),
+            starFormals(N) == null ? -1 : starFormals(N).getVarargsParameter(),
+            starFormals(N) == null ? -1 : starFormals(N).getKeywordsParameter());
   }
 
   @Override
@@ -578,16 +580,26 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    *     for a function whose formals are all plain positionals.
    */
   static int numberOfTrailingNonDefaultableParameters(CAstEntity n) {
-    // The entity reaching this translator is normally a `CAstRewriter` wrapper around the parser's
-    // own entity, and the wrapper implements only `CAstEntity`. Testing the wrapper alone always
-    // reports zero, which silently reinstates the very miscount this exists to correct, so follow
-    // the `getOriginal` chain the same way the globals handling does.
+    StarFormalDeclaration declaration = starFormals(n);
+    return declaration == null ? 0 : declaration.getNumberOfTrailingNonDefaultableParameters();
+  }
+
+  /**
+   * The parser's own entity behind the given one, as the {@link StarFormalDeclaration} it is. The
+   * entity reaching this translator is normally a {@code CAstRewriter} wrapper around the parser's
+   * entity, and the wrapper implements only {@code CAstEntity}; testing the wrapper alone always
+   * reports nothing, so follow the {@code getOriginal} chain the same way the globals handling
+   * does.
+   *
+   * @param n The entity.
+   * @return The declaration, or {@code null} when no entity on the chain is one.
+   */
+  static StarFormalDeclaration starFormals(CAstEntity n) {
     for (CAstEntity e = n; e != null; e = e.getOriginal()) {
-      if (e instanceof StarFormalDeclaration)
-        return ((StarFormalDeclaration) e).getNumberOfTrailingNonDefaultableParameters();
+      if (e instanceof StarFormalDeclaration declaration) return declaration;
       if (e.getOriginal() == e) break;
     }
-    return 0;
+    return null;
   }
 
   /**

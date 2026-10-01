@@ -243,7 +243,8 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
               except,
               new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), pc),
               params,
-              keys));
+              keys,
+              shiftedStarredPositions(call, 0)));
       pc++;
 
       x.addStatement(new SSAReturnInstruction(pc, result, false));
@@ -391,7 +392,15 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
     CallSiteReference ref = new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
 
-    x.addStatement(new PythonInvokeInstruction(2, result, except, ref, params, keys));
+    x.addStatement(
+        new PythonInvokeInstruction(
+            2,
+            result,
+            except,
+            ref,
+            params,
+            keys,
+            shiftedStarredPositions(call, staticMethodReceiver ? 0 : 1)));
     x.addStatement(new SSAReturnInstruction(3, result, false));
     x.setValueNames(names);
   }

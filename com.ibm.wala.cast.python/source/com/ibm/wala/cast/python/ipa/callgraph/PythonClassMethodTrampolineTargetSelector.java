@@ -120,7 +120,9 @@ public class PythonClassMethodTrampolineTargetSelector<T>
     int except = v++;
     int invokeResult = v++;
 
-    x.addStatement(new PythonInvokeInstruction(pc++, invokeResult, except, ref, params, keys));
+    x.addStatement(
+        new PythonInvokeInstruction(
+            pc++, invokeResult, except, ref, params, keys, shiftedStarredPositions(call, 1)));
     x.addStatement(new SSAReturnInstruction(pc++, invokeResult, false));
     x.setValueNames(names);
   }

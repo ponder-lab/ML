@@ -16,6 +16,7 @@ import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.collections.HashMapFactory;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -35,7 +36,10 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
    * @param keywordNames The call's keyword argument names.
    */
   protected record TrampolineKey(
-      IClass receiver, int positionalParameterCount, Set<String> keywordNames) {}
+      IClass receiver,
+      int positionalParameterCount,
+      Set<String> keywordNames,
+      List<Integer> starredPositions) {}
 
   protected final MethodTargetSelector base;
 
@@ -107,7 +111,10 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
    */
   private TrampolineKey makeKey(IClass receiver, PythonInvokeInstruction call) {
     return new TrampolineKey(
-        receiver, call.getNumberOfPositionalParameters(), Set.copyOf(call.getKeywords()));
+        receiver,
+        call.getNumberOfPositionalParameters(),
+        Set.copyOf(call.getKeywords()),
+        starredPositions(call));
   }
 
   /**
@@ -123,7 +130,32 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
   protected String getTrampolineName(PythonInvokeInstruction call) {
     return TRAMPOLINE_METHOD_NAME
         + call.getNumberOfPositionalParameters()
-        + call.getKeywords().stream().sorted().map(k -> "$" + k).collect(joining());
+        + call.getKeywords().stream().sorted().map(k -> "$" + k).collect(joining())
+        + starredPositions(call).stream().map(p -> "$star" + p).collect(joining());
+  }
+
+  /**
+   * A call's starred positional slots, in order: part of a trampoline's layout, since the body
+   * forwards them as starred so that the target unpacks them (wala/ML#991). A call without a
+   * starred argument has none, so its trampoline keeps the key and name it had.
+   *
+   * @param call The call.
+   * @return The starred slots, sorted.
+   */
+  protected static List<Integer> starredPositions(PythonInvokeInstruction call) {
+    return java.util.Arrays.stream(call.getStarredPositions()).sorted().boxed().toList();
+  }
+
+  /**
+   * A call's starred positional slots shifted by the trampoline body's own slot layout, for the
+   * body's forwarding invoke (wala/ML#991).
+   *
+   * @param call The call.
+   * @param shift How many slots the body's invoke inserts before the call's own arguments.
+   * @return The shifted starred slots.
+   */
+  protected static int[] shiftedStarredPositions(PythonInvokeInstruction call, int shift) {
+    return java.util.Arrays.stream(call.getStarredPositions()).map(p -> p + shift).toArray();
   }
 
   /**
