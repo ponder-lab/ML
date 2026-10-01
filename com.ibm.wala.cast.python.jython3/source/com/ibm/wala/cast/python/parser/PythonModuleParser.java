@@ -88,12 +88,37 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
             LOGGER.finer("Module name from " + imp + " is: " + moduleName);
 
-            if (isLocalModule(moduleName))
-              return createImportNode(imp.getInternalNames(), moduleName, true);
+            if (isLocalModule(moduleName)) {
+              // `import a.b.mod as m` binds `m` to the module itself, not `a` to the root package
+              // (wala/ML#210).
+              List<alias> names = imp.getInternalNames();
+              if (names.size() == 1 && names.get(0).getInternalAsname() != null)
+                return createAliasedImportNode(names.get(0).getInternalAsname(), moduleName);
+              return createImportNode(names, moduleName, true);
+            }
           }
         }
 
         return super.visitImport(imp);
+      }
+
+      /**
+       * Returns an import {@link CAstNode} binding the given alias to the given local module's
+       * script.
+       *
+       * @param alias The name the import binds.
+       * @param moduleName The local module's path, e.g. {@code pkg/sub/mod} or {@code
+       *     pkg/sub/__init__}.
+       * @return A declaration of the alias initialized by an import of the module's script.
+       */
+      private CAstNode createAliasedImportNode(String alias, String moduleName) {
+        return Ast.makeNode(
+            CAstNode.DECL_STMT,
+            Ast.makeConstant(new CAstSymbolImpl(alias, PythonCAstToIRTranslator.Any)),
+            Ast.makeNode(
+                CAstNode.PRIMITIVE,
+                Ast.makeConstant("import"),
+                Ast.makeConstant(adjustModuleName(moduleName, false))));
       }
 
       /**
