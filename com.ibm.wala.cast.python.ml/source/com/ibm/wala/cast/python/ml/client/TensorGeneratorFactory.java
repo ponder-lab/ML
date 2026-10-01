@@ -2438,7 +2438,7 @@ public class TensorGeneratorFactory {
           PointsToSetVariable argSrc = getPointsToSetVariable(argKey, builder);
           if (argSrc == null) continue;
           TensorGenerator argGenerator = tryGetGenerator(argSrc, builder, visited);
-          InheritedElement candidate = elementOf(argGenerator, builder);
+          InheritedElement candidate = elementOf(argGenerator);
           if (candidate == null) continue;
           if (found == null) found = candidate;
           else if (!sameProvider(found.provider(), candidate.provider())
@@ -2466,11 +2466,9 @@ public class TensorGeneratorFactory {
    * delegating chain to its dataset, carries the empty path.
    *
    * @param generator The argument's generator, possibly {@code null}.
-   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The element, or {@code null} when the generator is not a dataset element.
    */
-  private static InheritedElement elementOf(
-      TensorGenerator generator, PropagationCallGraphBuilder builder) {
+  private static InheritedElement elementOf(TensorGenerator generator) {
     if (generator instanceof DatasetTupleElementGenerator selected
         && selected.getUnderlying() instanceof TupleElementProvider tep)
       return new InheritedElement(tep, selected.getPath());
@@ -2486,8 +2484,8 @@ public class TensorGeneratorFactory {
         }
       }
     }
-    if (effective instanceof DatasetGenerator dataset
-        && dataset instanceof TupleElementProvider tep) return new InheritedElement(tep, List.of());
+    if (effective instanceof DatasetGenerator dataset)
+      return new InheritedElement(dataset, List.of());
     return null;
   }
 }
