@@ -19,6 +19,7 @@ import com.ibm.wala.cast.ir.translator.AbstractScriptEntity;
 import com.ibm.wala.cast.ir.translator.TranslatorToCAst;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAst;
 import com.ibm.wala.cast.tree.CAstEntity;
 import com.ibm.wala.cast.tree.CAstNode;
@@ -1938,22 +1939,16 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                 // Revert to just the name.
                 return this.getName();
 
-              for (File pathEntry : pythonPath) {
-                String pathEntryAbsolutePath = pathEntry.getAbsoluteFile().getPath();
+              // The most specific entry containing the script names it (wala/ML#984).
+              java.util.List<Path> entries = new java.util.ArrayList<>();
+              for (File pathEntry : pythonPath)
                 // Remove protocol.
-                pathEntryAbsolutePath = removeFileProtocolFromPath(pathEntryAbsolutePath);
-
-                String fileAbsolutePath = file.getAbsolutePath();
-
-                if (fileAbsolutePath.startsWith(pathEntryAbsolutePath)) {
-                  // Found it.
-                  Path filePath = Paths.get(fileAbsolutePath);
-                  Path pathEntryPath = Paths.get(pathEntryAbsolutePath);
-
-                  Path scriptRelativePath = pathEntryPath.relativize(filePath);
-                  return "script " + scriptRelativePath.toString();
-                }
-              }
+                entries.add(
+                    Paths.get(removeFileProtocolFromPath(pathEntry.getAbsoluteFile().getPath())));
+              Path filePath = Paths.get(file.getAbsolutePath());
+              java.util.Optional<Path> namingEntry = Util.getNamingPathEntry(entries, filePath);
+              if (namingEntry.isPresent())
+                return "script " + namingEntry.get().relativize(filePath).toString();
               return null; // Not found.
             }
           };
