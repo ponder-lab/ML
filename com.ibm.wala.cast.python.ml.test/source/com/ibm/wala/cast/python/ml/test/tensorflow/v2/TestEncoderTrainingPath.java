@@ -125,12 +125,10 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   }
 
   /**
-   * The encoder's own {@code __call__}, declared on its base class, is not dispatched: the call
-   * goes straight to {@code call} (wala/ML#994). No type is lost on this chain by it.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#994 is fixed.
+   * The encoder's own {@code __call__}, declared on its base class, is dispatched before the
+   * layer's {@code call}, which its {@code super().__call__(...)} reaches (wala/ML#994).
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDunderCallInputs() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_dunder_call_inputs", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
