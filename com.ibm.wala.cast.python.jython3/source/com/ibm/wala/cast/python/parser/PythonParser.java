@@ -951,6 +951,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitCall(Call arg0) throws Exception {
+      CAstNode attributeRead = constantGetattr(arg0);
+      if (attributeRead != null) return attributeRead;
+
       int i = 0;
       CAstNode args[] =
           new CAstNode[arg0.getInternalArgs().size() + arg0.getInternalKeywords().size() + 1];
@@ -994,6 +997,46 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       }
 
       return call;
+    }
+
+    /**
+     * {@code getattr(obj, "name")} with a constant name, read as the attribute read {@code
+     * obj.name} it denotes, and {@code getattr(obj, "name", default)} as that read where it holds a
+     * value and the default otherwise (wala/ML#993). The builtin itself is not modeled, so the call
+     * read as a call resolved to nothing. The rewrite is limited to an object that is a name or an
+     * attribute chain, which the two arms may evaluate twice without effect; a {@code getattr} with
+     * a computed name, keywords, or another object stays a call.
+     *
+     * @param call The call expression.
+     * @return The attribute read, or {@code null} when {@code call} is not such a {@code getattr}.
+     */
+    private CAstNode constantGetattr(Call call) throws Exception {
+      if (!(call.getInternalFunc() instanceof Name)
+          || !"getattr".equals(((Name) call.getInternalFunc()).getInternalId())
+          || !call.getInternalKeywords().isEmpty()) return null;
+      java.util.List<expr> args = call.getInternalArgs();
+      if (args.size() != 2 && args.size() != 3) return null;
+      expr object = args.get(0);
+      if (!(object instanceof Name) && !(object instanceof Attribute)) return null;
+      if (!(args.get(1) instanceof Str)) return null;
+      String name = ((Str) args.get(1)).getInternalS().toString();
+      if (args.size() == 2) return attributeRead(object, name, call);
+      return notePosition(
+          Ast.makeNode(
+              CAstNode.IF_EXPR,
+              attributeRead(object, name, call),
+              attributeRead(object, name, call),
+              notePosition(args.get(2).accept(this), args.get(2))),
+          call);
+    }
+
+    private CAstNode attributeRead(expr object, String name, Call call) throws Exception {
+      return notePosition(
+          Ast.makeNode(
+              CAstNode.OBJECT_REF,
+              notePosition(object.accept(this), object),
+              Ast.makeConstant(name)),
+          call);
     }
 
     private final Map<String, CAstType> missingTypes = HashMapFactory.make();
