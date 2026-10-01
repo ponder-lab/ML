@@ -31,6 +31,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
@@ -748,6 +749,50 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public void visitArrayStore(SSAArrayStoreInstruction inst) {
       newFieldWrite(node, inst.getArrayRef(), inst.getIndex(), inst.getValue());
+    }
+
+    @Override
+    public void visitPropertyWrite(AstPropertyWrite instruction) {
+      if (!processStarredElement(instruction)) super.visitPropertyWrite(instruction);
+    }
+
+    /**
+     * Unpacks a starred element of a tuple or list literal, {@code (a, *rest)} (wala/ML#989). The
+     * parser writes such a literal's elements to its order-free operation-contents property, and a
+     * starred one under {@link PythonCAstToIRTranslator#STARRED_ARGUMENT_MARKER}; that write stands
+     * for every element of the iterable, not the iterable itself, so the iterable's elements flow
+     * into the literal's operation contents instead of the iterable being stored as one element.
+     *
+     * @param instruction The property write.
+     * @return {@code true} iff the write was a starred element and has been handled.
+     */
+    private boolean processStarredElement(AstPropertyWrite instruction) {
+      SymbolTable symtab = ir.getSymbolTable();
+      int memberRef = instruction.getMemberRef();
+      if (!symtab.isConstant(memberRef)
+          || !PythonCAstToIRTranslator.STARRED_ARGUMENT_MARKER.equals(
+              symtab.getConstantValue(memberRef))) return false;
+      int objectVn = instruction.getObjectRef();
+      // A guard, not a path: the parser writes the marker only into the literal it allocates in
+      // the same body, whose contents are invariant. Were it otherwise, the ordinary write would
+      // store the iterable under the marker name, which no reader consults.
+      if (!contentsAreInvariant(symtab, du, objectVn)) return false;
+      IField contents = resolveRootField(getClassHierarchy(), LIST_OPERATION_CONTENTS_FIELD);
+      if (contents == null) return false;
+      int valueVn = instruction.getValue();
+      PointerKey valueKey = getPointerKeyForLocal(valueVn);
+      for (InstanceKey literal : getInvariantContents(symtab, du, node, objectVn)) {
+        PointerKey target =
+            ((AstPointerKeyFactory) getBuilder().getPointerKeyFactory())
+                .getPointerKeyForInstanceField(literal, contents);
+        StarredElementOperator operator =
+            getBuilder().new StarredElementOperator(target, valueKey, instruction.iIndex());
+        if (contentsAreInvariant(symtab, du, valueVn) || system.isImplicit(valueKey))
+          for (InstanceKey iterable : getInvariantContents(symtab, du, node, valueVn))
+            operator.read(iterable);
+        else system.newSideEffect(operator, valueKey);
+      }
+      return true;
     }
 
     @Override
@@ -1783,6 +1828,90 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     return cha.resolveField(
         FieldReference.findOrCreate(
             PythonTypes.Root, Atom.findOrCreateUnicodeAtom(name), PythonTypes.Root));
+  }
+
+  /**
+   * Flows the elements of each iterable a starred literal element may be into the literal's
+   * operation contents (wala/ML#989): a list's or tuple's catalogued fields and its own appended
+   * and operation contents. Any other iterable (an ndarray, a tensor shape, a generator) is stored
+   * itself, as the literal stored it before, since its elements are not fields the analysis knows.
+   */
+  public final class StarredElementOperator extends UnaryOperator<PointsToSetVariable> {
+    private final PointerKey target;
+    private final PointerKey value;
+    private final int pc;
+    private final Set<InstanceKey> read = HashSetFactory.make();
+    private boolean keptWhole;
+
+    private StarredElementOperator(PointerKey target, PointerKey value, int pc) {
+      this.target = target;
+      this.value = value;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      // A side effect: the elements reach the literal through the constraints registered here.
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Registers the flow of one iterable's elements into the literal.
+     *
+     * @param iterable A key the starred value may be.
+     */
+    private void read(InstanceKey iterable) {
+      if (!read.add(iterable)) return;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass list = cha.lookupClass(PythonTypes.list);
+      IClass tuple = cha.lookupClass(PythonTypes.tuple);
+      IClass type = iterable.concreteType();
+      if (!(list != null && cha.isSubclassOf(type, list))
+          && !(tuple != null && cha.isSubclassOf(type, tuple))) {
+        // Kept whole through an assignment from the starred value, so the tensor dataflow, which
+        // walks assignments, sees it as it did when the literal stored the value as one element.
+        // The assignment carries the value's whole points-to set: when it mixes a collection with
+        // a non-collection, the collection is stored whole as well as unpacked (a superset).
+        if (!keptWhole) {
+          keptWhole = true;
+          getSystem().newConstraint(target, assignOperator, value);
+        }
+        return;
+      }
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IField contents = resolveRootField(cha, LIST_OPERATION_CONTENTS_FIELD);
+      IField appended = resolveRootField(cha, LIST_APPEND_CONTENTS_FIELD);
+      if (contents != null)
+        getSystem()
+            .newConstraint(
+                target, assignOperator, factory.getPointerKeyForInstanceField(iterable, contents));
+      if (appended != null)
+        getSystem()
+            .newConstraint(
+                target, assignOperator, factory.getPointerKeyForInstanceField(iterable, appended));
+      getSystem()
+          .newSideEffect(
+              new ElementCopyOperator(iterable, target, pc),
+              factory.getPointerKeyForObjectCatalog(iterable));
+    }
+
+    @Override
+    public int hashCode() {
+      return target.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof StarredElementOperator other
+          && target.equals(other.target)
+          && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "starred element at " + pc + " into " + target;
+    }
   }
 
   /**

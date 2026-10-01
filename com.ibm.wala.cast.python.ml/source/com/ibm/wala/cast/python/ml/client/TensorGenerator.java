@@ -572,7 +572,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder,
       Iterable<InstanceKey> pointsToSet,
       Set<InstanceKey> onWalk) {
-    if (pointsToSet == null || !hasLiteralShapeEvidence(pointsToSet))
+    if (pointsToSet == null || !hasLiteralShapeEvidence(builder, pointsToSet))
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + describe(this.getSource()) + ".");
 
@@ -603,6 +603,9 @@ public abstract class TensorGenerator {
         // falls
         // through to the def-use vector walk, today's route for such a value.
         if (isListOperationResult(asin)) continue;
+        // A literal with a starred element keeps its elements the same way, under the
+        // operation-contents name with no length (wala/ML#989), though its site is a `new`.
+        if (hasUnpositionedElements(builder, asin)) continue;
         TypeReference reference = asin.concreteType().getReference();
 
         if (reference.equals(dict)) {
@@ -970,18 +973,21 @@ public abstract class TensorGenerator {
 
   /**
    * Whether a shape argument's points-to set holds any evidence a literal reader can use: a key
-   * that is not a list synthesized by the repetition and concatenation model (wala/ML#960). A set
-   * of synthesized keys alone is no evidence, and reads as an empty set so that every caller takes
-   * its no-evidence route (the def-use vector walk, or an unknown shape) rather than an empty or
-   * scalar shape set.
+   * that is not a list synthesized by the repetition and concatenation model (wala/ML#960) or a
+   * literal with a starred element (wala/ML#989). A set of synthesized keys alone is no evidence,
+   * and reads as an empty set so that every caller takes its no-evidence route (the def-use vector
+   * walk, or an unknown shape) rather than an empty or scalar shape set.
    *
+   * @param builder The propagation call graph builder.
    * @param pointsToSet The shape argument's points-to set.
-   * @return {@code true} iff some member is not a synthesized list.
+   * @return {@code true} iff some member is neither a synthesized list nor a starred literal.
    */
-  protected static boolean hasLiteralShapeEvidence(Iterable<InstanceKey> pointsToSet) {
+  protected static boolean hasLiteralShapeEvidence(
+      PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     for (InstanceKey ik : pointsToSet) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin == null || !isListOperationResult(asin)) return true;
+      if (asin == null || !(isListOperationResult(asin) || hasUnpositionedElements(builder, asin)))
+        return true;
     }
     return false;
   }
@@ -1003,6 +1009,32 @@ public abstract class TensorGenerator {
     return pc >= 0
         && pc < instructions.length
         && instructions[pc] instanceof SSABinaryOpInstruction;
+  }
+
+  /**
+   * Whether a collection keeps elements whose positions are unknown under the operation-contents
+   * name (wala/ML#989): a literal with a starred element, whose unpacked length leaves every
+   * element's index unknown. Its numeric fields, if any, do not give its length, so a reader
+   * counting them must not read it as a literal.
+   *
+   * @param builder The propagation call graph builder.
+   * @param asin The allocation to test.
+   * @return {@code true} iff the collection's catalog names the operation-contents property.
+   */
+  protected static boolean hasUnpositionedElements(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+    OrdinalSet<InstanceKey> catalog =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
+    if (catalog == null) return false;
+    for (InstanceKey name : catalog)
+      if (name instanceof ConstantKey<?> constant
+          && PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD.equals(
+              constant.getValue())) return true;
+    return false;
   }
 
   /**

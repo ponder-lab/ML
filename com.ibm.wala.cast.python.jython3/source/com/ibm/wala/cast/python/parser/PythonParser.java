@@ -22,6 +22,7 @@ import com.ibm.wala.cast.ir.translator.AbstractCodeEntity;
 import com.ibm.wala.cast.ir.translator.AbstractFieldEntity;
 import com.ibm.wala.cast.ir.translator.AbstractScriptEntity;
 import com.ibm.wala.cast.ir.translator.TranslatorToCAst;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
@@ -2248,9 +2249,25 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       int i = 0, j = 0;
       CAstNode[] elts = new CAstNode[2 * eltList.size() + 1];
       elts[i++] = Ast.makeNode(CAstNode.NEW, Ast.makeConstant(type));
+      // A starred element (`(a, *rest)`) unpacks an iterable of statically unknown length, so no
+      // element of such a literal has a known index and its length is unknown (wala/ML#989). Every
+      // element is then written where a list operation's result keeps its elements, the
+      // order-free operation-contents property, and a starred one under the starred marker, whose
+      // write the call-graph builder reads as "every element of this iterable".
+      boolean starred = false;
+      for (expr e : eltList) if (e instanceof Starred) starred = true;
       for (expr e : eltList) {
-        elts[i++] = Ast.makeConstant(j++);
-        elts[i++] = acceptOrNull(e);
+        if (!starred) {
+          elts[i++] = Ast.makeConstant(j++);
+          elts[i++] = acceptOrNull(e);
+        } else if (e instanceof Starred) {
+          elts[i++] = Ast.makeConstant(PythonCAstToIRTranslator.STARRED_ARGUMENT_MARKER);
+          elts[i++] = acceptOrNull(((Starred) e).getInternalValue());
+        } else {
+          elts[i++] =
+              Ast.makeConstant(PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD);
+          elts[i++] = acceptOrNull(e);
+        }
       }
       return Ast.makeNode(CAstNode.OBJECT_LITERAL, elts);
     }

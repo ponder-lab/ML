@@ -16,6 +16,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
@@ -803,6 +805,15 @@ public class TensorType implements Iterable<Dimension<?>> {
         int indexVn = ((PythonPropertyWrite) use).getMemberRef();
         if (S.isNumberConstant(indexVn)) {
           index = ((Number) S.getConstantValue(indexVn)).intValue();
+        } else if (S.isStringConstant(indexVn)
+            && ref == literalVn
+            && (PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD.equals(
+                    S.getStringValue(indexVn))
+                || PythonCAstToIRTranslator.STARRED_ARGUMENT_MARKER.equals(
+                    S.getStringValue(indexVn)))) {
+          // A literal with a starred element (wala/ML#989): its unpacked length leaves every
+          // element's index, and the literal's length, unknown, so the shape's rank is unknown.
+          return new TensorType(FLOAT32.name().toLowerCase(Locale.ROOT), null);
         } else if (S.isStringConstant(indexVn)) {
           try {
             index = Integer.parseInt(S.getStringValue(indexVn));
