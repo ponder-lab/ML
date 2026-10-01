@@ -22,8 +22,8 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   /** The generator representing the underlying dataset this element belongs to. */
   private final TupleElementProvider underlying;
 
-  /** The index of this element within the tuple. */
-  private final int index;
+  /** The selectors into the element, outermost first (wala/ML#993). */
+  private final List<Object> path;
 
   /**
    * Constructs a new {@code DatasetTupleElementGenerator}.
@@ -34,9 +34,40 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    */
   public DatasetTupleElementGenerator(
       PointsToSetVariable source, TupleElementProvider underlying, int index) {
+    this(source, underlying, List.<Object>of(index));
+  }
+
+  /**
+   * Constructs a generator for the component a path of selectors reaches within the element
+   * (wala/ML#993): integer indexes into tuples and string keys into dicts, outermost first.
+   *
+   * @param source the points-to set variable representing the source of the read
+   * @param underlying the generator representing the underlying dataset
+   * @param path the selectors, outermost first; never empty
+   */
+  public DatasetTupleElementGenerator(
+      PointsToSetVariable source, TupleElementProvider underlying, List<Object> path) {
     super(source);
     this.underlying = underlying;
-    this.index = index;
+    this.path = List.copyOf(path);
+  }
+
+  /**
+   * The selectors into the element this generator reads, outermost first.
+   *
+   * @return the path; never empty
+   */
+  public List<Object> getPath() {
+    return this.path;
+  }
+
+  /** Whether the path is a single integer index into a tuple element, the original form. */
+  private boolean isIndex() {
+    return this.path.size() == 1 && this.path.get(0) instanceof Integer;
+  }
+
+  private int index() {
+    return (Integer) this.path.get(0);
   }
 
   /**
@@ -51,7 +82,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   public DatasetTupleElementGenerator(CGNode node, TupleElementProvider underlying, int index) {
     super(node);
     this.underlying = underlying;
-    this.index = index;
+    this.path = List.of(index);
   }
 
   /**
@@ -74,12 +105,12 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    */
   @Override
   protected Object operationDiscriminator() {
-    return this.index;
+    return this.path;
   }
 
   @Override
   public String toString() {
-    return "DatasetTupleElementGenerator(" + underlying + ", index=" + index + ")";
+    return "DatasetTupleElementGenerator(" + underlying + ", path=" + path + ")";
   }
 
   /**
@@ -91,7 +122,9 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getTensorTypesForIndex(builder, index);
+      return isIndex()
+          ? underlying.getTensorTypesForIndex(builder, index())
+          : underlying.getTensorTypesForPath(builder, path);
     }
     return super.getTensorTypes(builder);
   }
@@ -105,7 +138,9 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   @Override
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getShapesForIndex(builder, index);
+      return isIndex()
+          ? underlying.getShapesForIndex(builder, index())
+          : underlying.getShapesForPath(builder, path);
     }
     return super.getShapes(builder);
   }
@@ -119,7 +154,9 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   @Override
   public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getDTypesForIndex(builder, index);
+      return isIndex()
+          ? underlying.getDTypesForIndex(builder, index())
+          : underlying.getDTypesForPath(builder, path);
     }
     return super.getDTypes(builder);
   }

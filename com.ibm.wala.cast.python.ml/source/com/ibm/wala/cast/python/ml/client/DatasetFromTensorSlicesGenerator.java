@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -24,6 +25,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -360,6 +362,85 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
   }
 
   @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer) return this.yieldsTuple(builder);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    return component != null && !component.isEmpty();
+  }
+
+  /**
+   * The points-to set of the component a path of selectors reaches within the {@code tensors}
+   * argument (wala/ML#993): an {@link Integer} selects a tuple's field by index, a {@link String} a
+   * dict's field by key, each applied to every container the previous step reached.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set, or {@code null} when a step reaches nothing.
+   */
+  private OrdinalSet<InstanceKey> componentPointsToSet(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    OrdinalSet<InstanceKey> current =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+    for (Object selector : path) {
+      if (current == null || current.isEmpty()) return null;
+      OrdinalSet<InstanceKey> next = null;
+      for (InstanceKey ik : current) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin == null) continue;
+        TypeReference type = asin.concreteType().getReference();
+        String fieldName;
+        if (selector instanceof Integer index && type.equals(tuple)) fieldName = index.toString();
+        else if (selector instanceof String key && type.equals(dict)) fieldName = key;
+        else continue;
+        IField f =
+            builder
+                .getClassHierarchy()
+                .resolveField(
+                    FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldName), Root));
+        if (f == null) continue;
+        OrdinalSet<InstanceKey> fieldPts =
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
+        if (fieldPts == null) continue;
+        next = next == null ? fieldPts : OrdinalSet.unify(next, fieldPts);
+      }
+      current = next;
+    }
+    return current;
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getShapesForIndex(builder, index);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    if (component == null || component.isEmpty()) return null;
+    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, component);
+    if (shapes == null || shapes.isEmpty()) return null;
+    // The dataset slices the component along its first axis.
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> shape : shapes)
+      ret.add(
+          shape.isEmpty()
+              ? Collections.emptyList()
+              : new ArrayList<>(shape.subList(1, shape.size())));
+    return ret;
+  }
+
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getDTypesForIndex(builder, index);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    if (component == null || component.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    Set<DType> dtypes = this.getDTypesOfValue(builder, component);
+    return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
+  }
+
+  @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
     Set<DType> dTypes = this.getDTypesForIndex(builder, index);
@@ -379,6 +460,19 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       for (DType dtype : dTypes)
         ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
 
+    return ret;
+  }
+
+  /**
+   * The containers on a structure walk with one more added (wala/ML#993).
+   *
+   * @param onWalk The containers already on the walk.
+   * @param container The container whose members are about to be walked.
+   * @return A new set holding both.
+   */
+  private static Set<InstanceKey> withOnWalk(Set<InstanceKey> onWalk, InstanceKey container) {
+    Set<InstanceKey> ret = HashSetFactory.make(onWalk);
+    ret.add(container);
     return ret;
   }
 
@@ -407,12 +501,58 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
    */
   private Set<List<Dimension<?>>> getShapesOfTensorsArgument(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    return this.getShapesOfTensorsArgument(builder, valuePointsToSet, HashSetFactory.make());
+  }
+
+  /**
+   * As {@link #getShapesOfTensorsArgument(PropagationCallGraphBuilder, OrdinalSet)}, carrying the
+   * containers on the walk: a tuple of dicts, or a dict of tuples, is walked through its members to
+   * the tensors at the leaves, and a container met again on its own walk contributes nothing
+   * (wala/ML#993, wala/ML#990).
+   */
+  private Set<List<Dimension<?>>> getShapesOfTensorsArgument(
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> valuePointsToSet,
+      Set<InstanceKey> onWalk) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     boolean sawTuple = false;
 
     for (InstanceKey ik : valuePointsToSet) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin == null || !asin.concreteType().getReference().equals(tuple)) {
+      if (asin == null || onWalk.contains(asin)) continue;
+      // A dict-structured argument (`{"ids": ids, "length": length}`) is a structure of
+      // independent components too, keyed by strings (wala/ML#993): its result is the union over
+      // its values, as a tuple's is over its members, so the dataset's size and its aggregate
+      // reading come from the components.
+      if (asin.concreteType().getReference().equals(dict)) {
+        sawTuple = true;
+        OrdinalSet<InstanceKey> dictCatalog =
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin));
+        for (InstanceKey catalogIK : dictCatalog) {
+          if (!(catalogIK instanceof ConstantKey<?> constant)
+              || !(constant.getValue() instanceof String key)) continue;
+          IField f =
+              builder
+                  .getClassHierarchy()
+                  .resolveField(
+                      FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(key), Root));
+          if (f == null) continue;
+          Set<List<Dimension<?>>> valueShapes =
+              this.getShapesOfTensorsArgument(
+                  builder,
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)),
+                  withOnWalk(onWalk, asin));
+          if (valueShapes != null) ret.addAll(valueShapes);
+        }
+        continue;
+      }
+      if (!asin.concreteType().getReference().equals(tuple)) {
         continue;
       }
       sawTuple = true;
@@ -438,7 +578,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         if (f == null) continue;
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
-        Set<List<Dimension<?>>> fieldShapes = this.getShapesOfValue(builder, fieldPts);
+        Set<List<Dimension<?>>> fieldShapes =
+            this.getShapesOfTensorsArgument(builder, fieldPts, withOnWalk(onWalk, asin));
         if (fieldShapes == null || fieldShapes.isEmpty()) {
           // Fallback: fieldPts is empty because the stored value has an implicit PK (e.g.,
           // a division-result post reshape chain: `x_train / 255.0`). Locate the tuple-field
@@ -576,12 +717,53 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
    */
   private Set<DType> getDTypesOfTensorsArgument(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    return this.getDTypesOfTensorsArgument(builder, valuePointsToSet, HashSetFactory.make());
+  }
+
+  /** The dtype counterpart of the three-argument shapes walk (wala/ML#993). */
+  private Set<DType> getDTypesOfTensorsArgument(
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> valuePointsToSet,
+      Set<InstanceKey> onWalk) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     boolean sawTuple = false;
 
     for (InstanceKey ik : valuePointsToSet) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin == null || !asin.concreteType().getReference().equals(tuple)) {
+      if (asin == null || onWalk.contains(asin)) continue;
+      // A dict-structured argument (`{"ids": ids, "length": length}`) is a structure of
+      // independent components too, keyed by strings (wala/ML#993): its result is the union over
+      // its values, as a tuple's is over its members, so the dataset's size and its aggregate
+      // reading come from the components.
+      if (asin.concreteType().getReference().equals(dict)) {
+        sawTuple = true;
+        OrdinalSet<InstanceKey> dictCatalog =
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin));
+        for (InstanceKey catalogIK : dictCatalog) {
+          if (!(catalogIK instanceof ConstantKey<?> constant)
+              || !(constant.getValue() instanceof String key)) continue;
+          IField f =
+              builder
+                  .getClassHierarchy()
+                  .resolveField(
+                      FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(key), Root));
+          if (f == null) continue;
+          Set<DType> valueDTypes =
+              this.getDTypesOfTensorsArgument(
+                  builder,
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)),
+                  withOnWalk(onWalk, asin));
+          if (valueDTypes != null) ret.addAll(valueDTypes);
+        }
+        continue;
+      }
+      if (!asin.concreteType().getReference().equals(tuple)) {
         continue;
       }
       sawTuple = true;
@@ -602,7 +784,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         if (f == null) continue;
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
-        Set<DType> fieldDTypes = this.getDTypesOfValue(builder, fieldPts);
+        Set<DType> fieldDTypes =
+            this.getDTypesOfTensorsArgument(builder, fieldPts, withOnWalk(onWalk, asin));
         if (fieldDTypes == null || fieldDTypes.isEmpty()) {
           // Same fallback as for shapes: implicit-PK stored value, walk DU chain.
           int storedVn = findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);

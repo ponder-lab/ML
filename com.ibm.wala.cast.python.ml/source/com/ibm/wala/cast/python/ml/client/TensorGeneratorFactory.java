@@ -283,6 +283,7 @@ import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -1820,6 +1821,28 @@ public class TensorGeneratorFactory {
             return new EnumerateIndexGenerator(objSrc);
           } else if (isSecondElement) {
             return new DatasetElementGenerator(objSrc, enumGen.getUnderlyingGenerator(builder));
+          }
+        }
+
+        // A dataset element selected by a string KEY (a dict element, `source["ids"]`), or a
+        // component of an element already selected (`element[0]["ids"]`): the selectors form a
+        // path into the dataset's element structure (wala/ML#993). An element selected by a
+        // single integer index keeps the tuple-element path below.
+        List<Object> basePath =
+            containerGenerator instanceof DatasetTupleElementGenerator selected
+                ? selected.getPath()
+                : List.of();
+        Object selector = propertyIndex != null ? (Object) propertyIndex : (Object) propertyName;
+        if (effectiveGenerator instanceof TupleElementProvider tep
+            && selector != null
+            && (!basePath.isEmpty() || propertyIndex == null)) {
+          List<Object> path = new ArrayList<>(basePath);
+          path.add(selector);
+          // Gated on the path reaching a component of the element's structure: a string that
+          // names no key, such as an attribute read on the dataset itself, is not a selector.
+          if (tep.resolvesPath(builder, path)) {
+            LOGGER.fine(() -> "Found a dataset element component at path " + path + ".");
+            return new DatasetTupleElementGenerator(objSrc, tep, path);
           }
         }
 
