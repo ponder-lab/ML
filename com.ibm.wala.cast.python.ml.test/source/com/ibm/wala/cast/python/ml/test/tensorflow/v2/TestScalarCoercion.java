@@ -42,6 +42,13 @@ public class TestScalarCoercion extends AbstractTensorTest {
     test(FILE, "sink", 1, 1, Map.of(2, Set.of(FED)));
   }
 
+  /** A unary minus over the computed number, {@code inputs * -(n ** 0.5)}: still a number. */
+  @Test
+  public void testNegatedScalarPowerKeepsFedDType()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "scale_negated", 1, 2, Map.of(2, Set.of(FED)));
+  }
+
   /** Control: a float literal beside the parameter left it alone before as well. */
   @Test
   public void testFloatLiteralKeepsFedDType()

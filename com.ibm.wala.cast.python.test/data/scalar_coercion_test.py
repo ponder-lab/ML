@@ -24,6 +24,14 @@ def scale_in_place(inputs, n):
     return inputs
 
 
+def scale_negated(inputs, n):
+    # A unary minus over the computed number: still a Python number beside the tensor.
+    assert inputs.dtype == tf.float32
+    scaled = inputs * -(n**0.5)
+    assert scaled.dtype == tf.float32
+    return scaled
+
+
 def scale_by_literal(inputs):
     assert inputs.dtype == tf.float32
     scaled = inputs * 4.5
@@ -35,6 +43,7 @@ class EncoderTest(tf.test.TestCase):
     def testScaling(self):
         scale(tf.random.uniform([4, 5, 10]), 20)
         scale_in_place(tf.random.uniform([4, 5, 10]), 20)
+        scale_negated(tf.random.uniform([4, 5, 10]), 20)
         scale_by_literal(tf.random.uniform([4, 5, 10]))
 
 
