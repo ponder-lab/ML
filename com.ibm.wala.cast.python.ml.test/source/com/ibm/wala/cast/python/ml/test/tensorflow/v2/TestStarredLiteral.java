@@ -64,4 +64,35 @@ public class TestStarredLiteral extends AbstractTensorTest {
   public void testStarredShape() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_reshaped", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
+
+  /** A literal starred in place, {@code [a, *[b, g]]}, unpacks its elements. */
+  @Test
+  public void testInlineStarredLiteral()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_inline",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4), TensorType.of(FLOAT_32, 2), TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A starred iterable that is not a list or tuple, here an ndarray, is kept as itself, as the
+   * literal kept it before: its elements are not fields the analysis knows. At run time the
+   * elements are the array's rows, of shape {@code (4,)}.
+   */
+  @Test
+  public void testNonCollectionStarKeptWhole()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_array_star",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4), TensorType.of(FLOAT_64, 2, 4))));
+  }
 }
