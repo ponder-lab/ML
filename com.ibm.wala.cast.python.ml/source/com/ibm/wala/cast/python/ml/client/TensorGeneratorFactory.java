@@ -2399,7 +2399,11 @@ public class TensorGeneratorFactory {
    * The dataset element provider a parameter inherits from the callers of its function
    * (wala/ML#993): for each caller's call, the argument at the parameter's position is read for its
    * generator; a dataset element, or a component of one, yields its provider and path. Exactly one
-   * distinct provider-and-path across the callers is inherited; none, or several, is declined.
+   * distinct provider-and-path among the callers that pass an element is inherited; none, or
+   * several distinct ones, is declined. A caller whose argument is not a dataset element is not
+   * counted: its values reach the parameter by dataflow as before, beside the inherited reading, so
+   * the result is their union. Providers are compared by their points-to source, since one dataset
+   * can be read through distinct generator instances across callers.
    *
    * @param node The function whose parameter is read.
    * @param parameterVn The parameter's value number.
@@ -2435,12 +2439,23 @@ public class TensorGeneratorFactory {
           InheritedElement candidate = elementOf(argGenerator, builder);
           if (candidate == null) continue;
           if (found == null) found = candidate;
-          else if (found.provider() != candidate.provider()
+          else if (!sameProvider(found.provider(), candidate.provider())
               || !found.path().equals(candidate.path())) return null;
         }
       }
     }
     return found;
+  }
+
+  /**
+   * Whether two providers read the same dataset: the same instance, or generators anchored on the
+   * same points-to source (wala/ML#993).
+   */
+  private static boolean sameProvider(TupleElementProvider a, TupleElementProvider b) {
+    if (a == b) return true;
+    if (a instanceof TensorGenerator ga && b instanceof TensorGenerator gb)
+      return ga.getSource() != null && ga.getSource().equals(gb.getSource());
+    return false;
   }
 
   /**

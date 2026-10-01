@@ -1069,9 +1069,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // numeric key, while the ubiquitous `self.attr` reads this branch also visits would
             // otherwise each pay a full (uncached) creator walk whose common outcome is an
             // exception.
-            // A constant member, an integer index or a string key (wala/ML#993): the generator
-            // decides whether the object is a dataset element or a component of one.
-            if (!added && readsConstantMember(propertyRead, localPointerKeyNode, pointerAnalysis)) {
+            // A constant integer index, or a constant string key on an object with NO points-to
+            // set (wala/ML#993): a dataset element is no allocation, so a parameter it is passed
+            // to has an empty set, where `self` and every other object always has one. The gate
+            // keeps the ubiquitous `self.attr` read off the generator walk, whose cost the comment
+            // above describes; the generator then decides whether the object is a dataset element.
+            if (!added
+                && (readsConstantIntegerMember(propertyRead, localPointerKeyNode, pointerAnalysis)
+                    || (readsConstantStringMember(
+                            propertyRead, localPointerKeyNode, pointerAnalysis)
+                        && pointerAnalysis
+                            .getPointsToSet(
+                                pointerAnalysis
+                                    .getHeapModel()
+                                    .getPointerKeyForLocal(localPointerKeyNode, objectRef))
+                            .isEmpty()))) {
               try {
                 TensorGenerator generator = getGenerator(src, builder);
 
@@ -1543,22 +1555,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * Whether a property read's member is a constant integer index or a constant string key
-   * (wala/ML#993).
+   * Whether a property read's member is a constant string key (wala/ML#993).
    *
    * @param read The property read.
    * @param node The node containing the read.
    * @param pointerAnalysis The pointer analysis.
-   * @return {@code true} iff the member's points-to set holds a number or a string constant.
+   * @return {@code true} iff the member's points-to set holds a string constant.
    */
-  private static boolean readsConstantMember(
+  private static boolean readsConstantStringMember(
       PythonPropertyRead read, CGNode node, PointerAnalysis<InstanceKey> pointerAnalysis) {
     PointerKey memberKey =
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef());
 
     for (InstanceKey ik : pointerAnalysis.getPointsToSet(memberKey))
-      if (ik instanceof ConstantKey<?> constant
-          && (constant.getValue() instanceof Number || constant.getValue() instanceof String))
+      if (ik instanceof ConstantKey<?> constant && constant.getValue() instanceof String)
         return true;
 
     return false;
