@@ -459,7 +459,7 @@ public class UserLayerCall extends TensorGenerator {
     CGNode node = allocation.getNode();
 
     if (node.getIR() != null) {
-      SSAInstruction alloc = node.getIR().getNew(allocation.getSite());
+      SSAInstruction alloc = newInstructionOrNull(node.getIR(), allocation.getSite());
       if (alloc != null && alloc.iIndex() >= 0) {
         ISSABasicBlock block =
             node.getIR().getControlFlowGraph().getBlockForInstruction(alloc.iIndex());
