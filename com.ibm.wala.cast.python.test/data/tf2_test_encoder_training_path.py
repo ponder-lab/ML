@@ -60,6 +60,18 @@ def passthrough(x):
     return x
 
 
+def consume_module_fn_property(x):
+    pass
+
+
+def consume_tf_property(x):
+    pass
+
+
+def module_helper(layer):
+    return layer
+
+
 def consume_property_inputs(x):
     pass
 
@@ -178,6 +190,16 @@ class Model(BaseModel):
         consume_setter_value(value)
         self._fn = value
 
+    # Getters whose bodies read MODULE-LEVEL names, which a function object resolves lexically
+    # through its creator: a module function and a library call.
+    @property
+    def module_fn_inputter(self):
+        return module_helper(self.examples_inputter.features_inputter)
+
+    @property
+    def tf_value(self):
+        return tf.ones((2, 3, 8))
+
     # The inputter reached through a property, as a sequence-to-sequence model exposes it.
     @property
     def property_inputter(self):
@@ -225,6 +247,9 @@ def training_step(source, target):
     consume_settable_inputs(settable_inputs)
     fn_out = model.settable_fn(source_inputs)
     consume_settable_fn_out(fn_out)
+    module_fn_inputs = model.module_fn_inputter(source, training=True)
+    consume_module_fn_property(module_fn_inputs)
+    consume_tf_property(model.tf_value)
     return encoder_outputs
 
 

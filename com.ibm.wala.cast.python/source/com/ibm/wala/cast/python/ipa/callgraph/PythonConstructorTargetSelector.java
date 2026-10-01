@@ -260,15 +260,24 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                 && isPropertyAccessor(r, receiver.getClassHierarchy())) continue;
             if (!summaryDeclaredMethods.contains(r)
                 && isProperty(r, receiver.getClassHierarchy())) {
-              // The getter is allocated by its own function class, not read off the class
-              // attribute of its name: a setter of the same name rebinds that attribute, so the
-              // attribute holds both functions and reading it would run the setter with the
-              // instance as its value.
+              // The getter is read off the class attribute of its name, where the class body
+              // bound it, so its lexical reads of module names resolve through that creator (a
+              // fresh allocation here would have no module scope: measured, a getter calling a
+              // module function or a library API read as nothing). A setter's definition rebinds
+              // that attribute to both functions, so the read is filtered to the getter's own
+              // function class; reading it unfiltered ran the setter with the instance as its
+              // value (measured).
+              int attribute = v++;
+              ctor.addStatement(
+                  insts.GetInstruction(
+                      pc++,
+                      attribute,
+                      1,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
               int getter = v++;
               ctor.addStatement(
-                  insts.NewInstruction(
-                      pc, getter, NewSiteReference.make(pc, r.getDeclaringClass())));
-              pc++;
+                  insts.CheckCastInstruction(pc++, getter, attribute, r.getDeclaringClass(), true));
               int value = v++;
               int valueException = v++;
               @SuppressWarnings({"unchecked", "rawtypes"})

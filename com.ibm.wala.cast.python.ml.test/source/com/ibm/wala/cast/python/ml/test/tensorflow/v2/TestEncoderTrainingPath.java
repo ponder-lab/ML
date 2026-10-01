@@ -107,6 +107,24 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   }
 
   /**
+   * A getter whose body calls a module-level function: the function object resolves the name
+   * lexically through its creator, so the getter must be allocated where the module's scope is
+   * reachable.
+   */
+  @Test
+  public void testModuleFunctionPropertyInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_module_fn_property", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /** A getter whose body calls a library API through the module name: its value is the tensor. */
+  @Test
+  public void testLibraryCallProperty()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_tf_property", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
+  }
+
+  /**
    * The encoder's own {@code __call__}, declared on its base class, is not dispatched: the call
    * goes straight to {@code call} (wala/ML#994). No type is lost on this chain by it.
    *
