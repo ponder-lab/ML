@@ -28,4 +28,19 @@ public class TestShapeArgumentCycle extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
   }
+
+  /**
+   * The same cycle through a spec's shape field: {@code spec = tf.TensorSpec([spec, 2])} in a loop,
+   * so reading the list reads the spec, whose shape is the list again.
+   */
+  @Test
+  public void testSelfContainingSpecCompletes()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_argument_cycle.py",
+        "consume_spec",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+  }
 }

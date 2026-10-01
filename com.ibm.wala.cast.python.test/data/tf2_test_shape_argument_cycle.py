@@ -15,3 +15,17 @@ try:
     consume(tf.ones(shape))
 except (TypeError, ValueError):
     pass
+
+
+def consume_spec(x):
+    pass
+
+
+# The same cycle through a spec's shape field: the list arm reads the spec, whose shape is the list.
+spec = tf.TensorSpec([2])
+try:
+    for _ in range(2):
+        spec = tf.TensorSpec([spec, 2])
+    consume_spec(tf.ones(spec.shape))
+except (TypeError, ValueError):
+    pass
