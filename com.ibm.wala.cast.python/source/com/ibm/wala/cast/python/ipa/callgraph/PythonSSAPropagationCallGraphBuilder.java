@@ -785,7 +785,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
             ((AstPointerKeyFactory) getBuilder().getPointerKeyFactory())
                 .getPointerKeyForInstanceField(literal, contents);
         StarredElementOperator operator =
-            getBuilder().new StarredElementOperator(target, instruction.iIndex());
+            getBuilder().new StarredElementOperator(target, valueKey, instruction.iIndex());
         if (contentsAreInvariant(symtab, du, valueVn) || system.isImplicit(valueKey))
           for (InstanceKey iterable : getInvariantContents(symtab, du, node, valueVn))
             operator.read(iterable);
@@ -1837,11 +1837,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   public final class StarredElementOperator extends UnaryOperator<PointsToSetVariable> {
     private final PointerKey target;
+    private final PointerKey value;
     private final int pc;
     private final Set<InstanceKey> read = HashSetFactory.make();
+    private boolean keptWhole;
 
-    private StarredElementOperator(PointerKey target, int pc) {
+    private StarredElementOperator(PointerKey target, PointerKey value, int pc) {
       this.target = target;
+      this.value = value;
       this.pc = pc;
     }
 
@@ -1865,7 +1868,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IClass type = iterable.concreteType();
       if (!(list != null && cha.isSubclassOf(type, list))
           && !(tuple != null && cha.isSubclassOf(type, tuple))) {
-        getSystem().newConstraint(target, iterable);
+        // Kept whole through an assignment from the starred value, so the tensor dataflow, which
+        // walks assignments, sees it as it did when the literal stored the value as one element.
+        if (!keptWhole) {
+          keptWhole = true;
+          getSystem().newConstraint(target, assignOperator, value);
+        }
         return;
       }
       AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
