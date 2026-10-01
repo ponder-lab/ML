@@ -998,9 +998,9 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
       PropagationCallGraphBuilder builder, int sourceVn, int targetVn, Set<PointerKey> ret) {
     CGNode node = this.getNode();
     if (node.getIR() == null || node.getDU() == null) return;
-    // Mirrors `coerce`: a scalar-literal slot on either side means the op imposes nothing at run
+    // Mirrors `coerce`: a Python-number slot on either side means the op imposes nothing at run
     // time — complete by design, not unresolved.
-    if (this.isScalarLiteral(builder, sourceVn) || this.isScalarLiteral(builder, targetVn)) return;
+    if (this.isPythonNumber(builder, sourceVn) || this.isScalarLiteral(builder, targetVn)) return;
 
     if (isParameterVn(node, sourceVn)
         || singleDefiniteDType(this.getOperandDTypes(builder, sourceVn)) == null)
@@ -1021,7 +1021,9 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     if (node.getIR() == null || node.getDU() == null) return;
     // A Python number is weak in both libraries: it takes the other operand's dtype rather than
     // imposing its own, which is what `promoteWithFloatLiteral` already models for the result.
-    if (this.isScalarLiteral(builder, sourceVn) || this.isScalarLiteral(builder, targetVn)) return;
+    // That holds for a computed number as much as for a literal: `n ** 0.5` over an int promotes
+    // to `float64` as a value, and still imposes nothing on the tensor beside it (wala/ML#992).
+    if (this.isPythonNumber(builder, sourceVn) || this.isScalarLiteral(builder, targetVn)) return;
     if (isParameterVn(node, sourceVn)) return;
 
     DType imposed = singleDefiniteDType(this.getOperandDTypes(builder, sourceVn));
@@ -1043,6 +1045,42 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
                 + " in "
                 + describe(node)
                 + ".");
+  }
+
+  /**
+   * Whether an operand slot holds a Python number rather than a tensor or an array (wala/ML#992): a
+   * scalar literal; a value whose points-to set is non-empty and consists of numeric constants only
+   * (a parameter every caller feeds a number, a stored attribute written a number); or a binary
+   * operation over such operands ({@code n ** 0.5}, {@code self.num_units ** 0.5}). A Python number
+   * is converted to the dtype of the tensor beside it and imposes nothing on it, whatever dtype its
+   * own evaluation promotes to. A value that allocates anything, or whose points-to set is empty,
+   * is not a number by this test, so an unresolved operand keeps the coercion rule it had.
+   *
+   * @param builder The propagation call graph builder.
+   * @param vn The operand's value number.
+   * @return {@code true} iff the slot is shown to hold a Python number.
+   */
+  private boolean isPythonNumber(PropagationCallGraphBuilder builder, int vn) {
+    return this.isPythonNumber(builder, vn, 0);
+  }
+
+  private boolean isPythonNumber(PropagationCallGraphBuilder builder, int vn, int depth) {
+    if (vn <= 0 || depth > 8) return false;
+    if (this.isScalarLiteral(builder, vn)) return true;
+    CGNode node = this.getNode();
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction binop) {
+      for (int i = 0; i < binop.getNumberOfUses(); i++)
+        if (!this.isPythonNumber(builder, binop.getUse(i), depth + 1)) return false;
+      return true;
+    }
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts)
+      if (!(ik instanceof ConstantKey<?> constant) || !(constant.getValue() instanceof Number))
+        return false;
+    return true;
   }
 
   /**
