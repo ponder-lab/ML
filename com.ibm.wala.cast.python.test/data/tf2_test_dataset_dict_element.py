@@ -69,6 +69,7 @@ for source, target in batched:
 @tf.function(input_signature=batched.element_spec)
 def step(source, target):
     consume_spec_step(source["ids"])
+    tf.debugging.assert_equal(tf.shape(source["ids"]), [2, 3])
     return source["ids"]
 
 
@@ -79,6 +80,7 @@ for source, target in batched:
 # A whole dict element passed into a function and subscripted there.
 def whole_step(element):
     consume_whole_step(element["ids"])
+    assert element["ids"].shape == (2, 3) and element["ids"].dtype == tf.int32
     return element["ids"]
 
 
@@ -118,12 +120,14 @@ for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}
     lambda e: e
 ):
     consume_mapped(element["ids"])
+    assert element["ids"].shape == (3,) and element["ids"].dtype == tf.int32
 
 
 # A function fed dict elements of two different datasets by two callers: each call is its own
 # context and inherits its own dataset's provider.
 def two_datasets_step(element):
     consume_two_datasets(element["ids"])
+    assert element["ids"].shape in ((3,), (2,)) and element["ids"].dtype == tf.int32
 
 
 other = tf.data.Dataset.from_tensor_slices(
@@ -138,6 +142,7 @@ for element in other:
 # An element supplied to its parameter by keyword is typed as well.
 def keyword_step(element):
     consume_keyword_step(element["ids"])
+    assert element["ids"].shape == (3,) and element["ids"].dtype == tf.int32
 
 
 for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}):
