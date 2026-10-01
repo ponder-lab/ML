@@ -250,6 +250,13 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             // heap: the body's reads of `self` resolve to whatever the initializer ever stores.
             // Only instances built through this synthesized constructor get the value; a read on
             // the class itself, or on an instance made another way, keeps the previous behavior.
+            // A property's setter or deleter (`@name.setter`) is not an attribute of the instance:
+            // a write to the attribute reaches the field directly, and binding the accessor under
+            // the property's name would make a call through the attribute dispatch it beside the
+            // getter's value (wala/ML#993). Its body is not run; the written value reaches the
+            // attribute as written.
+            if (!summaryDeclaredMethods.contains(r)
+                && isPropertyAccessor(r, receiver.getClassHierarchy())) continue;
             if (!summaryDeclaredMethods.contains(r)
                 && isProperty(r, receiver.getClassHierarchy())) {
               int getter = v++;
@@ -503,6 +510,24 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
     return cls != null
         && cls.getAnnotations() != null
         && cls.getAnnotations().contains(Annotation.make(PythonTypes.PROPERTY));
+  }
+
+  /**
+   * Whether the given method is a property's setter or deleter (wala/ML#993): its class carries an
+   * annotation named {@code <property>.setter} or {@code <property>.deleter}.
+   *
+   * @param r The method.
+   * @param cha The class hierarchy that resolves the method's class.
+   * @return {@code true} iff the method is a property accessor other than the getter.
+   */
+  private static boolean isPropertyAccessor(MethodReference r, IClassHierarchy cha) {
+    IClass cls = cha.lookupClass(r.getDeclaringClass());
+    if (cls == null || cls.getAnnotations() == null) return false;
+    for (Annotation annotation : cls.getAnnotations()) {
+      String name = annotation.getType().getName().toString();
+      if (name.endsWith(".setter") || name.endsWith(".deleter")) return true;
+    }
+    return false;
   }
 
   /**
