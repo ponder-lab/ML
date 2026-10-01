@@ -29,3 +29,20 @@ try:
     consume_spec(tf.ones(spec.shape))
 except (TypeError, ValueError):
     pass
+
+
+def consume_dict(x):
+    pass
+
+
+# The same cycle through a dict-structured shape: each value of `padded_shapes` is read as a shape.
+shapes = {"h": [None]}
+for _ in range(2):
+    shapes = {"h": shapes}
+try:
+    for element in tf.data.Dataset.from_tensors({"h": tf.ones(3)}).padded_batch(
+        2, padded_shapes=shapes
+    ):
+        consume_dict(element["h"])
+except (TypeError, ValueError):
+    pass

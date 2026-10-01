@@ -43,4 +43,20 @@ public class TestShapeArgumentCycle extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
   }
+
+  /**
+   * The same cycle through a dict-structured shape: {@code padded_shapes} rebuilt as {@code {"h":
+   * shapes}} in a loop, whose value is the dict itself. On the previous engine this overflows the
+   * stack through the dict arm.
+   */
+  @Test
+  public void testSelfContainingDictCompletes()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_argument_cycle.py",
+        "consume_dict",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
