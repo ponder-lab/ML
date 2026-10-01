@@ -8,6 +8,8 @@
         <new def="x" class="Lfunctools"/>
         <new def="reduce" class="Lfunctools/functions/reduce"/>
         <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="reduce"/>
+        <new def="wraps" class="Lfunctools/functions/wraps"/>
+        <putfield class="LRoot" field="wraps" fieldType="LRoot" ref="x" value="wraps"/>
         <return value="x"/>
       </method>
     </class>
@@ -20,6 +22,20 @@
           <aaload ref="data" def="v2" type="LRoot" index="r"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="lambda" arg1="v1" arg2="v2" numArgs="3" def="v"/>
           <return value="v"/>
+        </method>
+      </class>
+      <!-- https://docs.python.org/3/library/functools.html#functools.wraps -->
+      <!-- `functools.wraps(wrapped)` returns a decorator that copies `wrapped`'s metadata onto the function it decorates and returns that function itself. The metadata is not modelled; what matters is that `@wraps(f)` over a wrapper yields the wrapper, so a user decorator built on it returns a callable and the functions it decorates keep a dispatch target. -->
+      <class name="wraps" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self wrapped">
+          <new def="decorator" class="Lfunctools/functions/wraps_decorator"/>
+          <return value="decorator"/>
+        </method>
+      </class>
+      <!-- The decorator `functools.wraps(wrapped)` returns: applied to a wrapper, it returns the wrapper (genuinely pass-through). -->
+      <class name="wraps_decorator" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self wrapper">
+          <return value="wrapper"/>
         </method>
       </class>
     </package>
