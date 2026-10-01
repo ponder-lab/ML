@@ -23,6 +23,7 @@ import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.ir.translator.AstTranslator;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
+import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorCallSiteReference;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
@@ -474,7 +475,13 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 a -> {
                   visit(a, context, this);
                   int pos = context.cfg().getCurrentInstruction();
-                  CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
+                  // The parser hands a bare decorator (`@d`) over as its callee expression and a
+                  // parenthesized one as its call; only the bare one applies its own value
+                  // (wala/ML#188).
+                  CallSiteReference site =
+                      a.getKind() == CAstNode.CALL
+                          ? new DynamicCallSiteReference(PythonTypes.CodeBody, pos)
+                          : new BareDecoratorCallSiteReference(PythonTypes.CodeBody, pos);
                   @SuppressWarnings({"unchecked", "rawtypes"})
                   Pair<String, Integer>[] keywordParams = new Pair[0];
                   context

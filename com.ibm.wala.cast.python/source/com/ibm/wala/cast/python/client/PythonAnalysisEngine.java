@@ -21,6 +21,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstCFAPointerKeys;
 import com.ibm.wala.cast.ipa.callgraph.AstContextInsensitiveSSAContextInterpreter;
 import com.ibm.wala.cast.ir.ssa.AstIRFactory;
 import com.ibm.wala.cast.loader.AstDynamicField;
+import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonClassMethodTrampolineTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonInstanceMethodTrampolineTargetSelector;
@@ -930,6 +931,10 @@ public abstract class PythonAnalysisEngine<T>
     options.setSelector(new ClassHierarchyMethodTargetSelector(cha));
 
     addBypassLogic(cha, options);
+
+    // Outermost, so that it sees every summary decorator, including those a subclass's bypass
+    // logic loads (wala/ML#188).
+    options.setSelector(new BareDecoratorTargetSelector(options.getMethodTargetSelector()));
 
     options.setUseConstantSpecificKeys(true);
 

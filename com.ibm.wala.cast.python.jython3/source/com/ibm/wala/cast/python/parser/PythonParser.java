@@ -61,6 +61,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
@@ -1497,12 +1498,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         args.addAll(aa.getInternalKwonlyargs());
         trailingNonDefaultable += aa.getInternalKwonlyargs().size();
       }
-      java.util.Set<CAstNode> x = HashSetFactory.make();
-      if (arg0.getDecorator_list() != null) {
-        for (expr f : arg0.getInternalDecorator_list()) {
-          x.add(f.accept(this));
-        }
-      }
+      java.util.List<CAstNode> x = decorators(arg0.getInternalDecorator_list());
       return defineFunction(
           arg0.getInternalName(),
           args,
@@ -1513,6 +1509,58 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           aa.getInternalDefaults(),
           x,
           trailingNonDefaultable);
+    }
+
+    /**
+     * Bare decorators ({@code @d}) mapped from the zero-argument {@link CAstNode#CALL} their
+     * annotation carries to the callee expression the decorator applies (wala/ML#188). The grammar
+     * builds a bare decorator as a call with no arguments, which the annotation keeps so that the
+     * name and argument miners in {@link Util} see one shape for {@code @d} and {@code @d()}; the
+     * application, however, must be {@code d(f)}, not {@code d()(f)}.
+     */
+    private final Map<CAstNode, CAstNode> bareDecoratorCallees = new IdentityHashMap<>();
+
+    /**
+     * The decorator expressions of a function definition, in source order, as the annotations
+     * record them. A bare decorator is recorded as a zero-argument call over its callee, and its
+     * callee is noted in {@link #bareDecoratorCallees}.
+     *
+     * @param decoratorList The definition's decorator expressions; {@code null} when there are
+     *     none.
+     * @return The decorator nodes, in source order.
+     */
+    private java.util.List<CAstNode> decorators(java.util.List<expr> decoratorList)
+        throws Exception {
+      java.util.List<CAstNode> ret = new ArrayList<>();
+      if (decoratorList == null) return ret;
+      for (expr f : decoratorList) {
+        // The grammar gives a bare decorator's call no token: only `@d(...)` has a parenthesis.
+        if (f instanceof Call && ((Call) f).getToken() == null) {
+          Call bare = (Call) f;
+          CAstNode callee =
+              notePosition(bare.getInternalFunc().accept(this), bare.getInternalFunc());
+          CAstNode call =
+              notePosition(Ast.makeNode(CAstNode.CALL, callee, Ast.makeNode(CAstNode.EMPTY)), f);
+          bareDecoratorCallees.put(call, callee);
+          ret.add(call);
+        } else ret.add(f.accept(this));
+      }
+      return ret;
+    }
+
+    /**
+     * The decorator expressions to apply to a function, in application order: Python applies the
+     * decorator nearest the {@code def} first, so this is the reverse of source order, and a bare
+     * decorator applies its callee (see {@link #bareDecoratorCallees}).
+     *
+     * @param dynamicAnnotations The decorator nodes, in source order.
+     * @return The expressions whose values the function is passed to, in turn.
+     */
+    private java.util.List<CAstNode> appliedDecorators(Iterable<CAstNode> dynamicAnnotations) {
+      java.util.List<CAstNode> ret = new ArrayList<>();
+      for (CAstNode node : dynamicAnnotations)
+        ret.add(0, bareDecoratorCallees.getOrDefault(node, node));
+      return ret;
     }
 
     private <R extends PythonTree, S extends PythonTree> CAstNode defineFunction(
@@ -1633,6 +1681,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       }
       ;
 
+      java.util.List<CAstNode> appliedDecorators = appliedDecorators(dynamicAnnotations);
+
       Collection<CAstAnnotation> annotations = new ArrayList<>();
 
       for (CAstNode node : dynamicAnnotations) {
@@ -1730,7 +1780,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
         @Override
         public Iterable<CAstNode> dynamicAnnotations() {
-          return dynamicAnnotations;
+          return appliedDecorators;
         }
 
         protected PythonCodeEntity(
@@ -2938,12 +2988,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitAsyncFunctionDef(AsyncFunctionDef arg0) throws Exception {
-      java.util.Set<CAstNode> x = HashSetFactory.make();
-      if (arg0.getDecorator_list() != null) {
-        for (expr f : arg0.getInternalDecorator_list()) {
-          x.add(f.accept(this));
-        }
-      }
+      java.util.List<CAstNode> x = decorators(arg0.getInternalDecorator_list());
       return defineFunction(
           arg0.getInternalName(),
           arg0.getInternalArgs().getInternalArgs(),

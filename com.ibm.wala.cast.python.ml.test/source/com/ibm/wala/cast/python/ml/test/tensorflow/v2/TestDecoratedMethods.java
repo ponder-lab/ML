@@ -367,13 +367,14 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   }
 
   /**
-   * Test https://github.com/wala/ML/issues/188.
+   * Test https://github.com/wala/ML/issues/188. The decorated function is reached through its
+   * decorator's wrapper, but the wrapper forwards through {@code *args}.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#188 is fixed.
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#991 is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method2.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -437,10 +438,15 @@ public class TestDecoratedMethods extends AbstractTensorTest {
     test("tf2_test_decorated_method11.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  @Test
+  /**
+   * Test https://github.com/wala/ML/issues/188 with a parenthesized decorator. The decorated
+   * function is reached through the wrapper, but the wrapper forwards through {@code *args}.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#991 is fixed.
+   */
+  @Test(expected = AssertionError.class)
   public void testDecoratedMethod12() throws ClassHierarchyException, CancelException, IOException {
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/188 is fixed.
-    test("tf2_test_decorated_method12.py", "f", 0, 0);
+    test("tf2_test_decorated_method12.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
