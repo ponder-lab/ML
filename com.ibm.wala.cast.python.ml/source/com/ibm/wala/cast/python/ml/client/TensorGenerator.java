@@ -552,6 +552,26 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
+    return this.getShapesFromShapeArgument(builder, pointsToSet, HashSetFactory.make());
+  }
+
+  /**
+   * Reads a shape argument, carrying the containers already on the walk (wala/ML#990). A list
+   * rebuilt around its previous value in a loop ({@code shape = [shape, 2]}) is one abstract object
+   * that contains itself, and reading its nested elements recursed without end. A container met
+   * again on its own walk is read as an unresolvable nested form, ⊤, as an unrecognized one is
+   * (wala/ML#471). A container that appears twice without containing itself still resolves, since a
+   * container leaves the walk when its reading is done.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The shape argument's points-to set.
+   * @param onWalk The containers whose elements are being read, outermost first.
+   * @return As {@link #getShapesFromShapeArgument(PropagationCallGraphBuilder, Iterable)}.
+   */
+  private Set<List<Dimension<?>>> getShapesFromShapeArgument(
+      PropagationCallGraphBuilder builder,
+      Iterable<InstanceKey> pointsToSet,
+      Set<InstanceKey> onWalk) {
     if (pointsToSet == null || !hasLiteralShapeEvidence(pointsToSet))
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + describe(this.getSource()) + ".");
@@ -604,7 +624,15 @@ public abstract class TensorGenerator {
             PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
             OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
             if (fieldPts == null || fieldPts.isEmpty()) continue;
-            Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
+            for (InstanceKey element : fieldPts)
+              if (element.equals(asin) || onWalk.contains(element)) return null; // wala/ML#990
+            onWalk.add(asin);
+            Set<List<Dimension<?>>> sub;
+            try {
+              sub = this.getShapesFromShapeArgument(builder, fieldPts, onWalk);
+            } finally {
+              onWalk.remove(asin);
+            }
             if (sub == null) return null;
             ret.addAll(sub);
           }
@@ -702,10 +730,18 @@ public abstract class TensorGenerator {
                   || innerReference.equals(TensorFlowTypes.TENSOR_SPEC)
                   || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
                   || innerReference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
-                // Nested tuple/list or Spec. Recurse.
-                Set<List<Dimension<?>>> nestedShapes =
-                    this.getShapesFromShapeArgument(
-                        builder, Collections.singleton(instanceFieldIK));
+                // Nested tuple/list or Spec. Recurse, unless the element is a container already on
+                // this walk: a list rebuilt around itself in a loop contains itself (wala/ML#990).
+                if (innerAsin.equals(asin) || onWalk.contains(innerAsin)) return null;
+                onWalk.add(asin);
+                Set<List<Dimension<?>>> nestedShapes;
+                try {
+                  nestedShapes =
+                      this.getShapesFromShapeArgument(
+                          builder, Collections.singleton(instanceFieldIK), onWalk);
+                } finally {
+                  onWalk.remove(asin);
+                }
 
                 if (nestedShapes == null) return null;
                 for (List<Dimension<?>> nestedShape : nestedShapes)
