@@ -157,6 +157,31 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     return this.getShapes(builder);
   }
 
+  @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    return receiver instanceof TupleElementProvider tep && tep.resolvesPath(builder, path);
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) {
+      Set<List<Dimension<?>>> componentShapes = tep.getShapesForPath(builder, path);
+      if (componentShapes == null) return null;
+      if (!componentShapes.isEmpty()) return applyBatching(componentShapes, builder);
+    }
+    return this.getShapes(builder);
+  }
+
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) return tep.getDTypesForPath(builder, path);
+    return this.getDTypes(builder);
+  }
+
   protected Set<List<Dimension<?>>> applyBatching(
       Set<List<Dimension<?>>> inputShapes, PropagationCallGraphBuilder builder) {
     Set<Long> batchSizes =

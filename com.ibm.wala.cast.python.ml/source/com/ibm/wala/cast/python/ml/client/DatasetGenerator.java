@@ -152,6 +152,27 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   }
 
   @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    return receiver instanceof TupleElementProvider tep && tep.resolvesPath(builder, path);
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) return tep.getShapesForPath(builder, path);
+    return this.getShapes(builder);
+  }
+
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) return tep.getDTypesForPath(builder, path);
+    return this.getDTypes(builder);
+  }
+
+  @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
     Set<DType> dTypes = this.getDTypesForIndex(builder, index);

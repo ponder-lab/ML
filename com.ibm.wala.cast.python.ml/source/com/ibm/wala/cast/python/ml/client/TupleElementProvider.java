@@ -4,7 +4,10 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.collections.HashSetFactory;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -47,4 +50,74 @@ public interface TupleElementProvider {
    * @return A set of possible dtypes for the element at the given index.
    */
   Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index);
+
+  /**
+   * Whether a path of selectors reaches a component of the generated element (wala/ML#993): each
+   * selector is an {@link Integer} index into a tuple or a {@link String} key into a dict, applied
+   * in turn. A string that names no key of the element's structure, such as an attribute read on
+   * the dataset itself, reaches nothing. A single integer index reaches a tuple's member.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param path The selectors, outermost first; never empty.
+   * @return {@code true} iff the path reaches a component.
+   */
+  default boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    return path.size() == 1 && path.get(0) instanceof Integer && this.yieldsTuple(builder);
+  }
+
+  /**
+   * Retrieves the shapes of the component a path of selectors reaches within the generated element
+   * (wala/ML#993): each selector is an {@link Integer} index into a tuple or a {@link String} key
+   * into a dict, applied in turn, so {@code [0, "ids"]} is the {@code "ids"} entry of the first
+   * member of a tuple element. A single integer index is {@link #getShapesForIndex}.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param path The selectors, outermost first; never empty.
+   * @return A set of possible shapes of the component, or {@code null} when it is unknown.
+   */
+  default Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getShapesForIndex(builder, index);
+    return null;
+  }
+
+  /**
+   * Retrieves the dtypes of the component a path of selectors reaches within the generated element
+   * (wala/ML#993); see {@link #getShapesForPath}.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param path The selectors, outermost first; never empty.
+   * @return A set of possible dtypes of the component, {@link DType#UNKNOWN} when it is unknown.
+   */
+  default Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getDTypesForIndex(builder, index);
+    return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
+   * Retrieves the tensor types of the component a path of selectors reaches within the generated
+   * element (wala/ML#993): the shapes from {@link #getShapesForPath} crossed with the dtypes from
+   * {@link #getDTypesForPath}, one type of unknown shape per dtype when the shapes are unknown.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param path The selectors, outermost first; never empty.
+   * @return A set of possible tensor types of the component.
+   */
+  default Set<TensorType> getTensorTypesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    Set<List<Dimension<?>>> shapes = this.getShapesForPath(builder, path);
+    Set<DType> dTypes = this.getDTypesForPath(builder, path);
+    Set<TensorType> ret = HashSetFactory.make();
+    if (shapes == null) {
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
+      return ret;
+    }
+    for (List<Dimension<?>> dimensionList : shapes)
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
+    return ret;
+  }
 }
