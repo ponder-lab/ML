@@ -772,6 +772,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           || !PythonCAstToIRTranslator.STARRED_ARGUMENT_MARKER.equals(
               symtab.getConstantValue(memberRef))) return false;
       int objectVn = instruction.getObjectRef();
+      // A guard, not a path: the parser writes the marker only into the literal it allocates in
+      // the same body, whose contents are invariant. Were it otherwise, the ordinary write would
+      // store the iterable under the marker name, which no reader consults.
       if (!contentsAreInvariant(symtab, du, objectVn)) return false;
       IField contents = resolveRootField(getClassHierarchy(), LIST_OPERATION_CONTENTS_FIELD);
       if (contents == null) return false;
