@@ -1,0 +1,72 @@
+# Test for wala/ML#993 (remainder): the element of a dataset whose elements are dicts, or tuples
+# of dicts, read in a loop over the dataset. Each variant sinks the element's `ids`.
+import tensorflow as tf
+
+
+def consume_dict(x):
+    pass
+
+
+def consume_dict_batched(x):
+    pass
+
+
+def consume_tuple_tensor(x):
+    pass
+
+
+def consume_tuple_dict(x):
+    pass
+
+
+def consume_tuple_dict_batched(x):
+    pass
+
+
+def consume_spec_step(x):
+    pass
+
+
+ids = tf.constant([[1, 2, 3], [4, 5, 6]])
+length = tf.constant([3, 3])
+
+# A dataset of dicts.
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}):
+    consume_dict(element["ids"])
+    assert element["ids"].shape == (3,) and element["ids"].dtype == tf.int32
+
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}).batch(
+    2
+):
+    consume_dict_batched(element["ids"])
+    assert element["ids"].shape == (2, 3)
+
+# A dataset of tuples of tensors.
+for a, b in tf.data.Dataset.from_tensor_slices((ids, length)):
+    consume_tuple_tensor(a)
+    assert a.shape == (3,)
+
+# A dataset of tuples of dicts.
+for source, target in tf.data.Dataset.from_tensor_slices(
+    ({"ids": ids, "length": length}, {"ids": ids, "length": length})
+):
+    consume_tuple_dict(source["ids"])
+    assert source["ids"].shape == (3,)
+
+batched = tf.data.Dataset.from_tensor_slices(
+    ({"ids": ids, "length": length}, {"ids": ids, "length": length})
+).batch(2)
+for source, target in batched:
+    consume_tuple_dict_batched(source["ids"])
+    assert source["ids"].shape == (2, 3)
+
+
+# The element_spec hop: a step whose signature is the dataset's element_spec, called in the loop.
+@tf.function(input_signature=batched.element_spec)
+def step(source, target):
+    consume_spec_step(source["ids"])
+    return source["ids"]
+
+
+for source, target in batched:
+    step(source, target)
