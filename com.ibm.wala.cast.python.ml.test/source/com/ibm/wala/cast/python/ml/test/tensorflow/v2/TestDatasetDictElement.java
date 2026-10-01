@@ -62,6 +62,44 @@ public class TestDatasetDictElement extends AbstractTensorTest {
     test(FILE, "consume_spec_step", 1, 1, Map.of(2, Set.of(IDS_2_3)));
   }
 
+  /**
+   * A dict dataset through an operation that keeps its element structure ({@code shuffle}): the
+   * component resolves through the operation's generator to the source dataset.
+   */
+  @Test
+  public void testShuffled() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_shuffled", 1, 1, Map.of(2, Set.of(IDS_3)));
+  }
+
+  /**
+   * A dict dataset through an identity {@code map}: the component resolves through the map to its
+   * source (measured; the pin first expected the map to keep the element unknown, and it does not).
+   */
+  @Test
+  public void testMapped() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_mapped", 1, 1, Map.of(2, Set.of(IDS_3)));
+  }
+
+  /**
+   * A function fed dict elements of two different datasets by two callers: each call is its own
+   * context, so each inherits its own dataset's provider and the sink sees both components
+   * (measured; the decline of a non-unique provider applies only when one node has several
+   * callers).
+   */
+  @Test
+  public void testTwoDatasets() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_two_datasets", 1, 1, Map.of(2, Set.of(IDS_3, TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * An element supplied to its parameter by keyword is typed as well (measured); the inheriting
+   * walk itself reads positional arguments only, so the keyword reaches the parameter another way.
+   */
+  @Test
+  public void testKeywordArgument() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_keyword_step", 1, 1, Map.of(2, Set.of(IDS_3)));
+  }
+
   /** A whole dict element passed into a function and subscripted there. */
   @Test
   public void testWholeElementStep() throws ClassHierarchyException, CancelException, IOException {

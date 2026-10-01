@@ -86,3 +86,59 @@ for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}
     2
 ):
     whole_step(element)
+
+
+def consume_shuffled(x):
+    pass
+
+
+def consume_mapped(x):
+    pass
+
+
+def consume_two_datasets(x):
+    pass
+
+
+def consume_keyword_step(x):
+    pass
+
+
+# A dict dataset through an operation that keeps its element structure: the component resolves
+# through the operation to its source.
+for element in tf.data.Dataset.from_tensor_slices(
+    {"ids": ids, "length": length}
+).shuffle(2):
+    consume_shuffled(element["ids"])
+    assert element["ids"].shape == (3,)
+
+# A dict dataset through a `map` whose function returns its element: the component resolves
+# through the map to its source.
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}).map(
+    lambda e: e
+):
+    consume_mapped(element["ids"])
+
+
+# A function fed dict elements of two different datasets by two callers: each call is its own
+# context and inherits its own dataset's provider.
+def two_datasets_step(element):
+    consume_two_datasets(element["ids"])
+
+
+other = tf.data.Dataset.from_tensor_slices(
+    {"ids": tf.constant([[7, 8]]), "length": length[:1]}
+)
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}):
+    two_datasets_step(element)
+for element in other:
+    two_datasets_step(element)
+
+
+# An element supplied to its parameter by keyword is typed as well.
+def keyword_step(element):
+    consume_keyword_step(element["ids"])
+
+
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}):
+    keyword_step(element=element)

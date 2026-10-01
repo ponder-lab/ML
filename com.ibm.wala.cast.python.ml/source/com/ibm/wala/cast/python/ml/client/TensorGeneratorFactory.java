@@ -2400,10 +2400,12 @@ public class TensorGeneratorFactory {
    * (wala/ML#993): for each caller's call, the argument at the parameter's position is read for its
    * generator; a dataset element, or a component of one, yields its provider and path. Exactly one
    * distinct provider-and-path among the callers that pass an element is inherited; none, or
-   * several distinct ones, is declined. A caller whose argument is not a dataset element is not
-   * counted: its values reach the parameter by dataflow as before, beside the inherited reading, so
-   * the result is their union. Providers are compared by their points-to source, since one dataset
-   * can be read through distinct generator instances across callers.
+   * several distinct ones, is declined; a call that is its own context has one caller, so the
+   * decline applies only to a node several callers share. This walk reads positional arguments
+   * only; an element supplied by keyword was measured typed as well. A caller whose argument is not
+   * a dataset element is not counted: its values reach the parameter by dataflow as before, beside
+   * the inherited reading, so the result is their union. Providers are compared by their points-to
+   * source, since one dataset can be read through distinct generator instances across callers.
    *
    * @param node The function whose parameter is read.
    * @param parameterVn The parameter's value number.
