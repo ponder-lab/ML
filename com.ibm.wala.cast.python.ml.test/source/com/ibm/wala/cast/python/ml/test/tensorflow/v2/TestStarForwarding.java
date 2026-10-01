@@ -77,4 +77,31 @@ public class TestStarForwarding extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "Built.__init__", 2, 2, Map.of(3, Set.of(T2), 4, Set.of(T3)));
   }
+
+  /** A starred literal's elements past the named formals are packed into {@code *rest}. */
+  @Test
+  public void testStarredSpillsIntoVarargs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "spill_sink", 1, 1, Map.of(2, Set.of(T3)));
+  }
+
+  /** A starred list built by {@code append} packs its elements of unknown index. */
+  @Test
+  public void testStarredAppendedList()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "appended_sink", 1, 1, Map.of(2, Set.of(T2)));
+  }
+
+  /** A keyword naming no formal is collected into {@code **kw}. */
+  @Test
+  public void testKeywordCollected() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "kw_sink", 1, 1, Map.of(2, Set.of(T4)));
+  }
+
+  /** A {@code **} dict a call computes binds {@code **kw} whole. */
+  @Test
+  public void testDoubleStarComputedIntoKwargs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "dict_kw_sink", 1, 1, Map.of(2, Set.of(T4)));
+  }
 }

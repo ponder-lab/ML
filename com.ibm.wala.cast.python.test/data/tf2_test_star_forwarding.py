@@ -62,6 +62,60 @@ class Holder:
         return scale
 
 
+def spill_sink(r):
+    assert r.shape == (3,)
+    return r
+
+
+def spill(x, *rest):
+    # A starred literal's elements past the named formals land in `*rest`.
+    for r in rest:
+        spill_sink(r)
+    return x
+
+
+def appended_sink(r):
+    assert r.shape == (2,)
+    return r
+
+
+def appended(*rest):
+    # A starred list built by `append` has elements of unknown index.
+    for r in rest:
+        appended_sink(r)
+    return rest
+
+
+def kw_sink(s):
+    assert s.shape == (4,)
+    return s
+
+
+def kw_collect(x, **kw):
+    # A keyword naming no formal is collected into `**kw`.
+    return kw_sink(kw["scale"])
+
+
+def dict_kw_sink(s):
+    assert s.shape == (4,)
+    return s
+
+
+def dict_kw_collect(x, **kw):
+    # A `**` dict computed by a call binds `**kw` whole.
+    return dict_kw_sink(kw["scale"])
+
+
+def drive():
+    spill(*[tf.ones(2), tf.ones(3)])
+    xs = []
+    xs.append(tf.ones(2))
+    appended(*xs)
+    t = tf.ones(4)
+    kw_collect(tf.ones(2), scale=t)
+    dict_kw_collect(tf.ones(2), **make_kw())
+
+
 def wrap(fn):
     def wrapper(*args, **kwargs):
         return fn(*args, **kwargs)
@@ -80,3 +134,4 @@ options = {"scale": tf.ones(4)}
 local_kw(tf.ones(2), **options)
 Holder().take(tf.ones(2), **make_kw())
 Built(*pair)
+drive()
