@@ -387,7 +387,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           // The Keras `Model.__init__` contract requires every subclass initializer to invoke
           // `super().__init__()`, which assigns framework state such as
           // `_distribution_strategy` (wala/ML#683). The `super()` machinery cannot dispatch
-          // summary-declared initializers (its synthesized `$self` never binds; wala/ML#580), so
+          // summary-declared initializers (its synthesized `$self` never binds; wala/ML#995), so
           // the synthesized constructor invokes an inherited summary `__init__` on the new
           // instance directly. Over-approximates only for subclasses that unlawfully skip
           // `super().__init__()`.

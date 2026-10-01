@@ -27,6 +27,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -396,6 +397,32 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
   }
 
   /**
+   * The {@code __call__} method class a program-defined base class of the given class declares,
+   * nearest first along the superclass chain (wala/ML#994). The walk stops at the first class the
+   * program does not define, so a library summary's callable never outranks a program class's own
+   * {@code call}.
+   *
+   * @param cha The class hierarchy.
+   * @param loader The program's class loader.
+   * @param type The instance's concrete class.
+   * @return The inherited {@code __call__} method class, or {@code null} when no program-defined
+   *     base declares one.
+   */
+  private static IClass inheritedDunderCall(
+      IClassHierarchy cha, ClassLoaderReference loader, IClass type) {
+    for (IClass base = type.getSuperclass();
+        base instanceof PythonClass && !(base instanceof PythonSummaryShellClass);
+        base = base.getSuperclass()) {
+      IClass callable =
+          cha.lookupClass(
+              TypeReference.findOrCreateClass(
+                  loader, "$" + base.getName().toString().substring(1), CALLABLE_METHOD_NAME));
+      if (callable != null) return callable;
+    }
+    return null;
+  }
+
+  /**
    * Returns the callable classes of the receiver of the given {@link PythonInvokeInstruction}: one
    * per callable class over the receiver's whole points-to set, keyed by each member's allocating
    * node's declaring class. The caller decides what to do with the set's size; this method no
@@ -437,6 +464,11 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
               cha.lookupClass(
                   TypeReference.findOrCreateClass(
                       classLoaderReference, concreteTypeName, CALLABLE_METHOD_NAME));
+          // Python finds `__call__` along the method resolution order before a Keras layer's
+          // `call` is ever consulted (`Layer.__call__` is what invokes it), so a `__call__` a
+          // program-defined base class declares shadows the subclass's own `call` (wala/ML#994).
+          if (concreteCallable == null)
+            concreteCallable = inheritedDunderCall(cha, classLoaderReference, concreteType);
           if (concreteCallable == null) {
             concreteCallable =
                 cha.lookupClass(
@@ -473,6 +505,13 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                       declaringClassName.toString().substring(1),
                       CALLABLE_METHOD_NAME));
         }
+
+        // A `__call__` a program-defined base class declares comes before the class's own `do`
+        // and the Keras `call` convention, as in Python's lookup (wala/ML#994). A program class's
+        // instance is allocated in its synthesized constructor, so the class reached here is the
+        // instance's own.
+        if (callable == null)
+          callable = inheritedDunderCall(cha, classLoaderReference, declaringClass);
 
         if (callable == null) {
           callable =

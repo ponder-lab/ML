@@ -241,6 +241,8 @@ public class PythonSuper {
           Collection<TypeReference> innerReferences = Collections.emptyList();
           Collection<MethodReference> methodReferences = new ArrayList<>();
           Set<MethodReference> summaryDeclaredMethods = HashSetFactory.make();
+          boolean declaresDunderCall = false;
+          boolean reachesKerasBase = false;
 
           if (x instanceof IPythonClass) {
             IPythonClass px = (IPythonClass) x;
@@ -254,7 +256,10 @@ public class PythonSuper {
                 ancestor instanceof IPythonClass;
                 ancestor = ancestor.getSuperclass()) {
               boolean shell = ancestor instanceof PythonSummaryShellClass;
+              reachesKerasBase |= shell && isKerasBase(ancestor);
               for (MethodReference m : ((IPythonClass) ancestor).getMethodReferences()) {
+                if (methodFieldName(m, shell).toString().equals(PythonTypes.CALLABLE_METHOD_NAME))
+                  declaresDunderCall = true;
                 if (!seenMethodNames.add(methodFieldName(m, shell).toString())) continue;
                 methodReferences.add(m);
                 if (shell) summaryDeclaredMethods.add(m);
@@ -350,6 +355,39 @@ public class PythonSuper {
             pc++;
           }
 
+          // Keras's `Layer.__call__` (which the `Layer` and `Model` summary class shells do not
+          // declare) invokes the instance's own `call`, so `super().__call__(...)` from a program
+          // class's `__call__` is the instance's bound `call` (wala/ML#994). This is the Keras
+          // contract only: the binding applies when the chain reaches a Keras summary class shell
+          // (`isKerasBase`), not any library base. A `__call__` an ancestor declares is bound above
+          // and takes precedence.
+          if (!declaresDunderCall && reachesKerasBase) {
+            // The instance is read off the super object itself, whose `$self` the caller set; this
+            // body declares one parameter, so the third value it is invoked with is not bound.
+            int self = v++;
+            ctor.addStatement(insts.GetInstruction(pc++, self, 1, $self));
+            int call = v++;
+            ctor.addStatement(
+                insts.GetInstruction(
+                    pc++,
+                    call,
+                    self,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(
+                            PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS),
+                        PythonTypes.Root)));
+            ctor.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    inst,
+                    call,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(PythonTypes.CALLABLE_METHOD_NAME),
+                        PythonTypes.Root)));
+          }
+
           ctor.addStatement(insts.ReturnInstruction(pc++, inst, false));
 
           ctors.put(
@@ -379,6 +417,18 @@ public class PythonSuper {
     public ControlFlowGraph<SSAInstruction, ISSABasicBlock> getCFG(CGNode n) {
       return getIR(n).getControlFlowGraph();
     }
+  }
+
+  /**
+   * Whether a summary class shell is a Keras layer or model base, whose {@code __call__} invokes
+   * the instance's {@code call} (wala/ML#994): a class of the {@code tensorflow/keras} package, the
+   * one the {@code Layer} and {@code Model} summaries are declared in.
+   *
+   * @param shell The summary class shell.
+   * @return {@code true} iff it is a Keras class.
+   */
+  private static boolean isKerasBase(IClass shell) {
+    return shell.getName().toString().startsWith("Ltensorflow/keras/");
   }
 
   private class SuperContextSelector implements ContextSelector {
