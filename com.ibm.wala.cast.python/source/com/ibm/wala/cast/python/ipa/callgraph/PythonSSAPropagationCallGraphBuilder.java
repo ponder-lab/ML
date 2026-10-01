@@ -1276,7 +1276,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       keywords:
       for (String argName : call.getKeywords()) {
         int src = call.getUse(argName);
-        if (star.bindDoubleStarred(argName, src)) {
+        if (star.bindDoubleStarred(
+            argName,
+            src,
+            constParams != null && paramNumber < constParams.length
+                ? constParams[paramNumber]
+                : null)) {
           paramNumber++;
           continue;
         }
@@ -1846,12 +1851,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    *
    * <p>The positional arguments from the {@code *args} formal's index on are packed into a tuple,
    * and the keywords naming no formal into a dict, each allocated at the call (one per caller
-   * context) and bound to its formal. A starred argument's elements bind the target's positional
-   * formals from its slot on, by the iterable's element index, those past a {@code *args} formal
-   * joining its pack; elements of unknown index (appended or operation contents) may bind any of
-   * them. A {@code **} argument binds each named formal its dict has a key for, and its whole dict
-   * to a {@code **kwargs} formal. The arguments after a starred one keep the alignment by slot they
-   * had (wala/ML#751), and an iterable whose elements are not indexed fields (a list built by an
+   * context) and bound to its formal. The site is the call's alone, so two targets of one
+   * polymorphic call with different {@code *args} indices share one pack and their elements merge
+   * (sound, and rare). A starred argument's elements bind the target's positional formals from its
+   * slot on, by the iterable's element index, those past a {@code *args} formal joining its pack;
+   * elements of unknown index (appended or operation contents) may bind any of them. A {@code **}
+   * argument binds each named formal its dict has a key for, and its whole dict to a {@code
+   * **kwargs} formal. The arguments after a starred one keep the alignment by slot they had
+   * (wala/ML#751), and an iterable whose elements are not indexed fields (a list built by an
    * operation, wala/ML#960) binds through its unknown-index contents only.
    */
   private final class StarArguments {
@@ -1862,6 +1869,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final int varargs;
     private final int keywords;
     private final int firstStarred;
+    private final boolean forwardingBody;
     private final int formals;
     private InstanceKey pack;
     private InstanceKey keywordPack;
@@ -1881,11 +1889,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           method instanceof StarFormalDeclaration declaration
               ? declaration.getKeywordsParameter()
               : -1;
-      // A synthesized forwarding body (a method or callable trampoline, a constructor) receives a
-      // starred argument intact and forwards it still marked starred, so the target it forwards
-      // to unpacks it; unpacking it here as well would spread it twice.
-      this.firstStarred =
-          method instanceof PythonSummarizedFunction ? -1 : call.firstStarredPosition();
+      // A synthesized forwarding body (a method or callable trampoline) receives a starred or
+      // `**` argument intact and forwards it still marked, so the target it forwards to unpacks
+      // it; unpacking it here as well would spread it twice. A synthesized constructor forwards
+      // its own formals to `__init__` positionally and by `__init__`'s names, so a starred or `**`
+      // argument is unpacked at the call to it instead.
+      this.forwardingBody =
+          method instanceof PythonSummarizedFunction
+              && !(method instanceof PythonConstructorFunction);
+      this.firstStarred = this.forwardingBody ? -1 : call.firstStarredPosition();
       this.formals = method.getNumberOfParameters();
       // A `*args` formal is a tuple even when no argument reaches it.
       if (this.varargs >= 0 && this.varargs < this.formals) this.pack();
@@ -2076,7 +2088,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       @Override
       public boolean equals(Object o) {
         return o instanceof UnpackOperator other
-            && other.outer() == StarArguments.this.identity()
+            && Objects.equals(other.outer(), StarArguments.this.identity())
             && other.slot == this.slot;
       }
 
@@ -2101,15 +2113,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      *
      * @return {@code true} iff the keyword was a {@code **} argument and is bound here.
      */
-    private boolean bindDoubleStarred(String argName, int src) {
-      if (!"null".equals(argName)) return false;
+    private boolean bindDoubleStarred(String argName, int src, InstanceKey[] constants) {
+      if (!"null".equals(argName) || this.forwardingBody) return false;
       PointerKey dict = getPointerKeyForLocal(this.caller, src);
-      if (this.keywords >= 0)
-        getSystem()
-            .newConstraint(
-                getPointerKeyForLocal(this.target, this.keywords + 1), assignOperator, dict);
-      IClassHierarchy cha = getClassHierarchy();
-      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      // A dict built in the caller's own body is an invariant argument: its keys arrive as
+      // constants and its pointer key is implicit, which no constraint may name (wala/ML#925).
+      boolean implicit = constants == null && getSystem().isImplicit(dict);
+      if (this.keywords >= 0) {
+        PointerKey formal = getPointerKeyForLocal(this.target, this.keywords + 1);
+        if (constants != null)
+          for (InstanceKey key : constants) getSystem().newConstraint(formal, key);
+        else if (!implicit) getSystem().newConstraint(formal, assignOperator, dict);
+      }
       Map<String, PointerKey> named = HashMapFactory.make();
       for (int index = 1; index < this.formals; index++) {
         if (index == this.varargs || index == this.keywords) continue;
@@ -2119,49 +2134,63 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           if (name != null) named.put(name, getPointerKeyForLocal(this.target, index + 1));
       }
       if (named.isEmpty()) return true;
-      getSystem()
-          .newSideEffect(
-              new UnaryOperator<PointsToSetVariable>() {
-                private final Set<InstanceKey> read = HashSetFactory.make();
-
-                @Override
-                public byte evaluate(PointsToSetVariable l, PointsToSetVariable r) {
-                  if (r.getValue() == null) return NOT_CHANGED;
-                  r.getValue()
-                      .foreach(
-                          i -> {
-                            InstanceKey key = getSystem().getInstanceKey(i);
-                            if (!read.add(key)) return;
-                            for (Map.Entry<String, PointerKey> entry : named.entrySet()) {
-                              IField field = resolveRootField(cha, entry.getKey());
-                              if (field != null)
-                                getSystem()
-                                    .newConstraint(
-                                        entry.getValue(),
-                                        assignOperator,
-                                        factory.getPointerKeyForInstanceField(key, field));
-                            }
-                          });
-                  return NOT_CHANGED;
-                }
-
-                @Override
-                public int hashCode() {
-                  return System.identityHashCode(this);
-                }
-
-                @Override
-                public boolean equals(Object o) {
-                  return this == o;
-                }
-
-                @Override
-                public String toString() {
-                  return "unpack ** at " + call.iIndex() + " in " + caller;
-                }
-              },
-              dict);
+      DoubleStarOperator operator = new DoubleStarOperator(named);
+      if (constants != null) for (InstanceKey key : constants) operator.read(key);
+      else if (!implicit) getSystem().newSideEffect(operator, dict);
       return true;
+    }
+
+    /** Binds each named formal from the field of that name of each dict a {@code **} value is. */
+    private final class DoubleStarOperator extends UnaryOperator<PointsToSetVariable> {
+      private final Map<String, PointerKey> named;
+      private final Set<InstanceKey> read = HashSetFactory.make();
+
+      private DoubleStarOperator(Map<String, PointerKey> named) {
+        this.named = named;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable l, PointsToSetVariable r) {
+        // A side effect: the entries reach the formals through the constraints registered here.
+        if (r.getValue() != null) r.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+        return NOT_CHANGED;
+      }
+
+      private void read(InstanceKey dict) {
+        if (!this.read.add(dict)) return;
+        IClassHierarchy cha = getClassHierarchy();
+        AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+        for (Map.Entry<String, PointerKey> entry : this.named.entrySet()) {
+          IField field = resolveRootField(cha, entry.getKey());
+          if (field != null)
+            getSystem()
+                .newConstraint(
+                    entry.getValue(),
+                    assignOperator,
+                    factory.getPointerKeyForInstanceField(dict, field));
+        }
+      }
+
+      @Override
+      public int hashCode() {
+        return Objects.hash(identity(), this.named.keySet());
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof DoubleStarOperator other
+            && Objects.equals(other.outer(), identity())
+            && other.named.keySet().equals(this.named.keySet());
+      }
+
+      private Object outer() {
+        return identity();
+      }
+
+      @Override
+      public String toString() {
+        return "unpack ** at " + call.iIndex() + " in " + caller;
+      }
     }
 
     /** Collects a keyword that names no formal into the {@code **kwargs} formal's dict. */
