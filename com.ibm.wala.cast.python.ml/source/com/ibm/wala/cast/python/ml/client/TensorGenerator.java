@@ -1047,7 +1047,7 @@ public abstract class TensorGenerator {
     if (node.getIR() == null) return null;
     DefUse du = node.getDU();
     SymbolTable st = node.getIR().getSymbolTable();
-    SSANewInstruction allocInstr = node.getIR().getNew(listAsin.getSite());
+    SSANewInstruction allocInstr = newInstructionOrNull(node.getIR(), listAsin.getSite());
     if (allocInstr == null) return null;
     int listVn = allocInstr.getDef();
 
@@ -1247,6 +1247,23 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * The {@code new} instruction of an allocation site in the given IR, or {@code null} when the
+   * site is not a {@code new} of that IR. A collection the analysis allocates at another
+   * instruction (a list operation's result at its binop, wala/ML#960; a literal's slice at its
+   * call, wala/ML#993) has such a site, and {@link IR#getNew} throws for it rather than answering
+   * {@code null}.
+   *
+   * @param ir The IR of the allocation's node.
+   * @param site The allocation site.
+   * @return The {@code new} instruction, or {@code null}.
+   */
+  protected static SSANewInstruction newInstructionOrNull(IR ir, NewSiteReference site) {
+    for (Iterator<NewSiteReference> sites = ir.iterateNewSites(); sites.hasNext(); )
+      if (sites.next().equals(site)) return ir.getNew(site);
+    return null;
+  }
+
+  /**
    * Resolves a single-element list/tuple allocation to its constant integer element (e.g. the
    * {@code axis=[-1]} form of {@code tf.expand_dims}, as in NLPGNN's {@code WDEmbedding.call}).
    *
@@ -1263,7 +1280,7 @@ public abstract class TensorGenerator {
     if (!type.equals(list) && !type.equals(tuple)) return null;
     CGNode node = asin.getNode();
     if (node.getIR() == null || node.getDU() == null) return null;
-    SSANewInstruction alloc = node.getIR().getNew(asin.getSite());
+    SSANewInstruction alloc = newInstructionOrNull(node.getIR(), asin.getSite());
     if (alloc == null) return null;
     int containerVn = alloc.getDef();
     SymbolTable st = node.getIR().getSymbolTable();

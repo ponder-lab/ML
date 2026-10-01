@@ -81,6 +81,7 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.IntIterator;
@@ -1879,6 +1880,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       this.pc = pc;
     }
 
+    /** The literal list and tuple keys already sliced, mapped to their slice's key. */
+    private final Map<InstanceKey, InstanceKey> sliced = HashMapFactory.make();
+
     @Override
     public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
       if (rhs.getValue() == null) return NOT_CHANGED;
@@ -1888,6 +1892,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           .foreach(
               i -> {
                 InstanceKey key = getSystem().getInstanceKey(i);
+                InstanceKey slice = sliceOfLiteral(key);
+                if (slice != null) {
+                  out.add(getSystem().findOrCreateIndexForInstanceKey(slice));
+                  return;
+                }
                 TypeReference type = key.concreteType().getReference();
                 InstanceKey allocation =
                     fresh.contains(type)
@@ -1903,6 +1912,153 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                         : getSystem().findOrCreateIndexForInstanceKey(allocation));
               });
       return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
+    }
+
+    /**
+     * The slice of a list or tuple literal by constant bounds, as a fresh collection of the same
+     * type allocated at the slice's call holding only the elements in range (wala/ML#993), where
+     * the result aliased the whole receiver and so carried the elements the slice drops. The fresh
+     * collection is populated as a literal is, a catalog entry and a numbered field per element.
+     * The receiver's appended and operation contents, whose positions are not known, flow into the
+     * slice's as well. A list can grow past its literal after it is built, so once any such
+     * contents reach the receiver, the elements past the upper bound are kept as well: a bound
+     * counted from the end no longer names the literal's elements.
+     *
+     * @param key A key the sliced object may be.
+     * @return The slice's key, or {@code null} when the key is not a list or tuple literal of known
+     *     length, the bounds are not constants, or the step is not one; the caller then aliases the
+     *     receiver as before.
+     */
+    private InstanceKey sliceOfLiteral(InstanceKey key) {
+      if (sliced.containsKey(key)) return sliced.get(key);
+      InstanceKey slice = null;
+      int[] range = literalRange(key);
+      if (range != null) {
+        slice =
+            getInstanceKeyForAllocation(
+                caller, NewSiteReference.make(pc, key.concreteType().getReference()));
+        if (slice != null) populate(key, slice, range[0], range[1], range[2]);
+      }
+      sliced.put(key, slice);
+      return slice;
+    }
+
+    /**
+     * The {@code [start, stop)} range of literal elements this slice keeps of a key, with the
+     * literal's length, or {@code null} when the key or the bounds do not determine it.
+     */
+    private int[] literalRange(InstanceKey key) {
+      if (!(key instanceof AllocationSiteInNode asin)) return null;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass list = cha.lookupClass(PythonTypes.list);
+      IClass tuple = cha.lookupClass(PythonTypes.tuple);
+      IClass type = key.concreteType();
+      if (!(list != null && cha.isSubclassOf(type, list))
+          && !(tuple != null && cha.isSubclassOf(type, tuple))) return null;
+      int length = tupleLength(asin);
+      if (length < 0) return null;
+      SSAInstruction inst = caller.getIR().getInstructions()[pc];
+      if (!(inst instanceof PythonInvokeInstruction call)
+          || call.getNumberOfPositionalParameters() < 3) return null;
+      SymbolTable symtab = caller.getIR().getSymbolTable();
+      Integer lower = bound(symtab, call, 2, 0);
+      Integer upper = bound(symtab, call, 3, length);
+      Integer step = bound(symtab, call, 4, 1);
+      if (lower == null || upper == null || step == null || step != 1) return null;
+      int start = clamp(lower < 0 ? lower + length : lower, length);
+      int stop = clamp(upper < 0 ? upper + length : upper, length);
+      return new int[] {start, Math.max(start, stop), length};
+    }
+
+    /** A slice bound: its integer constant, the default when it is absent or {@code None}. */
+    private Integer bound(SymbolTable symtab, PythonInvokeInstruction call, int use, int dflt) {
+      if (use >= call.getNumberOfPositionalParameters()) return dflt;
+      int vn = call.getUse(use);
+      if (vn <= 0 || symtab.isNullConstant(vn)) return dflt;
+      if (!symtab.isConstant(vn)) return null;
+      Object value = symtab.getConstantValue(vn);
+      if (value == null) return dflt;
+      return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private static int clamp(int index, int length) {
+      return Math.max(0, Math.min(index, length));
+    }
+
+    private void populate(InstanceKey from, InstanceKey slice, int start, int stop, int length) {
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      logger.fine(() -> "slice [" + start + ", " + stop + ") of " + from + " at " + pc);
+      copyElements(from, slice, start, stop, start, factory, cha);
+      IField contents = resolveRootField(cha, LIST_OPERATION_CONTENTS_FIELD);
+      IField appended = resolveRootField(cha, LIST_APPEND_CONTENTS_FIELD);
+      if (contents == null || appended == null) return;
+      PointerKey sliceContents = factory.getPointerKeyForInstanceField(slice, contents);
+      PointerKey fromContents = factory.getPointerKeyForInstanceField(from, contents);
+      PointerKey fromAppended = factory.getPointerKeyForInstanceField(from, appended);
+      getSystem().newConstraint(sliceContents, assignOperator, fromContents);
+      getSystem().newConstraint(sliceContents, assignOperator, fromAppended);
+      if (stop < length) {
+        // Once the receiver may have grown, keep the literal's elements past the upper bound too.
+        UnaryOperator<PointsToSetVariable> grown =
+            new UnaryOperator<>() {
+              private boolean widened;
+
+              @Override
+              public byte evaluate(PointsToSetVariable l, PointsToSetVariable r) {
+                if (widened || r.getValue() == null || r.getValue().isEmpty()) return NOT_CHANGED;
+                widened = true;
+                copyElements(from, slice, stop, length, start, factory, cha);
+                return NOT_CHANGED;
+              }
+
+              @Override
+              public int hashCode() {
+                return from.hashCode() * 31 + slice.hashCode();
+              }
+
+              @Override
+              public boolean equals(Object o) {
+                return this == o;
+              }
+
+              @Override
+              public String toString() {
+                return "slice widening of " + from + " into " + slice;
+              }
+            };
+        getSystem().newSideEffect(grown, fromContents);
+        getSystem().newSideEffect(grown, fromAppended);
+      }
+    }
+
+    /**
+     * Copies elements {@code [lo, hi)} of a literal into the slice, renumbered from the slice's
+     * start: element {@code j} becomes the slice's element {@code j - start}.
+     */
+    private void copyElements(
+        InstanceKey from,
+        InstanceKey slice,
+        int lo,
+        int hi,
+        int start,
+        AstPointerKeyFactory factory,
+        IClassHierarchy cha) {
+      for (int j = lo; j < hi; j++) {
+        int index = j - start;
+        IField source = resolveRootField(cha, Integer.toString(j));
+        IField target = resolveRootField(cha, Integer.toString(index));
+        if (source == null || target == null) continue;
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForObjectCatalog(slice),
+                getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(index), index));
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForInstanceField(slice, target),
+                assignOperator,
+                factory.getPointerKeyForInstanceField(from, source));
+      }
     }
 
     @Override

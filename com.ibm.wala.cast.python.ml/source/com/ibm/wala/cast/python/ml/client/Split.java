@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -84,6 +85,8 @@ public class Split extends PassThroughUnaryTensorGenerator {
       }
     } else axis = 0;
 
+    Set<List<Dimension<?>>> sizeLists = count == null ? sizeListsOrNull(builder) : null;
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> input : inputShapes) {
       int rank = input.size();
@@ -91,8 +94,20 @@ public class Split extends PassThroughUnaryTensorGenerator {
       int normalized = axis < 0 ? axis + rank : axis;
       if (normalized < 0 || normalized >= rank) return null;
 
-      List<Dimension<?>> out = new ArrayList<>(input);
       Dimension<?> axisDim = input.get(normalized);
+      if (sizeLists != null) {
+        // A size list: each piece's extent along the axis is one of the listed sizes, so the
+        // modeled piece is any of them (wala/ML#993).
+        for (List<Dimension<?>> sizes : sizeLists)
+          for (Dimension<?> extent : pieceExtents(sizes, axisDim)) {
+            List<Dimension<?>> out = new ArrayList<>(input);
+            out.set(normalized, extent);
+            ret.add(out);
+          }
+        continue;
+      }
+
+      List<Dimension<?>> out = new ArrayList<>(input);
       if (count != null
           && axisDim instanceof NumericDim
           && count > 0
@@ -109,6 +124,56 @@ public class Split extends PassThroughUnaryTensorGenerator {
       ret.add(out);
     }
     return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * The size lists a {@code num_or_size_splits} argument may be (wala/ML#993): the possible
+   * contents of a list or tuple of sizes, read as a shape argument is, each size a {@link
+   * NumericDim}, an inferred {@code -1} included.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @return The possible size lists, or {@code null} when the argument is not a resolvable list or
+   *     tuple of sizes.
+   */
+  private Set<List<Dimension<?>>> sizeListsOrNull(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, 1, "num_or_size_splits");
+    if (pts == null || pts.isEmpty()) return null;
+    Set<List<Dimension<?>>> lists = this.getShapesFromShapeArgument(builder, pts);
+    return lists == null || lists.isEmpty() ? null : lists;
+  }
+
+  /**
+   * The extents along the split axis of the pieces a size list makes. A listed size is its own
+   * extent; an inferred size ({@code -1}) is what the other sizes leave of the axis, when the axis
+   * and the other sizes are known, and otherwise unknown as an unknown quotient is.
+   *
+   * @param sizes One possible size list.
+   * @param axisDim The input's dimension along the split axis.
+   * @return The possible piece extents.
+   */
+  private static Set<Dimension<?>> pieceExtents(List<Dimension<?>> sizes, Dimension<?> axisDim) {
+    Dimension<?> unknown =
+        axisDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE;
+    Set<Dimension<?>> extents = HashSetFactory.make();
+    int listed = 0;
+    boolean allListedKnown = true;
+    boolean inferred = false;
+    for (Dimension<?> size : sizes)
+      if (size instanceof NumericDim numeric && numeric.value() >= 0) {
+        extents.add(numeric);
+        listed += numeric.value();
+      } else if (size instanceof SymbolicDim
+          || (size instanceof NumericDim numeric && numeric.value() == -1)) inferred = true;
+      else {
+        extents.add(unknown);
+        allListedKnown = false;
+      }
+    if (inferred)
+      extents.add(
+          axisDim instanceof NumericDim total && allListedKnown && total.value() >= listed
+              ? new NumericDim(total.value() - listed)
+              : unknown);
+    return extents;
   }
 
   /**

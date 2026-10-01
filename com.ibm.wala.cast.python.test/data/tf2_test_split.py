@@ -29,8 +29,8 @@ def consume_size_list(t):
 
 
 # The axis defaults to 0 when absent; a size-list split produces
-# differently-shaped pieces, which the single-piece model soundly
-# represents with a dynamic dimension at the axis.
+# differently-shaped pieces, which the single-piece model represents
+# as any of the listed extents at the axis.
 x2 = tf.ones((4, 6))
 p, q = tf.split(x2, 2)
 r, s = tf.split(x2, [1, 3], 0)

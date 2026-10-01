@@ -420,9 +420,10 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * The size-list arm of {@code tf.split} (wala/ML#717): {@code tf.split(x, [1, 3], 0)} produces
-   * differently-shaped pieces, which the single-piece model soundly represents with a dynamic
-   * dimension at the axis; the other dimension still transfers.
+   * The size-list arm of {@code tf.split} (wala/ML#717, wala/ML#993): {@code tf.split(x, [1, 3],
+   * 0)} produces differently-shaped pieces, which the single-piece model represents as any of the
+   * listed extents at the axis, here {@code (1, 6)} or {@code (3, 6)} for the second piece, whose
+   * run-time shape is {@code (3, 6)}; the other dimension still transfers.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -437,9 +438,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume_size_list",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 6), TensorType.of(FLOAT_32, 3, 6))));
   }
 
   /**
