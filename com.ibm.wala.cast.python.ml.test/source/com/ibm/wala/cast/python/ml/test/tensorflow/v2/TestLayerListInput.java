@@ -69,24 +69,19 @@ public class TestLayerListInput extends AbstractTensorTest {
   }
 
   /**
-   * The outer layer builds the inner layer's list input by splitting and appending. The element is
-   * reached and typed, but iterating the slice {@code inputs[0:-1]} still yields the dropped group
-   * tensor, and the split's extent is not resolved.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#993 is fixed.
+   * The outer layer builds the inner layer's list input by splitting and appending, iterating the
+   * slice {@code inputs[0:-1]} that drops the group tensor.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testBuilt() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_built", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
    * The gate splits each input per subnet and hands each subnet, by a loop index, a list it builds
-   * by appending. As in {@link #testBuilt()}, the element is reached and typed, but not precisely.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#993 is fixed.
+   * by appending.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDispatched() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_dispatched", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
