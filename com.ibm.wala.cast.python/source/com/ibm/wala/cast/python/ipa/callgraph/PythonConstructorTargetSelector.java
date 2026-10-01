@@ -253,20 +253,22 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             // A property's setter or deleter (`@name.setter`) is not an attribute of the instance:
             // a write to the attribute reaches the field directly, and binding the accessor under
             // the property's name would make a call through the attribute dispatch it beside the
-            // getter's value (wala/ML#993). Its body is not run; the written value reaches the
-            // attribute as written.
+            // getter's value (wala/ML#993). The analysis never invokes the accessor (measured: its
+            // body is absent from the call graph unless called directly); the written value
+            // reaches the attribute as written.
             if (!summaryDeclaredMethods.contains(r)
                 && isPropertyAccessor(r, receiver.getClassHierarchy())) continue;
             if (!summaryDeclaredMethods.contains(r)
                 && isProperty(r, receiver.getClassHierarchy())) {
+              // The getter is allocated by its own function class, not read off the class
+              // attribute of its name: a setter of the same name rebinds that attribute, so the
+              // attribute holds both functions and reading it would run the setter with the
+              // instance as its value.
               int getter = v++;
               ctor.addStatement(
-                  insts.GetInstruction(
-                      pc++,
-                      getter,
-                      1,
-                      FieldReference.findOrCreate(
-                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
+                  insts.NewInstruction(
+                      pc, getter, NewSiteReference.make(pc, r.getDeclaringClass())));
+              pc++;
               int value = v++;
               int valueException = v++;
               @SuppressWarnings({"unchecked", "rawtypes"})

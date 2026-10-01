@@ -166,8 +166,9 @@ class Model(BaseModel):
     def settable_inputter(self, value):
         self._settable = value
 
-    # A property whose setter sinks what it is given: only the assignment in `__init__` reaches
-    # the setter; a call through the attribute must not dispatch it.
+    # A property whose setter sinks what it is given. The analysis does not run a setter: the
+    # assignment in `__init__` reaches the attribute directly. The sink is called once below with a
+    # function, so it is present; a call through the attribute must not reach it with the tensor.
     @property
     def settable_fn(self):
         return self._fn
@@ -191,6 +192,7 @@ class Model(BaseModel):
 
 
 model = Model()
+consume_setter_value(passthrough)
 
 dataset = tf.data.Dataset.from_tensor_slices(
     (

@@ -94,9 +94,11 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
   }
 
   /**
-   * The setter of that property is reached only by the assignment in {@code __init__}, whose value
-   * is a function, so its sink sees no tensor: a call through the attribute does not dispatch the
-   * setter beside the getter's value.
+   * The setter of that property is not run by the analysis (the assignment in {@code __init__}
+   * reaches the attribute directly), and the getter is allocated by its own function class rather
+   * than read off the class attribute the setter's definition rebinds, so neither the call through
+   * the attribute nor the getter's evaluation dispatches the setter. Its sink, called once directly
+   * with a function, sees no tensor.
    */
   @Test
   public void testSetterNotDispatchedByCall()
