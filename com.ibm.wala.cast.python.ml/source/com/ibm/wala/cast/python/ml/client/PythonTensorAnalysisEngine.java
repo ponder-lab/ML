@@ -1069,8 +1069,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // numeric key, while the ubiquitous `self.attr` reads this branch also visits would
             // otherwise each pay a full (uncached) creator walk whose common outcome is an
             // exception.
-            if (!added
-                && readsConstantIntegerMember(propertyRead, localPointerKeyNode, pointerAnalysis)) {
+            // A constant member, an integer index or a string key (wala/ML#993): the generator
+            // decides whether the object is a dataset element or a component of one.
+            if (!added && readsConstantMember(propertyRead, localPointerKeyNode, pointerAnalysis)) {
               try {
                 TensorGenerator generator = getGenerator(src, builder);
 
@@ -1536,6 +1537,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     for (InstanceKey ik : pointerAnalysis.getPointsToSet(memberKey))
       if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof Number)
+        return true;
+
+    return false;
+  }
+
+  /**
+   * Whether a property read's member is a constant integer index or a constant string key
+   * (wala/ML#993).
+   *
+   * @param read The property read.
+   * @param node The node containing the read.
+   * @param pointerAnalysis The pointer analysis.
+   * @return {@code true} iff the member's points-to set holds a number or a string constant.
+   */
+  private static boolean readsConstantMember(
+      PythonPropertyRead read, CGNode node, PointerAnalysis<InstanceKey> pointerAnalysis) {
+    PointerKey memberKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef());
+
+    for (InstanceKey ik : pointerAnalysis.getPointsToSet(memberKey))
+      if (ik instanceof ConstantKey<?> constant
+          && (constant.getValue() instanceof Number || constant.getValue() instanceof String))
         return true;
 
     return false;
