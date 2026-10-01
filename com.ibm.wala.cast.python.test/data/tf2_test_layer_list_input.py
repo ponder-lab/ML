@@ -28,6 +28,14 @@ def consume_counted(x):
     assert x.shape == (4, 3) and x.dtype == tf.float32
 
 
+def consume_bound(x):
+    assert x.shape == (4, 3) and x.dtype == tf.float32
+
+
+def pick(xs, k):
+    consume_bound(xs[k])
+
+
 def consume_built(x):
     assert x.shape == (2, 3) and x.dtype == tf.float32
 
@@ -136,6 +144,7 @@ b = tf.ones((4, 3))
 g = tf.zeros((4, 1), dtype=tf.int32)
 
 Distance(consume_direct)([a, b])
+pick([a, g], 0)
 Kernel(Distance(consume_nested))([a, b])
 Sliced(Kernel(Distance(consume_sliced)))([a, b, g])
 Listed([Kernel(Distance(consume_listed))])([a, b, g])

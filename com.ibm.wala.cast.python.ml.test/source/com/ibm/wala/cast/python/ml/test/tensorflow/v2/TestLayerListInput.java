@@ -59,6 +59,16 @@ public class TestLayerListInput extends AbstractTensorTest {
   }
 
   /**
+   * Control: an index that is a parameter fed a literal is not a loop variable, so the read stays
+   * exact rather than taking every element (the group tensor beside the one read).
+   */
+  @Test
+  public void testConstantBoundIndex()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_bound", 1, 1, Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
+  }
+
+  /**
    * The outer layer builds the inner layer's list input by splitting and appending. The element is
    * reached and typed, but iterating the slice {@code inputs[0:-1]} still yields the dropped group
    * tensor, and the split's extent is not resolved.
