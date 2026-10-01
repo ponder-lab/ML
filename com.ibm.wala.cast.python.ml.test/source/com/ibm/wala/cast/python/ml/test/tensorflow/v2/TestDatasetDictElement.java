@@ -53,9 +53,10 @@ public class TestDatasetDictElement extends AbstractTensorTest {
 
   /**
    * The same element passed into a function and subscripted there, whose signature is the dataset's
-   * {@code element_spec}: the dict parameter has no points-to set, so its subscript's generator is
-   * inherited from the loop's call, where the argument is the tuple element's first member
-   * (wala/ML#993). {@code element_spec} itself stays unmodeled; the call is what types it.
+   * {@code element_spec}: the dict parameter has no points-to set, so its subscript is admitted at
+   * seeding by its constant string key, and the parameter's container resolves through the loop's
+   * call to the tuple element's first member (wala/ML#993). {@code element_spec} itself stays
+   * unmodeled; the call is what types it.
    */
   @Test
   public void testElementSpecStep() throws ClassHierarchyException, CancelException, IOException {
@@ -82,19 +83,15 @@ public class TestDatasetDictElement extends AbstractTensorTest {
 
   /**
    * A function fed dict elements of two different datasets by two callers: each call is its own
-   * context, so each inherits its own dataset's provider and the sink sees both components
-   * (measured; the decline of a non-unique provider applies only when one node has several
-   * callers).
+   * context, so each resolves its own dataset's element and the sink sees both components
+   * (measured).
    */
   @Test
   public void testTwoDatasets() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_two_datasets", 1, 1, Map.of(2, Set.of(IDS_3, TensorType.of(INT_32, 2))));
   }
 
-  /**
-   * An element supplied to its parameter by keyword is typed as well (measured); the inheriting
-   * walk itself reads positional arguments only, so the keyword reaches the parameter another way.
-   */
+  /** An element supplied to its parameter by keyword is typed as well (measured). */
   @Test
   public void testKeywordArgument() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_keyword_step", 1, 1, Map.of(2, Set.of(IDS_3)));

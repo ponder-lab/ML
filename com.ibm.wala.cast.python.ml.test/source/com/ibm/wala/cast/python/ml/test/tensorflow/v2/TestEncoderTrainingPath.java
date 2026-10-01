@@ -29,8 +29,8 @@ public class TestEncoderTrainingPath extends AbstractTensorTest {
 
   /**
    * The dict element of the dataset, passed into the inputter's {@code call} and subscripted there,
-   * is typed: the parameter inherits the element's provider from the step's call, and the component
-   * is the batched ids (wala/ML#993).
+   * is typed: the subscript is admitted at seeding by its constant string key, the parameter's
+   * container resolves through the step's call, and the component is the batched ids (wala/ML#993).
    */
   @Test
   public void testFeaturesIds() throws ClassHierarchyException, CancelException, IOException {

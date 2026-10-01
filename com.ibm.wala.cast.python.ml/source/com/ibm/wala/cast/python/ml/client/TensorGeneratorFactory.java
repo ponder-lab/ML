@@ -253,11 +253,9 @@ import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -1740,20 +1738,6 @@ public class TensorGeneratorFactory {
         if (objSrc == null) return null;
         TensorGenerator containerGenerator = tryGetGenerator(objSrc, builder, visited);
 
-        // A dataset element passed into this function and subscripted here: the parameter has no
-        // points-to set (an element is no allocation), so its generator comes from the callers,
-        // where the argument is the element or a component of it (wala/ML#993). One provider
-        // across the callers is inherited, with the path the argument already carries; several
-        // distinct providers are declined, as before.
-        List<Object> inheritedPath = List.of();
-        if (containerGenerator == null) {
-          InheritedElement inherited = inheritedElement(node, objRef, builder, visited);
-          if (inherited != null) {
-            containerGenerator = (TensorGenerator) inherited.provider();
-            inheritedPath = inherited.path();
-          }
-        }
-
         TensorGenerator effectiveGenerator = containerGenerator;
         boolean changed = true;
         while (changed) {
@@ -1847,7 +1831,7 @@ public class TensorGeneratorFactory {
         List<Object> basePath =
             containerGenerator instanceof DatasetTupleElementGenerator selected
                 ? selected.getPath()
-                : inheritedPath;
+                : List.of();
         Object selector = propertyIndex != null ? (Object) propertyIndex : (Object) propertyName;
         if (effectiveGenerator instanceof TupleElementProvider tep
             && selector != null
@@ -2384,108 +2368,5 @@ public class TensorGeneratorFactory {
     protected String getDTypeParameterName() {
       return null;
     }
-  }
-
-  /**
-   * A dataset element's provider inherited by a parameter from its callers, with the path the
-   * argument already selects within the element (wala/ML#993).
-   *
-   * @param provider The provider of the element's structure.
-   * @param path The selectors the argument carries, outermost first; empty for a whole element.
-   */
-  private record InheritedElement(TupleElementProvider provider, List<Object> path) {}
-
-  /**
-   * The dataset element provider a parameter inherits from the callers of its function
-   * (wala/ML#993): for each caller's call, the argument at the parameter's position is read for its
-   * generator; a dataset element, or a component of one, yields its provider and path. Exactly one
-   * distinct provider-and-path among the callers that pass an element is inherited; none, or
-   * several distinct ones, is declined; a call that is its own context has one caller, so the
-   * decline applies only to a node several callers share. This walk reads positional arguments
-   * only; an element supplied by keyword was measured typed as well. A caller whose argument is not
-   * a dataset element is not counted: its values reach the parameter by dataflow as before, beside
-   * the inherited reading, so the result is their union. Providers are compared by their points-to
-   * source, since one dataset can be read through distinct generator instances across callers.
-   *
-   * @param node The function whose parameter is read.
-   * @param parameterVn The parameter's value number.
-   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param visited The generators under construction, for the recursion guard.
-   * @return The inherited element, or {@code null}.
-   */
-  private static InheritedElement inheritedElement(
-      CGNode node,
-      int parameterVn,
-      PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
-    int position = TensorGenerator.parameterPosition(node, parameterVn);
-    if (position == Integer.MIN_VALUE || position < 0) return null;
-    InheritedElement found = null;
-    for (Iterator<CGNode> callers = builder.getCallGraph().getPredNodes(node);
-        callers.hasNext(); ) {
-      CGNode caller = callers.next();
-      if (caller.getIR() == null) continue;
-      for (Iterator<CallSiteReference> sites =
-              builder.getCallGraph().getPossibleSites(caller, node);
-          sites.hasNext(); ) {
-        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next())) {
-          if (!(call instanceof PythonInvokeInstruction pyCall)) continue;
-          int positionals = pyCall.getNumberOfPositionalParameters() - 1;
-          if (position >= positionals) continue; // Not supplied positionally.
-          int argVn = pyCall.getUse(position + 1);
-          PointerKey argKey =
-              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, argVn);
-          PointsToSetVariable argSrc = getPointsToSetVariable(argKey, builder);
-          if (argSrc == null) continue;
-          TensorGenerator argGenerator = tryGetGenerator(argSrc, builder, visited);
-          InheritedElement candidate = elementOf(argGenerator);
-          if (candidate == null) continue;
-          if (found == null) found = candidate;
-          else if (!sameProvider(found.provider(), candidate.provider())
-              || !found.path().equals(candidate.path())) return null;
-        }
-      }
-    }
-    return found;
-  }
-
-  /**
-   * Whether two providers read the same dataset: the same instance, or generators anchored on the
-   * same points-to source (wala/ML#993).
-   */
-  private static boolean sameProvider(TupleElementProvider a, TupleElementProvider b) {
-    if (a == b) return true;
-    if (a instanceof TensorGenerator ga && b instanceof TensorGenerator gb)
-      return ga.getSource() != null && ga.getSource().equals(gb.getSource());
-    return false;
-  }
-
-  /**
-   * The provider and path a generator denotes when it is a dataset element or a component of one
-   * (wala/ML#993): a selected component carries its path; a whole element, reached through the
-   * delegating chain to its dataset, carries the empty path.
-   *
-   * @param generator The argument's generator, possibly {@code null}.
-   * @return The element, or {@code null} when the generator is not a dataset element.
-   */
-  private static InheritedElement elementOf(TensorGenerator generator) {
-    if (generator instanceof DatasetTupleElementGenerator selected
-        && selected.getUnderlying() instanceof TupleElementProvider tep)
-      return new InheritedElement(tep, selected.getPath());
-    TensorGenerator effective = generator;
-    boolean changed = true;
-    while (effective != null && changed) {
-      changed = false;
-      if (effective instanceof DelegatingTensorGenerator dtg) {
-        TensorGenerator next = dtg.getUnderlying();
-        if (next != null && next != effective) {
-          effective = next;
-          changed = true;
-        }
-      }
-    }
-    if (effective instanceof DatasetGenerator dataset)
-      return new InheritedElement(dataset, List.of());
-    return null;
   }
 }

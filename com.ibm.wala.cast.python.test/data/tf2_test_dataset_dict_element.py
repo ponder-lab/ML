@@ -124,7 +124,7 @@ for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}
 
 
 # A function fed dict elements of two different datasets by two callers: each call is its own
-# context and inherits its own dataset's provider.
+# context and resolves its own dataset's element.
 def two_datasets_step(element):
     consume_two_datasets(element["ids"])
     assert element["ids"].shape in ((3,), (2,)) and element["ids"].dtype == tf.int32
