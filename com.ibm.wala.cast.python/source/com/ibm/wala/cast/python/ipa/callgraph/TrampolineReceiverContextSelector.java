@@ -118,7 +118,10 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // since the trampoline's callee object is filtered to the context's receiver: reusing the
       // caller's context, whose receiver is the instance, left that object empty and the base
       // method never dispatched.
-      if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
+      if (allocatedBySuperBody(receiver)) {
+        Census.superReceiver(caller, callee, receiver);
+        return new ReceiverInstanceContext(receiver);
+      }
 
       // A Keras layer builds once per instance: `Layer.__call__` runs `build` only while
       // `self.built` is false, and an explicit `layer.build(input_shape)` sets it, so the lazy
@@ -150,6 +153,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
+      Census.pair(caller, callee, receiver);
       return new AnchoredCallerSiteContext(
           receiverAnchor(caller), caller.getMethod(), site, new ReceiverInstanceContext(receiver));
     }
@@ -187,6 +191,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
+      Census.single(caller, callee);
       return new AnchoredCallerSiteContext(receiverAnchor(caller), caller.getMethod(), site, null);
     }
 
@@ -365,6 +370,71 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     if (key instanceof ScopeMappingInstanceKey scoped) return scoped.getCreator();
     if (key instanceof AllocationSiteInNode allocation) return allocation.getNode();
     return null;
+  }
+
+  /** PROBE ONLY: counts the contexts this selector builds and logs the heaviest keys. */
+  private static final class Census {
+    private static final java.util.concurrent.ConcurrentHashMap<
+            String, java.util.concurrent.atomic.LongAdder>
+        COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.atomic.AtomicLong TOTAL =
+        new java.util.concurrent.atomic.AtomicLong();
+
+    private static void count(String key) {
+      COUNTS.computeIfAbsent(key, k -> new java.util.concurrent.atomic.LongAdder()).increment();
+    }
+
+    private static String describe(InstanceKey key) {
+      if (key instanceof ScopeMappingInstanceKey scoped)
+        return "SMIK "
+            + scoped.getBase().concreteType().getName()
+            + " creator "
+            + scoped.getCreator().getMethod().getSignature();
+      return key.getClass().getSimpleName() + " " + key.concreteType().getName();
+    }
+
+    static void pair(CGNode caller, IMethod callee, InstanceKey receiver) {
+      count("pair callee " + callee.getSignature());
+      count("pair receiver " + describe(receiver));
+      count("pair caller " + caller.getMethod().getSignature());
+      tick();
+    }
+
+    static void superReceiver(CGNode caller, IMethod callee, InstanceKey receiver) {
+      count("super callee " + callee.getSignature());
+      count("super caller " + caller.getMethod().getSignature());
+      tick();
+    }
+
+    static void single(CGNode caller, IMethod callee) {
+      count("single callee " + callee.getSignature());
+      count("single caller " + caller.getMethod().getSignature());
+      tick();
+    }
+
+    private static void tick() {
+      long n = TOTAL.incrementAndGet();
+      if (n % 20000 != 0) return;
+      StringBuilder b = new StringBuilder("RECEIVER-CENSUS after " + n + " contexts:");
+      for (String kind :
+          new String[] {
+            "pair callee",
+            "pair receiver",
+            "pair caller",
+            "super callee",
+            "super caller",
+            "single callee",
+            "single caller"
+          }) {
+        COUNTS.entrySet().stream()
+            .filter(e -> e.getKey().startsWith(kind + " "))
+            .sorted((x, y) -> Long.compare(y.getValue().sum(), x.getValue().sum()))
+            .limit(12)
+            .forEach(
+                e -> b.append("\n  ").append(e.getValue().sum()).append("  ").append(e.getKey()));
+      }
+      LOGGER.warning(b.toString());
+    }
   }
 
   /**
