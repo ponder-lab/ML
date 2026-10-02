@@ -23,6 +23,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstLexicalAccess;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
@@ -98,6 +99,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -248,7 +250,17 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     return iterationProtocolClasses.computeIfAbsent(
         type,
         t -> {
+          IClassHierarchy cha = getClassHierarchy();
           for (IClass c = t; c != null; c = c.getSuperclass()) {
+            // A summarized or program class renders each method as a function class nested under
+            // the class's own name, held by an instance field of the method's name.
+            for (String name :
+                List.of(BuiltinFunctions.ITER_METHOD_NAME, BuiltinFunctions.NEXT_METHOD_NAME))
+              if (cha.lookupClass(
+                      TypeReference.findOrCreate(
+                          c.getClassLoader().getReference(),
+                          TypeName.string2TypeName(c.getName() + "/" + name)))
+                  != null) return true;
             java.util.Collection<? extends IMethod> methods = c.getDeclaredMethods();
             if (methods == null) continue;
             for (IMethod m : methods) {
@@ -646,9 +658,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @return {@code true} iff the value is defined by such a read.
      */
     private boolean isLoopVariable(int vn) {
-      return du.getDef(vn) instanceof AstPropertyRead read
-          && du.getDef(read.getMemberRef()) instanceof EachElementGetInstruction;
+      SSAInstruction def = du.getDef(vn);
+      if (def instanceof AstPropertyRead read
+          && du.getDef(read.getMemberRef()) instanceof EachElementGetInstruction) return true;
+      // A `for` loop binds its variable to `next` of the iterator `iter` made (wala/ML#1010).
+      if (!(def instanceof PythonInvokeInstruction call) || call.getNumberOfUses() < 2)
+        return false;
+      SSAInstruction callee = du.getDef(call.getUse(0));
+      if (callee instanceof AstLexicalRead lexical)
+        for (AstLexicalAccess.Access access : lexical.getAccesses())
+          if (NEXT_BUILTIN_NAME.equals(access.variableName())) return true;
+      return callee instanceof AstGlobalRead global
+          && global.getGlobalName().equals("global " + NEXT_BUILTIN_NAME);
     }
+
+    /** The name a program calls the {@code next} builtin by. */
+    private static final String NEXT_BUILTIN_NAME = "next";
 
     /**
      * Surfaces append-accumulated list contents at subscript reads (<a
