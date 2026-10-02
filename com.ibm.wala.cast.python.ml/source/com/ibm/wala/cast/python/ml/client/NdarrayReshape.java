@@ -187,7 +187,7 @@ public class NdarrayReshape extends TensorGenerator {
     int receiverVn = getReceiverVn();
     if (receiverVn <= 0) return null;
     try {
-      return getShapesOrSSAChain(builder, getNode(), receiverVn);
+      return getShapes(builder, getNode(), receiverVn);
     } catch (IllegalArgumentException e) {
       LOGGER.fine("NdarrayReshape.getDefaultShapes: IAE on receiver vn=" + receiverVn);
       return null;

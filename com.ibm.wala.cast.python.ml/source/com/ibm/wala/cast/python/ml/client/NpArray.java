@@ -529,11 +529,11 @@ public class NpArray extends TensorGenerator {
       // wala/ML#796.
       WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
       Set<DType> viaChain;
-      if (engine == null) viaChain = getDTypesOrSSAChain(builder, getNode(), sourceVn);
+      if (engine == null) viaChain = getDTypes(builder, getNode(), sourceVn);
       else {
         Object key = Pair.make("nparray-content-chain", pk);
         java.util.function.Supplier<Object> transfer =
-            () -> getDTypesOrSSAChain(builder, getNode(), sourceVn);
+            () -> getDTypes(builder, getNode(), sourceVn);
         viaChain =
             (Set<DType>)
                 (engine.isEvaluating()

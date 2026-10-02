@@ -134,7 +134,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     // only the chain walk's tuple-field peel resolves (wala/ML#396).
     Set<List<Dimension<?>>> receiverShapes;
     try {
-      receiverShapes = getShapesOrSSAChain(builder, getNode(), objRef);
+      receiverShapes = getShapes(builder, getNode(), objRef);
     } catch (IllegalArgumentException e) {
       LOGGER.fine(
           () -> "NdarraySubscriptOperation: receiver vn=" + objRef + " unresolved: " + e + ".");

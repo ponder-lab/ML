@@ -163,7 +163,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       // `getShapesOrSSAChain` falls back to an SSA DU walk when the PTS walk hits an implicit
       // PK (e.g., the chained `x_test.reshape(...).astype(...)` path in `neural_network.py`).
       // The SSA chain walker recognises mnist sources, astype, reshape, etc. See wala/ML#405.
-      receiverShapes = getShapesOrSSAChain(builder, view.callerNode(), view.receiverVn);
+      receiverShapes = getShapes(builder, view.callerNode(), view.receiverVn);
     } catch (IllegalArgumentException e) {
       // Both paths failed — treat as ⊤ (null) so dtype inference still proceeds.
       LOGGER.log(
@@ -395,7 +395,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
     try {
       // Parallel to the shape path: use the SSA-DU fallback so chained sources (mnist → astype
       // → reshape → divide → slice) still recover a concrete dtype. See wala/ML#405.
-      dtypes = getDTypesOrSSAChain(builder, view.callerNode(), view.receiverVn);
+      dtypes = getDTypes(builder, view.callerNode(), view.receiverVn);
     } catch (IllegalArgumentException e) {
       LOGGER.log(
           Level.FINE, "Receiver dtype lookup threw IAE for receiverVn=" + view.receiverVn(), e);

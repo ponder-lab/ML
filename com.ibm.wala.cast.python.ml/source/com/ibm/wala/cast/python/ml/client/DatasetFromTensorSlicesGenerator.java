@@ -268,7 +268,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                   if (storedVn > 0) {
                     try {
                       Set<List<Dimension<?>>> viaChain =
-                          this.getShapesOrSSAChain(builder, asin.getNode(), storedVn);
+                          this.getShapes(builder, asin.getNode(), storedVn);
                       if (viaChain != null && !viaChain.isEmpty()) fieldShapes = viaChain;
                     } catch (IllegalArgumentException e) {
                       // leave as null/empty
@@ -337,8 +337,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                       findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
                   if (storedVn > 0) {
                     try {
-                      Set<DType> viaChain =
-                          this.getDTypesOrSSAChain(builder, asin.getNode(), storedVn);
+                      Set<DType> viaChain = this.getDTypes(builder, asin.getNode(), storedVn);
                       if (viaChain != null && !viaChain.isEmpty()) fieldDTypes = viaChain;
                     } catch (IllegalArgumentException e) {
                       // leave as null/empty
@@ -588,8 +587,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
           int storedVn = findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
           if (storedVn > 0) {
             try {
-              Set<List<Dimension<?>>> viaChain =
-                  this.getShapesOrSSAChain(builder, asin.getNode(), storedVn);
+              Set<List<Dimension<?>>> viaChain = this.getShapes(builder, asin.getNode(), storedVn);
               if (viaChain != null && !viaChain.isEmpty()) {
                 fieldShapes = viaChain;
                 final int fi = fieldIndex;
@@ -791,7 +789,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
           int storedVn = findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
           if (storedVn > 0) {
             try {
-              Set<DType> viaChain = this.getDTypesOrSSAChain(builder, asin.getNode(), storedVn);
+              Set<DType> viaChain = this.getDTypes(builder, asin.getNode(), storedVn);
               if (viaChain != null && !viaChain.isEmpty()) fieldDTypes = viaChain;
             } catch (IllegalArgumentException e) {
               // leave as null/empty
