@@ -2537,6 +2537,27 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         boolean scalarTarget = c.getInternalTarget() instanceof Name;
         String keyName = scalarTarget ? null : "temp key " + ++tmpIndex;
 
+        // The element is what `next` returns from the iterator `iter` makes over the iterable, as
+        // Python's iteration protocol does (wala/ML#1010): `next` yields a sequence's elements, and
+        // an object whose class declares `__iter__`/`__next__` yields through them. The key loop
+        // over the iterable only decides when the loop ends.
+        String iteratorName = "temp iterator " + ++tmpIndex;
+        CAstNode nextElement =
+            Ast.makeNode(
+                CAstNode.CALL,
+                Ast.makeNode(CAstNode.VAR, Ast.makeConstant("next")),
+                Ast.makeNode(CAstNode.EMPTY),
+                Ast.makeNode(CAstNode.VAR, Ast.makeConstant(iteratorName)));
+        CAstNode iteratorDecl =
+            Ast.makeNode(
+                CAstNode.DECL_STMT,
+                Ast.makeConstant(new CAstSymbolImpl(iteratorName, PythonCAstToIRTranslator.Any)),
+                Ast.makeNode(
+                    CAstNode.CALL,
+                    Ast.makeNode(CAstNode.VAR, Ast.makeConstant("iter")),
+                    Ast.makeNode(CAstNode.EMPTY),
+                    Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName))));
+
         CAstNode test;
         CAstNode firstKeyAssign;
         CAstNode bodyValueAssign;
@@ -2565,13 +2586,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                         Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
                         Ast.makeConstant(null)));
             bodyValueAssign =
-                Ast.makeNode(
-                    CAstNode.ASSIGN,
-                    c.getInternalTarget().accept(this),
-                    Ast.makeNode(
-                        CAstNode.OBJECT_REF,
-                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
-                        c.getInternalTarget().accept(this)));
+                Ast.makeNode(CAstNode.ASSIGN, c.getInternalTarget().accept(this), nextElement);
           } else {
             test =
                 Ast.makeNode(
@@ -2596,22 +2611,20 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                         Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
                         Ast.makeConstant(null)));
             bodyValueAssign =
-                Ast.makeNode(
-                    CAstNode.ASSIGN,
-                    c.getInternalTarget().accept(this),
-                    Ast.makeNode(
-                        CAstNode.OBJECT_REF,
-                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
-                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(keyName))));
+                Ast.makeNode(CAstNode.ASSIGN, c.getInternalTarget().accept(this), nextElement);
           }
         }
 
         CAstNode decls =
             scalarTarget
                 ? Ast.makeNode(
-                    CAstNode.DECL_STMT,
-                    Ast.makeConstant(new CAstSymbolImpl(tempName, PythonCAstToIRTranslator.Any)),
-                    c.getInternalIter().accept(this))
+                    CAstNode.BLOCK_EXPR,
+                    Ast.makeNode(
+                        CAstNode.DECL_STMT,
+                        Ast.makeConstant(
+                            new CAstSymbolImpl(tempName, PythonCAstToIRTranslator.Any)),
+                        c.getInternalIter().accept(this)),
+                    iteratorDecl)
                 : Ast.makeNode(
                     CAstNode.BLOCK_EXPR,
                     Ast.makeNode(
@@ -2619,6 +2632,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                         Ast.makeConstant(
                             new CAstSymbolImpl(tempName, PythonCAstToIRTranslator.Any)),
                         c.getInternalIter().accept(this)),
+                    iteratorDecl,
                     Ast.makeNode(
                         CAstNode.DECL_STMT,
                         Ast.makeConstant(new CAstSymbolImpl(keyName, PythonCAstToIRTranslator.Any)),
