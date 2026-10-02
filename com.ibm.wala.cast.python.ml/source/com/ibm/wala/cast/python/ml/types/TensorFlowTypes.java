@@ -786,6 +786,38 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String POISSON_SIGNATURE = "tf.random.poisson()";
 
+  /**
+   * The data a Keras training, evaluation or prediction call packs for its step: slot 0 is {@code
+   * x} and slot 1 is {@code y}, as {@code Model.fit} hands them to {@code train_step}
+   * (wala/ML#997).
+   */
+  public static final TypeReference FIT_DATA_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/FitData"));
+
+  private static final String FIT_DATA_SIGNATURE = "tf.keras.Model.fit()";
+
+  /**
+   * The result of {@code tf.keras.utils.unpack_x_y_sample_weight(data)}: slot 0 is {@code data},
+   * and index {@code i} of the result is {@code data}'s component {@code i} when {@code data} is a
+   * tuple and {@code data} itself at index 0 otherwise (wala/ML#997).
+   */
+  public static final TypeReference UNPACKED_DATA_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/UnpackedData"));
+
+  private static final String UNPACKED_DATA_SIGNATURE = "tf.keras.utils.unpack_x_y_sample_weight()";
+
+  /**
+   * https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/unpack_x_y_sample_weight.
+   */
+  public static final MethodReference UNPACK_X_Y_SAMPLE_WEIGHT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/utils/unpack_x_y_sample_weight")),
+          AstMethodReference.fnSelector);
+
   /** https://www.tensorflow.org/api_docs/python/tf/Variable. */
   public static final MethodReference VARIABLE =
       MethodReference.findOrCreate(
@@ -2489,6 +2521,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GAMMA.getDeclaringClass(), GAMMA_SIGNATURE),
           Map.entry(POISSON.getDeclaringClass(), POISSON_SIGNATURE),
           Map.entry(VARIABLE.getDeclaringClass(), VARIABLE_SIGNATURE),
+          Map.entry(FIT_DATA_TYPE, FIT_DATA_SIGNATURE),
+          Map.entry(UNPACKED_DATA_TYPE, UNPACKED_DATA_SIGNATURE),
           Map.entry(INPUT.getDeclaringClass(), INPUT_SIGNATURE),
           Map.entry(RAGGED_CONSTANT.getDeclaringClass(), RAGGED_CONSTANT_SIGNATURE),
           Map.entry(RAGGED_RANGE.getDeclaringClass(), RAGGED_RANGE_SIGNATURE),

@@ -2401,8 +2401,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } catch (IllegalArgumentException e) {
           continue;
         }
+        // A component read of the data a Keras `fit` packs for its step, or of an unpacked step
+        // data, is pinned for the same reason (wala/ML#997): the pack's slot holds the user's
+        // `x`, and when that is a dataset, its whole-element type would otherwise leak into the
+        // component the step reads from it.
+        boolean fitComponent =
+            generator instanceof DatasetTupleElementGenerator selected
+                && selected.getUnderlying() instanceof FitDataGenerator;
         if (!(generator instanceof SliceBuiltinOperation)
-            && !(generator instanceof NdarraySubscriptOperation)) continue;
+            && !(generator instanceof NdarraySubscriptOperation)
+            && !fitComponent) continue;
         Set<TensorType> types = init.get(src);
         if (types == null || types.isEmpty()) continue;
         // Every member must carry dimensions. A ⊤-shape member says nothing about the subscript's
