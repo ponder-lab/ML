@@ -2028,10 +2028,15 @@ public class TestShapeOps extends AbstractTensorTest {
 
   /**
    * A gather whose table is only partially resolvable (one arm a concrete {@code tf.ones}, one an
-   * opaque cast) keeps what the resolvable member proves: the crossed {@code (30, 16)} stands as
-   * the resolvable subset instead of the unresolvable arm poisoning the whole result to ⊤ (<a
-   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>; the member-wise record upgrade's
-   * legacy view).
+   * opaque cast) keeps what the resolvable member proves: the crossed {@code (30, 16)} stands
+   * instead of the unresolvable arm poisoning the whole result to ⊤ (<a
+   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>). The opaque arm's own unknown
+   * shape stands beside it: the table is read from both of its definitions, where it used to be
+   * read from whichever one a walk reached first (<a
+   * href="https://github.com/wala/ML/issues/1009">wala/ML#1009</a>). The gather reads its table
+   * exactly, so the opaque arm is the read's unknown remainder (<a
+   * href="https://github.com/wala/ML/issues/716">wala/ML#716</a>), which the seed carries as the
+   * unknown-shape member.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2046,7 +2051,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume_partial",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_30_16_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**

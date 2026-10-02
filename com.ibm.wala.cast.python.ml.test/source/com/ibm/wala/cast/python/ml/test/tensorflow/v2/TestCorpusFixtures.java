@@ -600,7 +600,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * D} extents stay {@link UnresolvedDim} in vivo because {@code w}'s dimensions are config-derived
    * (contrast {@link #testDense3dProj()}, where the weight's static extents transfer). The {@code
    * (8, 100, U, U)}/{@code (8, 10, U, U)} members arrive already rank-4 from the entry contracts
-   * (wala/ML#717) and pass through the refinement with their concrete leading dims intact.
+   * (wala/ML#717) and pass through the refinement with their concrete leading dims intact. Their
+   * dynamic-batch twins arrive through the attention scores, a value with several definitions that
+   * is now read from all of them, where a walk used to read the first it reached (wala/ML#1009):
+   * one definition is a user call typed across its calling contexts, including a dataset-fed one
+   * whose batch axis TensorFlow reports as {@code None}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -638,6 +642,20 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32,
                     asList(
                         new NumericDim(8),
+                        new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        new NumericDim(100),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
                         new NumericDim(10),
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
