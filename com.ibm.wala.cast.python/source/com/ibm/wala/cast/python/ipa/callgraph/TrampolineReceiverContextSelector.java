@@ -10,6 +10,7 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -18,11 +19,17 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContextPair;
 import com.ibm.wala.util.intset.IntSet;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -205,7 +212,61 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       if (up.getMethod().equals(callee)) return true; // The callee is already on the chain.
       c = up.getContext();
     }
+    return allocatesThroughMethod(caller, callee);
+  }
+
+  /**
+   * The most nodes {@link #allocatesThroughMethod} visits. The contexts share structure, so the
+   * walk keeps a visited set and stops here rather than grow with the structure.
+   */
+  private static final int MAX_CREATOR_VISITS = 64;
+
+  /**
+   * Returns whether the given callee already allocated a receiver the caller's context is keyed on,
+   * directly or through the contexts of those receivers' own allocating nodes (wala/ML#210).
+   *
+   * <p>A receiver context nests the context of the node that allocated its receiver, a link the
+   * caller chain does not walk. A loop that rebuilds an object under a context keyed on its
+   * previous build (a model rebuilt from its own config and stored back where the next round reads
+   * it) recurses through that link: each build runs under a context keyed on the last one's
+   * receiver, allocates a fresh receiver, and so keys the next round on a context one level deeper,
+   * without bound.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @param callee The dispatched callee.
+   * @return {@code true} iff the callee appears among the allocating nodes reachable from the
+   *     caller's context.
+   */
+  private static boolean allocatesThroughMethod(CGNode caller, IMethod callee) {
+    Set<CGNode> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    Deque<CGNode> pending = new ArrayDeque<>();
+    pending.add(caller);
+    while (!pending.isEmpty() && visited.size() < MAX_CREATOR_VISITS) {
+      CGNode node = pending.poll();
+      if (!visited.add(node)) continue;
+      Context context = node.getContext();
+      if (context.get(ContextKey.RECEIVER) instanceof InstanceKey receiver) {
+        CGNode creator = allocator(receiver);
+        if (creator != null) {
+          if (creator.getMethod().equals(callee)) return true;
+          pending.add(creator);
+        }
+      }
+      if (context instanceof CallerSiteContext site) pending.add(site.getCaller());
+    }
     return false;
+  }
+
+  /**
+   * Returns the node that allocated the given instance, if the instance names one.
+   *
+   * @param key The instance.
+   * @return The allocating node, or {@code null} if the instance names none.
+   */
+  private static CGNode allocator(InstanceKey key) {
+    if (key instanceof ScopeMappingInstanceKey scoped) return scoped.getCreator();
+    if (key instanceof AllocationSiteInNode allocation) return allocation.getNode();
+    return null;
   }
 
   /**
