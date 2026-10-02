@@ -331,6 +331,21 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
   }
 
   /**
+   * A context this selector anchors on a node other than the calling node, carrying the method the
+   * call site belongs to. A reader resolving the site's program counter must do so against this
+   * method, not the anchor node's: the site is a program counter within its own method.
+   */
+  public interface AnchoredCallerSiteContext {
+
+    /**
+     * Returns the method the context's call site belongs to.
+     *
+     * @return The calling method.
+     */
+    IMethod getCallerMethod();
+  }
+
+  /**
    * A {@link CallerSiteContext} whose hash code is computed once. WALA recomputes a node's hash
    * from its context's, and a caller-site context's from its caller node's, on every call, so
    * hashing a context walks every caller reachable through it. Contexts this selector builds share
@@ -339,7 +354,8 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * hashes its context. Caching the hash at every level this selector builds makes each one
    * constant.
    */
-  private static final class HashedCallerSiteContext extends CallerSiteContext {
+  private static final class HashedCallerSiteContext extends CallerSiteContext
+      implements AnchoredCallerSiteContext {
 
     /**
      * The method the call site belongs to. A call site is a program counter within its own method,
@@ -355,6 +371,11 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       super(anchor, site);
       this.callerMethod = callerMethod;
       this.hash = 31 * super.hashCode() + callerMethod.hashCode();
+    }
+
+    @Override
+    public IMethod getCallerMethod() {
+      return this.callerMethod;
     }
 
     @Override
@@ -377,7 +398,8 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * A {@link CallerSiteContextPair} whose hash code is computed once; see {@link
    * HashedCallerSiteContext}.
    */
-  private static final class HashedCallerSiteContextPair extends CallerSiteContextPair {
+  private static final class HashedCallerSiteContextPair extends CallerSiteContextPair
+      implements AnchoredCallerSiteContext {
 
     /** The method the call site belongs to; see {@link HashedCallerSiteContext#callerMethod}. */
     private final IMethod callerMethod;
@@ -389,6 +411,11 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       super(anchor, site, base);
       this.callerMethod = callerMethod;
       this.hash = 31 * super.hashCode() + callerMethod.hashCode();
+    }
+
+    @Override
+    public IMethod getCallerMethod() {
+      return this.callerMethod;
     }
 
     @Override
