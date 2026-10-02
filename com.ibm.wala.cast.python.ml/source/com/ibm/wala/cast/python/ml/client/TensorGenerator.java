@@ -2977,6 +2977,11 @@ public abstract class TensorGenerator {
     }
 
     if (var != null) {
+      ShapeResult viaCreators = this.creatorJoinShapeResult(builder, var);
+      if (viaCreators != null) {
+        if (viaCreators.members().isEmpty() && partial != null) return partial;
+        return viaCreators;
+      }
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
         // Recurse into the generator as long as it does not model the *same operation* as `this`
@@ -4661,6 +4666,73 @@ public abstract class TensorGenerator {
                 + describe(node)
                 + ".");
     return ret;
+  }
+
+  /**
+   * The join of the shapes of every creator of {@code var}, when it has more than one: a value
+   * assigned on several paths is any of its creators at run time, so the factory's single
+   * generator, built from the first creator its walk reaches, would type it as that path's alone
+   * (wala/ML#1009). A creator modeling this same operation is the read's own recursion and
+   * contributes nothing; a creator the factory cannot type makes the whole join unknown, since the
+   * join of the rest would be read as the value's complete set.
+   *
+   * @param builder The propagation call graph builder.
+   * @param var The value's points-to variable.
+   * @return The join, or {@code null} when the value has a single creator, leaving the read on the
+   *     single-generator path.
+   */
+  private ShapeResult creatorJoinShapeResult(
+      PropagationCallGraphBuilder builder, PointsToSetVariable var) {
+    Set<PointsToSetVariable> creators = TensorGeneratorFactory.findCreators(var, builder);
+    if (creators.size() < 2) return null;
+    ShapeResult joined = null;
+    for (PointsToSetVariable creator : creators) {
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(creator, builder);
+      } catch (IllegalArgumentException e) {
+        return ShapeResult.unknown();
+      }
+      if (generator == null) return ShapeResult.unknown();
+      if (this.isSameOperation(generator)) continue;
+      ShapeResult result = memoizedShapeResult(builder, generator);
+      if (result.members().isEmpty()) return ShapeResult.unknown();
+      joined = joined == null ? result : joined.union(result);
+    }
+    return joined;
+  }
+
+  /**
+   * The dtype counterpart of {@link #creatorJoinShapeResult}, with the dtype path's class-based
+   * same-operation guard; a creator the factory cannot type contributes {@link DType#UNKNOWN}.
+   *
+   * @param builder The propagation call graph builder.
+   * @param var The value's points-to variable.
+   * @return The join, or {@code null} when the value has a single creator.
+   */
+  private Set<DType> creatorJoinDTypes(
+      PropagationCallGraphBuilder builder, PointsToSetVariable var) {
+    Set<PointsToSetVariable> creators = TensorGeneratorFactory.findCreators(var, builder);
+    if (creators.size() < 2) return null;
+    Set<DType> joined = EnumSet.noneOf(DType.class);
+    for (PointsToSetVariable creator : creators) {
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(creator, builder);
+      } catch (IllegalArgumentException e) {
+        joined.add(UNKNOWN);
+        continue;
+      }
+      if (generator == null) {
+        joined.add(UNKNOWN);
+        continue;
+      }
+      if (generator.getClass().equals(this.getClass())) continue;
+      Set<DType> dtypes = memoizedDTypes(builder, generator);
+      if (dtypes.isEmpty()) joined.add(UNKNOWN);
+      else joined.addAll(dtypes);
+    }
+    return joined;
   }
 
   /**
@@ -6622,6 +6694,8 @@ public abstract class TensorGenerator {
     }
 
     if (var != null) {
+      Set<DType> viaCreators = this.creatorJoinDTypes(builder, var);
+      if (viaCreators != null) return viaCreators;
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
         // Unlike the shape path's evaluation-identity guard (wala/ML#739), this guard stays

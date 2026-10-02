@@ -38,20 +38,25 @@ public class TestMergedCallers extends AbstractTensorTest {
   }
 
   /**
-   * One caller passes a slice, which resolves, and the other a dataset batch, which does not: the
-   * output's shape is unknown, not the slice caller's shape alone. Its dtype is known from the
-   * layer.
+   * One caller passes a slice and the other a dataset batch: the layer's output holds both callers'
+   * shapes.
    *
-   * <p>TODO: Expect {@code (256, 4)} and {@code (5, 4)} once dataset iteration yields an element
-   * the generators can read (<a href="https://github.com/wala/ML/issues/1010">wala/ML #1010</a>).
+   * <p>TODO: A dataset batch has no element for the generators to read, so the batch caller is
+   * typed only through a fallback walk (<a href="https://github.com/wala/ML/issues/1010">wala/ML
+   * #1010</a>).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test
-  public void testUnresolvedCallerMakesShapeUnknown()
+  @Test(expected = AssertionError.class)
+  public void testSliceAndBatchCallers()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FIXTURE, "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(
+        FIXTURE,
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 4), TensorType.of(FLOAT_32, 256, 4))));
   }
 }

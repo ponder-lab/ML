@@ -952,6 +952,64 @@ public class TensorGeneratorFactory {
     return source;
   }
 
+  /**
+   * Every creator {@link #findCreator} could stop at: the walk continues past each creator it
+   * reaches instead of returning the first, and does not walk through a creator. A value assigned
+   * on several paths, such as a parameter whose node merges several callers or a local written on
+   * several branches, has one creator per path, and the value at run time is any of them; reading
+   * only the first one the walk happens to reach types the value as that path's alone
+   * (wala/ML#1009).
+   *
+   * @param source The {@link PointsToSetVariable} to trace backwards from.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @return The creators in the order the walk reaches them, or {@code source} alone when the walk
+   *     reaches none, as {@link #findCreator} falls back.
+   */
+  public static Set<PointsToSetVariable> findCreators(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    Graph<PointsToSetVariable> assignmentGraph =
+        builder.getPropagationSystem().getAssignmentGraph();
+    Set<PointsToSetVariable> creators = HashSetFactory.make();
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    Queue<PointsToSetVariable> queue = new LinkedList<>();
+    queue.add(source);
+    visited.add(source);
+    while (!queue.isEmpty()) {
+      PointsToSetVariable current = queue.poll();
+      if (current == null) continue; // An unresolved predecessor; see findCreator (wala/ML#613).
+      if (isCreator(current)) {
+        creators.add(current);
+        continue;
+      }
+      for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(current);
+          it.hasNext(); ) {
+        PointsToSetVariable pred = it.next();
+        if (pred != null && visited.add(pred)) queue.add(pred);
+      }
+    }
+    if (creators.isEmpty()) creators.add(source);
+    return creators;
+  }
+
+  /**
+   * Decides whether {@link #findCreator} stops at a variable: a return value, or a local defined by
+   * an invoke, an iteration, a property read or a binary operation.
+   *
+   * @param variable The variable.
+   * @return {@code true} iff the variable is a creator.
+   */
+  private static boolean isCreator(PointsToSetVariable variable) {
+    PointerKey pk = variable.getPointerKey();
+    if (pk instanceof ReturnValueKey) return true;
+    if (!(pk instanceof LocalPointerKey)) return false;
+    LocalPointerKey lpk = (LocalPointerKey) pk;
+    SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+    return def instanceof SSAAbstractInvokeInstruction
+        || def instanceof EachElementGetInstruction
+        || def instanceof PythonPropertyRead
+        || def instanceof SSABinaryOpInstruction;
+  }
+
   private static PointsToSetVariable getPointsToSetVariable(
       PointerKey key, PropagationCallGraphBuilder builder) {
     // Materializing an implicitly-represented key makes WALA dump the entire call graph's IR via an
