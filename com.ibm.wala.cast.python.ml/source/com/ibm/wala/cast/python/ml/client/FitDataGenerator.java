@@ -283,26 +283,15 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       } catch (IllegalArgumentException e) {
         generator = null;
       }
-    // A dataset element read in a loop resolves to an element generator delegating to its dataset,
-    // and a pass-through transformation to its receiver; unwrap to the provider, as the factory
-    // does before its own tuple-element dispatch.
-    boolean changed = true;
-    while (changed && generator != null) {
-      changed = false;
-      if (generator instanceof DelegatingTensorGenerator dtg) {
-        TensorGenerator next = dtg.getUnderlying();
-        if (next != null && next != generator) {
-          generator = next;
-          changed = true;
-        }
-      }
-      if (!changed && generator.getClass() == DatasetGenerator.class) {
-        TensorGenerator receiver = ((DatasetGenerator) generator).getReceiverGenerator(builder);
-        if (receiver != null && receiver != generator) {
-          generator = receiver;
-          changed = true;
-        }
-      }
+    // A dataset element read in a loop resolves to an element generator delegating to its dataset;
+    // unwrap to the dataset's own generator, as the factory does before its tuple-element dispatch.
+    // A pass-through transformation's generator (`shuffle`, `prefetch`, ...) needs no unwrapping:
+    // it
+    // forwards every provider read to its receiver itself.
+    while (generator instanceof DelegatingTensorGenerator dtg) {
+      TensorGenerator next = dtg.getUnderlying();
+      if (next == null || next == generator) break;
+      generator = next;
     }
     if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder))
       return this.ofProvider(tep, index);
