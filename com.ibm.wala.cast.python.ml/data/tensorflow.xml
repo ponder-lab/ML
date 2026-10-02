@@ -127,11 +127,27 @@
         <putfield class="LRoot" field="get" fieldType="LRoot" ref="constraints" value="constraints_get"/>
         <new def="nonneg_cls" class="Ltensorflow/keras/constraints/class/NonNeg"/>
         <putfield class="LRoot" field="NonNeg" fieldType="LRoot" ref="constraints" value="nonneg_cls"/>
-        <!-- `tf.keras.utils` (wala/ML#997). -->
+        <!-- `tf.keras.utils` (wala/ML#997, wala/ML#996) and the `serialize`/`deserialize`/`get` functions of the `layers`, `constraints`, `initializers` and `regularizers` modules (wala/ML#996). -->
         <new def="utils" class="Lobject"/>
         <putfield class="LRoot" field="utils" fieldType="LRoot" ref="keras" value="utils"/>
         <new def="unpack_xyw" class="Ltensorflow/keras/utils/unpack_x_y_sample_weight"/>
         <putfield class="LRoot" field="unpack_x_y_sample_weight" fieldType="LRoot" ref="utils" value="unpack_xyw"/>
+        <new def="serialize_ko" class="Ltensorflow/keras/utils/serialize_keras_object"/>
+        <putfield class="LRoot" field="serialize_keras_object" fieldType="LRoot" ref="utils" value="serialize_ko"/>
+        <new def="deserialize_ko" class="Ltensorflow/keras/utils/deserialize_keras_object"/>
+        <putfield class="LRoot" field="deserialize_keras_object" fieldType="LRoot" ref="utils" value="deserialize_ko"/>
+        <new def="ser_fn" class="Ltensorflow/keras/serialization/serialize"/>
+        <new def="deser_fn" class="Ltensorflow/keras/serialization/deserialize"/>
+        <new def="get_fn" class="Ltensorflow/keras/serialization/get"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="layers" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="layers" value="deser_fn"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="constraints" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="constraints" value="deser_fn"/>
+        <new def="regularizers" class="Lobject"/>
+        <putfield class="LRoot" field="regularizers" fieldType="LRoot" ref="keras" value="regularizers"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="regularizers" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="regularizers" value="deser_fn"/>
+        <putfield class="LRoot" field="get" fieldType="LRoot" ref="regularizers" value="get_fn"/>
         <new def="keras_mnist" class="Lobject"/>
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="x" value="image"/>
         <new def="io" class="Lobject"/>
@@ -189,6 +205,11 @@
         <putfield class="LRoot" field="initializers" fieldType="LRoot" ref="x" value="initializers"/>
         <new def="RandomNormal" class="Ltensorflow/initializers/class/RandomNormal"/>
         <putfield class="LRoot" field="RandomNormal" fieldType="LRoot" ref="initializers" value="RandomNormal"/>
+        <!-- `tf.keras.initializers` is the same module as `tf.initializers`; its `serialize`, `deserialize` and `get` are the identities above (wala/ML#996). -->
+        <putfield class="LRoot" field="initializers" fieldType="LRoot" ref="keras" value="initializers"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="initializers" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="initializers" value="deser_fn"/>
+        <putfield class="LRoot" field="get" fieldType="LRoot" ref="initializers" value="get_fn"/>
         <new def="Dataset" class="Ltensorflow/data/Dataset"/>
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset"/>
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
@@ -3401,6 +3422,35 @@
           <new def="u" class="Ltensorflow/keras/UnpackedData"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="u" value="data"/>
           <return value="u"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/serialize_keras_object and deserialize_keras_object (wala/ML#996): the round trip through a configuration is modeled as the identity, so a layer rebuilt from its configuration is the layer it was serialized from, flow-insensitively the same configuration, constraints included. -->
+      <class name="serialize_keras_object" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self instance">
+          <return value="instance"/>
+        </method>
+      </class>
+      <class name="deserialize_keras_object" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self identifier module_objects custom_objects printable_module_name">
+          <return value="identifier"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/serialization">
+      <!-- The `serialize`/`deserialize`/`get` functions of the `layers`, `constraints`, `initializers` and `regularizers` modules (wala/ML#996): identities on the object, as above. -->
+      <class name="serialize" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self instance">
+          <return value="instance"/>
+        </method>
+      </class>
+      <class name="deserialize" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self config custom_objects">
+          <return value="config"/>
+        </method>
+      </class>
+      <class name="get" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self identifier">
+          <return value="identifier"/>
         </method>
       </class>
     </package>
