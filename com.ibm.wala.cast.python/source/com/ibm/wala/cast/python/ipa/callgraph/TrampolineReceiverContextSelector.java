@@ -132,7 +132,8 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
-      return new HashedCallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
+      return new HashedCallerSiteContextPair(
+          receiverAnchor(caller), caller.getMethod(), site, new ReceiverInstanceContext(receiver));
     }
 
     // The real method body dispatched from a per-receiver trampoline node stays per-receiver.
@@ -168,10 +169,33 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
-      return new HashedCallerSiteContext(caller, site);
+      return new HashedCallerSiteContext(receiverAnchor(caller), caller.getMethod(), site);
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Returns the nearest node on the given caller's chain whose context is keyed on a receiver: the
+   * caller itself when its own context names one, else the first such caller up its caller-site
+   * chain, else the caller.
+   *
+   * <p>Keying a context on the raw calling node makes a node's context its whole call path, since
+   * the node's identity carries its own context: the number of contexts of a method is then the
+   * number of distinct call paths from a receiver root to it, which multiplies at every fan-in
+   * along a layer tower (two fits, a from_config rebuild, a fanout trampoline beside a direct
+   * dispatch, the explicit sublayer build beside the lazy-build injection). Anchoring at the
+   * receiver-keyed node keeps the separation the rules exist for, per instance and per call site,
+   * while a helper chain under one receiver shares that receiver's node.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @return The anchoring node.
+   */
+  private static CGNode receiverAnchor(CGNode caller) {
+    CGNode node = caller;
+    while (node.getContext().get(ContextKey.RECEIVER) == null
+        && node.getContext() instanceof CallerSiteContext chain) node = chain.getCaller();
+    return node.getContext().get(ContextKey.RECEIVER) == null ? caller : node;
   }
 
   /**
@@ -317,11 +341,20 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    */
   private static final class HashedCallerSiteContext extends CallerSiteContext {
 
+    /**
+     * The method the call site belongs to. A call site is a program counter within its own method,
+     * so a context anchored on a node other than the calling node must name the calling method as
+     * well, or two helpers under one anchor calling from the same program counter would share a
+     * context.
+     */
+    private final IMethod callerMethod;
+
     private final int hash;
 
-    private HashedCallerSiteContext(CGNode caller, CallSiteReference site) {
-      super(caller, site);
-      this.hash = super.hashCode();
+    private HashedCallerSiteContext(CGNode anchor, IMethod callerMethod, CallSiteReference site) {
+      super(anchor, site);
+      this.callerMethod = callerMethod;
+      this.hash = 31 * super.hashCode() + callerMethod.hashCode();
     }
 
     @Override
@@ -335,6 +368,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // cached hashes reject most of the rest cheaply.
       return obj instanceof HashedCallerSiteContext other
           && other.hash == this.hash
+          && other.callerMethod.equals(this.callerMethod)
           && super.equals(obj);
     }
   }
@@ -345,11 +379,16 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    */
   private static final class HashedCallerSiteContextPair extends CallerSiteContextPair {
 
+    /** The method the call site belongs to; see {@link HashedCallerSiteContext#callerMethod}. */
+    private final IMethod callerMethod;
+
     private final int hash;
 
-    private HashedCallerSiteContextPair(CGNode caller, CallSiteReference site, Context base) {
-      super(caller, site, base);
-      this.hash = super.hashCode();
+    private HashedCallerSiteContextPair(
+        CGNode anchor, IMethod callerMethod, CallSiteReference site, Context base) {
+      super(anchor, site, base);
+      this.callerMethod = callerMethod;
+      this.hash = 31 * super.hashCode() + callerMethod.hashCode();
     }
 
     @Override
@@ -363,6 +402,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // cached hashes reject most of the rest cheaply.
       return obj instanceof HashedCallerSiteContextPair other
           && other.hash == this.hash
+          && other.callerMethod.equals(this.callerMethod)
           && super.equals(obj);
     }
   }
