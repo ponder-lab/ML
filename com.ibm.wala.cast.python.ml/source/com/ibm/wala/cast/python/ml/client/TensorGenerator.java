@@ -9862,6 +9862,8 @@ public abstract class TensorGenerator {
       return new Einsum(node);
     } else if (type.equals(TensorFlowTypes.RESHAPE.getDeclaringClass())) {
       return new Reshape(node);
+    } else if (type.equals(TensorFlowTypes.PAD.getDeclaringClass())) {
+      return new Pad(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
       return new Squeeze(node);
     } else if (type.equals(TensorFlowTypes.RNN_STEP.getDeclaringClass())) {
