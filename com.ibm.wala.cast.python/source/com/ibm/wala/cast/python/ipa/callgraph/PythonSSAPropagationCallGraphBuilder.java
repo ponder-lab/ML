@@ -29,6 +29,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
@@ -264,6 +265,34 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public void setFreshArrayAttributes(Map<TypeReference, Map<String, TypeReference>> attributes) {
     this.freshArrayAttributes =
         attributes == null ? Collections.emptyMap() : Map.copyOf(attributes);
+  }
+
+  /** The classes already decided by {@link #declaresIterationProtocol}. */
+  private final Map<IClass, Boolean> iterationProtocolClasses = HashMapFactory.make();
+
+  /**
+   * Whether a class declares Python's iteration protocol, an {@code __iter__} or {@code __next__}
+   * method (wala/ML#1010). Iterating an instance of such a class yields what {@code __next__}
+   * returns, not the instance's properties.
+   *
+   * @param type The class.
+   * @return {@code true} iff the class or a superclass declares either method.
+   */
+  public boolean declaresIterationProtocol(IClass type) {
+    return iterationProtocolClasses.computeIfAbsent(
+        type,
+        t -> {
+          for (IClass c = t; c != null; c = c.getSuperclass()) {
+            java.util.Collection<? extends IMethod> methods = c.getDeclaredMethods();
+            if (methods == null) continue;
+            for (IMethod m : methods) {
+              String name = m.getName().toString();
+              if (name.equals(BuiltinFunctions.ITER_METHOD_NAME)
+                  || name.equals(BuiltinFunctions.NEXT_METHOD_NAME)) return true;
+            }
+          }
+          return false;
+        });
   }
 
   public static class PythonConstraintVisitor extends AstConstraintVisitor
@@ -619,9 +648,33 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * Whether a value is the variable of a {@code for} loop. The loop lowers to an element read of
-     * the iterated collection keyed by one of its property names, {@code i = coll[name]} with
-     * {@code name} drawn by an {@link EachElementGetInstruction}.
+     * Whether the property read being visited is an element read; see {@link #visitPropertyRead}.
+     */
+    private boolean elementRead = false;
+
+    @Override
+    protected ReflectedFieldAction fieldReadAction(PointerKey lhs) {
+      ReflectedFieldAction read = super.fieldReadAction(lhs);
+      if (!elementRead) return read;
+      return new ReflectedFieldAction() {
+        @Override
+        public void dump(AbstractFieldPointerKey fieldKey, boolean constObj, boolean constProp) {
+          read.dump(fieldKey, constObj, constProp);
+        }
+
+        @Override
+        public void action(AbstractFieldPointerKey fieldKey) {
+          if (!getBuilder().declaresIterationProtocol(fieldKey.getInstanceKey().concreteType()))
+            read.action(fieldKey);
+        }
+      };
+    }
+
+    /**
+     * Whether a value is an element read: a read of a collection keyed by one of its property
+     * names, {@code e = coll[name]} with {@code name} drawn by an {@link
+     * EachElementGetInstruction}, as {@code next} reads a sequence's elements and a comprehension's
+     * machinery reads its iterables (wala/ML#1010).
      *
      * @param vn The value number.
      * @return {@code true} iff the value is defined by such a read.
@@ -972,7 +1025,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public void visitPropertyRead(AstPropertyRead instruction) {
-      super.visitPropertyRead(instruction);
+      // An element read over an object whose class declares the iteration protocol reads nothing:
+      // such an object's elements come from `__next__`, and its properties are its attributes,
+      // not its elements (wala/ML#1010).
+      elementRead = isLoopVariable(instruction.getDef());
+      try {
+        super.visitPropertyRead(instruction);
+      } finally {
+        elementRead = false;
+      }
       processListContentsRead(instruction);
       processNegativeSubscript(instruction);
       processUnknownIndexRead(instruction);
