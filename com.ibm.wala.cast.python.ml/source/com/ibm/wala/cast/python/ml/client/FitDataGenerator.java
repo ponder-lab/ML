@@ -157,7 +157,9 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     if (this.unpack) {
       // A dataset element read in a loop is the dataset object in the pointer analysis, whose set
       // also carries the object's field values (its method objects, its source tensors); the
-      // dataset reading covers the element, and those members are not components of it.
+      // dataset reading covers the element, and those members are not components of it. A tensor
+      // unpacked at the same site as such an element would be read as that element too, an
+      // imprecision accepted here, since the field values cannot be told from it by type.
       for (InstanceKey data : this.slot(builder, 0)) {
         AllocationSiteInNode asin = getAllocationSiteInNode(data);
         if (asin != null && isDataset(asin.concreteType().getReference())) {
@@ -176,14 +178,25 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       }
       return ret;
     }
+    // A pack's slot holds the user's `x` as passed, so its members are the callers' own values: a
+    // dataset member reads as the element's component through the slot's variable, and every other
+    // member contributes its own type at index 0, so a step fed a tensor at one call and a dataset
+    // at another, through one site, sees both.
+    boolean dataset = false;
     for (InstanceKey x : this.slot(builder, 0)) {
       AllocationSiteInNode asin = getAllocationSiteInNode(x);
       if (asin != null && isDataset(asin.concreteType().getReference())) {
-        ret.add(this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), index));
-        return ret;
-      }
+        if (!dataset)
+          ret.add(this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), index));
+        dataset = true;
+      } else if (index == 0) ret.add(this.ofValues(this.singleton(builder, x)));
     }
-    ret.add(this.ofValues(this.slot(builder, index)));
+    if (index > 0) {
+      // The targets and weights of a tensor-fed call are the pack's own later slots; a dataset-fed
+      // call's are the element's components, read above.
+      OrdinalSet<InstanceKey> slot = this.slot(builder, index);
+      if (!slot.isEmpty()) ret.add(this.ofValues(slot));
+    }
     return ret;
   }
 
