@@ -169,4 +169,36 @@ public class TestConfigChain extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_config_chain_user_items.py", "consume_registry", 0, 0);
   }
+
+  /**
+   * The chain with {@code get_config} and {@code from_config} inherited from a base model class,
+   * the subclass's constructor forwarding to the base's through {@code super()} and the subclass
+   * defining its own {@code call}: the base constructor's write of the kernel lands on the
+   * instance, and the rebuilt model's constraint sees the weight.
+   */
+  @Test
+  public void testInheritedChain() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_config_chain_inherited.py",
+        "consume_norm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /**
+   * The rebuilt model is the subclass, not the base declaring {@code from_config}: {@code cls(...)}
+   * in an inherited classmethod constructs the derived class, so the subclass's own {@code call}
+   * runs on the rebuilt model's inputs.
+   */
+  @Test
+  public void testInheritedChainRebuildsSubclass()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_config_chain_inherited.py",
+        "consume_net_inputs",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 4))));
+  }
 }

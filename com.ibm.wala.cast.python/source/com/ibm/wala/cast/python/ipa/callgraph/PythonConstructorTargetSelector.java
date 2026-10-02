@@ -12,7 +12,6 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
-import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
@@ -352,12 +351,17 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                         PythonTypes.Root)));
             pc++;
 
-            // Add a metadata variable that refers to the declaring class.
-            // NOTE: Per https://docs.python.org/3/library/functions.html#classmethod, "[i]f a class
-            // method is called for a derived class, the derived class object is passed as the
-            // implied first argument."
+            // Add a metadata variable that refers to the class the instance is constructed from,
+            // which for an inherited method is the derived class, not the declaring one. Per
+            // https://docs.python.org/3/library/functions.html#classmethod, "[i]f a class method is
+            // called for a derived class, the derived class object is passed as the implied first
+            // argument": an inherited `from_config` whose body returns `cls(...)` constructs the
+            // derived class, so the rebuilt model runs the derived class's own `call`
+            // (wala/ML#997).
             int classVar = v++;
-            String globalName = getGlobalName(r);
+            // The class global is named by the class's own type name, as the method helper names a
+            // method's declaring class by its package.
+            String globalName = receiver.getReference().getName().toString().substring(1);
             FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
 
             ctor.addStatement(new AstGlobalRead(pc++, classVar, globalRef));
