@@ -227,6 +227,13 @@ public class PythonSuper {
           int inst = v++;
           ctor.addStatement(
               insts.NewInstruction(pc++, inst, NewSiteReference.make(pc, PythonTypes.object)));
+          // The instance the methods bind as `self` is read off the super object itself, whose
+          // `$self` the caller set when it evaluated `super()`. This body is invoked through the
+          // stub, which declares one parameter, so its second and third values are never bound; a
+          // method bound to the third value had an empty `self`, and every field write a base
+          // constructor made through `super().__init__(...)` was lost (wala/ML#995, wala/ML#997).
+          int boundSelf = v++;
+          ctor.addStatement(insts.GetInstruction(pc++, boundSelf, 1, $self));
 
           int clss = v++;
           ctor.addStatement(
@@ -306,7 +313,7 @@ public class PythonSuper {
                 insts.PutInstruction(
                     pc,
                     f,
-                    3,
+                    boundSelf,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom("$self"),
@@ -362,16 +369,12 @@ public class PythonSuper {
           // (`isKerasBase`), not any library base. A `__call__` an ancestor declares is bound above
           // and takes precedence.
           if (!declaresDunderCall && reachesKerasBase) {
-            // The instance is read off the super object itself, whose `$self` the caller set; this
-            // body declares one parameter, so the third value it is invoked with is not bound.
-            int self = v++;
-            ctor.addStatement(insts.GetInstruction(pc++, self, 1, $self));
             int call = v++;
             ctor.addStatement(
                 insts.GetInstruction(
                     pc++,
                     call,
-                    self,
+                    boundSelf,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom(
