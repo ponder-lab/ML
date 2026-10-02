@@ -118,7 +118,10 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // since the trampoline's callee object is filtered to the context's receiver: reusing the
       // caller's context, whose receiver is the instance, left that object empty and the base
       // method never dispatched.
-      if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
+      if (allocatedBySuperBody(receiver)) {
+        Census.superReceiver(caller, callee, receiver);
+        return new ReceiverInstanceContext(receiver);
+      }
 
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
         LOGGER.fine(
@@ -397,6 +400,12 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       tick();
     }
 
+    static void superReceiver(CGNode caller, IMethod callee, InstanceKey receiver) {
+      count("super callee " + callee.getSignature());
+      count("super caller " + caller.getMethod().getSignature());
+      tick();
+    }
+
     static void single(CGNode caller, IMethod callee) {
       count("single callee " + callee.getSignature());
       count("single caller " + caller.getMethod().getSignature());
@@ -409,7 +418,13 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       StringBuilder b = new StringBuilder("RECEIVER-CENSUS after " + n + " contexts:");
       for (String kind :
           new String[] {
-            "pair callee", "pair receiver", "pair caller", "single callee", "single caller"
+            "pair callee",
+            "pair receiver",
+            "pair caller",
+            "super callee",
+            "super caller",
+            "single callee",
+            "single caller"
           }) {
         COUNTS.entrySet().stream()
             .filter(e -> e.getKey().startsWith(kind + " "))
