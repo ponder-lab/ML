@@ -324,10 +324,10 @@ public class DenseCall extends TensorGenerator {
    * result of another layer call (e.g., {@code Flatten.__call__}, {@code Dense.__call__}, {@code
    * Dropout.__call__}), whose allocating node type is not in {@link #createManualGenerator(CGNode,
    * PropagationCallGraphBuilder)}'s switch — walks to the {@code inputs} value number in this
-   * summary method's IR and delegates to {@link #getShapesOrSSAChain(PropagationCallGraphBuilder,
-   * CGNode, int)}. That path re-enters the factory via {@link TensorGeneratorFactory#getGenerator}
-   * on the upstream call's result, which knows {@code FLATTEN_LAYER_CALL}, {@code DENSE_CALL}, etc.
-   * See wala/ML#358.
+   * summary method's IR and delegates to {@link #getShapes(PropagationCallGraphBuilder, CGNode,
+   * int)}. That path re-enters the factory via {@link TensorGeneratorFactory#getGenerator} on the
+   * upstream call's result, which knows {@code FLATTEN_LAYER_CALL}, {@code DENSE_CALL}, etc. See
+   * wala/ML#358.
    *
    * @param builder The propagation call graph builder used for points-to analysis and factory
    *     dispatch.
@@ -392,7 +392,7 @@ public class DenseCall extends TensorGenerator {
     LOGGER.fine(
         () -> "PTS walk produced no shapes; attempting SSA-chain fallback on vn=" + inputsVn + ".");
     try {
-      Set<List<Dimension<?>>> viaSsa = this.getShapesOrSSAChain(builder, this.getNode(), inputsVn);
+      Set<List<Dimension<?>>> viaSsa = this.getShapes(builder, this.getNode(), inputsVn);
       LOGGER.fine(() -> "SSA-chain fallback shapes for vn=" + inputsVn + ": " + viaSsa + ".");
       if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
     } catch (IllegalArgumentException e) {
