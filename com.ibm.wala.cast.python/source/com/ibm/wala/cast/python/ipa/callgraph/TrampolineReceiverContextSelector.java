@@ -10,6 +10,7 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -115,6 +116,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
+      Census.pair(caller, callee, receiver);
       return new HashedCallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
     }
 
@@ -151,6 +153,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
+      Census.single(caller, callee);
       return new HashedCallerSiteContext(caller, site);
     }
 
@@ -248,6 +251,59 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     @Override
     public int hashCode() {
       return this.hash;
+    }
+  }
+
+  /** PROBE ONLY: counts the contexts this selector builds and logs the heaviest keys. */
+  private static final class Census {
+    private static final java.util.concurrent.ConcurrentHashMap<
+            String, java.util.concurrent.atomic.LongAdder>
+        COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.atomic.AtomicLong TOTAL =
+        new java.util.concurrent.atomic.AtomicLong();
+
+    private static void count(String key) {
+      COUNTS.computeIfAbsent(key, k -> new java.util.concurrent.atomic.LongAdder()).increment();
+    }
+
+    private static String describe(InstanceKey key) {
+      if (key instanceof ScopeMappingInstanceKey scoped)
+        return "SMIK "
+            + scoped.getBase().concreteType().getName()
+            + " creator "
+            + scoped.getCreator().getMethod().getSignature();
+      return key.getClass().getSimpleName() + " " + key.concreteType().getName();
+    }
+
+    static void pair(CGNode caller, IMethod callee, InstanceKey receiver) {
+      count("pair callee " + callee.getSignature());
+      count("pair receiver " + describe(receiver));
+      count("pair caller " + caller.getMethod().getSignature());
+      tick();
+    }
+
+    static void single(CGNode caller, IMethod callee) {
+      count("single callee " + callee.getSignature());
+      count("single caller " + caller.getMethod().getSignature());
+      tick();
+    }
+
+    private static void tick() {
+      long n = TOTAL.incrementAndGet();
+      if (n % 20000 != 0) return;
+      StringBuilder b = new StringBuilder("RECEIVER-CENSUS after " + n + " contexts:");
+      for (String kind :
+          new String[] {
+            "pair callee", "pair receiver", "pair caller", "single callee", "single caller"
+          }) {
+        COUNTS.entrySet().stream()
+            .filter(e -> e.getKey().startsWith(kind + " "))
+            .sorted((x, y) -> Long.compare(y.getValue().sum(), x.getValue().sum()))
+            .limit(12)
+            .forEach(
+                e -> b.append("\n  ").append(e.getValue().sum()).append("  ").append(e.getKey()));
+      }
+      LOGGER.warning(b.toString());
     }
   }
 }
