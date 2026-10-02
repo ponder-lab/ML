@@ -754,7 +754,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     }
     // PTS-first with SSA-DU fallback — handles operands whose def is a synthetic-method
     // return (implicit PK) by walking the DU chain. See wala/WALA#1889.
-    return this.getShapesOrSSAChain(builder, this.getNode(), vn);
+    return this.getShapes(builder, this.getNode(), vn);
   }
 
   /** Dtype counterpart of {@link #getOperandShapes(PropagationCallGraphBuilder, int)}. */

@@ -208,7 +208,7 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
     if (!this.usesReceiver()) {
       int inputVn = this.inputValueNumber(builder);
       if (inputVn > 0) {
-        Set<DType> dTypes = getDTypesOrSSAChain(builder, this.getNode(), inputVn);
+        Set<DType> dTypes = getDTypes(builder, this.getNode(), inputVn);
         if (dTypes != null && !dTypes.isEmpty()) return dTypes;
       }
       return super.getDefaultDTypes(builder);
@@ -216,7 +216,7 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
     Set<DType> viaReceiver = EnumSet.noneOf(DType.class);
     for (Pair<CGNode, Integer> receiver : this.receiverValueNumbers(builder)) {
       try {
-        Set<DType> dTypes = getDTypesOrSSAChain(builder, receiver.fst, receiver.snd);
+        Set<DType> dTypes = getDTypes(builder, receiver.fst, receiver.snd);
         if (dTypes != null) viaReceiver.addAll(dTypes);
       } catch (IllegalArgumentException e) {
         // This receiver candidate does not resolve; others may.
@@ -245,7 +245,7 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
     Set<List<Dimension<?>>> viaReceiver = HashSetFactory.make();
     for (Pair<CGNode, Integer> receiver : this.receiverValueNumbers(builder)) {
       try {
-        Set<List<Dimension<?>>> shapes = getShapesOrSSAChain(builder, receiver.fst, receiver.snd);
+        Set<List<Dimension<?>>> shapes = getShapes(builder, receiver.fst, receiver.snd);
         if (shapes != null) viaReceiver.addAll(shapes);
       } catch (IllegalArgumentException e) {
         // This receiver candidate does not resolve; others may.
