@@ -482,6 +482,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       visitInvokeInternal(inst, new DefaultInvariantComputer());
       processListAppend(inst);
       processTextRead(inst);
+      processDictMethod(inst);
     }
 
     /**
@@ -667,6 +668,73 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       PointerKey receiverKey = getPointerKeyForLocal(receiverVn);
       // A literal receiver (`"a,b".split(",")`) has an implicitly represented key, which a side
       // effect must not touch (wala/ML#668): read its contents here and apply the operator once.
+      if (contentsAreInvariant(symtab, du, receiverVn) || system.isImplicit(receiverKey)) {
+        operator.apply(getInvariantContents(symtab, du, node, receiverVn));
+        return;
+      }
+      system.newSideEffect(operator, receiverKey);
+    }
+
+    /**
+     * The dictionary methods a configuration round trip goes through, read and written as the
+     * fields a dictionary's constant keys name (<a
+     * href="https://github.com/wala/ML/issues/997">wala/ML#997</a>): {@code d.pop(key, default)}
+     * and {@code d.get(key, default)} yield the field a constant {@code key} names, and the default
+     * when one is given; {@code d.items()} yields a list of one {@code (key, value)} tuple whose
+     * fields are the dictionary's catalogued keys and their fields' values, so {@code for k, v in
+     * d.items()} binds {@code v} to the values; and {@code d.update(other)} writes each of {@code
+     * other}'s catalogued fields to the field of the same name of {@code d}, and {@code other}'s
+     * keys into {@code d}'s catalog, so a later {@code **d} or {@code d.items()} sees them. The
+     * receiver is checked when its points-to set arrives, so a method of the same name on an object
+     * that is not a dictionary is untouched, and a receiver that is implicitly represented (a
+     * literal) is read directly, since a side effect must not materialize its key (wala/ML#668).
+     *
+     * <p>Without this, a model's {@code from_config} that deep-copies its configuration, pops the
+     * layer configurations off it, rebuilds each layer in a loop over their items and binds the
+     * rebuilt layers through {@code update} and {@code **} received no layer at all, and the
+     * rebuilt model's forward pass was empty.
+     *
+     * @param inst The call.
+     */
+    private void processDictMethod(PythonInvokeInstruction inst) {
+      SSAInstruction calleeDef = du.getDef(inst.getUse(0));
+      if (!(calleeDef instanceof AstPropertyRead read)) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      if (!symtab.isConstant(read.getMemberRef())) return;
+      Object member = symtab.getConstantValue(read.getMemberRef());
+      DictMethodOperator.Kind kind;
+      int positional = inst.getNumberOfPositionalParameters();
+      String key = null;
+      int argument = -1;
+      if (("pop".equals(member) || "get".equals(member)) && positional >= 2 && positional <= 3) {
+        int keyVn = inst.getUse(1);
+        if (!symtab.isConstant(keyVn) || !(symtab.getConstantValue(keyVn) instanceof String name))
+          return;
+        key = name;
+        kind = DictMethodOperator.Kind.FIELD;
+        if (positional == 3) argument = inst.getUse(2);
+      } else if ("items".equals(member) && positional == 1) kind = DictMethodOperator.Kind.ITEMS;
+      else if ("update".equals(member) && positional == 2) {
+        kind = DictMethodOperator.Kind.UPDATE;
+        argument = inst.getUse(1);
+      } else return;
+      if (kind != DictMethodOperator.Kind.UPDATE && !inst.hasDef()) return;
+      PointerKey resultKey = inst.hasDef() ? getPointerKeyForLocal(inst.getDef()) : null;
+      // The default of a read, or the argument of an update: its keys when it is invariant, its
+      // pointer key otherwise.
+      InstanceKey[] argumentKeys = null;
+      PointerKey argumentKey = null;
+      if (argument >= 0) {
+        if (contentsAreInvariant(symtab, du, argument))
+          argumentKeys = getInvariantContents(symtab, du, node, argument);
+        else argumentKey = getPointerKeyForLocal(argument);
+      }
+      DictMethodOperator operator =
+          getBuilder()
+          .new DictMethodOperator(
+              node, inst.iIndex(), kind, key, resultKey, argumentKeys, argumentKey);
+      int receiverVn = read.getObjectRef();
+      PointerKey receiverKey = getPointerKeyForLocal(receiverVn);
       if (contentsAreInvariant(symtab, du, receiverVn) || system.isImplicit(receiverKey)) {
         operator.apply(getInvariantContents(symtab, du, node, receiverVn));
         return;
@@ -1411,6 +1479,267 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /**
+   * Reads or writes a dictionary through one of its methods as the receiver's keys arrive; see
+   * {@code PythonConstraintVisitor#processDictMethod} (wala/ML#997). Equal for the same call, so
+   * the propagation system keeps one per call site.
+   */
+  public final class DictMethodOperator extends UnaryOperator<PointsToSetVariable> {
+    public enum Kind {
+      FIELD,
+      ITEMS,
+      UPDATE
+    }
+
+    private final CGNode node;
+    private final int pc;
+    private final Kind kind;
+    private final String key;
+    private final PointerKey resultKey;
+    private final InstanceKey[] argumentKeys;
+    private final PointerKey argumentKey;
+    private final Set<InstanceKey> read = HashSetFactory.make();
+    private boolean argumentFlowed;
+
+    private DictMethodOperator(
+        CGNode node,
+        int pc,
+        Kind kind,
+        String key,
+        PointerKey resultKey,
+        InstanceKey[] argumentKeys,
+        PointerKey argumentKey) {
+      this.node = node;
+      this.pc = pc;
+      this.kind = kind;
+      this.key = key;
+      this.resultKey = resultKey;
+      this.argumentKeys = argumentKeys;
+      this.argumentKey = argumentKey;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      java.util.List<InstanceKey> receivers = new java.util.ArrayList<>();
+      rhs.getValue().foreach(i -> receivers.add(getSystem().getInstanceKey(i)));
+      apply(receivers.toArray(new InstanceKey[0]));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Applies the method to each dictionary the receiver may be.
+     *
+     * @param receivers The receiver's instance keys.
+     */
+    void apply(InstanceKey[] receivers) {
+      if (receivers == null) return;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass dict = cha.lookupClass(PythonTypes.dict);
+      if (dict == null) return;
+      for (InstanceKey receiver : receivers) {
+        if (receiver == null || !cha.isSubclassOf(receiver.concreteType(), dict)) continue;
+        if (!read.add(receiver)) continue;
+        logger.fine(() -> "dict " + kind + " at " + pc + " in " + node + " on " + receiver);
+        switch (kind) {
+          case FIELD -> readField(receiver);
+          case ITEMS -> items(receiver);
+          case UPDATE -> update(receiver);
+        }
+      }
+    }
+
+    /** {@code d.pop(key, default)} and {@code d.get(key, default)}: the field, and the default. */
+    private void readField(InstanceKey receiver) {
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IField field = resolveRootField(getClassHierarchy(), key);
+      if (field == null) return;
+      getSystem()
+          .newConstraint(
+              resultKey, assignOperator, factory.getPointerKeyForInstanceField(receiver, field));
+      if (!argumentFlowed) {
+        argumentFlowed = true;
+        if (argumentKeys != null) {
+          for (InstanceKey k : argumentKeys) if (k != null) getSystem().newConstraint(resultKey, k);
+        } else if (argumentKey != null && !getSystem().isImplicit(argumentKey))
+          getSystem().newConstraint(resultKey, assignOperator, argumentKey);
+      }
+    }
+
+    /** {@code d.items()}: a list of one {@code (key, value)} tuple over the catalogued fields. */
+    private void items(InstanceKey receiver) {
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      IField zero = resolveRootField(cha, "0");
+      IField one = resolveRootField(cha, "1");
+      if (zero == null || one == null) return;
+      InstanceKey list =
+          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.list));
+      InstanceKey tuple =
+          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.tuple));
+      if (list == null || tuple == null) return;
+      InstanceKey zeroKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0);
+      InstanceKey oneKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(1), 1);
+      getSystem().newConstraint(resultKey, list);
+      getSystem().newConstraint(factory.getPointerKeyForObjectCatalog(list), zeroKey);
+      getSystem().newConstraint(factory.getPointerKeyForInstanceField(list, zero), tuple);
+      getSystem().newConstraint(factory.getPointerKeyForObjectCatalog(tuple), zeroKey);
+      getSystem().newConstraint(factory.getPointerKeyForObjectCatalog(tuple), oneKey);
+      // The keys are the receiver's catalogued names; the values are the fields they name.
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForInstanceField(tuple, zero),
+              assignOperator,
+              factory.getPointerKeyForObjectCatalog(receiver));
+      getSystem()
+          .newSideEffect(
+              new ElementCopyOperator(
+                  receiver, factory.getPointerKeyForInstanceField(tuple, one), pc),
+              factory.getPointerKeyForObjectCatalog(receiver));
+    }
+
+    /** {@code d.update(other)}: each of {@code other}'s catalogued fields into {@code d}'s. */
+    private void update(InstanceKey receiver) {
+      if (argumentKeys != null) for (InstanceKey other : argumentKeys) copyInto(other, receiver);
+      else if (argumentKey != null && !getSystem().isImplicit(argumentKey))
+        getSystem().newSideEffect(new DictArgumentOperator(receiver, pc), argumentKey);
+    }
+
+    /**
+     * Flows every catalogued field of {@code other} into the field of the same name of {@code
+     * receiver}, and {@code other}'s keys into {@code receiver}'s catalog.
+     */
+    private void copyInto(InstanceKey other, InstanceKey receiver) {
+      if (other == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForObjectCatalog(receiver),
+              assignOperator,
+              factory.getPointerKeyForObjectCatalog(other));
+      getSystem()
+          .newSideEffect(
+              new DictFieldsOperator(other, receiver, pc),
+              factory.getPointerKeyForObjectCatalog(other));
+    }
+
+    /** Applies {@link #copyInto} to each dictionary the update's argument may be. */
+    private final class DictArgumentOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey receiver;
+      private final int pc;
+      private final Set<InstanceKey> seen = HashSetFactory.make();
+
+      private DictArgumentOperator(InstanceKey receiver, int pc) {
+        this.receiver = receiver;
+        this.pc = pc;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable l, PointsToSetVariable r) {
+        if (r.getValue() != null)
+          r.getValue()
+              .foreach(
+                  i -> {
+                    InstanceKey other = getSystem().getInstanceKey(i);
+                    if (seen.add(other)) copyInto(other, receiver);
+                  });
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return receiver.hashCode() * 31 + pc;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof DictArgumentOperator other
+            && other.receiver.equals(receiver)
+            && other.pc == pc;
+      }
+
+      @Override
+      public String toString() {
+        return "dict update argument at " + pc + " into " + receiver;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + kind.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DictMethodOperator other
+          && other.node.equals(node)
+          && other.pc == pc
+          && other.kind == kind;
+    }
+
+    @Override
+    public String toString() {
+      return "dict " + kind + " at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Flows every catalogued field of one dictionary key into the field of the same name of another
+   * as the catalog's names arrive (wala/ML#997). Equal for the same (from, to) pair.
+   */
+  private final class DictFieldsOperator extends UnaryOperator<PointsToSetVariable> {
+    private final InstanceKey from;
+    private final InstanceKey to;
+    private final int pc;
+
+    private DictFieldsOperator(InstanceKey from, InstanceKey to, int pc) {
+      this.from = from;
+      this.to = to;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+      if (catalog.getValue() == null) return NOT_CHANGED;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      catalog
+          .getValue()
+          .foreach(
+              c -> {
+                InstanceKey nameKey = getSystem().getInstanceKey(c);
+                if (!(nameKey instanceof ConstantKey<?> constant)) return;
+                Object value = constant.getValue();
+                if (!(value instanceof String) && !(value instanceof Number)) return;
+                IField f = resolveRootField(cha, value.toString());
+                if (f == null) return;
+                getSystem()
+                    .newConstraint(
+                        factory.getPointerKeyForInstanceField(to, f),
+                        assignOperator,
+                        factory.getPointerKeyForInstanceField(from, f));
+              });
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return from.hashCode() * 31 + to.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DictFieldsOperator other
+          && other.from.equals(from)
+          && other.to.equals(to);
+    }
+
+    @Override
+    public String toString() {
+      return "dict update at " + pc + ": " + from + " into " + to;
+    }
   }
 
   /**
