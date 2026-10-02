@@ -374,13 +374,35 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     private java.util.Set<TypeReference> innerTypes = HashSetFactory.make();
     Set<String> missingTypeNames;
 
+    /** The bases as declared, in order; see {@link IPythonClass#getBaseTypeNames()}. */
+    private final java.util.List<TypeName> baseNames;
+
     public PythonClass(
         TypeName name,
         TypeName superName,
         IClassLoader loader,
         Position sourcePosition,
         Set<CAstType> missingTypes) {
+      this(
+          name,
+          superName,
+          loader,
+          sourcePosition,
+          missingTypes,
+          superName == null
+              ? java.util.Collections.emptyList()
+              : java.util.Collections.singletonList(superName));
+    }
+
+    public PythonClass(
+        TypeName name,
+        TypeName superName,
+        IClassLoader loader,
+        Position sourcePosition,
+        Set<CAstType> missingTypes,
+        java.util.List<TypeName> baseNames) {
       super(name, superName, loader, sourcePosition);
+      this.baseNames = java.util.List.copyOf(baseNames);
       missingTypeNames = missingTypes.stream().map(t -> t.getName()).collect(Collectors.toSet());
       if (name.toString().lastIndexOf('/') > 0) {
         String maybeOuterName = name.toString().substring(0, name.toString().lastIndexOf('/'));
@@ -409,6 +431,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
     public Collection<TypeReference> getInnerReferences() {
       return innerTypes;
+    }
+
+    @Override
+    public java.util.List<TypeName> getBaseTypeNames() {
+      return baseNames;
     }
   }
 
@@ -842,6 +869,25 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   public void defineType(
       TypeName cls, TypeName parent, Position sourcePosition, Set<CAstType> missingTypes) {
     types.put(cls, new PythonClass(cls, parent, this, sourcePosition, missingTypes));
+  }
+
+  /**
+   * Defines a class recording every base it declares, in order, beside the one superclass the class
+   * model keeps (wala/ML#1006).
+   *
+   * @param cls The class.
+   * @param parent Its recorded superclass.
+   * @param sourcePosition Its position.
+   * @param missingTypes Its bases the unit does not define.
+   * @param bases Its bases as declared, resolved to classes of this unit or summary shells.
+   */
+  public void defineType(
+      TypeName cls,
+      TypeName parent,
+      Position sourcePosition,
+      Set<CAstType> missingTypes,
+      java.util.List<TypeName> bases) {
+    types.put(cls, new PythonClass(cls, parent, this, sourcePosition, missingTypes, bases));
   }
 
   public void defineField(TypeName cls, CAstEntity field) {

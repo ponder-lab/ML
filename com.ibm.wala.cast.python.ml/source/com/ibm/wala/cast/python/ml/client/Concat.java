@@ -148,6 +148,7 @@ public class Concat extends TensorGenerator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     boolean sawConvergingElement = false;
+    boolean everyListCannotExecute = true;
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
       if (asin == null) continue;
@@ -171,9 +172,14 @@ public class Concat extends TensorGenerator {
         ShapeResult appended = computeAppendedShape(builder, asin, axis);
         if (!appended.members().isEmpty()) outShape = appended;
       }
+      if (!cannotExecute(builder, asin, catalog)) everyListCannotExecute = false;
       if (outShape.isBottom()) sawConvergingElement = true;
       ret.addAll(outShape.members());
     }
+    // A concat every one of whose lists has an element that cannot execute is itself no tensor, a
+    // settled answer rather than a converging one (wala/ML#961, wala/ML#962).
+    if (ret.isEmpty() && everyListCannotExecute && sawConvergingElement)
+      return Collections.emptySet();
     if (ret.isEmpty()) {
       // Clause 3 (wala/ML#758): with the element reads engine-visible, a memberless evaluation
       // that consumed a still-converging (⊥) element contributes ⊥, so the ascent delivers the
@@ -202,6 +208,8 @@ public class Concat extends TensorGenerator {
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
     int valuesVn = getArgumentValueNumber(this.getValuesParameterIndex());
     if (valuesVn <= 0) return null;
+    // A concat that cannot execute is no tensor, so nothing feeds its result (wala/ML#1009).
+    if (this.cannotExecute(builder)) return null;
     PointerKey argument =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), valuesVn);
     List<PointerKey> operands = new ArrayList<>();
@@ -431,6 +439,60 @@ public class Concat extends TensorGenerator {
       else if (ret != v) return null;
     }
     return ret == null ? this.getDefaultAxis() : ret;
+  }
+
+  /**
+   * Whether this concat cannot execute: every list or tuple it receives has an element that is the
+   * {@code None} constant (wala/ML#961) or a value every producer of which cannot run on its {@code
+   * None}-only input (wala/ML#962). Such a concat raises, so its result is no tensor.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @return {@code true} iff every list received has such an element.
+   */
+  private boolean cannotExecute(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> valuesPts =
+        this.getArgumentPointsToSet(
+            builder, this.getValuesParameterIndex(), this.getValuesParameterName());
+    if (valuesPts == null || valuesPts.isEmpty()) return false;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    boolean anyList = false;
+    for (InstanceKey valIk : valuesPts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
+      if (asin == null) return false;
+      TypeReference ref = asin.concreteType().getReference();
+      if (!(ref.equals(list) || ref.equals(tuple))) return false;
+      OrdinalSet<InstanceKey> catalog =
+          pa.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+      if (!cannotExecute(builder, asin, catalog)) return false;
+      anyList = true;
+    }
+    return anyList;
+  }
+
+  /**
+   * Whether a list or tuple this concat receives has an element that cannot execute; see {@link
+   * #cannotExecute(PropagationCallGraphBuilder)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @param listAsin The list or tuple.
+   * @param catalog The list's object catalog.
+   * @return {@code true} iff some element cannot execute.
+   */
+  private boolean cannotExecute(
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode listAsin,
+      OrdinalSet<InstanceKey> catalog) {
+    for (InstanceKey catalogIK : catalog) {
+      if (!(catalogIK instanceof ConstantKey)) continue;
+      Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+      if (fieldIndex == null) continue;
+      OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
+      if (elemPts != null && (allNullConstants(elemPts) || allInfeasible(builder, elemPts)))
+        return true;
+    }
+    return false;
   }
 
   /**
