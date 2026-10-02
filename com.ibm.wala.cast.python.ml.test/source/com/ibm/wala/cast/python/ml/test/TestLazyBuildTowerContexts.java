@@ -2,12 +2,16 @@ package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector.AnchoredCallerSiteContext;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextKey;
 import org.junit.Test;
 
 /**
@@ -52,5 +56,33 @@ public class TestLazyBuildTowerContexts extends TestPythonMLCallGraphShape {
         trampolines <= MAX_BUILD_TRAMPOLINE_NODES);
     assertTrue(
         "nodes: " + cg.getNumberOfNodes() + " > " + MAX_NODES, cg.getNumberOfNodes() <= MAX_NODES);
+  }
+
+  /**
+   * An anchored context answers no calling node and does answer its call site. The anchor is not
+   * the calling node, and several calling nodes with the same method share one context, so a caller
+   * it named would be an arbitrary representative whose own context follows solver order; a reader
+   * pairing the caller and call-site keys must get nothing rather than a mismatched pair.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testAnchoredContextsNameNoCaller() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        (PythonTensorAnalysisEngine) makeEngine("tf2_test_lazy_build_tower.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    int anchored = 0;
+    for (CGNode node : cg) {
+      Context context = node.getContext();
+      if (!(context instanceof AnchoredCallerSiteContext)) continue;
+      anchored++;
+      assertNull("An anchored context names a calling node.", context.get(ContextKey.CALLER));
+      assertNotNull("An anchored context names no call site.", context.get(ContextKey.CALLSITE));
+      assertNotNull(
+          "An anchored context names no anchor.",
+          ((AnchoredCallerSiteContext) context).getAnchor());
+    }
+    assertTrue("No anchored context in the graph.", anchored > 0);
   }
 }
