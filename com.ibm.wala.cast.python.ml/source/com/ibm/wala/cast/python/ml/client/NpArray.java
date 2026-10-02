@@ -9,6 +9,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -722,6 +723,20 @@ public class NpArray extends TensorGenerator {
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
           if (!collectNumpyLeaves(builder, fieldPTS, leaves, visited, sawUnresolvableTensorLeaf))
             return false;
+        }
+
+        // Elements whose positions are not known live in the list's order-free contents: those
+        // a comprehension or `append` adds, and those a list operation carries (wala/ML#1009).
+        // A dtype does not depend on position, so they are leaves like the numbered ones.
+        for (String contents :
+            List.of(
+                PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD,
+                PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD)) {
+          OrdinalSet<InstanceKey> contentsPTS =
+              getInstanceFieldPointsToSet(builder, asin, contents);
+          if (contentsPTS != null
+              && !collectNumpyLeaves(
+                  builder, contentsPTS, leaves, visited, sawUnresolvableTensorLeaf)) return false;
         }
       }
     }

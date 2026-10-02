@@ -2187,7 +2187,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
+            2, Set.of(new TensorType(INT_64, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
 
     test(
         "tf2_test_argparse_declines.py",
@@ -2195,7 +2195,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(INT_32, asList(new NumericDim(7), UnresolvedDim.INSTANCE)))));
+            2, Set.of(new TensorType(INT_64, asList(new NumericDim(7), UnresolvedDim.INSTANCE)))));
 
     // A short option alone: the destination is the option name with the dash stripped.
     test(
@@ -2204,7 +2204,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(INT_32, asList(new NumericDim(9), UnresolvedDim.INSTANCE)))));
+            2, Set.of(new TensorType(INT_64, asList(new NumericDim(9), UnresolvedDim.INSTANCE)))));
 
     // Literal slice bounds subtract to the window whatever the sliced data is.
     test(
@@ -2221,7 +2221,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
+            2, Set.of(new TensorType(INT_64, asList(new NumericDim(2), UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -2240,7 +2240,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   @Test
   public void testArgparseDeclines()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    Set<TensorType> top = Set.of(new TensorType(INT_32, null));
+    Set<TensorType> top = Set.of(new TensorType(INT_64, null));
     test("tf2_test_argparse_declines.py", "consume_none_default", 1, 1, Map.of(2, top));
     test("tf2_test_argparse_declines.py", "consume_no_default", 1, 1, Map.of(2, top));
     test("tf2_test_argparse_declines.py", "consume_string_default", 1, 1, Map.of(2, top));
