@@ -20,6 +20,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
@@ -651,17 +652,25 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache2) {
     PythonSSAPropagationCallGraphBuilder builder = super.getCallGraphBuilder(cha, options, cache2);
 
-    // A tensor's slice is a tensor with an allocation of its own, so a generator reading
-    // `x[:, :-1]` through the points-to set no longer sees the receiver's pre-slice window
-    // (wala/ML#916). Only the tensor type is named. A slice of it yields the same type and the
-    // type's methods live on the class, so dispatch through the result survives. An ndarray is
-    // NOT named: numpy.xml puts an array's methods (`astype`, `tolist`, `reshape`, `transpose`) on
-    // each allocation as instance fields, so a fresh allocation at a slice call has no methods and
-    // `arr[a:b].tolist()` loses its target (measured: four `tolist` nodes vanished from one
-    // whole-program call graph with the array type named); an ndarray slice already reads its own
-    // extent through the slice pin, so nothing was gained there. The ragged and sparse kinds and
-    // every general container keep the pass-through as well; that is the named remainder.
-    builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE));
+    // A tensor's or an array's slice is an array of the same kind with an allocation of its own,
+    // so a generator reading `x[:, :-1]` through the points-to set no longer sees the receiver's
+    // pre-slice window (wala/ML#916). numpy.xml puts an array's methods (`astype`, `tolist`,
+    // `reshape`, `transpose`) on each allocation as instance fields, which a fresh allocation alone
+    // lacks (measured: four `tolist` nodes vanished from one whole-program call graph); the slice
+    // therefore also receives the receiver's attributes, so dispatch through it survives
+    // (wala/ML#1009). The ragged and sparse kinds and every general container keep the
+    // pass-through; that is the named remainder.
+    builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE, NumpyTypes.NDARRAY_TYPE));
+
+    // Arithmetic over an array yields an array the pointer analysis can see (wala/ML#1009): a
+    // tensor or a variable operand yields a tensor and an ndarray operand an ndarray, so a
+    // container that stores the result holds it. Its shape and dtype are the operator's own
+    // generator's, which delegation reaches from the allocation's site.
+    builder.setFreshBinaryOpResultTypes(
+        Map.of(
+            TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE,
+            TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE,
+            NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE));
 
     final ContextSelector base = builder.getContextSelector();
     final ContextSelector targetedCFA =
