@@ -13,6 +13,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -109,6 +110,14 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // Recursive dispatch on the caller's own receiver: reuse the caller's context so
       // self-recursive methods do not grow the context.
       if (receiver.equals(caller.getContext().get(ContextKey.RECEIVER))) return caller.getContext();
+      // `super().m(...)` dispatches on the same instance as the caller: the method object is one
+      // the
+      // super body allocates per calling context, so keying on it minted a fresh caller pair per
+      // level of a `super().__init__(...)` chain per caller context, and once those bodies ran with
+      // a bound `self` everything below the chain multiplied by the chain's depth per instance
+      // (wala/ML#995). Reuse the caller's context, as for a recursive dispatch on the caller's own
+      // receiver.
+      if (allocatedBySuperBody(receiver)) return caller.getContext();
 
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
         LOGGER.fine(
@@ -162,6 +171,26 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Whether a receiver is a method object the {@code super()} body allocates: its allocation site
+   * (unwrapped from the scope-mapping key a function object carries) is in a node whose method is
+   * the super stub's, declared on the {@code superfun} class.
+   *
+   * @param receiver A dispatched receiver.
+   * @return {@code true} iff the super body allocated it.
+   */
+  private static boolean allocatedBySuperBody(InstanceKey receiver) {
+    InstanceKey key = receiver;
+    while (key instanceof ScopeMappingInstanceKey scoped) key = scoped.getBase();
+    return key instanceof AllocationSiteInNode allocation
+        && allocation
+            .getNode()
+            .getMethod()
+            .getReference()
+            .getDeclaringClass()
+            .equals(PythonTypes.superfun);
   }
 
   @Override
