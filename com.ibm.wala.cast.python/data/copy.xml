@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- copy model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="copy" allocatable="true">
+      <method name="import" static="true" descriptor="()Lcopy;">
+        <new def="x" class="Lcopy"/>
+        <new def="copy" class="Lcopy/functions/copy"/>
+        <putfield class="LRoot" field="copy" fieldType="LRoot" ref="x" value="copy"/>
+        <new def="deepcopy" class="Lcopy/functions/deepcopy"/>
+        <putfield class="LRoot" field="deepcopy" fieldType="LRoot" ref="x" value="deepcopy"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="copy/functions">
+      <!-- https://docs.python.org/3/library/copy.html -->
+      <!-- `copy.copy(x)` and `copy.deepcopy(x)` return a copy of `x` with the same contents. The analysis is flow-insensitive over an object's fields, so the copy is modelled as the object itself: a configuration deep-copied before its layers are rebuilt keeps the layers' configurations, as the serialization identities keep their argument. A write to the copy therefore also reaches the original, an over-approximation. -->
+      <class name="copy" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self x">
+          <return value="x"/>
+        </method>
+      </class>
+      <class name="deepcopy" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x memo">
+          <return value="x"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
