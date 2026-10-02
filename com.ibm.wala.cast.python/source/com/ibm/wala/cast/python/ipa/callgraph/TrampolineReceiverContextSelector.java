@@ -232,6 +232,13 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * receiver, allocates a fresh receiver, and so keys the next round on a context one level deeper,
    * without bound.
    *
+   * <p>Two broader bounds break legitimate nesting and should not be re-proposed: a depth cap that
+   * counts receiver creators cut encoder towers, whose receivers nest deeply through distinct
+   * layers, and a guard on a repeated receiver type dropped nodes from decoder towers, where a
+   * shared Keras method object recurs along every nested layer's chain. A repeated allocating
+   * method is the existing rule 4 criterion extended by one link, and it leaves those towers
+   * unchanged.
+   *
    * @param caller The calling {@link CGNode}.
    * @param callee The dispatched callee.
    * @return {@code true} iff the callee appears among the allocating nodes reachable from the
