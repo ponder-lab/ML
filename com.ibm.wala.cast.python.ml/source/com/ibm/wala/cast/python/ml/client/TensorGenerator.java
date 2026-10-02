@@ -5252,6 +5252,14 @@ public abstract class TensorGenerator {
     SSAInstruction[] instructions = ir.getInstructions();
     if (pc < 0 || pc >= instructions.length) return null;
     SSAInstruction at = instructions[pc];
+    // A binary operator's result allocated at the operator (wala/ML#1009) resolves the same way:
+    // its shape and dtype are the operator's own generator's.
+    if (at instanceof SSABinaryOpInstruction && at.hasDef()) {
+      PointerKey key =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, at.getDef());
+      if (builder.getPropagationSystem().isImplicit(key)) return null;
+      return builder.getPropagationSystem().findOrCreatePointsToSet(key);
+    }
     if (!(at instanceof PythonInvokeInstruction) || !at.hasDef()) return null;
     PythonInvokeInstruction call = (PythonInvokeInstruction) at;
     boolean toSlice = false;

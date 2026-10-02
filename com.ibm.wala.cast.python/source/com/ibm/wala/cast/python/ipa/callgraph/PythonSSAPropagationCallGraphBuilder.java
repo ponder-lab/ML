@@ -192,6 +192,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     this.freshSliceResultTypes = types == null ? Collections.emptySet() : Set.copyOf(types);
   }
 
+  /**
+   * The array types whose arithmetic yields a fresh array (wala/ML#1009), each mapped to the type
+   * of the result: a binary operator with an operand of a key type gets, beside whatever else it
+   * produces, a fresh allocation of the mapped type at the operator's instruction index. Without
+   * one, {@code x / 255.0} on an array has an empty points-to set, so a tuple, list or field that
+   * stores it holds nothing, and every read through that container finds no value although the
+   * operator's own result is typed. Empty by default, so a client that names no array types sees no
+   * change; the tensor analysis names its tensor and array types.
+   */
+  private Map<TypeReference, TypeReference> freshBinaryOpResultTypes = Collections.emptyMap();
+
+  /**
+   * Names the array types whose arithmetic allocates a result (wala/ML#1009); see {@link
+   * #freshBinaryOpResultTypes}.
+   *
+   * @param types Each operand type mapped to the type of the result it yields.
+   */
+  public void setFreshBinaryOpResultTypes(Map<TypeReference, TypeReference> types) {
+    this.freshBinaryOpResultTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
+  }
+
   public static class PythonConstraintVisitor extends AstConstraintVisitor
       implements PythonInstructionVisitor {
 
@@ -756,6 +777,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     @Override
     public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
+      processArrayOperation(binop);
       // List repetition and concatenation (wala/ML#960): `xs * n` and `xs + ys` produce a fresh
       // list (or tuple) whose elements are the operands' elements. Only a list or tuple key
       // flowing into an operand produces anything, so a tensor binop keeps its empty result set
@@ -808,6 +830,36 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         // an invariant or implicit other operand has static contents and nothing arrives late).
         if (keys[other] != null && invariant[other] == null)
           system.newSideEffect(listOperation, keys[other]);
+      }
+    }
+
+    /**
+     * Allocates the result of a binary operator over an array (wala/ML#1009): for each operand key
+     * of a type {@link #freshBinaryOpResultTypes} names, a fresh key of the mapped type at the
+     * operator's instruction index joins the result. The fresh key is added by an instance
+     * constraint, not an assignment edge, so no operand's tensor state flows into the result
+     * through the flow graph (the wala/ML#405 substrate-leak class); the result's type comes from
+     * the operator's own generator.
+     *
+     * @param binop The binary operator.
+     */
+    private void processArrayOperation(PythonBinaryOpInstruction binop) {
+      Map<TypeReference, TypeReference> types = getBuilder().freshBinaryOpResultTypes;
+      if (types.isEmpty() || !binop.hasDef()) return;
+      PointerKey resultKey = getPointerKeyForLocal(binop.getDef());
+      SymbolTable symtab = ir.getSymbolTable();
+      ArrayOperationOperator operator =
+          getBuilder().new ArrayOperationOperator(node, binop.iIndex(), resultKey, types);
+      for (int i = 0; i < 2; i++) {
+        int use = binop.getUse(i);
+        if (use <= 0 || symtab.isConstant(use)) continue;
+        PointerKey key = getPointerKeyForLocal(use);
+        // As for list operations: an invariant or implicit operand is read directly, since a
+        // constraint over its key would materialize it (the wala/ML#668 trap).
+        if (contentsAreInvariant(symtab, du, use) || system.isImplicit(key))
+          for (InstanceKey ik : getInvariantContents(symtab, du, node, use))
+            operator.contribute(ik);
+        else system.newSideEffect(operator, key);
       }
     }
 
@@ -2008,6 +2060,67 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The result of a binary operator over an array (wala/ML#1009), attached to an operand: each
+   * operand key of a type {@link #freshBinaryOpResultTypes} names yields a fresh key of the mapped
+   * type at the operator's instruction index, added to the result's points-to set by an instance
+   * constraint. Keys of other types contribute nothing.
+   */
+  public final class ArrayOperationOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final Map<TypeReference, TypeReference> types;
+
+    private ArrayOperationOperator(
+        CGNode node, int pc, PointerKey resultKey, Map<TypeReference, TypeReference> types) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.types = types;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      rhs.getValue().foreach(i -> contribute(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds the fresh result an operand key yields, if its type is named, to the result's points-to
+     * set.
+     *
+     * @param key An operand's instance key.
+     */
+    private void contribute(InstanceKey key) {
+      TypeReference resultType = types.get(key.concreteType().getReference());
+      if (resultType == null) return;
+      InstanceKey fresh = getInstanceKeyForAllocation(node, NewSiteReference.make(pc, resultType));
+      if (fresh == null) return;
+      getSystem().newConstraint(resultKey, fresh);
+      if (resultType.equals(key.concreteType().getReference())) copyAttributes(key, fresh);
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + resultKey.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ArrayOperationOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && resultKey.equals(other.resultKey);
+    }
+
+    @Override
+    public String toString() {
+      return "array operation@" + pc;
+    }
+  }
+
+  /**
    * The result of a list repetition or concatenation (wala/ML#960), attached to ONE operand: for
    * each list or tuple key flowing into that operand, when the operation's rule holds against the
    * other operand's contents, a fresh key of the same type allocated at the binop's instruction
@@ -2649,6 +2762,78 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Gives a fresh array the attributes of the array it was derived from (wala/ML#1009): every
+   * attribute named in the source's object catalog flows into the same attribute of the fresh key
+   * as the catalog's names arrive. An array whose model attaches its methods per instance, as the
+   * NumPy summaries do for {@code astype}, {@code tolist}, {@code reshape} and {@code transpose},
+   * therefore keeps them through a slice or an arithmetic operator, as the derived array does at
+   * run time. Equal for the same (from, to) pair, so the propagation system keeps one.
+   */
+  private final class AttributeCopyOperator extends UnaryOperator<PointsToSetVariable> {
+    private final InstanceKey from;
+    private final InstanceKey to;
+
+    private AttributeCopyOperator(InstanceKey from, InstanceKey to) {
+      this.from = from;
+      this.to = to;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+      if (catalog.getValue() == null) return NOT_CHANGED;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      catalog
+          .getValue()
+          .foreach(
+              c -> {
+                InstanceKey nameKey = getSystem().getInstanceKey(c);
+                if (!(nameKey instanceof ConstantKey)
+                    || !(((ConstantKey<?>) nameKey).getValue() instanceof String name)) return;
+                IField f = resolveRootField(cha, name);
+                if (f == null) return;
+                getSystem()
+                    .newConstraint(
+                        factory.getPointerKeyForInstanceField(to, f),
+                        assignOperator,
+                        factory.getPointerKeyForInstanceField(from, f));
+              });
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return from.hashCode() * 31 + to.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof AttributeCopyOperator other
+          && other.from.equals(from)
+          && other.to.equals(to);
+    }
+
+    @Override
+    public String toString() {
+      return "attributes of " + from + " into " + to;
+    }
+  }
+
+  /**
+   * Gives {@code to} the attributes of {@code from}; see {@link AttributeCopyOperator}.
+   *
+   * @param from The array derived from.
+   * @param to The fresh array.
+   */
+  private void copyAttributes(InstanceKey from, InstanceKey to) {
+    if (from.equals(to)) return;
+    getSystem()
+        .newSideEffect(
+            new AttributeCopyOperator(from, to),
+            ((AstPointerKeyFactory) getPointerKeyFactory()).getPointerKeyForObjectCatalog(from));
+  }
+
+  /**
    * Flows every catalogued field of a list key into a contents field as the catalog's names arrive
    * (wala/ML#960). Equal for the same (from, contents) pair, so the propagation system keeps one.
    */
@@ -2765,6 +2950,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                     fresh.contains(type)
                         ? getInstanceKeyForAllocation(caller, NewSiteReference.make(pc, type))
                         : null;
+                // The slice is an array of the receiver's kind, with its attributes (wala/ML#1009).
+                if (allocation != null) copyAttributes(key, allocation);
                 // A declined allocation (null) falls back to the receiver's own key: the type came
                 // off an existing key, so the class resolves and this is not expected to happen,
                 // but a null inside the solver would take the whole analysis down (the wala/ML#925
