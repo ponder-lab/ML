@@ -9727,19 +9727,6 @@ public abstract class TensorGenerator {
             argValNum = pyCallInstr.getUse(paramName);
           }
 
-          // A method-dispatch trampoline forwards the user's call with the bound instance inserted
-          // before the user's positional arguments, so a position counted from the user's call
-          // does not index the trampoline's invoke; resolve it one hop up, at the trampoline's
-          // own callers, where the positions are the user's (wala/ML#996).
-          if (argValNum == -1 && paramPos >= 0 && isTrampolineNode(caller)) {
-            OrdinalSet<InstanceKey> upPts =
-                getArgumentPointsToSet(builder, caller, paramPos, paramName);
-            if (upPts != null && !upPts.isEmpty()) {
-              combinedPts = OrdinalSet.unify(combinedPts, upPts);
-              found = true;
-            }
-            continue;
-          }
           // Try to resolve by position.
           if (argValNum == -1) {
             if (paramPos == RECEIVER_PARAMETER_POSITION) {
