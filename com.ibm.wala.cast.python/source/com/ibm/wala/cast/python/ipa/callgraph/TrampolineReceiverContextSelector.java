@@ -298,6 +298,15 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     public int hashCode() {
       return this.hash;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+      // Only the same class can be equal, as the superclass compares classes exactly; the
+      // cached hashes reject most of the rest cheaply.
+      return obj instanceof HashedCallerSiteContext other
+          && other.hash == this.hash
+          && super.equals(obj);
+    }
   }
 
   /**
@@ -316,6 +325,15 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     @Override
     public int hashCode() {
       return this.hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      // Only the same class can be equal, as the superclass compares classes exactly; the
+      // cached hashes reject most of the rest cheaply.
+      return obj instanceof HashedCallerSiteContextPair other
+          && other.hash == this.hash
+          && super.equals(obj);
     }
   }
 }
