@@ -1343,8 +1343,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           // follows that mapping (wala/ML#762). Every other target reads its own entity's global.
           String name = defaultsGlobalName(target, i, "_defaults_");
           IField f = resolveGlobal(name);
+          // Built lazily: a node's context can share structure deeply enough that rendering it
+          // overflows a string, and this runs for every unbound default whatever the log level.
+          int param = i;
           logger.fine(
-              "DEFAULTS-BIND target " + target + " param " + i + " global " + name + " field " + f);
+              () ->
+                  "DEFAULTS-BIND target "
+                      + target
+                      + " param "
+                      + param
+                      + " global "
+                      + name
+                      + " field "
+                      + f);
           PointerKey lval = getPointerKeyForLocal(target, i + 1);
           getSystem().newConstraint(lval, assignOperator, new StaticFieldKey(f));
           // A `@click.option` default is written under a global of its own and binds under a

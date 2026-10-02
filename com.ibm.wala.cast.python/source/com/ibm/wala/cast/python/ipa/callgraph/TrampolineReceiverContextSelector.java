@@ -10,6 +10,7 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -18,11 +19,17 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContextPair;
 import com.ibm.wala.util.intset.IntSet;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -115,7 +122,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
-      return new CallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
+      return new HashedCallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
     }
 
     // The real method body dispatched from a per-receiver trampoline node stays per-receiver.
@@ -151,7 +158,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
-      return new CallerSiteContext(caller, site);
+      return new HashedCallerSiteContext(caller, site);
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
@@ -205,6 +212,128 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       if (up.getMethod().equals(callee)) return true; // The callee is already on the chain.
       c = up.getContext();
     }
+    return allocatesThroughMethod(caller, callee);
+  }
+
+  /**
+   * The most nodes {@link #allocatesThroughMethod} visits. The contexts share structure, so the
+   * walk keeps a visited set and stops here rather than grow with the structure.
+   */
+  private static final int MAX_CREATOR_VISITS = 64;
+
+  /**
+   * Returns whether the given callee already allocated a receiver the caller's context is keyed on,
+   * directly or through the contexts of those receivers' own allocating nodes (wala/ML#210).
+   *
+   * <p>A receiver context nests the context of the node that allocated its receiver, a link the
+   * caller chain does not walk. A loop that rebuilds an object under a context keyed on its
+   * previous build (a model rebuilt from its own config and stored back where the next round reads
+   * it) recurses through that link: each build runs under a context keyed on the last one's
+   * receiver, allocates a fresh receiver, and so keys the next round on a context one level deeper,
+   * without bound.
+   *
+   * <p>Two broader bounds break legitimate nesting and should not be re-proposed: a depth cap that
+   * counts receiver creators cut encoder towers, whose receivers nest deeply through distinct
+   * layers, and a guard on a repeated receiver type dropped nodes from decoder towers, where a
+   * shared Keras method object recurs along every nested layer's chain. A repeated allocating
+   * method is the existing rule 4 criterion extended by one link, and it leaves those towers
+   * unchanged.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @param callee The dispatched callee.
+   * @return {@code true} iff the callee appears among the allocating nodes reachable from the
+   *     caller's context.
+   */
+  private static boolean allocatesThroughMethod(CGNode caller, IMethod callee) {
+    Set<CGNode> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    Deque<CGNode> pending = new ArrayDeque<>();
+    pending.add(caller);
+    while (!pending.isEmpty() && visited.size() < MAX_CREATOR_VISITS) {
+      CGNode node = pending.poll();
+      if (!visited.add(node)) continue;
+      Context context = node.getContext();
+      if (context.get(ContextKey.RECEIVER) instanceof InstanceKey receiver) {
+        CGNode creator = allocator(receiver);
+        if (creator != null) {
+          if (creator.getMethod().equals(callee)) return true;
+          pending.add(creator);
+        }
+      }
+      if (context instanceof CallerSiteContext site) pending.add(site.getCaller());
+    }
     return false;
+  }
+
+  /**
+   * Returns the node that allocated the given instance, if the instance names one.
+   *
+   * @param key The instance.
+   * @return The allocating node, or {@code null} if the instance names none.
+   */
+  private static CGNode allocator(InstanceKey key) {
+    if (key instanceof ScopeMappingInstanceKey scoped) return scoped.getCreator();
+    if (key instanceof AllocationSiteInNode allocation) return allocation.getNode();
+    return null;
+  }
+
+  /**
+   * A {@link CallerSiteContext} whose hash code is computed once. WALA recomputes a node's hash
+   * from its context's, and a caller-site context's from its caller node's, on every call, so
+   * hashing a context walks every caller reachable through it. Contexts this selector builds share
+   * those callers, and a receiver key's creator node adds a second branch at each level, so the
+   * walk is exponential in the context's height even when the contexts are few: each node lookup
+   * hashes its context. Caching the hash at every level this selector builds makes each one
+   * constant.
+   */
+  private static final class HashedCallerSiteContext extends CallerSiteContext {
+
+    private final int hash;
+
+    private HashedCallerSiteContext(CGNode caller, CallSiteReference site) {
+      super(caller, site);
+      this.hash = super.hashCode();
+    }
+
+    @Override
+    public int hashCode() {
+      return this.hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      // Only the same class can be equal, as the superclass compares classes exactly; the
+      // cached hashes reject most of the rest cheaply.
+      return obj instanceof HashedCallerSiteContext other
+          && other.hash == this.hash
+          && super.equals(obj);
+    }
+  }
+
+  /**
+   * A {@link CallerSiteContextPair} whose hash code is computed once; see {@link
+   * HashedCallerSiteContext}.
+   */
+  private static final class HashedCallerSiteContextPair extends CallerSiteContextPair {
+
+    private final int hash;
+
+    private HashedCallerSiteContextPair(CGNode caller, CallSiteReference site, Context base) {
+      super(caller, site, base);
+      this.hash = super.hashCode();
+    }
+
+    @Override
+    public int hashCode() {
+      return this.hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      // Only the same class can be equal, as the superclass compares classes exactly; the
+      // cached hashes reject most of the rest cheaply.
+      return obj instanceof HashedCallerSiteContextPair other
+          && other.hash == this.hash
+          && super.equals(obj);
+    }
   }
 }
