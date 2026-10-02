@@ -147,4 +147,26 @@ public class TestConfigChain extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
   }
+
+  /**
+   * A receiver that is a dict on one path and a user object with its own {@code items} on the
+   * other: the dict's fields are read and the user's method dispatches, so the rebuilt model sees
+   * the layer from both paths.
+   */
+  @Test
+  public void testUserItems() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_config_chain_user_items.py",
+        "consume_norm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /** The user's {@code items} method is reached beside the dict reading (present, no tensor). */
+  @Test
+  public void testUserItemsDispatches()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_config_chain_user_items.py", "consume_registry", 0, 0);
+  }
 }
