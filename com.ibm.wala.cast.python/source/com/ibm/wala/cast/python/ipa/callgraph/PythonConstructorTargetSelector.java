@@ -426,20 +426,60 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
 
             int numberOfParameters = init.getNumberOfParameters();
-            int[] cps = new int[numberOfParameters > 1 ? numberOfParameters : 2];
+            // The constructor's formals mirror `__init__`'s shifted by one, and its star formals,
+            // declared below on the constructor function, receive what a class call packs: the
+            // positional extras as a tuple and the keywords naming no formal as a dict. Forward the
+            // two as a starred slot and a `**` keyword, so the unpack at `__init__` binds them as a
+            // caller's `Cls(*args, **kwargs)` would; forwarded by position they were nested, or,
+            // before the constructor declared them, never packed at all, so a keyword naming no
+            // formal of a class never reached `__init__`'s `**kwargs` and a positional argument
+            // past
+            // `__init__`'s formals never reached its `*args` (wala/ML#188, wala/ML#997).
+            int initVarargs =
+                init instanceof StarFormalDeclaration d ? d.getVarargsParameter() : -1;
+            int initKeywords =
+                init instanceof StarFormalDeclaration d ? d.getKeywordsParameter() : -1;
+            // The IR orders `__init__`'s formals as the plain positionals, then `*args`, then
+            // `**kwargs`, then the keyword-only formals. The positional forward covers the plain
+            // positionals and the `*args` slot; every other formal past the first star is forwarded
+            // by `__init__`'s own name, since a positional argument after the starred slot would be
+            // read into the pack and one after the keywords slot has no position at all. A formal
+            // without a name is left unbound, as it was before the constructor forwarded anything.
+            String[][] initNames =
+                init instanceof AstMethod astInit
+                    ? astInit.debugInfo().getSourceNamesForValues()
+                    : null;
+            int positionalEnd = numberOfParameters;
+            if (initVarargs >= 2) positionalEnd = initVarargs + 1;
+            else if (initKeywords >= 2) positionalEnd = initKeywords;
+            java.util.List<Pair<String, Integer>> keywords = new java.util.ArrayList<>();
+            for (int k = positionalEnd; k < numberOfParameters; k++) {
+              if (k == initVarargs || k == initKeywords) continue;
+              int initVn = k + 1;
+              if (initNames != null
+                  && initVn < initNames.length
+                  && initNames[initVn] != null
+                  && initNames[initVn].length > 0) keywords.add(Pair.make(initNames[initVn][0], k));
+            }
+            int[] cps = new int[positionalEnd > 1 ? positionalEnd : 2];
             cps[0] = fv;
             cps[1] = inst;
-            for (int j = 2; j < numberOfParameters; j++) {
+            for (int j = 2; j < positionalEnd; j++) {
               cps[j] = j;
             }
+            int[] starred =
+                initVarargs >= 2 && initVarargs < positionalEnd
+                    ? new int[] {initVarargs}
+                    : new int[0];
+            if (initKeywords >= 0) keywords.add(Pair.make("null", initKeywords));
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Pair<String, Integer>[] keywordParams = keywords.toArray(new Pair[0]);
 
             int result = v++;
             int except = v++;
             CallSiteReference cref = new DynamicCallSiteReference(site.getDeclaredTarget(), pc);
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            Pair<String, Integer>[] keywordParams = new Pair[0];
             ctor.addStatement(
-                new PythonInvokeInstruction(2, result, except, cref, cps, keywordParams));
+                new PythonInvokeInstruction(2, result, except, cref, cps, keywordParams, starred));
             pc++;
 
             // Declare `__init__`'s parameter names on the constructor's own formals, so a caller's
@@ -451,7 +491,6 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             // the extra function-object formal in front).
             if ((ctor.getValueNames() == null || ctor.getValueNames().isEmpty())
                 && init instanceof AstMethod astInit) {
-              String[][] initNames = astInit.debugInfo().getSourceNamesForValues();
               Map<Integer, Atom> ctorValueNames = HashMapFactory.make();
               ctorValueNames.put(1, Atom.findOrCreateUnicodeAtom("self"));
               for (int j = 2; j < numberOfParameters; j++) {
@@ -482,7 +521,15 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                   init == null ? 0 : init.getNumberOfDefaultParameters(),
                   init instanceof StarFormalDeclaration
                       ? ((StarFormalDeclaration) init).getNumberOfTrailingNonDefaultableParameters()
-                      : 0));
+                      : 0,
+                  // Constructor argument j is `__init__` argument j + 1 (`__init__` has `self` in
+                  // front), so its star formals are `__init__`'s shifted by one.
+                  init instanceof StarFormalDeclaration d && d.getVarargsParameter() >= 0
+                      ? d.getVarargsParameter() - 1
+                      : -1,
+                  init instanceof StarFormalDeclaration d && d.getKeywordsParameter() >= 0
+                      ? d.getKeywordsParameter() - 1
+                      : -1));
         }
 
         return ctors.get(receiver);
