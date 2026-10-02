@@ -120,6 +120,13 @@
         <putfield class="LRoot" field="SUM_OVER_BATCH_SIZE" fieldType="LRoot" ref="reduction" value="reduction_sum_over_batch_size"/>
         <constant name="reduction_auto" type="string" value="auto"/>
         <putfield class="LRoot" field="AUTO" fieldType="LRoot" ref="reduction" value="reduction_auto"/>
+        <!-- `tf.keras.constraints` (wala/ML#996): `get` returns a constraint instance unchanged, `NonNeg` is a representative built-in constraint, and `Constraint` (declared in the `tensorflow/keras/constraints` package) is the base class user constraints extend. -->
+        <new def="constraints" class="Lobject"/>
+        <putfield class="LRoot" field="constraints" fieldType="LRoot" ref="keras" value="constraints"/>
+        <new def="constraints_get" class="Ltensorflow/keras/constraints/get"/>
+        <putfield class="LRoot" field="get" fieldType="LRoot" ref="constraints" value="constraints_get"/>
+        <new def="nonneg_cls" class="Ltensorflow/keras/constraints/class/NonNeg"/>
+        <putfield class="LRoot" field="NonNeg" fieldType="LRoot" ref="constraints" value="nonneg_cls"/>
         <new def="keras_mnist" class="Lobject"/>
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="x" value="image"/>
         <new def="io" class="Lobject"/>
@@ -2103,6 +2110,10 @@
       <class name="Variable" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="13" paramNames="self initial_value trainable validate_shape caching_device name variable_def dtype import_scope constraint synchronization aggregation shape">
           <new def="res" class="Ltensorflow/python/ops/variables/Variable"/>
+          <!-- As for `add_weight`: the optimizer applies a variable's constraint to it after every update (wala/ML#996). -->
+          <new def="z" class="Ltensorflow/functions/convert_to_tensor"/>
+          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="res" numArgs="2" def="rt"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="constraint" arg1="rt" numArgs="2" def="constrained"/>
           <return value="res"/>
         </method>
       </class>
@@ -2902,6 +2913,34 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/keras/constraints">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/constraints/Constraint (wala/ML#996): the base class a user constraint extends; its `__call__` is the user's. -->
+      <class name="Constraint" super="Lobject"></class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/constraints/get: a constraint instance is returned unchanged (a string identifier, naming a built-in, is not resolved). -->
+      <class name="get" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self identifier">
+          <return value="identifier"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/constraints/NonNeg: the instance's `__call__` keeps the weight's shape and dtype, so it is a pass-through. -->
+      <class name="NonNeg" allocatable="true">
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self w">
+          <return value="w"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self w">
+          <return value="w"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/constraints/class">
+      <!-- The constructor of `tf.keras.constraints.NonNeg` (wala/ML#996), split from the instance as the layer constructors are. -->
+      <class name="NonNeg" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="res" class="Ltensorflow/keras/constraints/NonNeg"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/keras/applications">
       <!-- The pretrained-architecture constructors of `tf.keras.applications` (wala/ML#896). Each constructor allocates one shared callable, `Application`, and stores the two arguments its output rank depends on, `include_top` and `pooling`; `KerasApplicationCall` reads them back and emits a rank-only shape (rank 4 for a feature-map output, rank 2 for a pooled or classifying one), with the input's batch axis and `Unresolved` elsewhere, since the spatial and channel extents are fixed integers of the architecture the analysis does not compute. Parameter names are the constructors' own in TensorFlow 2.9.3 (read with `inspect.signature`; a trailing `**kwargs` is dropped), so keyword calls bind by name and positional calls by position. Every constructor here defaults `include_top` to `True` and `pooling` to `None`, also read from the signatures. -->
       <class name="Application" allocatable="true">
@@ -3534,8 +3573,12 @@
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
       <class name="Layer" super="Lobject">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#add_weight. The universal Keras weight-creation API: user layers call `self.add_weight(...)` (typically in `build`, wala/ML#595) to create their kernels. Modeled as a fresh dense tensor; the `AddWeight` generator consumes the call's `shape` and `dtype` arguments (wala/ML#667). The shell carries this method's reference (wala/ML#106), and source subclasses wire it through their synthesized constructors, so `self.add_weight` dispatches on any `Layer` subclass instance (wala/ML#618). -->
-        <method name="add_weight" descriptor="()LRoot;" numArgs="9" paramNames="self name shape dtype initializer regularizer trainable constraint synchronization">
+        <method name="add_weight" descriptor="()LRoot;" numArgs="10" paramNames="func self name shape dtype initializer regularizer trainable constraint synchronization">
           <new def="w" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <!-- The optimizer applies the weight's constraint to the weight after every update (`apply_grad_to_update_var` calls `var.constraint(var)`), so the constraint's `__call__` runs on the weight with the weight's type. The analysis is flow-insensitive, so applying it here, at creation, reaches the same constraint and weight without modeling the optimizer's variable list (wala/ML#996). A weight without a constraint dispatches nowhere. -->
+          <new def="z" class="Ltensorflow/functions/convert_to_tensor"/>
+          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="w" numArgs="2" def="wt"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="constraint" arg1="wt" numArgs="2" def="constrained"/>
           <return value="w"/>
         </method>
       </class>
