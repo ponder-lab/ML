@@ -1,3 +1,5 @@
+import sys
+
 import tensorflow as tf
 
 
@@ -9,11 +11,9 @@ def get_shape_list(tensor):
     return tensor.shape.as_list()
 
 
-config = {"embedding_size": 8}
-
-
 # The vendored NLPGNN embedding sizes its table from a checkpoint config the
-# analysis cannot read (wala/ML#717): the output reshape's trailing element
+# analysis cannot read (wala/ML#717), stood in for by a size computed from the
+# number of command-line arguments, a runtime-only count no fold can compute: the output reshape's trailing element
 # `input_shape[-1] * self.embedding_size` has an unresolvable factor, but the
 # expression is still one scalar dimension, so the rank and the leading
 # dimensions survive and only the trailing value degrades to dynamic.
@@ -21,7 +21,7 @@ class WDEmbedding(tf.keras.layers.Layer):
     def __init__(self, vocab_size, use_one_hot_embedding, **kwargs):
         super(WDEmbedding, self).__init__(**kwargs)
         self.vocab_size = vocab_size
-        self.embedding_size = config.get("embedding_size", 8)
+        self.embedding_size = len(sys.argv) * 8
         self.use_one_hot_embedding = use_one_hot_embedding
 
     def build(self, input_shape):

@@ -1425,9 +1425,10 @@ public class TestShapeOps extends AbstractTensorTest {
 
   /**
    * Single-member counterpart of {@link #testEmbeddingDynamicSize()} (wala/ML#717): dimension
-   * arithmetic over a plain (non-φ) shape-vector subscript with a config-sourced factor exercises
-   * the singleton fold's degradation, so that element's value is dynamic while the rank and the
-   * literal element survive.
+   * arithmetic over a plain (non-φ) shape-vector subscript with a factor computed from the number
+   * of command-line arguments, a runtime-only count (a dictionary read by a constant key now
+   * resolves, so the fixture no longer uses one), exercises the singleton fold's degradation, so
+   * that element's value is dynamic while the rank and the literal element survive.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.

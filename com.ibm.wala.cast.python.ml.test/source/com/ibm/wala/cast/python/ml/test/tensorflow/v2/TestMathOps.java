@@ -1806,7 +1806,9 @@ public class TestMathOps extends AbstractTensorTest {
 
   /**
    * Opaque-size variant of {@link #testEmbeddingOutput()} (wala/ML#717), mirroring the vendored
-   * NLPGNN embedding, whose table size comes from a checkpoint config the analysis cannot read. The
+   * NLPGNN embedding, whose table size comes from a checkpoint config the analysis cannot read,
+   * stood in for by a size computed from the number of command-line arguments, a runtime-only count
+   * (a dictionary read by a constant key now resolves, so the fixture no longer uses one). The
    * output reshape's trailing element {@code input_shape[-1] * self.embedding_size} then has an
    * unresolvable factor, so it degrades to dynamic while the rank and the leading dimensions
    * survive: the single member {@code (2, 2, ?)}, whose rank-3 shape matches the fixture's {@code
