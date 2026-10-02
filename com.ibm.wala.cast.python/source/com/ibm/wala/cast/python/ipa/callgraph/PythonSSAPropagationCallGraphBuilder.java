@@ -1561,11 +1561,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               resultKey, assignOperator, factory.getPointerKeyForInstanceField(receiver, field));
       if (!argumentFlowed) {
         argumentFlowed = true;
-        if (argumentKeys != null)
-          for (InstanceKey k : argumentKeys)
-            if (k != null) getSystem().newConstraint(resultKey, k);
-            else if (argumentKey != null && !getSystem().isImplicit(argumentKey))
-              getSystem().newConstraint(resultKey, assignOperator, argumentKey);
+        if (argumentKeys != null) {
+          for (InstanceKey k : argumentKeys) if (k != null) getSystem().newConstraint(resultKey, k);
+        } else if (argumentKey != null && !getSystem().isImplicit(argumentKey))
+          getSystem().newConstraint(resultKey, assignOperator, argumentKey);
       }
     }
 
