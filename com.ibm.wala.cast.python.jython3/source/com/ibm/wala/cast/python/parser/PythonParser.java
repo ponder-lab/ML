@@ -301,6 +301,26 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       definedNames.add(name);
     }
 
+    /**
+     * An exception raised in a function propagates to the function's caller, never to a {@code try}
+     * that lexically encloses the function's definition, so a function's body has no catch target
+     * beyond the {@code try} statements inside it, whose own contexts supply their handlers (<a
+     * href="https://github.com/wala/ML/issues/1004">wala/ML#1004</a>). Delegating to the enclosing
+     * context recorded an exception edge from the function's body to a handler of the enclosing
+     * entity, which the function entity's control flow cannot hold, and the module failed to
+     * translate.
+     */
+    @Override
+    public CAstNode getCatchTarget() {
+      return null;
+    }
+
+    /** As {@link #getCatchTarget()}, for an exception of the given type. */
+    @Override
+    public CAstNode getCatchTarget(String s) {
+      return null;
+    }
+
     public void addGlobal(String g) {
       downwardGlobals.add(g);
     }
