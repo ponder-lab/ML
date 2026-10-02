@@ -72,7 +72,7 @@ public class TolistOperation extends TensorGenerator {
     int receiverVn = getReceiverVn();
     if (this.source != null && receiverVn > 0) {
       try {
-        Set<List<Dimension<?>>> shapes = getShapesOrSSAChain(builder, getNode(), receiverVn);
+        Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), receiverVn);
         if (shapes != null && !shapes.isEmpty()) return shapes;
       } catch (IllegalArgumentException e) {
         // Fall through to the caller-aware points-to path.
@@ -93,7 +93,7 @@ public class TolistOperation extends TensorGenerator {
     int receiverVn = getReceiverVn();
     if (this.source != null && receiverVn > 0) {
       try {
-        Set<DType> dTypes = getDTypesOrSSAChain(builder, getNode(), receiverVn);
+        Set<DType> dTypes = getDTypes(builder, getNode(), receiverVn);
         LOGGER.fine(
             () -> "Resolved tolist receiver dtypes via the caller-frame chain: " + dTypes + ".");
         if (dTypes != null && !dTypes.isEmpty() && !dTypes.equals(EnumSet.of(DType.UNKNOWN)))
