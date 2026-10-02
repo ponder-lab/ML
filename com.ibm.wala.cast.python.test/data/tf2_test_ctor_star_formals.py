@@ -14,6 +14,16 @@ def consume_forwarded(k):
     return k
 
 
+def consume_keyword_only(t):
+    assert t.shape == (7,)
+    return t
+
+
+def consume_keyword_only_second(t):
+    assert t.shape == (6,)
+    return t
+
+
 def consume_second_positional(t):
     assert t.shape == (5,)
     return t
@@ -38,3 +48,12 @@ class Packed:
 
 
 Packed(tf.ones(2), tf.ones(5))
+
+
+class KeywordOnly:
+    def __init__(self, *args, flag=None, **kw):
+        consume_keyword_only(flag)
+        consume_keyword_only_second(args[1])
+
+
+KeywordOnly(tf.ones(2), tf.ones(6), flag=tf.ones(7))

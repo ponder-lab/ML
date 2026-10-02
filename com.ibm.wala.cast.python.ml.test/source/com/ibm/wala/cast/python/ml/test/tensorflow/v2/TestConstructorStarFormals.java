@@ -69,4 +69,32 @@ public class TestConstructorStarFormals extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
   }
+
+  /**
+   * A keyword-only formal between {@code *args} and {@code **kwargs} binds by name while the
+   * positional arguments fill {@code *args}: the constructor forwards it as a keyword, since a
+   * positional argument after a starred slot would be read into the pack.
+   */
+  @Test
+  public void testKeywordOnlyFormalBinds()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ctor_star_formals.py",
+        "consume_keyword_only",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 7))));
+  }
+
+  /** The positional arguments beside a keyword-only formal still reach {@code *args}. */
+  @Test
+  public void testPositionalBesideKeywordOnly()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ctor_star_formals.py",
+        "consume_keyword_only_second",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 6))));
+  }
 }
