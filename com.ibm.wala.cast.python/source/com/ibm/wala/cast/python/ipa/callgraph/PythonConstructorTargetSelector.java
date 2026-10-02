@@ -12,6 +12,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
@@ -45,6 +46,7 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.types.annotations.Annotation;
 import com.ibm.wala.util.collections.HashMapFactory;
@@ -178,6 +180,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           // allocated directly below, mirroring the engine's summary-constructor rewriting.
           Set<MethodReference> summaryDeclaredMethods = new HashSet<>();
           MethodReference inheritedSummaryInit = null;
+          Set<MethodReference> ownMethods = new HashSet<>();
 
           if (receiver instanceof IPythonClass) {
             IPythonClass x = (IPythonClass) receiver;
@@ -185,21 +188,23 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             // Collect own methods first; they take precedence over inherited methods of the same
             // name (Python override semantics).
             Set<Atom> seenMethodNames = new HashSet<>();
+            ownMethods.addAll(x.getMethodReferences());
             for (MethodReference m : x.getMethodReferences()) {
               methodReferences.add(m);
               seenMethodNames.add(m.getName());
             }
             // Also stamp methods inherited from supertypes onto the instance, so a call like
             // `c.func(...)` where `class C(D)` and `D` declares `func` resolves through the
-            // constructor's per-method trampoline instead of silently dropping the edge. Walks
-            // the single supertype chain via `getSuperclass()`; the `seenMethodNames` set keeps
-            // own methods winning on name collision, and the IClass model collapses Python
-            // multi-inheritance to one `superName` per `PythonClass`, so a true left-first MRO
-            // walk isn't representable here without extending the loader. See
-            // https://github.com/wala/ML/issues/107.
-            for (IClass parent = receiver.getSuperclass();
-                parent instanceof IPythonClass;
-                parent = parent.getSuperclass()) {
+            // constructor's per-method trampoline instead of silently dropping the edge
+            // (wala/ML#107). The walk covers every base the class declares, in Python's method
+            // resolution order (the C3 linearization): the class model records one superclass,
+            // but it also records the bases as declared, and a method of a base other than the
+            // first was otherwise never bound on the instance, so it resolved only through the
+            // class object's copied field and dispatched or not with the site (wala/ML#1006).
+            // The `seenMethodNames` set keeps own methods and earlier bases winning on a name
+            // collision, which with one trampoline per name is what decides which method the
+            // instance runs, so the order has to be Python's.
+            for (IClass parent : inheritedBases(receiver)) {
               boolean shell = parent instanceof PythonSummaryShellClass;
               for (MethodReference m : ((IPythonClass) parent).getMethodReferences()) {
                 Atom pythonLevelName = instanceFieldName(m, shell);
@@ -329,12 +334,31 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
               ctor.addStatement(
                   insts.NewInstruction(
                       pc, orig_f, NewSiteReference.make(pc, r.getDeclaringClass())));
-            } else {
+            } else if (ownMethods.contains(r)) {
               ctor.addStatement(
                   insts.GetInstruction(
                       pc,
                       orig_f,
                       1,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
+            } else {
+              // An inherited method's function object is read off its DECLARING class's global,
+              // not off the constructed class object: the translator copies the bases' members
+              // onto that object depth first and left first, so under several bases the copied
+              // field can hold another base's function of the same name, which the per-method
+              // trampoline's cast then rejects and the instance binds nothing (wala/ML#1006).
+              int declaringClassObject = v++;
+              ctor.addStatement(
+                  new AstGlobalRead(
+                      pc++,
+                      declaringClassObject,
+                      makeGlobalRef(receiver.getClassLoader(), getGlobalName(r))));
+              ctor.addStatement(
+                  insts.GetInstruction(
+                      pc,
+                      orig_f,
+                      declaringClassObject,
                       FieldReference.findOrCreate(
                           PythonTypes.Root, r.getName(), PythonTypes.Root)));
             }
@@ -536,6 +560,76 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
       }
     }
     return base.getCalleeTarget(caller, site, receiver);
+  }
+
+  /**
+   * The bases a class inherits methods from, in Python's method resolution order, the receiver
+   * itself excluded (wala/ML#1006): the C3 linearization over the bases the class model recorded,
+   * each resolved in the hierarchy, restricted to classes the Python class model knows. A class
+   * whose bases were not recorded contributes its single superclass, as the chain walk did. When
+   * the bases admit no consistent linearization, which Python rejects at class creation, the
+   * remaining classes follow in declaration order.
+   *
+   * @param receiver The class being constructed.
+   * @return Its bases in resolution order.
+   */
+  private static List<IClass> inheritedBases(IClass receiver) {
+    List<IClass> order = linearize(receiver, new java.util.HashMap<>());
+    return order.subList(1, order.size());
+  }
+
+  private static List<IClass> linearize(IClass cls, Map<IClass, List<IClass>> memo) {
+    List<IClass> done = memo.get(cls);
+    if (done != null) return done;
+    // Guard a cycle in the recorded bases with the class alone.
+    memo.put(cls, Collections.singletonList(cls));
+    List<IClass> bases = directBases(cls);
+    List<List<IClass>> sequences = new ArrayList<>();
+    for (IClass base : bases) sequences.add(new ArrayList<>(linearize(base, memo)));
+    sequences.add(new ArrayList<>(bases));
+    List<IClass> result = new ArrayList<>();
+    result.add(cls);
+    while (true) {
+      sequences.removeIf(List::isEmpty);
+      if (sequences.isEmpty()) break;
+      IClass head = null;
+      for (List<IClass> candidate : sequences) {
+        IClass h = candidate.get(0);
+        boolean inTail = false;
+        for (List<IClass> other : sequences)
+          if (other.indexOf(h) > 0) {
+            inTail = true;
+            break;
+          }
+        if (!inTail) {
+          head = h;
+          break;
+        }
+      }
+      // No consistent order: take the first remaining head, in declaration order.
+      if (head == null) head = sequences.get(0).get(0);
+      result.add(head);
+      for (List<IClass> sequence : sequences) sequence.remove(head);
+    }
+    memo.put(cls, result);
+    return result;
+  }
+
+  /**
+   * The classes a Python class's recorded bases name, in declaration order, Python classes only.
+   */
+  private static List<IClass> directBases(IClass cls) {
+    IClassHierarchy cha = cls.getClassHierarchy();
+    // Only Python classes reach here: the walk starts at the constructed Python class and descends
+    // into Python-class bases alone.
+    List<TypeName> names = ((IPythonClass) cls).getBaseTypeNames();
+    List<IClass> bases = new ArrayList<>();
+    for (TypeName name : names) {
+      IClass base =
+          cha.lookupClass(TypeReference.findOrCreate(cls.getClassLoader().getReference(), name));
+      if (base instanceof IPythonClass && !bases.contains(base)) bases.add(base);
+    }
+    return bases;
   }
 
   /**
