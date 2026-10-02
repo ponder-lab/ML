@@ -657,8 +657,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // pre-slice window (wala/ML#916). numpy.xml puts an array's methods (`astype`, `tolist`,
     // `reshape`, `transpose`) on each allocation as instance fields, which a fresh allocation alone
     // lacks (measured: four `tolist` nodes vanished from one whole-program call graph); the slice
-    // therefore also receives the receiver's attributes, so dispatch through it survives
-    // (wala/ML#1009). The ragged and sparse kinds and every general container keep the
+    // therefore receives those methods as well, so dispatch through it survives (wala/ML#1009). The
+    // ragged and sparse kinds and every general container keep the
     // pass-through; that is the named remainder.
     builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE, NumpyTypes.NDARRAY_TYPE));
 
@@ -671,6 +671,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE,
             TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE,
             NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE));
+    // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
+    // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
+    builder.setFreshArrayAttributes(Map.of(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_ATTRIBUTES));
 
     final ContextSelector base = builder.getContextSelector();
     final ContextSelector targetedCFA =

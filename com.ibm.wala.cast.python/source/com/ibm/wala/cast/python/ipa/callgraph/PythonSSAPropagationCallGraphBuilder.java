@@ -247,6 +247,25 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     this.freshBinaryOpResultTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
   }
 
+  /**
+   * The attributes the model attaches to each instance of an array type, per attribute name the
+   * summary class of the attached method (wala/ML#1009). A fresh array the builder allocates (a
+   * slice's or an arithmetic result's) receives them, so it dispatches as an array a summary
+   * allocates does. Empty by default.
+   */
+  private Map<TypeReference, Map<String, TypeReference>> freshArrayAttributes =
+      Collections.emptyMap();
+
+  /**
+   * Names the per-instance attributes of array types; see {@link #freshArrayAttributes}.
+   *
+   * @param attributes Each array type mapped to its attributes' summary classes by name.
+   */
+  public void setFreshArrayAttributes(Map<TypeReference, Map<String, TypeReference>> attributes) {
+    this.freshArrayAttributes =
+        attributes == null ? Collections.emptyMap() : Map.copyOf(attributes);
+  }
+
   public static class PythonConstraintVisitor extends AstConstraintVisitor
       implements PythonInstructionVisitor {
 
@@ -2132,7 +2151,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       InstanceKey fresh = getInstanceKeyForAllocation(node, NewSiteReference.make(pc, resultType));
       if (fresh == null) return;
       getSystem().newConstraint(resultKey, fresh);
-      if (resultType.equals(key.concreteType().getReference())) copyAttributes(key, fresh);
+      attachArrayAttributes(node, pc, fresh);
     }
 
     @Override
@@ -2796,75 +2815,29 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
-   * Gives a fresh array the attributes of the array it was derived from (wala/ML#1009): every
-   * attribute named in the source's object catalog flows into the same attribute of the fresh key
-   * as the catalog's names arrive. An array whose model attaches its methods per instance, as the
-   * NumPy summaries do for {@code astype}, {@code tolist}, {@code reshape} and {@code transpose},
-   * therefore keeps them through a slice or an arithmetic operator, as the derived array does at
-   * run time. Equal for the same (from, to) pair, so the propagation system keeps one.
-   */
-  private final class AttributeCopyOperator extends UnaryOperator<PointsToSetVariable> {
-    private final InstanceKey from;
-    private final InstanceKey to;
-
-    private AttributeCopyOperator(InstanceKey from, InstanceKey to) {
-      this.from = from;
-      this.to = to;
-    }
-
-    @Override
-    public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
-      if (catalog.getValue() == null) return NOT_CHANGED;
-      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
-      IClassHierarchy cha = getClassHierarchy();
-      catalog
-          .getValue()
-          .foreach(
-              c -> {
-                InstanceKey nameKey = getSystem().getInstanceKey(c);
-                if (!(nameKey instanceof ConstantKey)
-                    || !(((ConstantKey<?>) nameKey).getValue() instanceof String name)) return;
-                IField f = resolveRootField(cha, name);
-                if (f == null) return;
-                getSystem()
-                    .newConstraint(
-                        factory.getPointerKeyForInstanceField(to, f),
-                        assignOperator,
-                        factory.getPointerKeyForInstanceField(from, f));
-              });
-      return NOT_CHANGED;
-    }
-
-    @Override
-    public int hashCode() {
-      return from.hashCode() * 31 + to.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      return o instanceof AttributeCopyOperator other
-          && other.from.equals(from)
-          && other.to.equals(to);
-    }
-
-    @Override
-    public String toString() {
-      return "attributes of " + from + " into " + to;
-    }
-  }
-
-  /**
-   * Gives {@code to} the attributes of {@code from}; see {@link AttributeCopyOperator}.
+   * Attaches to a fresh array the methods its type's model attaches per instance (wala/ML#1009):
+   * each named attribute receives a fresh instance of the summary class the model's own allocators
+   * attach, allocated at the same site, so a slice or an arithmetic result dispatches its methods
+   * as an array the summaries allocate does. Per-instance attachment mirrors the NumPy summaries;
+   * wala/ML#551 replaces both with class-level methods.
    *
-   * @param from The array derived from.
-   * @param to The fresh array.
+   * @param node The node allocating the array.
+   * @param pc The allocation's site.
+   * @param array The fresh array.
    */
-  private void copyAttributes(InstanceKey from, InstanceKey to) {
-    if (from.equals(to)) return;
-    getSystem()
-        .newSideEffect(
-            new AttributeCopyOperator(from, to),
-            ((AstPointerKeyFactory) getPointerKeyFactory()).getPointerKeyForObjectCatalog(from));
+  private void attachArrayAttributes(CGNode node, int pc, InstanceKey array) {
+    Map<String, TypeReference> attributes =
+        freshArrayAttributes.get(array.concreteType().getReference());
+    if (attributes == null) return;
+    AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+    IClassHierarchy cha = getClassHierarchy();
+    attributes.forEach(
+        (name, type) -> {
+          IField f = resolveRootField(cha, name);
+          InstanceKey method = getInstanceKeyForAllocation(node, NewSiteReference.make(pc, type));
+          if (f != null && method != null)
+            getSystem().newConstraint(factory.getPointerKeyForInstanceField(array, f), method);
+        });
   }
 
   /**
@@ -2984,8 +2957,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                     fresh.contains(type)
                         ? getInstanceKeyForAllocation(caller, NewSiteReference.make(pc, type))
                         : null;
-                // The slice is an array of the receiver's kind, with its attributes (wala/ML#1009).
-                if (allocation != null) copyAttributes(key, allocation);
+                // The slice is an array of the receiver's kind, with its methods (wala/ML#1009).
+                if (allocation != null) attachArrayAttributes(caller, pc, allocation);
                 // A declined allocation (null) falls back to the receiver's own key: the type came
                 // off an existing key, so the class resolves and this is not expected to happen,
                 // but a null inside the solver would take the whole analysis down (the wala/ML#925
