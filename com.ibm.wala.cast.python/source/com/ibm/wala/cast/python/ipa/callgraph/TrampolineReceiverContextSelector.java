@@ -121,14 +121,18 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
 
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
+        // Past the cap the trampoline is keyed on the dispatched receiver alone. Inheriting the
+        // caller's context instead keyed it on the CALLER's receiver, and since a trampoline's
+        // callee object is filtered to its context's receiver, the method body was never
+        // dispatched from the degraded node (wala/ML#1007).
         LOGGER.fine(
             () ->
                 "Receiver-context depth cap reached at caller: "
                     + caller
-                    + "; inheriting instead of keying on receiver: "
+                    + "; keying on the receiver alone: "
                     + receiver
                     + ".");
-        return caller.getContext();
+        return new ReceiverInstanceContext(receiver);
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
