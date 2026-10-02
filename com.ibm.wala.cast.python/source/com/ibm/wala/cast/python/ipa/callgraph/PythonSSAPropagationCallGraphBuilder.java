@@ -2489,6 +2489,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IClass type = key.concreteType();
       if (!(list != null && cha.isSubclassOf(type, list))
           && !(tuple != null && cha.isSubclassOf(type, tuple))) return null;
+      // A list a summary allocates stands in for a value whose length the summary does not model
+      // (`tf.unstack` writes one stand-in piece at a few constant indices), so its constant writes
+      // are not its length, and slicing it as a literal mints a shorter list than the program's
+      // (wala/ML#993). A summary's tuple keeps its length: `zip` and `enumerate` pairs are fixed.
+      if (list != null
+          && cha.isSubclassOf(type, list)
+          && asin.getNode().getMethod().isWalaSynthetic()) return null;
       int length = tupleLength(asin);
       if (length < 0) return null;
       SSAInstruction inst = caller.getIR().getInstructions()[pc];
