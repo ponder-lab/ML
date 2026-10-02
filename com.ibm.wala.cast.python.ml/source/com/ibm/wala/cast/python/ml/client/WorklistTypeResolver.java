@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector.AnchoredCallerSiteContext;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IMethod;
@@ -364,12 +365,16 @@ final class WorklistTypeResolver {
           new StringBuilder("return of ").append(node.getMethod().getSignature());
       Context context = node.getContext();
       if (context instanceof CallerSiteContext) {
-        CGNode caller = ((CallerSiteContext) context).getCaller();
+        // The site is a program counter within the method it belongs to, which is the context's
+        // calling method where the selector anchored the context on another node.
+        IMethod caller =
+            context instanceof AnchoredCallerSiteContext
+                ? ((AnchoredCallerSiteContext) context).getCallerMethod()
+                : ((CallerSiteContext) context).getCaller().getMethod();
         int pc = ((CallerSiteContext) context).getCallSite().getProgramCounter();
-        description.append(" called from ").append(caller.getMethod().getSignature());
-        if (caller.getMethod() instanceof AstMethod) {
-          Position position =
-              ((AstMethod) caller.getMethod()).debugInfo().getInstructionPosition(pc);
+        description.append(" called from ").append(caller.getSignature());
+        if (caller instanceof AstMethod) {
+          Position position = ((AstMethod) caller).debugInfo().getInstructionPosition(pc);
           if (position != null) {
             String file = position.getURL() == null ? "?" : position.getURL().getPath();
             description
