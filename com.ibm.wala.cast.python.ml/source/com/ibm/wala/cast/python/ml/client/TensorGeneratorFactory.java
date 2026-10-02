@@ -277,6 +277,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -981,14 +982,56 @@ public class TensorGeneratorFactory {
         creators.add(current);
         continue;
       }
+      Set<Integer> infeasibleArms = infeasiblePhiArms(current, builder);
       for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(current);
           it.hasNext(); ) {
         PointsToSetVariable pred = it.next();
-        if (pred != null && visited.add(pred)) queue.add(pred);
+        if (pred == null || isArmOf(pred, current, infeasibleArms)) continue;
+        if (visited.add(pred)) queue.add(pred);
       }
     }
     if (creators.isEmpty()) creators.add(source);
     return creators;
+  }
+
+  /**
+   * The value numbers a φ-defined variable takes on arms its node's context decides cannot run
+   * (wala/ML#962's φ-arm feasibility): a creator on such an arm is not one of the value's
+   * definitions in this context.
+   *
+   * @param variable The variable.
+   * @param builder The {@link PropagationCallGraphBuilder} deciding the branches.
+   * @return The value numbers of the infeasible arms; empty when the variable is not φ-defined.
+   */
+  private static Set<Integer> infeasiblePhiArms(
+      PointsToSetVariable variable, PropagationCallGraphBuilder builder) {
+    if (!(variable.getPointerKey() instanceof LocalPointerKey lpk)
+        || !(lpk.getNode().getDU().getDef(lpk.getValueNumber()) instanceof SSAPhiInstruction phi))
+      return Set.of();
+    Set<Integer> ret = HashSetFactory.make();
+    for (int i = 0; i < phi.getNumberOfUses(); i++)
+      if (Boolean.FALSE.equals(
+          TensorGenerator.computePhiArmFeasibility(builder, lpk.getNode(), phi, i)))
+        ret.add(phi.getUse(i));
+    return ret;
+  }
+
+  /**
+   * Whether a predecessor is the variable of one of a φ's arms in the same node.
+   *
+   * @param pred The predecessor.
+   * @param phiVariable The φ-defined variable.
+   * @param arms The arms' value numbers.
+   * @return {@code true} iff {@code pred} is a local of {@code phiVariable}'s node numbered in
+   *     {@code arms}.
+   */
+  private static boolean isArmOf(
+      PointsToSetVariable pred, PointsToSetVariable phiVariable, Set<Integer> arms) {
+    return !arms.isEmpty()
+        && pred.getPointerKey() instanceof LocalPointerKey predKey
+        && phiVariable.getPointerKey() instanceof LocalPointerKey phiKey
+        && predKey.getNode().equals(phiKey.getNode())
+        && arms.contains(predKey.getValueNumber());
   }
 
   /**

@@ -2976,12 +2976,17 @@ public abstract class TensorGenerator {
       var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
     }
 
-    if (var != null) {
-      ShapeResult viaCreators = this.creatorJoinShapeResult(builder, var);
+    Set<PointsToSetVariable> creators =
+        var == null ? Set.of() : TensorGeneratorFactory.findCreators(var, builder);
+    if (creators.size() > 1) {
+      // A value with several creators is typed by all of them (wala/ML#1009); the factory's single
+      // generator would be built from whichever creator its walk reaches first.
+      ShapeResult viaCreators = this.creatorJoinShapeResult(builder, creators, exact);
       if (viaCreators != null) {
         if (viaCreators.members().isEmpty() && partial != null) return partial;
         return viaCreators;
       }
+    } else if (var != null) {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
         // Recurse into the generator as long as it does not model the *same operation* as `this`
@@ -4669,70 +4674,73 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * The join of the shapes of every creator of {@code var}, when it has more than one: a value
-   * assigned on several paths is any of its creators at run time, so the factory's single
-   * generator, built from the first creator its walk reaches, would type it as that path's alone
-   * (wala/ML#1009). A creator modeling this same operation is the read's own recursion and
-   * contributes nothing; a creator the factory cannot type makes the whole join unknown, since the
-   * join of the rest would be read as the value's complete set.
+   * The join of the shapes of every creator of a value with several: a value assigned on several
+   * paths is any of its creators at run time, so the factory's single generator, built from the
+   * first creator its walk reaches, would type it as that path's alone (wala/ML#1009). Under an
+   * exact read, a creator whose generator leaves its shape unresolved contributes an unknown
+   * remainder; a default-mode read returns the members the creators prove. A creator that is no
+   * tensor contributes nothing. A creator with no generator (a user layer call's result, typed by
+   * the dataflow) and one that is the read's own operation (its recursion over a loop-carried
+   * value) add nothing, as they do when they are a value's only creator.
    *
    * @param builder The propagation call graph builder.
-   * @param var The value's points-to variable.
-   * @return The join, or {@code null} when the value has a single creator, leaving the read on the
-   *     single-generator path.
+   * @param creators The value's creators, more than one.
+   * @param exact Whether an unresolved creator marks the unknown remainder.
+   * @return The join, or {@code null} when no creator has a generator, leaving the read on its
+   *     definition and parameter paths.
    */
   private ShapeResult creatorJoinShapeResult(
-      PropagationCallGraphBuilder builder, PointsToSetVariable var) {
-    Set<PointsToSetVariable> creators = TensorGeneratorFactory.findCreators(var, builder);
-    if (creators.size() < 2) return null;
-    ShapeResult joined = null;
+      PropagationCallGraphBuilder builder, Set<PointsToSetVariable> creators, boolean exact) {
+    ShapeResult joined = ShapeResult.bottom();
+    boolean typed = false;
     for (PointsToSetVariable creator : creators) {
       TensorGenerator generator;
       try {
         generator = TensorGeneratorFactory.getGenerator(creator, builder);
       } catch (IllegalArgumentException e) {
-        return ShapeResult.unknown();
+        generator = null;
       }
-      if (generator == null) return ShapeResult.unknown();
-      if (this.isSameOperation(generator)) continue;
+      // A creator with no generator, such as a user layer call's result, is typed by the dataflow
+      // rather than by a generator, as it is when it is a value's only creator; the read's own
+      // operation is its recursion over a loop-carried value, which the engine iterates. Neither
+      // adds anything here.
+      if (generator == null || this.isSameOperation(generator)) continue;
+      typed = true;
       ShapeResult result = memoizedShapeResult(builder, generator);
-      if (result.members().isEmpty()) return ShapeResult.unknown();
-      joined = joined == null ? result : joined.union(result);
+      // An exact read marks what a creator leaves unresolved; a default-mode read returns what the
+      // creators prove, as every value read does (wala/ML#716).
+      // A creator that is no tensor (a path that cannot execute) adds nothing.
+      if (exact) joined = joined.union(result);
+      else joined = joined.union(ShapeResult.of(result.members()));
     }
-    return joined;
+    return typed ? joined : null;
   }
 
   /**
    * The dtype counterpart of {@link #creatorJoinShapeResult}, with the dtype path's class-based
-   * same-operation guard; a creator the factory cannot type contributes {@link DType#UNKNOWN}.
+   * same-operation guard.
    *
    * @param builder The propagation call graph builder.
-   * @param var The value's points-to variable.
-   * @return The join, or {@code null} when the value has a single creator.
+   * @param creators The value's creators, more than one.
+   * @return The join, or {@code null} when no creator has a generator.
    */
   private Set<DType> creatorJoinDTypes(
-      PropagationCallGraphBuilder builder, PointsToSetVariable var) {
-    Set<PointsToSetVariable> creators = TensorGeneratorFactory.findCreators(var, builder);
-    if (creators.size() < 2) return null;
+      PropagationCallGraphBuilder builder, Set<PointsToSetVariable> creators) {
     Set<DType> joined = EnumSet.noneOf(DType.class);
+    boolean typed = false;
     for (PointsToSetVariable creator : creators) {
       TensorGenerator generator;
       try {
         generator = TensorGeneratorFactory.getGenerator(creator, builder);
       } catch (IllegalArgumentException e) {
-        joined.add(UNKNOWN);
-        continue;
+        generator = null;
       }
-      if (generator == null) {
-        joined.add(UNKNOWN);
-        continue;
-      }
-      if (generator.getClass().equals(this.getClass())) continue;
-      Set<DType> dtypes = memoizedDTypes(builder, generator);
-      if (dtypes.isEmpty()) joined.add(UNKNOWN);
-      else joined.addAll(dtypes);
+      if (generator == null || generator.getClass().equals(this.getClass())) continue;
+      typed = true;
+      // A creator that is no tensor (a path that cannot execute) adds nothing.
+      joined.addAll(memoizedDTypes(builder, generator));
     }
-    return joined;
+    return typed ? joined : null;
   }
 
   /**
@@ -6693,9 +6701,13 @@ public abstract class TensorGenerator {
       var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
     }
 
-    if (var != null) {
-      Set<DType> viaCreators = this.creatorJoinDTypes(builder, var);
+    Set<PointsToSetVariable> creators =
+        var == null ? Set.of() : TensorGeneratorFactory.findCreators(var, builder);
+    if (creators.size() > 1) {
+      // The dtype twin of the shape read's creator join (wala/ML#1009).
+      Set<DType> viaCreators = this.creatorJoinDTypes(builder, creators);
       if (viaCreators != null) return viaCreators;
+    } else if (var != null) {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
         // Unlike the shape path's evaluation-identity guard (wala/ML#739), this guard stays
