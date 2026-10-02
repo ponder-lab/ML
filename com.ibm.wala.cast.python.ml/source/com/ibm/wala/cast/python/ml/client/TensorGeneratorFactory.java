@@ -1508,15 +1508,23 @@ public class TensorGeneratorFactory {
     // of the tandem registration. Only a source that IS the data (a parameter, or the allocation
     // itself) resolves here: a component read of it has the data in its points-to set too, since
     // the pointer analysis stores the packed value in the slot, and must dispatch below as the
-    // read it is.
+    // read it is. And only when EVERY member is such an allocation: a step reached both through
+    // `fit` and by a direct call with the user's own tuple has both in its parameter's set, and
+    // typing it from the pack alone would drop the direct call's components; that set falls
+    // through, and the step's reads type through the heap edges from both.
     if (k instanceof LocalPointerKey lpk) {
       SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
-      if (def == null || def instanceof SSANewInstruction)
+      if (def == null || def instanceof SSANewInstruction) {
+        AllocationSiteInNode data = null;
+        boolean allData = true;
         for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(k)) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-          if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference()))
-            return new FitDataGenerator(asin.getNode(), asin);
+          if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference())) {
+            if (data == null) data = asin;
+          } else allData = false;
         }
+        if (data != null && allData) return new FitDataGenerator(data.getNode(), data);
+      }
     }
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
@@ -2073,6 +2081,10 @@ public class TensorGeneratorFactory {
         if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference()))
           return new FitDataGenerator(asin.getNode(), asin);
       }
+      // Unreachable by construction: the source is the unpack call's own result variable, and the
+      // summary allocates its result unconditionally, so the set is exactly that allocation. Kept
+      // as a throw so a summary change that breaks the invariant surfaces in the caught-exception
+      // census (wala/ML#925) rather than as a silent decline.
       throw new IllegalArgumentException(
           "No unpacked-data allocation in the points-to set of: " + describe(source) + ".");
     } else if (isType(calledFunction, DIRECTORY_ITERATOR_IMAGES_TYPE)

@@ -155,6 +155,16 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
   private List<Component> components(PropagationCallGraphBuilder builder, int index) {
     List<Component> ret = new ArrayList<>();
     if (this.unpack) {
+      // A dataset element read in a loop is the dataset object in the pointer analysis, whose set
+      // also carries the object's field values (its method objects, its source tensors); the
+      // dataset reading covers the element, and those members are not components of it.
+      for (InstanceKey data : this.slot(builder, 0)) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(data);
+        if (asin != null && isDataset(asin.concreteType().getReference())) {
+          ret.add(this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), index));
+          return ret;
+        }
+      }
       for (InstanceKey data : this.slot(builder, 0)) {
         AllocationSiteInNode asin = getAllocationSiteInNode(data);
         TypeReference type = asin == null ? null : asin.concreteType().getReference();
@@ -162,8 +172,6 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
           ret.add(this.ofProvider(new FitDataGenerator(asin.getNode(), asin), index));
         else if (asin != null && PythonTypes.tuple.equals(type))
           ret.add(this.ofValues(this.field(builder, asin, index)));
-        else if (asin != null && isDataset(type))
-          ret.add(this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), index));
         else if (index == 0) ret.add(this.ofValues(this.singleton(builder, data)));
       }
       return ret;
@@ -262,6 +270,27 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       } catch (IllegalArgumentException e) {
         generator = null;
       }
+    // A dataset element read in a loop resolves to an element generator delegating to its dataset,
+    // and a pass-through transformation to its receiver; unwrap to the provider, as the factory
+    // does before its own tuple-element dispatch.
+    boolean changed = true;
+    while (changed && generator != null) {
+      changed = false;
+      if (generator instanceof DelegatingTensorGenerator dtg) {
+        TensorGenerator next = dtg.getUnderlying();
+        if (next != null && next != generator) {
+          generator = next;
+          changed = true;
+        }
+      }
+      if (!changed && generator.getClass() == DatasetGenerator.class) {
+        TensorGenerator receiver = ((DatasetGenerator) generator).getReceiverGenerator(builder);
+        if (receiver != null && receiver != generator) {
+          generator = receiver;
+          changed = true;
+        }
+      }
+    }
     if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder))
       return this.ofProvider(tep, index);
     TensorGenerator element = generator;
