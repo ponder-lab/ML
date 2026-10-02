@@ -10247,6 +10247,10 @@ public abstract class TensorGenerator {
       return new DatasetMapGenerator(allocation.getNode(), allocation);
 
     TypeReference sanitized = sanitize(allocationType);
+    // The data a Keras `fit`, `evaluate` or `predict` summary packs for the model's step, and an
+    // `unpack_x_y_sample_weight` result: tuples whose components the step reads by constant index,
+    // typed from the slots' own values (wala/ML#997).
+    if (FitDataGenerator.describes(sanitized)) return new FitDataGenerator(node, allocation);
 
     if (sanitized.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
       return new MnistInputData(node, MnistInputData.X_TRAIN_SHAPE);

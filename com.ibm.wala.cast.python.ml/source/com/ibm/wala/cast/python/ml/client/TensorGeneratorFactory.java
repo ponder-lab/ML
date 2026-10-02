@@ -228,6 +228,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNPACK_X_Y_SAMPLE_WEIGHT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_SUM;
@@ -1500,6 +1501,31 @@ public class TensorGeneratorFactory {
       PropagationCallGraphBuilder builder,
       Set<PointsToSetVariable> visited) {
     PointerKey k = source.getPointerKey();
+    // The data a Keras `fit`, `evaluate` or `predict` summary packs for the model's step, or an
+    // `unpack_x_y_sample_weight` result, reaches a step as a parameter or an unpack result and is
+    // read by constant index there; its provider is the allocation's own, whatever defined the
+    // source (wala/ML#997). The manual registry in `createManualGenerator` is the other half
+    // of the tandem registration. Only a source that IS the data (a parameter, or the allocation
+    // itself) resolves here: a component read of it has the data in its points-to set too, since
+    // the pointer analysis stores the packed value in the slot, and must dispatch below as the
+    // read it is. And only when EVERY member is such an allocation: a step reached both through
+    // `fit` and by a direct call with the user's own tuple has both in its parameter's set, and
+    // typing it from the pack alone would drop the direct call's components; that set falls
+    // through, and the step's reads type through the heap edges from both.
+    if (k instanceof LocalPointerKey lpk) {
+      SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+      if (def == null || def instanceof SSANewInstruction) {
+        AllocationSiteInNode data = null;
+        boolean allData = true;
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(k)) {
+          AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+          if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference())) {
+            if (data == null) data = asin;
+          } else allData = false;
+        }
+        if (data != null && allData) return new FitDataGenerator(data.getNode(), data);
+      }
+    }
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
       CGNode node = lpk.getNode();
@@ -2046,7 +2072,22 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_LIST_FILES_TYPE)
         || isType(calledFunction, LIST_FILES_DATASET_TYPE))
       return new ListFilesDatasetGenerator(source);
-    else if (isType(calledFunction, DIRECTORY_ITERATOR_IMAGES_TYPE)
+    else if (isType(calledFunction, UNPACK_X_Y_SAMPLE_WEIGHT.getDeclaringClass())) {
+      // The unpack result's components are typed by the pack's own generator (wala/ML#997);
+      // the source-based half of the tandem registration, the manual half being
+      // `createManualGenerator`'s allocation-type prelude.
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference()))
+          return new FitDataGenerator(asin.getNode(), asin);
+      }
+      // Unreachable by construction: the source is the unpack call's own result variable, and the
+      // summary allocates its result unconditionally, so the set is exactly that allocation. Kept
+      // as a throw so a summary change that breaks the invariant surfaces in the caught-exception
+      // census (wala/ML#925) rather than as a silent decline.
+      throw new IllegalArgumentException(
+          "No unpacked-data allocation in the points-to set of: " + describe(source) + ".");
+    } else if (isType(calledFunction, DIRECTORY_ITERATOR_IMAGES_TYPE)
         || isType(calledFunction, DIRECTORY_ITERATOR_LABELS_TYPE)) {
       // A batch-tuple position of `flow_from_directory` (wala/ML#830), reached through its own
       // points-to membership when the container chase cannot resolve the tuple (a wrapper-plumbed

@@ -127,6 +127,27 @@
         <putfield class="LRoot" field="get" fieldType="LRoot" ref="constraints" value="constraints_get"/>
         <new def="nonneg_cls" class="Ltensorflow/keras/constraints/class/NonNeg"/>
         <putfield class="LRoot" field="NonNeg" fieldType="LRoot" ref="constraints" value="nonneg_cls"/>
+        <!-- `tf.keras.utils` (wala/ML#997, wala/ML#996) and the `serialize`/`deserialize`/`get` functions of the `layers`, `constraints`, `initializers` and `regularizers` modules (wala/ML#996). -->
+        <new def="utils" class="Lobject"/>
+        <putfield class="LRoot" field="utils" fieldType="LRoot" ref="keras" value="utils"/>
+        <new def="unpack_xyw" class="Ltensorflow/keras/utils/unpack_x_y_sample_weight"/>
+        <putfield class="LRoot" field="unpack_x_y_sample_weight" fieldType="LRoot" ref="utils" value="unpack_xyw"/>
+        <new def="serialize_ko" class="Ltensorflow/keras/utils/serialize_keras_object"/>
+        <putfield class="LRoot" field="serialize_keras_object" fieldType="LRoot" ref="utils" value="serialize_ko"/>
+        <new def="deserialize_ko" class="Ltensorflow/keras/utils/deserialize_keras_object"/>
+        <putfield class="LRoot" field="deserialize_keras_object" fieldType="LRoot" ref="utils" value="deserialize_ko"/>
+        <new def="ser_fn" class="Ltensorflow/keras/serialization/serialize"/>
+        <new def="deser_fn" class="Ltensorflow/keras/serialization/deserialize"/>
+        <new def="get_fn" class="Ltensorflow/keras/serialization/get"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="layers" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="layers" value="deser_fn"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="constraints" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="constraints" value="deser_fn"/>
+        <new def="regularizers" class="Lobject"/>
+        <putfield class="LRoot" field="regularizers" fieldType="LRoot" ref="keras" value="regularizers"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="regularizers" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="regularizers" value="deser_fn"/>
+        <putfield class="LRoot" field="get" fieldType="LRoot" ref="regularizers" value="get_fn"/>
         <new def="keras_mnist" class="Lobject"/>
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="x" value="image"/>
         <new def="io" class="Lobject"/>
@@ -184,6 +205,11 @@
         <putfield class="LRoot" field="initializers" fieldType="LRoot" ref="x" value="initializers"/>
         <new def="RandomNormal" class="Ltensorflow/initializers/class/RandomNormal"/>
         <putfield class="LRoot" field="RandomNormal" fieldType="LRoot" ref="initializers" value="RandomNormal"/>
+        <!-- `tf.keras.initializers` is the same module as `tf.initializers`; its `serialize`, `deserialize` and `get` are the identities above (wala/ML#996). -->
+        <putfield class="LRoot" field="initializers" fieldType="LRoot" ref="keras" value="initializers"/>
+        <putfield class="LRoot" field="serialize" fieldType="LRoot" ref="initializers" value="ser_fn"/>
+        <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="initializers" value="deser_fn"/>
+        <putfield class="LRoot" field="get" fieldType="LRoot" ref="initializers" value="get_fn"/>
         <new def="Dataset" class="Ltensorflow/data/Dataset"/>
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset"/>
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
@@ -3328,6 +3354,53 @@
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
+        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` records nothing the analysis reads. -->
+        <method name="compile" descriptor="()LRoot;" numArgs="10" paramNames="func self optimizer loss metrics loss_weights weighted_metrics run_eagerly steps_per_execution jit_compile">
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
+        <method name="train_step" descriptor="()LRoot;" numArgs="3" paramNames="func self data">
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="x"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
+          <new def="logs" class="Lobject"/>
+          <return value="logs"/>
+        </method>
+        <method name="test_step" descriptor="()LRoot;" numArgs="3" paramNames="func self data">
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="x"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
+          <new def="logs" class="Lobject"/>
+          <return value="logs"/>
+        </method>
+        <method name="predict_step" descriptor="()LRoot;" numArgs="3" paramNames="func self data">
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="x"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
+          <return value="pred"/>
+        </method>
+        <method name="fit" descriptor="()LRoot;" numArgs="22" paramNames="func self x y batch_size epochs verbose callbacks validation_split validation_data shuffle class_weight sample_weight initial_epoch steps_per_epoch validation_steps validation_batch_size validation_freq max_queue_size workers use_multiprocessing">
+          <new def="data" class="Ltensorflow/keras/FitData"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="data" value="x"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="data" value="y"/>
+          <!-- The step is read off the instance and called with the data alone: the method-dispatch trampoline binds the instance, as it does for `self.train_step(data)` in user code, so passing `self` here would land it in `data`. -->
+          <getfield class="LRoot" field="train_step" fieldType="LRoot" ref="self" def="step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="data" numArgs="2" def="logs"/>
+          <new def="history" class="Ltensorflow/keras/callbacks/History"/>
+          <return value="history"/>
+        </method>
+        <method name="evaluate" descriptor="()LRoot;" numArgs="13" paramNames="func self x y batch_size verbose sample_weight steps callbacks max_queue_size workers use_multiprocessing return_dict">
+          <new def="data" class="Ltensorflow/keras/FitData"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="data" value="x"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="data" value="y"/>
+          <getfield class="LRoot" field="test_step" fieldType="LRoot" ref="self" def="step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="data" numArgs="2" def="logs"/>
+          <return value="logs"/>
+        </method>
+        <method name="predict" descriptor="()LRoot;" numArgs="10" paramNames="func self x batch_size verbose steps callbacks max_queue_size workers use_multiprocessing">
+          <new def="data" class="Ltensorflow/keras/FitData"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="data" value="x"/>
+          <getfield class="LRoot" field="predict_step" fieldType="LRoot" ref="self" def="step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="data" numArgs="2" def="pred"/>
+          <return value="pred"/>
+        </method>
       </class>
       <!-- The distinct Sequential instance type (wala/ML#817). Declares only `__call__`, duplicated from `Model`: the instance-method trampoline resolves the callable's method on the exact receiver class with no superclass walk (wala/ML#833), so a body-less shell left `model(x)` unresolved. `__init__` and `call` are NOT duplicated — their resolution walks the hierarchy chain, so `Model`'s bodies serve — and `super` chains into the canonical `Model`, so a source subclass such as `class M(tf.keras.Sequential)` joins the same hierarchy a `Model` subclass does (wala/ML#118, wala/ML#662). -->
       <class name="Sequential" allocatable="true" super="Ltensorflow/keras/models/Model">
@@ -3338,7 +3411,53 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/keras/callbacks">
+      <!-- The object `fit` returns (wala/ML#997); its `epoch` and `history` fields are not modeled. -->
+      <class name="History" allocatable="true"></class>
+    </package>
+    <package name="tensorflow/keras/utils">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/unpack_x_y_sample_weight (wala/ML#997): `(x, y, sample_weight)` from a step's data; the result's components are `data`'s when `data` is a tuple and `data` itself at index 0 otherwise, which `FitDataGenerator` types. -->
+      <class name="unpack_x_y_sample_weight" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self data">
+          <new def="u" class="Ltensorflow/keras/UnpackedData"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="u" value="data"/>
+          <return value="u"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/serialize_keras_object and deserialize_keras_object (wala/ML#996): the round trip through a configuration is modeled as the identity, so a layer rebuilt from its configuration is the layer it was serialized from, flow-insensitively the same configuration, constraints included. -->
+      <class name="serialize_keras_object" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self instance">
+          <return value="instance"/>
+        </method>
+      </class>
+      <class name="deserialize_keras_object" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self identifier module_objects custom_objects printable_module_name">
+          <return value="identifier"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/serialization">
+      <!-- The `serialize`/`deserialize`/`get` functions of the `layers`, `constraints`, `initializers` and `regularizers` modules (wala/ML#996): identities on the object, as above. -->
+      <class name="serialize" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self instance">
+          <return value="instance"/>
+        </method>
+      </class>
+      <class name="deserialize" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self config custom_objects">
+          <return value="config"/>
+        </method>
+      </class>
+      <class name="get" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self identifier">
+          <return value="identifier"/>
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/keras">
+      <!-- The data a training, evaluation or prediction call packs for the model's step (slot 0 is `x`, slot 1 is `y`), and the result of `tf.keras.utils.unpack_x_y_sample_weight` (slot 0 is the data); `FitDataGenerator` types their components (wala/ML#997). -->
+      <class name="FitData" allocatable="true"></class>
+      <class name="UnpackedData" allocatable="true"></class>
       <!-- At runtime `tf.keras.Model` and `tf.keras.models.Model` are the same class under two attribute paths. Shell lookup is exact-match on the canonicalized base name (wala/ML#118), so this empty alias shell covers subclasses written against the `tf.keras.Model`/`from tensorflow.keras import Model` spelling; positioning it at the canonical `Ltensorflow/keras/models/Model` instance type keeps one hierarchy chain, so subtype queries against the canonical type also hold for subclasses reached through this alias (wala/ML#662). -->
       <class name="Model" super="Ltensorflow/keras/models/Model"></class>
       <!-- The `tf.keras.Sequential` spelling of the class below, aliased like `Model` (wala/ML#817, wala/ML#662). -->
