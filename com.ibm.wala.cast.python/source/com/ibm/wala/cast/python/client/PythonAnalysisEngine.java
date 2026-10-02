@@ -29,6 +29,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.PythonScopeMappingInstanceKeys;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
+import com.ibm.wala.cast.python.ipa.summaries.PythonBypassMethodTargetSelector;
 import com.ibm.wala.cast.python.ipa.summaries.PythonComprehensionTrampolines;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
@@ -69,7 +70,6 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.cha.SeqClassHierarchyFactory;
 import com.ibm.wala.ipa.summaries.BypassClassTargetSelector;
-import com.ibm.wala.ipa.summaries.BypassMethodTargetSelector;
 import com.ibm.wala.ipa.summaries.BypassSyntheticClassLoader;
 import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.ipa.summaries.XMLMethodSummaryReader;
@@ -876,7 +876,8 @@ public abstract class PythonAnalysisEngine<T>
 
     MethodTargetSelector targetSelector = options.getMethodTargetSelector();
     targetSelector =
-        new BypassMethodTargetSelector(targetSelector, summaries, xml.getIgnoredPackages(), cha);
+        new PythonBypassMethodTargetSelector(
+            targetSelector, summaries, xml.getIgnoredPackages(), cha);
     options.setSelector(targetSelector);
 
     ClassTargetSelector cs =

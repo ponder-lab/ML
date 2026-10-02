@@ -1,7 +1,10 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
 
 /**
  * A generator for weights created by {@code tf.keras.layers.Layer.add_weight()}, the universal
@@ -57,5 +60,27 @@ public class AddWeight extends TensorTypeAllocator {
   @Override
   protected int getDTypeParameterPosition() {
     return 2;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The positions this generator declares ({@link #getShapeParameterPosition()}, {@link
+   * #getDTypeParameterPosition()}) are counted in the USER's frame, {@code add_weight(name, shape,
+   * dtype, ...)} with {@code name} at 0, because a source anchor reads the user's own call. The
+   * Keras layer-call generators count in the trampoline's frame instead ({@code func self inputs}:
+   * the instance at 0, the first argument at 1), which is why the shared resolution reads a
+   * trampoline caller's invoke as it is. A manual anchor on the {@code add_weight} summary node
+   * reads at that trampoline, whose invoke carries the bound instance before the user's positional
+   * arguments, so the user's position {@code p} is the trampoline's {@code p + 1}; the shift is
+   * this generator's alone, not the shared path's (wala/ML#996). A keyword resolves by name on
+   * either path and is unaffected.
+   */
+  @Override
+  protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    boolean manual = this.getInvokeInstruction() == null && this.getSource() == null;
+    return super.getArgumentPointsToSet(
+        builder, manual && paramPos >= 0 ? paramPos + 1 : paramPos, paramName);
   }
 }
