@@ -2247,6 +2247,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether an instruction calls the given builtin, resolved through the call graph since the
+   * declared target of a call is a generic trampoline.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The node holding the instruction.
+   * @param def The instruction, possibly {@code null}.
+   * @param builtin The builtin's type.
+   * @return {@code true} iff {@code def} is a call with at least one argument some target of which
+   *     is {@code builtin}.
+   */
+  private static boolean callsBuiltin(
+      PropagationCallGraphBuilder builder, CGNode node, SSAInstruction def, TypeReference builtin) {
+    if (!(def instanceof PythonInvokeInstruction invoke) || invoke.getNumberOfUses() < 2)
+      return false;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(builtin)) return true;
+    return false;
+  }
+
+  /**
    * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
    * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
    * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
@@ -2294,8 +2314,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
     if (!isFirstElement) return false;
 
-    // Object ref must be another PropertyRead (the iterator-element fetch).
+    // Object ref must be the iterator-element fetch: another PropertyRead, or, as a loop now lowers
+    // (wala/ML#1010), `next` of the iterator `iter` makes over the `enumerate` result.
     SSAInstruction objDef = node.getDU().getDef(outer.getObjectRef());
+    if (callsBuiltin(builder, node, objDef, PythonTypes.NEXT_BUILTIN)) {
+      SSAInstruction iterDef = node.getDU().getDef(objDef.getUse(1));
+      return callsBuiltin(builder, node, iterDef, PythonTypes.ITER_BUILTIN)
+          && callsBuiltin(
+              builder, node, node.getDU().getDef(iterDef.getUse(1)), PythonTypes.ENUMERATE_BUILTIN);
+    }
     if (!(objDef instanceof PythonPropertyRead)) return false;
     PythonPropertyRead inner = (PythonPropertyRead) objDef;
 
