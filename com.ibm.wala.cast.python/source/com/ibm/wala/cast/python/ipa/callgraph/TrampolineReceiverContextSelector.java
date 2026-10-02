@@ -13,6 +13,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -109,6 +110,15 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // Recursive dispatch on the caller's own receiver: reuse the caller's context so
       // self-recursive methods do not grow the context.
       if (receiver.equals(caller.getContext().get(ContextKey.RECEIVER))) return caller.getContext();
+      // A method object a `super()` object exposes is allocated by the super body once per class
+      // and instance, so keying its trampoline on the receiver alone already separates instances;
+      // pairing it with the calling node and site as well minted a fresh context per level of a
+      // `super().__init__(...)` chain per caller context, and once those bodies ran with a bound
+      // `self` everything below the chain multiplied (wala/ML#995). The receiver stays the key,
+      // since the trampoline's callee object is filtered to the context's receiver: reusing the
+      // caller's context, whose receiver is the instance, left that object empty and the base
+      // method never dispatched.
+      if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
 
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
         LOGGER.fine(
@@ -162,6 +172,26 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Whether a receiver is a method object the {@code super()} body allocates: its allocation site
+   * (unwrapped from the scope-mapping key a function object carries) is in a node whose method is
+   * the super stub's, declared on the {@code superfun} class.
+   *
+   * @param receiver A dispatched receiver.
+   * @return {@code true} iff the super body allocated it.
+   */
+  private static boolean allocatedBySuperBody(InstanceKey receiver) {
+    InstanceKey key = receiver;
+    while (key instanceof ScopeMappingInstanceKey scoped) key = scoped.getBase();
+    return key instanceof AllocationSiteInNode allocation
+        && allocation
+            .getNode()
+            .getMethod()
+            .getReference()
+            .getDeclaringClass()
+            .equals(PythonTypes.superfun);
   }
 
   @Override
