@@ -115,7 +115,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
-      return new CallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
+      return new HashedCallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
     }
 
     // The real method body dispatched from a per-receiver trampoline node stays per-receiver.
@@ -151,7 +151,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
-      return new CallerSiteContext(caller, site);
+      return new HashedCallerSiteContext(caller, site);
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
@@ -206,5 +206,48 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       c = up.getContext();
     }
     return false;
+  }
+
+  /**
+   * A {@link CallerSiteContext} whose hash code is computed once. WALA recomputes a node's hash
+   * from its context's, and a caller-site context's from its caller node's, on every call, so
+   * hashing a context walks every caller reachable through it. Contexts this selector builds share
+   * those callers, and a receiver key's creator node adds a second branch at each level, so the
+   * walk is exponential in the context's height even when the contexts are few: each node lookup
+   * hashes its context. Caching the hash at every level this selector builds makes each one
+   * constant.
+   */
+  private static final class HashedCallerSiteContext extends CallerSiteContext {
+
+    private final int hash;
+
+    private HashedCallerSiteContext(CGNode caller, CallSiteReference site) {
+      super(caller, site);
+      this.hash = super.hashCode();
+    }
+
+    @Override
+    public int hashCode() {
+      return this.hash;
+    }
+  }
+
+  /**
+   * A {@link CallerSiteContextPair} whose hash code is computed once; see {@link
+   * HashedCallerSiteContext}.
+   */
+  private static final class HashedCallerSiteContextPair extends CallerSiteContextPair {
+
+    private final int hash;
+
+    private HashedCallerSiteContextPair(CGNode caller, CallSiteReference site, Context base) {
+      super(caller, site, base);
+      this.hash = super.hashCode();
+    }
+
+    @Override
+    public int hashCode() {
+      return this.hash;
+    }
   }
 }
