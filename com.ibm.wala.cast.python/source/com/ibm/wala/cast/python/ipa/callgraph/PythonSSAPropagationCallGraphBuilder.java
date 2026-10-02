@@ -87,6 +87,7 @@ import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
+import com.ibm.wala.util.intset.BitVectorIntSet;
 import com.ibm.wala.util.intset.IntIterator;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
@@ -2750,7 +2751,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
       if (rhs.getValue() == null) return NOT_CHANGED;
       Set<TypeReference> fresh = freshSliceResultTypes;
-      MutableIntSet out = IntSetUtil.make();
+      // A throwaway set, so unshared: the default factory's shared bit vectors search the shared
+      // repository on every overflow, and in a large graph with millions of shared sets each `add`
+      // here cost a scan of the repository, which stalled whole-project analyses.
+      MutableIntSet out = new BitVectorIntSet();
       rhs.getValue()
           .foreach(
               i -> {
@@ -3123,7 +3127,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
       if (rhs.getValue() == null) return NOT_CHANGED;
-      MutableIntSet out = IntSetUtil.make();
+      // A throwaway set, so unshared; see SliceResultOperator.
+      MutableIntSet out = new BitVectorIntSet();
       rhs.getValue()
           .foreach(
               i -> {
