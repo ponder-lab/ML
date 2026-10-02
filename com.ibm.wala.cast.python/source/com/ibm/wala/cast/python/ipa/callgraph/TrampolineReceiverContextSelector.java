@@ -110,14 +110,15 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // Recursive dispatch on the caller's own receiver: reuse the caller's context so
       // self-recursive methods do not grow the context.
       if (receiver.equals(caller.getContext().get(ContextKey.RECEIVER))) return caller.getContext();
-      // `super().m(...)` dispatches on the same instance as the caller: the method object is one
-      // the
-      // super body allocates per calling context, so keying on it minted a fresh caller pair per
-      // level of a `super().__init__(...)` chain per caller context, and once those bodies ran with
-      // a bound `self` everything below the chain multiplied by the chain's depth per instance
-      // (wala/ML#995). Reuse the caller's context, as for a recursive dispatch on the caller's own
-      // receiver.
-      if (allocatedBySuperBody(receiver)) return caller.getContext();
+      // A method object a `super()` object exposes is allocated by the super body once per class
+      // and instance, so keying its trampoline on the receiver alone already separates instances;
+      // pairing it with the calling node and site as well minted a fresh context per level of a
+      // `super().__init__(...)` chain per caller context, and once those bodies ran with a bound
+      // `self` everything below the chain multiplied (wala/ML#995). The receiver stays the key,
+      // since the trampoline's callee object is filtered to the context's receiver: reusing the
+      // caller's context, whose receiver is the instance, left that object empty and the base
+      // method never dispatched.
+      if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
 
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
         LOGGER.fine(
