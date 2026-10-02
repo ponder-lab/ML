@@ -237,6 +237,24 @@ public class NumpyTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/ndarray/tolist")),
           AstMethodReference.fnSelector);
 
+  /**
+   * The methods the NumPy summaries attach to every array they allocate, by attribute name, as each
+   * allocator's {@code <putfield>} block does (wala/ML#1009). An array the call-graph builder
+   * allocates itself, a slice's or an arithmetic result's, receives the same ones; a test checks
+   * this table against every allocator of {@link #NDARRAY_TYPE} in the summaries. Per-instance
+   * attachment goes away with wala/ML#551.
+   */
+  public static final Map<String, TypeReference> NDARRAY_ATTRIBUTES =
+      Map.of(
+          ASTYPE_METHOD_NAME,
+          ASTYPE.getDeclaringClass(),
+          TOLIST_METHOD_NAME,
+          TOLIST.getDeclaringClass(),
+          "reshape",
+          RESHAPE_METHOD.getDeclaringClass(),
+          "transpose",
+          NDARRAY_TRANSPOSE.getDeclaringClass());
+
   private static final String TOLIST_SIGNATURE = "numpy.ndarray.tolist()";
 
   /**
