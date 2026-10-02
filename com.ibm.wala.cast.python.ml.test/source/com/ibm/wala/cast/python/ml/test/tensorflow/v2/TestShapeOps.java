@@ -2498,4 +2498,31 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * {@code tf.pad} grows each extent by its {@code paddings} row and keeps the input's dtype; a row
+   * whose widths are not constants leaves its extent unresolved (wala/ML#1009).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTfPad()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_pad.py",
+        "consume_constant",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 5, 6))));
+    test(
+        "tf2_test_tf_pad.py",
+        "consume_unresolved",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3))))));
+  }
 }

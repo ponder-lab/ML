@@ -2444,6 +2444,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RESHAPE_SIGNATURE = "tf.reshape()";
 
+  /** {@code tf.pad} (wala/ML#1009). */
+  public static final MethodReference PAD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/pad")),
+          AstMethodReference.fnSelector);
+
+  private static final String PAD_SIGNATURE = "tf.pad()";
+
   public static final MethodReference DATASET_BATCH =
       MethodReference.findOrCreate(DATASET, AstMethodReference.fnSelector);
 
@@ -2495,6 +2504,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(TENSOR_SPEC, TENSOR_SPEC_SIGNATURE),
           Map.entry(RAGGED_TENSOR_SPEC, RAGGED_TENSOR_SPEC_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
+          Map.entry(PAD.getDeclaringClass(), PAD_SIGNATURE),
           Map.entry(CONSTANT.getDeclaringClass(), CONSTANT_SIGNATURE),
           Map.entry(RANGE.getDeclaringClass(), RANGE_SIGNATURE),
           Map.entry(NORMAL.getDeclaringClass(), NORMAL_SIGNATURE),

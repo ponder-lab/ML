@@ -2118,6 +2118,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
         || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
+    else if (isType(calledFunction, TensorFlowTypes.PAD.getDeclaringClass()))
+      return new Pad(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
     else if (isType(calledFunction, SCATTER_ND.getDeclaringClass())) return new ScatterNd(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))
