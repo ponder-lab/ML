@@ -999,6 +999,11 @@ public class TensorGeneratorFactory {
    * (wala/ML#962's φ-arm feasibility): a creator on such an arm is not one of the value's
    * definitions in this context.
    *
+   * <p>The arms are matched to the variable's assignment-graph predecessors by their value numbers
+   * in the φ's node, which assumes an arm's variable reaches the φ-defined variable only through
+   * the φ: the builder adds one use-to-def edge per arm and no other edge between locals of one
+   * node.
+   *
    * @param variable The variable.
    * @param builder The {@link PropagationCallGraphBuilder} deciding the branches.
    * @return The value numbers of the infeasible arms; empty when the variable is not φ-defined.

@@ -2826,7 +2826,7 @@ public abstract class TensorGenerator {
    *     PythonInvokeInstruction} stores keywords in call-site order and a positional index into
    *     them selects the wrong value.
    */
-  private static int callerArgumentValueNumber(SSAAbstractInvokeInstruction call, int paramPos) {
+  protected static int callerArgumentValueNumber(SSAAbstractInvokeInstruction call, int paramPos) {
     if (call instanceof PythonInvokeInstruction pyCall) {
       int positionals = pyCall.getNumberOfPositionalParameters() - 1;
       if (paramPos < positionals) return pyCall.getUse(paramPos + 1);

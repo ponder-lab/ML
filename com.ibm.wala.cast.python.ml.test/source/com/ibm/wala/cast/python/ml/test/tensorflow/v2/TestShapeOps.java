@@ -2033,7 +2033,10 @@ public class TestShapeOps extends AbstractTensorTest {
    * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>). The opaque arm's own unknown
    * shape stands beside it: the table is read from both of its definitions, where it used to be
    * read from whichever one a walk reached first (<a
-   * href="https://github.com/wala/ML/issues/1009">wala/ML#1009</a>).
+   * href="https://github.com/wala/ML/issues/1009">wala/ML#1009</a>). The gather reads its table
+   * exactly, so the opaque arm is the read's unknown remainder (<a
+   * href="https://github.com/wala/ML/issues/716">wala/ML#716</a>), which the seed carries as the
+   * unknown-shape member.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

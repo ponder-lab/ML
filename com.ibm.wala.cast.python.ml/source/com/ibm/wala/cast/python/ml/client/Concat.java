@@ -22,9 +22,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -148,7 +150,6 @@ public class Concat extends TensorGenerator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     boolean sawConvergingElement = false;
-    boolean everyListCannotExecute = true;
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
       if (asin == null) continue;
@@ -172,13 +173,12 @@ public class Concat extends TensorGenerator {
         ShapeResult appended = computeAppendedShape(builder, asin, axis);
         if (!appended.members().isEmpty()) outShape = appended;
       }
-      if (!cannotExecute(builder, asin, catalog)) everyListCannotExecute = false;
       if (outShape.isBottom()) sawConvergingElement = true;
       ret.addAll(outShape.members());
     }
     // A concat every one of whose lists has an element that cannot execute is itself no tensor, a
     // settled answer rather than a converging one (wala/ML#961, wala/ML#962).
-    if (ret.isEmpty() && everyListCannotExecute && sawConvergingElement)
+    if (ret.isEmpty() && sawConvergingElement && this.cannotExecute(builder))
       return Collections.emptySet();
     if (ret.isEmpty()) {
       // Clause 3 (wala/ML#758): with the element reads engine-visible, a memberless evaluation
@@ -442,21 +442,51 @@ public class Concat extends TensorGenerator {
   }
 
   /**
-   * Whether this concat cannot execute: every list or tuple it receives has an element that is the
-   * {@code None} constant (wala/ML#961) or a value every producer of which cannot run on its {@code
-   * None}-only input (wala/ML#962). Such a concat raises, so its result is no tensor.
+   * Whether this concat cannot execute: every caller passes it lists or tuples only, all visible,
+   * and each has an element that is the {@code None} constant (wala/ML#961) or a value every
+   * producer of which cannot run on its {@code None}-only input (wala/ML#962). Such a concat
+   * raises, so its result is no tensor. A caller whose argument has no allocation the points-to
+   * analysis sees could pass a list that executes, so it makes the answer {@code false} rather than
+   * being left out (the silent-skip class of wala/ML#900).
    *
    * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
-   * @return {@code true} iff every list received has such an element.
+   * @return {@code true} iff every caller's every list has such an element.
    */
   private boolean cannotExecute(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> valuesPts =
-        this.getArgumentPointsToSet(
-            builder, this.getValuesParameterIndex(), this.getValuesParameterName());
-    if (valuesPts == null || valuesPts.isEmpty()) return false;
+    int valuesVn = getArgumentValueNumber(this.getValuesParameterIndex());
+    if (valuesVn <= 0) return false;
+    CGNode node = this.getNode();
+    // Anchored on the call's result, the generator reads the argument at that one call site, in
+    // the calling frame; anchored on the concat's own body, every caller passes it.
+    if (this.getInvokeInstruction() != null) return listsCannotExecute(builder, node, valuesVn);
+    int paramPos = parameterPosition(node, valuesVn);
+    if (paramPos < 0) return false;
+    boolean anyCaller = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      anyCaller = true;
+      int argVn = callerArgumentValueNumber(callerInvoke.snd, paramPos);
+      if (argVn <= 0 || !listsCannotExecute(builder, callerInvoke.fst, argVn)) return false;
+    }
+    return anyCaller;
+  }
+
+  /**
+   * Whether a value is visible, only lists or tuples, and each has an element that cannot execute.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @param node The node whose frame holds the value.
+   * @param vn The value's number.
+   * @return {@code true} iff the value's points-to set is non-empty and every member is a list or
+   *     tuple with an element that cannot execute.
+   */
+  private boolean listsCannotExecute(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    boolean anyList = false;
-    for (InstanceKey valIk : valuesPts) {
+    // A literal list's key is implicitly represented; the pointer analysis computes its contents.
+    OrdinalSet<InstanceKey> pts =
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn));
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey valIk : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
       if (asin == null) return false;
       TypeReference ref = asin.concreteType().getReference();
@@ -466,9 +496,8 @@ public class Concat extends TensorGenerator {
               ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                   .getPointerKeyForObjectCatalog(asin));
       if (!cannotExecute(builder, asin, catalog)) return false;
-      anyList = true;
     }
-    return anyList;
+    return true;
   }
 
   /**
