@@ -43,6 +43,18 @@ public class PythonConstructorFunction extends PythonSummarizedFunction
   private final int initTrailingNonDefaultableParameters;
 
   /**
+   * The index of the constructor's own {@code *args} formal among its arguments, or {@code -1}: the
+   * wrapped {@code __init__}'s shifted by one, since constructor argument {@code j} is {@code
+   * __init__} argument {@code j + 1}.
+   */
+  private final int varargsParameter;
+
+  /**
+   * The index of the constructor's own {@code **kwargs} formal, shifted likewise, or {@code -1}.
+   */
+  private final int keywordsParameter;
+
+  /**
    * Constructs a {@link PythonConstructorFunction}.
    *
    * @param ref The constructor's method reference.
@@ -51,16 +63,47 @@ public class PythonConstructorFunction extends PythonSummarizedFunction
    * @param initDefaultParameters The wrapped {@code __init__}'s defaulted-parameter count.
    * @param initTrailingNonDefaultableParameters The wrapped {@code __init__}'s count of trailing
    *     formals that cannot take a positional default.
+   * @param varargsParameter The constructor's own {@code *args} formal index, or {@code -1}.
+   * @param keywordsParameter The constructor's own {@code **kwargs} formal index, or {@code -1}.
    */
   public PythonConstructorFunction(
       MethodReference ref,
       MethodSummary summary,
       IClass declaringClass,
       int initDefaultParameters,
-      int initTrailingNonDefaultableParameters) {
+      int initTrailingNonDefaultableParameters,
+      int varargsParameter,
+      int keywordsParameter) {
     super(ref, summary, declaringClass);
     this.initDefaultParameters = initDefaultParameters;
     this.initTrailingNonDefaultableParameters = initTrailingNonDefaultableParameters;
+    this.varargsParameter = varargsParameter;
+    this.keywordsParameter = keywordsParameter;
+  }
+
+  /**
+   * The constructor's {@code *args} formal, so a class call's positional arguments past {@code
+   * __init__}'s formals are packed onto it and forwarded to {@code __init__}'s {@code *args}
+   * (wala/ML#188). Without it the constructor declared no star formal and those arguments were
+   * dropped at the class call.
+   *
+   * @return The index, or {@code -1} when {@code __init__} declares no {@code *args}.
+   */
+  @Override
+  public int getVarargsParameter() {
+    return this.varargsParameter;
+  }
+
+  /**
+   * The constructor's {@code **kwargs} formal, so a class call's keywords naming no formal are
+   * packed onto it and forwarded to {@code __init__}'s {@code **kwargs} (wala/ML#997); likewise
+   * dropped before.
+   *
+   * @return The index, or {@code -1} when {@code __init__} declares no {@code **kwargs}.
+   */
+  @Override
+  public int getKeywordsParameter() {
+    return this.keywordsParameter;
   }
 
   /**
