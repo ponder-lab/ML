@@ -92,4 +92,25 @@ public class TestNdarraySliceMethods extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 256, 784), TensorType.of(FLOAT_32, 96, 784))));
   }
+
+  /**
+   * Arithmetic on an array a Keras dataset loader returns is an array (wala/ML#1009): {@code
+   * mnist.load_data()} allocates its arrays as classes of their own, and the arithmetic result was
+   * allocated only for the array, tensor and variable types, so {@code x_train / 255.0} had no
+   * value, and the expanded images reached the dataset as nothing.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDatasetLoaderArrayArithmetic()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ndarray_newaxis_dataset.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1))));
+  }
 }
