@@ -18,13 +18,13 @@ import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContextPair;
 import com.ibm.wala.util.intset.IntSet;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -120,19 +120,38 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // method never dispatched.
       if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
 
+      // A Keras layer builds once per instance: `Layer.__call__` runs `build` only while
+      // `self.built` is false, and an explicit `layer.build(input_shape)` sets it, so the lazy
+      // build a layer-call trampoline injects (wala/ML#595) and the program's explicit call reach
+      // ONE build of the instance. Keyed on the receiver alone, a `build` trampoline has one node
+      // per instance; keyed on its caller and site as well, it had one per build site per receiver
+      // chain, and everything beneath a tower whose layers build their sublayers explicitly
+      // doubled with it (wala/ML#1013). The body's `input_shape` then joins the explicit call's
+      // shape with the injected call's absence of one, as the one build Keras runs sees whichever
+      // site ran it.
+      if (isBuildTrampoline(callee)) {
+        LOGGER.fine(() -> "Keying build trampoline: " + callee + " on receiver: " + receiver + ".");
+        return new ReceiverInstanceContext(receiver);
+      }
+
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
+        // Past the cap the trampoline is keyed on the dispatched receiver alone. Inheriting the
+        // caller's context instead keyed it on the CALLER's receiver, and since a trampoline's
+        // callee object is filtered to its context's receiver, the method body was never
+        // dispatched from the degraded node (wala/ML#1007).
         LOGGER.fine(
             () ->
                 "Receiver-context depth cap reached at caller: "
                     + caller
-                    + "; inheriting instead of keying on receiver: "
+                    + "; keying on the receiver alone: "
                     + receiver
                     + ".");
-        return caller.getContext();
+        return new ReceiverInstanceContext(receiver);
       }
 
       LOGGER.fine(() -> "Keying trampoline: " + callee + " on receiver: " + receiver + ".");
-      return new HashedCallerSiteContextPair(caller, site, new ReceiverInstanceContext(receiver));
+      return new AnchoredCallerSiteContext(
+          receiverAnchor(caller), caller.getMethod(), site, new ReceiverInstanceContext(receiver));
     }
 
     // The real method body dispatched from a per-receiver trampoline node stays per-receiver.
@@ -153,7 +172,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     // load-bearing here, since recursive helpers would otherwise grow one pair per recursive
     // call.
     if (caller.getContext().get(ContextKey.RECEIVER) != null
-        || caller.getContext() instanceof CallerSiteContext) {
+        || caller.getContext() instanceof AnchoredCallerSiteContext) {
       // The guard is recursion, not depth: a deep-but-acyclic layer stack (a BERT encoder tower)
       // legitimately chains many pairs, while a callee already on the caller chain would grow one
       // pair per recursive call. Degrade to the base selector on a method repeat, with an
@@ -168,10 +187,50 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
-      return new HashedCallerSiteContext(caller, site);
+      return new AnchoredCallerSiteContext(receiverAnchor(caller), caller.getMethod(), site, null);
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Whether a method is the trampoline of a Keras {@code build} method: its declaring class is a
+   * trampoline for a method whose class name ends in the build method's name.
+   *
+   * @param callee The method being called.
+   * @return {@code true} iff the method is a {@code build} trampoline.
+   */
+  private static boolean isBuildTrampoline(IMethod callee) {
+    return callee.getDeclaringClass() instanceof PythonInstanceMethodTrampoline trampoline
+        && trampoline
+            .getRealClass()
+            .getReference()
+            .getName()
+            .toString()
+            .endsWith("/" + PythonTypes.KERAS_BUILD_METHOD_NAME);
+  }
+
+  /**
+   * Returns the nearest node on the given caller's chain whose context is keyed on a receiver: the
+   * caller itself when its own context names one, else the first such caller up its caller-site
+   * chain, else the caller.
+   *
+   * <p>Keying a context on the raw calling node makes a node's context its whole call path, since
+   * the node's identity carries its own context: the number of contexts of a method is then the
+   * number of distinct call paths from a receiver root to it, which multiplies at every fan-in
+   * along a layer tower (two fits, a from_config rebuild, a fanout trampoline beside a direct
+   * dispatch, the explicit sublayer build beside the lazy-build injection). Anchoring at the
+   * receiver-keyed node keeps the separation the rules exist for, per instance and per call site,
+   * while a helper chain under one receiver shares that receiver's node.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @return The anchoring node.
+   */
+  private static CGNode receiverAnchor(CGNode caller) {
+    CGNode node = caller;
+    while (node.getContext().get(ContextKey.RECEIVER) == null
+        && node.getContext() instanceof AnchoredCallerSiteContext chain) node = chain.getAnchor();
+    return node.getContext().get(ContextKey.RECEIVER) == null ? caller : node;
   }
 
   /**
@@ -209,8 +268,8 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
   private static int receiverDepth(CGNode node) {
     int depth = 0;
     Context c = node.getContext();
-    while (depth < MAX_RECEIVER_DEPTH && c instanceof CallerSiteContext) {
-      CGNode caller = ((CallerSiteContext) c).getCaller();
+    while (depth < MAX_RECEIVER_DEPTH && c instanceof AnchoredCallerSiteContext) {
+      CGNode caller = ((AnchoredCallerSiteContext) c).getAnchor();
       c = caller.getContext();
       depth++;
     }
@@ -236,9 +295,11 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     if (caller.getMethod().equals(callee)) return true; // Direct self-recursion.
     int depth = 0;
     Context c = caller.getContext();
-    while (c instanceof CallerSiteContext) {
+    while (c instanceof AnchoredCallerSiteContext) {
       if (++depth >= MAX_CALLER_PAIR_DEPTH) return true; // Fail closed at the backstop.
-      CGNode up = ((CallerSiteContext) c).getCaller();
+      AnchoredCallerSiteContext anchored = (AnchoredCallerSiteContext) c;
+      if (anchored.getCallerMethod().equals(callee)) return true; // Already on the chain.
+      CGNode up = anchored.getAnchor();
       if (up.getMethod().equals(callee)) return true; // The callee is already on the chain.
       c = up.getContext();
     }
@@ -289,7 +350,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
           pending.add(creator);
         }
       }
-      if (context instanceof CallerSiteContext site) pending.add(site.getCaller());
+      if (context instanceof AnchoredCallerSiteContext anchored) pending.add(anchored.getAnchor());
     }
     return false;
   }
@@ -307,21 +368,76 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
   }
 
   /**
-   * A {@link CallerSiteContext} whose hash code is computed once. WALA recomputes a node's hash
-   * from its context's, and a caller-site context's from its caller node's, on every call, so
-   * hashing a context walks every caller reachable through it. Contexts this selector builds share
-   * those callers, and a receiver key's creator node adds a second branch at each level, so the
-   * walk is exponential in the context's height even when the contexts are few: each node lookup
-   * hashes its context. Caching the hash at every level this selector builds makes each one
+   * A context keyed on the nearest receiver-keyed node up the caller chain (the anchor), the method
+   * the call site belongs to and the site, with an optional receiver base.
+   *
+   * <p>The anchor is not the calling node, so this is not a {@link CallerSiteContext}: a reader
+   * pairing {@link ContextKey#CALLER} with {@link ContextKey#CALLSITE} would resolve the site's
+   * program counter against the wrong method. Several calling nodes with the same method share one
+   * instance of this context (the context is interned on its key), so no single calling node
+   * exists: {@link ContextKey#CALLER} answers {@code null}, as a context without that information
+   * does, rather than an arbitrary representative whose own context would follow solver order;
+   * {@link ContextKey#CALLSITE} answers the site, and the calling method and the anchor are
+   * available through {@link #getCallerMethod()} and {@link #getAnchor()}. {@link
+   * ContextKey#RECEIVER} and the first parameter's filter delegate to the receiver base, so a
+   * trampoline's callee object stays filtered to the dispatched instance.
+   *
+   * <p>The hash code is computed once. WALA recomputes a node's hash from its context's, and a
+   * context's from its anchor node's, on every call, so hashing a context walks every anchor
+   * reachable through it; caching the hash at every level this selector builds makes each one
    * constant.
    */
-  private static final class HashedCallerSiteContext extends CallerSiteContext {
+  public static final class AnchoredCallerSiteContext implements Context {
 
+    private final CGNode anchor;
+    private final IMethod callerMethod;
+    private final CallSiteReference site;
+    private final Context base;
     private final int hash;
 
-    private HashedCallerSiteContext(CGNode caller, CallSiteReference site) {
-      super(caller, site);
-      this.hash = super.hashCode();
+    private AnchoredCallerSiteContext(
+        CGNode anchor, IMethod callerMethod, CallSiteReference site, Context base) {
+      this.anchor = anchor;
+      this.callerMethod = callerMethod;
+      this.site = site;
+      this.base = base;
+      int h = 31 * anchor.hashCode() + callerMethod.hashCode();
+      h = 31 * h + site.hashCode();
+      this.hash = base == null ? h : 31 * h + base.hashCode();
+    }
+
+    /**
+     * Returns the nearest receiver-keyed node up the caller chain the context is anchored on.
+     *
+     * @return The anchor node.
+     */
+    public CGNode getAnchor() {
+      return this.anchor;
+    }
+
+    /**
+     * Returns the method the context's call site belongs to.
+     *
+     * @return The calling method.
+     */
+    public IMethod getCallerMethod() {
+      return this.callerMethod;
+    }
+
+    /**
+     * Returns the context's call site, a program counter within {@link #getCallerMethod()}.
+     *
+     * @return The call site.
+     */
+    public CallSiteReference getCallSite() {
+      return this.site;
+    }
+
+    @Override
+    public ContextItem get(ContextKey name) {
+      if (name == ContextKey.CALLSITE) return this.site;
+      if (name == ContextKey.CALLER) return null; // No single calling node exists; see above.
+      return this.base == null ? null : this.base.get(name);
     }
 
     @Override
@@ -331,39 +447,23 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
 
     @Override
     public boolean equals(Object obj) {
-      // Only the same class can be equal, as the superclass compares classes exactly; the
-      // cached hashes reject most of the rest cheaply.
-      return obj instanceof HashedCallerSiteContext other
+      return obj instanceof AnchoredCallerSiteContext other
           && other.hash == this.hash
-          && super.equals(obj);
-    }
-  }
-
-  /**
-   * A {@link CallerSiteContextPair} whose hash code is computed once; see {@link
-   * HashedCallerSiteContext}.
-   */
-  private static final class HashedCallerSiteContextPair extends CallerSiteContextPair {
-
-    private final int hash;
-
-    private HashedCallerSiteContextPair(CGNode caller, CallSiteReference site, Context base) {
-      super(caller, site, base);
-      this.hash = super.hashCode();
+          && other.anchor.equals(this.anchor)
+          && other.callerMethod.equals(this.callerMethod)
+          && other.site.equals(this.site)
+          && java.util.Objects.equals(other.base, this.base);
     }
 
     @Override
-    public int hashCode() {
-      return this.hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      // Only the same class can be equal, as the superclass compares classes exactly; the
-      // cached hashes reject most of the rest cheaply.
-      return obj instanceof HashedCallerSiteContextPair other
-          && other.hash == this.hash
-          && super.equals(obj);
+    public String toString() {
+      return "Anchored: "
+          + this.anchor
+          + " @ "
+          + this.callerMethod.getSignature()
+          + "@"
+          + this.site.getProgramCounter()
+          + (this.base == null ? "" : ", Base: " + this.base);
     }
   }
 }
