@@ -72,4 +72,24 @@ public class TestNdarraySliceMethods extends AbstractTensorTest {
   public void testArithmeticAstype() throws ClassHierarchyException, CancelException, IOException {
     test(FIXTURE, "consume_scaled", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 4, 3))));
   }
+
+  /**
+   * An {@code ndarray.reshape} result read through a tuple's element, as {@code x, y =
+   * a.reshape(...), b.reshape(...)} does, is typed by the reshape: the value reaches the array the
+   * method's body allocates, and the reshape generator answers for it as it does for the call's own
+   * result (wala/ML#1009).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnpackedReshape() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ndarray_reshape_unpacked.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 256, 784), TensorType.of(FLOAT_32, 96, 784))));
+  }
 }
