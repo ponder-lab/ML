@@ -14,75 +14,67 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * Witnesses for wala/ML#869: a callable receiver whose points-to set spans several callable classes
- * dispatches to all of them through the fan-out trampoline, instead of receiving no call edges at
- * all.
+ * Witnesses for wala/ML#869 and wala/ML#1012: a callable receiver whose points-to set spans several
+ * callable classes dispatches to every one of them, instead of receiving no call edges at all, and
+ * each instance dispatches to its own class's callable directly.
  *
  * <p>The fixture's {@code Holder} stores either a parameter-supplied {@code Passed} instance or a
  * same-frame-constructed {@code Direct} instance in one field and calls through it. Under 1-CFA the
  * parameter-supplied holder's field holds BOTH classes (the other {@code __init__} branch is
- * statically feasible), which is the configuration the selector previously answered with silence.
- * {@link #testMultiCandidateReceiverDispatchesToAllCandidates} fails if the fan-out path stops
- * dispatching (the wala/ML#869 defect returning); {@link
- * #testSingletonReceiverStaysOnThePreciseTrampoline} fails if a singleton candidate set starts
- * routing through the fan-out dispatcher, pinning that the precise single-candidate path is
- * untouched. The fan-out trampoline's name carries the candidate-set size ({@code $fanout2}), the
- * graph-visible half of the permanent size diagnostic.
+ * statically feasible), which is the configuration the selector once answered with silence. The
+ * selector then routed such a site through a fan-out trampoline chosen by reading the callee's
+ * points-to set mid-solve, which made the target depend on how much of the set had been computed
+ * (wala/ML#1012); it now resolves the callable per receiver instance, so both classes' trampolines
+ * are direct successors of the call. {@link #testMultiCandidateReceiverDispatchesEachCandidate}
+ * fails if either class stops being dispatched or a dispatcher reappears between the call and the
+ * classes' trampolines; {@link #testSingletonReceiverStaysOnThePreciseTrampoline} fails if no
+ * context reached by one class dispatches that class alone.
  */
 public class TestCallableFanoutDispatch extends TestPythonMLCallGraphShape {
 
   @Test
-  public void testMultiCandidateReceiverDispatchesToAllCandidates() throws Exception {
+  public void testMultiCandidateReceiverDispatchesEachCandidate() throws Exception {
     CallGraph cg = analyze();
     boolean found = false;
 
     for (CGNode use : useNodes(cg)) {
-      Set<String> reachable = twoHopSuccessorSignatures(cg, use);
+      Set<String> successors = successorSignatures(cg, use);
 
-      if (reachable.stream().anyMatch(s -> s.contains("$fanout2"))) {
+      if (successors.stream().anyMatch(s -> s.contains("Passed.call.trampoline"))
+          && successors.stream().anyMatch(s -> s.contains("Direct.call.trampoline"))) {
         found = true;
         assertTrue(
-            "Expecting the fan-out context to reach the parameter-supplied class's call"
-                + " trampoline: "
-                + reachable,
-            reachable.stream().anyMatch(s -> s.contains("Passed.call.trampoline")));
-        assertTrue(
-            "Expecting the fan-out context to reach the same-frame class's call trampoline: "
-                + reachable,
-            reachable.stream().anyMatch(s -> s.contains("Direct.call.trampoline")));
+            "Expecting each candidate to dispatch to its own class's trampoline directly: "
+                + successors,
+            successors.stream().noneMatch(s -> s.contains("$fanout")));
       }
     }
 
     assertTrue(
-        "Expecting a context routed through the fan-out dispatcher, whose name carries the"
-            + " candidate-set size as the graph-visible diagnostic.",
+        "Expecting a context that dispatches both the parameter-supplied class's and the"
+            + " same-frame class's call trampolines directly.",
         found);
   }
 
+  /**
+   * The holder constructed in the module's frame ({@code h1}) holds a {@code Direct} instance only,
+   * so its context dispatches {@code Direct}'s trampoline alone: no other class and no dispatcher
+   * between the call and the trampoline.
+   */
   @Test
   public void testSingletonReceiverStaysOnThePreciseTrampoline() throws Exception {
     CallGraph cg = analyze();
     boolean found = false;
 
     for (CGNode use : useNodes(cg)) {
-      Set<String> successors = new HashSet<>();
-      for (Iterator<CGNode> it = cg.getSuccNodes(use); it.hasNext(); )
-        successors.add(it.next().getMethod().getSignature());
-
-      if (successors.stream().anyMatch(s -> s.contains("Direct.call.trampoline"))) {
-        found = true;
-        assertTrue(
-            "Expecting the singleton-candidate context to stay on the per-class trampoline, not"
-                + " the fan-out dispatcher: "
-                + successors,
-            successors.stream().noneMatch(s -> s.contains("$fanout")));
-        assertTrue(
-            "Expecting the singleton-candidate context not to reach the other class: " + successors,
-            successors.stream().noneMatch(s -> s.contains("Passed")));
-      }
+      Set<String> successors = successorSignatures(cg, use);
+      if (successors.stream().anyMatch(s -> s.contains("Direct.call.trampoline"))
+          && successors.stream().noneMatch(s -> s.contains("Passed"))
+          && successors.stream().noneMatch(s -> s.contains("$fanout"))) found = true;
     }
 
-    assertTrue("Expecting a context on the precise single-candidate path.", found);
+    assertTrue(
+        "Expecting a context that dispatches the same-frame class's trampoline alone.", found);
   }
 
   private CallGraph analyze() throws Exception {
@@ -99,14 +91,10 @@ public class TestCallableFanoutDispatch extends TestPythonMLCallGraphShape {
     return ret;
   }
 
-  private static Set<String> twoHopSuccessorSignatures(CallGraph cg, CGNode node) {
+  private static Set<String> successorSignatures(CallGraph cg, CGNode node) {
     Set<String> ret = new HashSet<>();
-    for (Iterator<CGNode> it = cg.getSuccNodes(node); it.hasNext(); ) {
-      CGNode succ = it.next();
-      ret.add(succ.getMethod().getSignature());
-      for (Iterator<CGNode> it2 = cg.getSuccNodes(succ); it2.hasNext(); )
-        ret.add(it2.next().getMethod().getSignature());
-    }
+    for (Iterator<CGNode> it = cg.getSuccNodes(node); it.hasNext(); )
+      ret.add(it.next().getMethod().getSignature());
     return ret;
   }
 }
