@@ -2267,6 +2267,42 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether an invoke is {@code iter} of an {@code enumerate} result, the iterator a loop over
+   * {@code enumerate(...)} takes (wala/ML#1010).
+   *
+   * @param node The node whose IR holds the invoke.
+   * @param invoke The invoke.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the invoke calls {@code iter} on a value an {@code enumerate} call
+   *     defines.
+   */
+  private static boolean isIterOfEnumerate(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    if (!callsBuiltin(builder, node, invoke, PythonTypes.ITER_BUILTIN)) return false;
+    SSAInstruction argDef = node.getDU().getDef(invoke.getUse(1));
+    return argDef instanceof SSAAbstractInvokeInstruction argInvoke
+        && isEnumerateCall(node, argInvoke, builder);
+  }
+
+  /**
+   * Whether an invoke is {@code next} of the iterator a loop takes of an {@code enumerate} result
+   * (wala/ML#1010): its result is an {@code (index, element)} tuple.
+   *
+   * @param node The node whose IR holds the invoke.
+   * @param invoke The invoke.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the invoke calls {@code next} on a value {@link #isIterOfEnumerate}
+   *     defines.
+   */
+  private static boolean isNextOfEnumerate(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    if (!callsBuiltin(builder, node, invoke, PythonTypes.NEXT_BUILTIN)) return false;
+    SSAInstruction argDef = node.getDU().getDef(invoke.getUse(1));
+    return argDef instanceof SSAAbstractInvokeInstruction argInvoke
+        && isIterOfEnumerate(node, argInvoke, builder);
+  }
+
+  /**
    * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
    * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
    * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
@@ -2646,7 +2682,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // whose element typing the element generators serve; both otherwise read cross-caller
       // tensor state through shared builtin frames and count as tensor defs downstream. The
       // subscript-application form is untouched: its arguments carry allocation sites (the
-      // sliced tensor or the constructed slice objects).
+      // sliced tensor or the constructed slice objects). The iterator a loop takes with `iter`
+      // (wala/ML#1010) is an iterator object, never a tensor, and what `next` takes from the
+      // iterator of an enumerate result is an `(index, element)` tuple, which a loop unpacks; the
+      // element generators serve the element.
       for (PointsToSetVariable v : dataflow) {
         if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
@@ -2655,7 +2694,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (!(def instanceof SSAAbstractInvokeInstruction)) continue;
         SSAAbstractInvokeInstruction invoke = (SSAAbstractInvokeInstruction) def;
         if (isEnumerateCall(lpk.getNode(), invoke, builder)
-            || isNonTensorSliceConstructor(lpk.getNode(), invoke, builder)) drops.add(v);
+            || isNonTensorSliceConstructor(lpk.getNode(), invoke, builder)
+            || callsBuiltin(builder, lpk.getNode(), invoke, PythonTypes.ITER_BUILTIN)
+            || isNextOfEnumerate(lpk.getNode(), invoke, builder)) drops.add(v);
       }
 
       LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
@@ -2832,21 +2873,25 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // is an eager-only product of the fed data, whose provenance comes from its own seed's
       // creator walk. The PA aliases iteration results with their iterables, so without a filter
       // the parameter constant crosses onto the products. Collected here are the aliased
-      // destinations: enumerate results, each-element reads, and their tuple-field unwraps.
+      // destinations: enumerate results, each-element reads, the `next` results a loop lowers its
+      // element read to (wala/ML#1010), and their tuple-field unwraps.
       Set<PointsToSetVariable> iterationProducts = HashSetFactory.make();
       for (PointsToSetVariable v : dataflow) {
         if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
         if (lpk.getNode().getDU() == null || lpk.getNode().getIR() == null) continue;
         SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
-        if (def instanceof EachElementGetInstruction) {
+        if (def instanceof EachElementGetInstruction
+            || callsBuiltin(builder, lpk.getNode(), def, PythonTypes.NEXT_BUILTIN)) {
           iterationProducts.add(v);
           continue;
         }
         if (def instanceof PythonPropertyRead) {
           SSAInstruction objDef =
               lpk.getNode().getDU().getDef(((PythonPropertyRead) def).getObjectRef());
-          if (objDef instanceof EachElementGetInstruction) iterationProducts.add(v);
+          if (objDef instanceof EachElementGetInstruction
+              || callsBuiltin(builder, lpk.getNode(), objDef, PythonTypes.NEXT_BUILTIN))
+            iterationProducts.add(v);
           continue;
         }
         if (def instanceof SSAAbstractInvokeInstruction
