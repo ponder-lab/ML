@@ -1978,4 +1978,20 @@ public class TestConstructors extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(INT_32, 2, 3), TensorType.of(INT_32, 2, 1))));
   }
+
+  /**
+   * {@code tf.range} over an argument that may be {@code 4} or {@code False}: {@code tf.range}
+   * rejects a bool limit at run time, so the bool yields no tensor and the result is the {@code
+   * (4,)} range. Reading the bool as a number threw and ended the whole analysis.
+   */
+  @Test
+  public void testRangeBoolArgument()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_range_bool_argument.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4))));
+  }
 }
