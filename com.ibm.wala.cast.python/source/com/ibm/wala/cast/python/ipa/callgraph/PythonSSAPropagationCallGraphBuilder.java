@@ -40,6 +40,7 @@ import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
@@ -190,6 +191,39 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   public void setFreshSliceResultTypes(Set<TypeReference> types) {
     this.freshSliceResultTypes = types == null ? Collections.emptySet() : Set.copyOf(types);
+  }
+
+  /**
+   * The receiver instance of the dispatch being resolved, while a target for it is chosen
+   * (wala/ML#1012). WALA resolves a dispatching call once per receiver instance but hands the
+   * method target selector only the instance's concrete type, and a program instance's concrete
+   * type is a plain object: the class it belongs to is recorded only by the constructor that
+   * allocated it, which the instance key carries. A selector that dispatches a call on an instance
+   * reads the instance here, so the target is decided by that instance alone, never by the callee's
+   * points-to set as it stands mid-solve. {@code null} outside a dispatch.
+   */
+  private InstanceKey dispatchReceiver;
+
+  /**
+   * The receiver instance of the dispatch whose target is being chosen; see {@link
+   * #dispatchReceiver}.
+   *
+   * @return The receiver instance, or {@code null} outside a dispatch.
+   */
+  public InstanceKey getDispatchReceiver() {
+    return this.dispatchReceiver;
+  }
+
+  @Override
+  protected CGNode getTargetForCall(
+      CGNode caller, CallSiteReference site, IClass recv, InstanceKey[] iKey) {
+    InstanceKey enclosing = this.dispatchReceiver;
+    this.dispatchReceiver = site.isDispatch() && iKey != null && iKey.length > 0 ? iKey[0] : null;
+    try {
+      return super.getTargetForCall(caller, site, recv, iKey);
+    } finally {
+      this.dispatchReceiver = enclosing;
+    }
   }
 
   public static class PythonConstraintVisitor extends AstConstraintVisitor
