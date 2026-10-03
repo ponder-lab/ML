@@ -20,6 +20,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
@@ -58,6 +59,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
@@ -651,17 +653,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache2) {
     PythonSSAPropagationCallGraphBuilder builder = super.getCallGraphBuilder(cha, options, cache2);
 
-    // A tensor's slice is a tensor with an allocation of its own, so a generator reading
-    // `x[:, :-1]` through the points-to set no longer sees the receiver's pre-slice window
-    // (wala/ML#916). Only the tensor type is named. A slice of it yields the same type and the
-    // type's methods live on the class, so dispatch through the result survives. An ndarray is
-    // NOT named: numpy.xml puts an array's methods (`astype`, `tolist`, `reshape`, `transpose`) on
-    // each allocation as instance fields, so a fresh allocation at a slice call has no methods and
-    // `arr[a:b].tolist()` loses its target (measured: four `tolist` nodes vanished from one
-    // whole-program call graph with the array type named); an ndarray slice already reads its own
-    // extent through the slice pin, so nothing was gained there. The ragged and sparse kinds and
-    // every general container keep the pass-through as well; that is the named remainder.
-    builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE));
+    // A tensor's or an array's slice is an array of the same kind with an allocation of its own,
+    // so a generator reading `x[:, :-1]` through the points-to set no longer sees the receiver's
+    // pre-slice window (wala/ML#916). numpy.xml puts an array's methods (`astype`, `tolist`,
+    // `reshape`, `transpose`) on each allocation as instance fields, which a fresh allocation alone
+    // lacks (measured: four `tolist` nodes vanished from one whole-program call graph); the slice
+    // therefore receives those methods as well, so dispatch through it survives (wala/ML#1009). The
+    // ragged and sparse kinds and every general container keep the
+    // pass-through; that is the named remainder.
+    builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE, NumpyTypes.NDARRAY_TYPE));
+
+    // Arithmetic over an array yields an array the pointer analysis can see (wala/ML#1009): a
+    // tensor or a variable operand yields a tensor and an ndarray operand an ndarray, so a
+    // container that stores the result holds it. Its shape and dtype are the operator's own
+    // generator's, which delegation reaches from the allocation's site.
+    // An array a Keras dataset loader returns is a NumPy array, so arithmetic on it allocates one.
+    Map<TypeReference, TypeReference> binaryOpResults = new HashMap<>();
+    binaryOpResults.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE);
+    binaryOpResults.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE);
+    binaryOpResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
+      binaryOpResults.put(array, NumpyTypes.NDARRAY_TYPE);
+    builder.setFreshBinaryOpResultTypes(binaryOpResults);
+    // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
+    // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
+    builder.setFreshArrayAttributes(Map.of(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_ATTRIBUTES));
 
     final ContextSelector base = builder.getContextSelector();
     final ContextSelector targetedCFA =
@@ -699,6 +715,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 // the trampoline's and the element function's own sites and merge again.
                 if (isComprehensionMachinery(callee, comprehensionClass, filterClass))
                   return caller.getContext();
+                // The `iter` and `next` builtins a loop is lowered to (wala/ML#1010) are keyed on
+                // the calling node and the site. The element read they replace was
+                // intraprocedural, so it never merged across the callers of the function it is
+                // in; under a call string they had one node per site, and a function called with
+                // two iterables read both in every context. The site stays in the key, since one
+                // node can iterate several values, and a node so keyed has the calls it makes (the
+                // iteration protocol's methods) keyed on it in turn by the trampoline rules.
+                if (isIterationBuiltin(callee)) return new CallerSiteContext(caller, site);
                 if (receivesTargetedContext(callee, modelClass)) {
                   return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
                 }
@@ -730,6 +754,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     IClass c = callee.getDeclaringClass();
     return (comprehensionClass != null && cha.isSubclassOf(c, comprehensionClass))
         || (filterClass != null && cha.isSubclassOf(c, filterClass));
+  }
+
+  /**
+   * Whether the given method is one of the {@code iter} and {@code next} builtins a loop is lowered
+   * to (wala/ML#1010).
+   *
+   * @param callee The method being dispatched.
+   * @return Whether {@code callee} is declared by the {@code iter} or {@code next} builtin.
+   */
+  private static boolean isIterationBuiltin(IMethod callee) {
+    TypeReference declaring = callee.getDeclaringClass().getReference();
+    return declaring.equals(PythonTypes.ITER_BUILTIN) || declaring.equals(PythonTypes.NEXT_BUILTIN);
   }
 
   /**
@@ -2235,6 +2271,62 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether an instruction calls the given builtin, resolved through the call graph since the
+   * declared target of a call is a generic trampoline.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The node holding the instruction.
+   * @param def The instruction, possibly {@code null}.
+   * @param builtin The builtin's type.
+   * @return {@code true} iff {@code def} is a call with at least one argument some target of which
+   *     is {@code builtin}.
+   */
+  private static boolean callsBuiltin(
+      PropagationCallGraphBuilder builder, CGNode node, SSAInstruction def, TypeReference builtin) {
+    if (!(def instanceof PythonInvokeInstruction invoke) || invoke.getNumberOfUses() < 2)
+      return false;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(builtin)) return true;
+    return false;
+  }
+
+  /**
+   * Whether an invoke is {@code iter} of an {@code enumerate} result, the iterator a loop over
+   * {@code enumerate(...)} takes (wala/ML#1010).
+   *
+   * @param node The node whose IR holds the invoke.
+   * @param invoke The invoke.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the invoke calls {@code iter} on a value an {@code enumerate} call
+   *     defines.
+   */
+  private static boolean isIterOfEnumerate(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    if (!callsBuiltin(builder, node, invoke, PythonTypes.ITER_BUILTIN)) return false;
+    SSAInstruction argDef = node.getDU().getDef(invoke.getUse(1));
+    return argDef instanceof SSAAbstractInvokeInstruction argInvoke
+        && isEnumerateCall(node, argInvoke, builder);
+  }
+
+  /**
+   * Whether an invoke is {@code next} of the iterator a loop takes of an {@code enumerate} result
+   * (wala/ML#1010): its result is an {@code (index, element)} tuple.
+   *
+   * @param node The node whose IR holds the invoke.
+   * @param invoke The invoke.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the invoke calls {@code next} on a value {@link #isIterOfEnumerate}
+   *     defines.
+   */
+  private static boolean isNextOfEnumerate(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    if (!callsBuiltin(builder, node, invoke, PythonTypes.NEXT_BUILTIN)) return false;
+    SSAInstruction argDef = node.getDU().getDef(invoke.getUse(1));
+    return argDef instanceof SSAAbstractInvokeInstruction argInvoke
+        && isIterOfEnumerate(node, argInvoke, builder);
+  }
+
+  /**
    * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
    * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
    * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
@@ -2282,8 +2374,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
     if (!isFirstElement) return false;
 
-    // Object ref must be another PropertyRead (the iterator-element fetch).
+    // Object ref must be the iterator-element fetch: another PropertyRead, or, as a loop now lowers
+    // (wala/ML#1010), `next` of the iterator `iter` makes over the `enumerate` result.
     SSAInstruction objDef = node.getDU().getDef(outer.getObjectRef());
+    if (callsBuiltin(builder, node, objDef, PythonTypes.NEXT_BUILTIN)) {
+      SSAInstruction iterDef = node.getDU().getDef(objDef.getUse(1));
+      return callsBuiltin(builder, node, iterDef, PythonTypes.ITER_BUILTIN)
+          && callsBuiltin(
+              builder, node, node.getDU().getDef(iterDef.getUse(1)), PythonTypes.ENUMERATE_BUILTIN);
+    }
     if (!(objDef instanceof PythonPropertyRead)) return false;
     PythonPropertyRead inner = (PythonPropertyRead) objDef;
 
@@ -2607,7 +2706,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // whose element typing the element generators serve; both otherwise read cross-caller
       // tensor state through shared builtin frames and count as tensor defs downstream. The
       // subscript-application form is untouched: its arguments carry allocation sites (the
-      // sliced tensor or the constructed slice objects).
+      // sliced tensor or the constructed slice objects). The iterator a loop takes with `iter`
+      // (wala/ML#1010) is an iterator object, never a tensor, and what `next` takes from the
+      // iterator of an enumerate result is an `(index, element)` tuple, which a loop unpacks; the
+      // element generators serve the element.
       for (PointsToSetVariable v : dataflow) {
         if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
@@ -2616,7 +2718,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (!(def instanceof SSAAbstractInvokeInstruction)) continue;
         SSAAbstractInvokeInstruction invoke = (SSAAbstractInvokeInstruction) def;
         if (isEnumerateCall(lpk.getNode(), invoke, builder)
-            || isNonTensorSliceConstructor(lpk.getNode(), invoke, builder)) drops.add(v);
+            || isNonTensorSliceConstructor(lpk.getNode(), invoke, builder)
+            || callsBuiltin(builder, lpk.getNode(), invoke, PythonTypes.ITER_BUILTIN)
+            || isNextOfEnumerate(lpk.getNode(), invoke, builder)) drops.add(v);
       }
 
       LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
@@ -2793,21 +2897,25 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // is an eager-only product of the fed data, whose provenance comes from its own seed's
       // creator walk. The PA aliases iteration results with their iterables, so without a filter
       // the parameter constant crosses onto the products. Collected here are the aliased
-      // destinations: enumerate results, each-element reads, and their tuple-field unwraps.
+      // destinations: enumerate results, each-element reads, the `next` results a loop lowers its
+      // element read to (wala/ML#1010), and their tuple-field unwraps.
       Set<PointsToSetVariable> iterationProducts = HashSetFactory.make();
       for (PointsToSetVariable v : dataflow) {
         if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
         if (lpk.getNode().getDU() == null || lpk.getNode().getIR() == null) continue;
         SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
-        if (def instanceof EachElementGetInstruction) {
+        if (def instanceof EachElementGetInstruction
+            || callsBuiltin(builder, lpk.getNode(), def, PythonTypes.NEXT_BUILTIN)) {
           iterationProducts.add(v);
           continue;
         }
         if (def instanceof PythonPropertyRead) {
           SSAInstruction objDef =
               lpk.getNode().getDU().getDef(((PythonPropertyRead) def).getObjectRef());
-          if (objDef instanceof EachElementGetInstruction) iterationProducts.add(v);
+          if (objDef instanceof EachElementGetInstruction
+              || callsBuiltin(builder, lpk.getNode(), objDef, PythonTypes.NEXT_BUILTIN))
+            iterationProducts.add(v);
           continue;
         }
         if (def instanceof SSAAbstractInvokeInstruction

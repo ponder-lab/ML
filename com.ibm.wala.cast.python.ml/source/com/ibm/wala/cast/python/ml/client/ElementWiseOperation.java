@@ -633,6 +633,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     }
 
     Set<DType> xDTypes = this.getOperandDTypes(builder, xVn);
+    if (yVn > 0) xDTypes = this.broadcastingMemberDTypes(builder, xVn, yVn, xDTypes);
     LOGGER.fine("ElementWiseOperation getDefaultDTypes dtypes: " + xDTypes);
     // An element-wise op always produces a tensor. If operand resolution returned ⊥ (empty set)
     // or null, that represents "unable to resolve the operand's dtype," not "not a tensor." Emit
@@ -641,6 +642,59 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     // identification across the chain even though every step is demonstrably a tensor producer.
     if (xDTypes == null || xDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     return xDTypes;
+  }
+
+  /**
+   * Restricts an operand's dtypes to those of its allocations whose shapes can execute against the
+   * other operand. The shape reading already discards an operand member that does not broadcast
+   * with the other operand's shapes, since that pairing cannot run; the dtype reading has to drop
+   * the same member, or a dtype reaches the result from an allocation whose shape never did. Each
+   * allocation pairs its own shapes with its own dtypes, so the two readings agree member by
+   * member. An allocation whose shape is unknown may broadcast and keeps its dtypes. When no
+   * allocation is left, or the operand or the other operand's shapes do not resolve, the dtypes are
+   * returned unchanged.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param vn The value number of the operand whose dtype decides the result's.
+   * @param otherVn The value number of the other operand.
+   * @param dtypes The operand's dtypes as read over its whole points-to set.
+   * @return The dtypes of the operand's allocations that broadcast with the other operand.
+   */
+  private Set<DType> broadcastingMemberDTypes(
+      PropagationCallGraphBuilder builder, int vn, int otherVn, Set<DType> dtypes) {
+    if (dtypes == null || dtypes.size() < 2 || getNestedForBinop(builder, vn) != null)
+      return dtypes;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    OrdinalSet<InstanceKey> pts =
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(this.getNode(), vn));
+    if (pts == null || pts.size() < 2) return dtypes;
+    Set<List<Dimension<?>>> otherShapes = this.getOperandShapes(builder, otherVn);
+    if (otherShapes == null || otherShapes.isEmpty()) return dtypes;
+    Set<DType> kept = EnumSet.noneOf(DType.class);
+    for (InstanceKey key : pts) {
+      OrdinalSet<InstanceKey> member =
+          OrdinalSet.toOrdinalSet(List.of(key), pa.getInstanceKeyMapping());
+      Set<List<Dimension<?>>> memberShapes = this.getShapesOfValue(builder, member);
+      boolean executes = memberShapes == null;
+      if (!executes)
+        for (List<Dimension<?>> memberShape : memberShapes)
+          for (List<Dimension<?>> otherShape : otherShapes)
+            if (memberShape == null
+                || otherShape == null
+                || areBroadcastable(memberShape, otherShape)) executes = true;
+      if (!executes) continue;
+      Set<DType> memberDTypes = this.getDTypesOfValue(builder, member);
+      if (memberDTypes != null) kept.addAll(memberDTypes);
+    }
+    LOGGER.fine(
+        () ->
+            "ElementWiseOperation operand vn="
+                + vn
+                + " dtypes of allocations broadcasting with vn="
+                + otherVn
+                + ": "
+                + kept);
+    return kept.isEmpty() ? dtypes : kept;
   }
 
   /**
@@ -754,7 +808,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     }
     // PTS-first with SSA-DU fallback — handles operands whose def is a synthetic-method
     // return (implicit PK) by walking the DU chain. See wala/WALA#1889.
-    return this.getShapesOrSSAChain(builder, this.getNode(), vn);
+    return this.getShapes(builder, this.getNode(), vn);
   }
 
   /** Dtype counterpart of {@link #getOperandShapes(PropagationCallGraphBuilder, int)}. */

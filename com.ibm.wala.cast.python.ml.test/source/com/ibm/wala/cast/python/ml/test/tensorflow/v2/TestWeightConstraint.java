@@ -22,7 +22,7 @@ public class TestWeightConstraint extends AbstractTensorTest {
   /** The stored constraint's {@code __call__} receives the {@code (4, 3)} weight. */
   @Test
   public void testStoredConstraint() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "NonNegNorm.__call__", 1, 7, Map.of(3, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+    test(FILE, "NonNegNorm.__call__", 1, 10, Map.of(3, Set.of(TensorType.of(FLOAT_32, 4, 3))));
   }
 
   /** The inline constraint's {@code __call__} receives the {@code (5, 2)} weight. */

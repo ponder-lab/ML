@@ -4,6 +4,7 @@ import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -38,6 +39,18 @@ public class NpReshape extends Reshape {
 
   public NpReshape(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Manual (node-based) anchor, for producer delegation from the {@code numpy/ndarray} allocation
+   * made inside {@code np.reshape}'s synthetic body (wala/ML#1009): a value that reaches the array
+   * through a points-to read (a tuple's element, a dataset's component) rather than as the call's
+   * own result. Its arguments resolve through {@link Reshape}'s caller-aware reads.
+   *
+   * @param node The synthetic {@code do()} node that allocated the value.
+   */
+  public NpReshape(CGNode node) {
+    super(node);
   }
 
   /**

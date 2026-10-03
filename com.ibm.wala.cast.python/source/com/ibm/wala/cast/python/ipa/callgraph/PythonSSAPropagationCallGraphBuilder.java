@@ -23,12 +23,14 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstLexicalAccess;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
@@ -98,6 +100,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -224,6 +227,84 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     } finally {
       this.dispatchReceiver = enclosing;
     }
+  }
+
+  /**
+   * The array types whose arithmetic yields a fresh array (wala/ML#1009), each mapped to the type
+   * of the result: a binary operator with an operand of a key type gets, beside whatever else it
+   * produces, a fresh allocation of the mapped type at the operator's instruction index. Without
+   * one, {@code x / 255.0} on an array has an empty points-to set, so a tuple, list or field that
+   * stores it holds nothing, and every read through that container finds no value although the
+   * operator's own result is typed. Empty by default, so a client that names no array types sees no
+   * change; the tensor analysis names its tensor and array types.
+   */
+  private Map<TypeReference, TypeReference> freshBinaryOpResultTypes = Collections.emptyMap();
+
+  /**
+   * Names the array types whose arithmetic allocates a result (wala/ML#1009); see {@link
+   * #freshBinaryOpResultTypes}.
+   *
+   * @param types Each operand type mapped to the type of the result it yields.
+   */
+  public void setFreshBinaryOpResultTypes(Map<TypeReference, TypeReference> types) {
+    this.freshBinaryOpResultTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
+  }
+
+  /**
+   * The attributes the model attaches to each instance of an array type, per attribute name the
+   * summary class of the attached method (wala/ML#1009). A fresh array the builder allocates (a
+   * slice's or an arithmetic result's) receives them, so it dispatches as an array a summary
+   * allocates does. Empty by default.
+   */
+  private Map<TypeReference, Map<String, TypeReference>> freshArrayAttributes =
+      Collections.emptyMap();
+
+  /**
+   * Names the per-instance attributes of array types; see {@link #freshArrayAttributes}.
+   *
+   * @param attributes Each array type mapped to its attributes' summary classes by name.
+   */
+  public void setFreshArrayAttributes(Map<TypeReference, Map<String, TypeReference>> attributes) {
+    this.freshArrayAttributes =
+        attributes == null ? Collections.emptyMap() : Map.copyOf(attributes);
+  }
+
+  /** The classes already decided by {@link #declaresIterationProtocol}. */
+  private final Map<IClass, Boolean> iterationProtocolClasses = HashMapFactory.make();
+
+  /**
+   * Whether a class declares Python's iteration protocol, an {@code __iter__} or {@code __next__}
+   * method (wala/ML#1010). Iterating an instance of such a class yields what {@code __next__}
+   * returns, not the instance's properties.
+   *
+   * @param type The class.
+   * @return {@code true} iff the class or a superclass declares either method.
+   */
+  public boolean declaresIterationProtocol(IClass type) {
+    return iterationProtocolClasses.computeIfAbsent(
+        type,
+        t -> {
+          IClassHierarchy cha = getClassHierarchy();
+          for (IClass c = t; c != null; c = c.getSuperclass()) {
+            // A summarized or program class renders each method as a function class nested under
+            // the class's own name, held by an instance field of the method's name.
+            for (String name :
+                List.of(BuiltinFunctions.ITER_METHOD_NAME, BuiltinFunctions.NEXT_METHOD_NAME))
+              if (cha.lookupClass(
+                      TypeReference.findOrCreate(
+                          c.getClassLoader().getReference(),
+                          TypeName.string2TypeName(c.getName() + "/" + name)))
+                  != null) return true;
+            java.util.Collection<? extends IMethod> methods = c.getDeclaredMethods();
+            if (methods == null) continue;
+            for (IMethod m : methods) {
+              String name = m.getName().toString();
+              if (name.equals(BuiltinFunctions.ITER_METHOD_NAME)
+                  || name.equals(BuiltinFunctions.NEXT_METHOD_NAME)) return true;
+            }
+          }
+          return false;
+        });
   }
 
   public static class PythonConstraintVisitor extends AstConstraintVisitor
@@ -579,17 +660,54 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * Whether a value is the variable of a {@code for} loop. The loop lowers to an element read of
-     * the iterated collection keyed by one of its property names, {@code i = coll[name]} with
-     * {@code name} drawn by an {@link EachElementGetInstruction}.
+     * Whether the property read being visited is an element read; see {@link #visitPropertyRead}.
+     */
+    private boolean elementRead = false;
+
+    @Override
+    protected ReflectedFieldAction fieldReadAction(PointerKey lhs) {
+      ReflectedFieldAction read = super.fieldReadAction(lhs);
+      if (!elementRead) return read;
+      return new ReflectedFieldAction() {
+        @Override
+        public void dump(AbstractFieldPointerKey fieldKey, boolean constObj, boolean constProp) {
+          read.dump(fieldKey, constObj, constProp);
+        }
+
+        @Override
+        public void action(AbstractFieldPointerKey fieldKey) {
+          if (!getBuilder().declaresIterationProtocol(fieldKey.getInstanceKey().concreteType()))
+            read.action(fieldKey);
+        }
+      };
+    }
+
+    /**
+     * Whether a value is an element read: a read of a collection keyed by one of its property
+     * names, {@code e = coll[name]} with {@code name} drawn by an {@link
+     * EachElementGetInstruction}, as {@code next} reads a sequence's elements and a comprehension's
+     * machinery reads its iterables (wala/ML#1010).
      *
      * @param vn The value number.
      * @return {@code true} iff the value is defined by such a read.
      */
     private boolean isLoopVariable(int vn) {
-      return du.getDef(vn) instanceof AstPropertyRead read
-          && du.getDef(read.getMemberRef()) instanceof EachElementGetInstruction;
+      SSAInstruction def = du.getDef(vn);
+      if (def instanceof AstPropertyRead read
+          && du.getDef(read.getMemberRef()) instanceof EachElementGetInstruction) return true;
+      // A `for` loop binds its variable to `next` of the iterator `iter` made (wala/ML#1010).
+      if (!(def instanceof PythonInvokeInstruction call) || call.getNumberOfUses() < 2)
+        return false;
+      SSAInstruction callee = du.getDef(call.getUse(0));
+      if (callee instanceof AstLexicalRead lexical)
+        for (AstLexicalAccess.Access access : lexical.getAccesses())
+          if (NEXT_BUILTIN_NAME.equals(access.variableName())) return true;
+      return callee instanceof AstGlobalRead global
+          && global.getGlobalName().equals("global " + NEXT_BUILTIN_NAME);
     }
+
+    /** The name a program calls the {@code next} builtin by. */
+    private static final String NEXT_BUILTIN_NAME = "next";
 
     /**
      * Surfaces append-accumulated list contents at subscript reads (<a
@@ -790,6 +908,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     @Override
     public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
+      processArrayOperation(binop);
       // List repetition and concatenation (wala/ML#960): `xs * n` and `xs + ys` produce a fresh
       // list (or tuple) whose elements are the operands' elements. Only a list or tuple key
       // flowing into an operand produces anything, so a tensor binop keeps its empty result set
@@ -842,6 +961,36 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         // an invariant or implicit other operand has static contents and nothing arrives late).
         if (keys[other] != null && invariant[other] == null)
           system.newSideEffect(listOperation, keys[other]);
+      }
+    }
+
+    /**
+     * Allocates the result of a binary operator over an array (wala/ML#1009): for each operand key
+     * of a type {@link #freshBinaryOpResultTypes} names, a fresh key of the mapped type at the
+     * operator's instruction index joins the result. The fresh key is added by an instance
+     * constraint, not an assignment edge, so no operand's tensor state flows into the result
+     * through the flow graph (the wala/ML#405 substrate-leak class); the result's type comes from
+     * the operator's own generator.
+     *
+     * @param binop The binary operator.
+     */
+    private void processArrayOperation(PythonBinaryOpInstruction binop) {
+      Map<TypeReference, TypeReference> types = getBuilder().freshBinaryOpResultTypes;
+      if (types.isEmpty() || !binop.hasDef()) return;
+      PointerKey resultKey = getPointerKeyForLocal(binop.getDef());
+      SymbolTable symtab = ir.getSymbolTable();
+      ArrayOperationOperator operator =
+          getBuilder().new ArrayOperationOperator(node, binop.iIndex(), resultKey, types);
+      for (int i = 0; i < 2; i++) {
+        int use = binop.getUse(i);
+        if (use <= 0 || symtab.isConstant(use)) continue;
+        PointerKey key = getPointerKeyForLocal(use);
+        // As for list operations: an invariant or implicit operand is read directly, since a
+        // constraint over its key would materialize it (the wala/ML#668 trap).
+        if (contentsAreInvariant(symtab, du, use) || system.isImplicit(key))
+          for (InstanceKey ik : getInvariantContents(symtab, du, node, use))
+            operator.contribute(ik);
+        else system.newSideEffect(operator, key);
       }
     }
 
@@ -901,7 +1050,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public void visitPropertyRead(AstPropertyRead instruction) {
-      super.visitPropertyRead(instruction);
+      // An element read over an object whose class declares the iteration protocol reads nothing:
+      // such an object's elements come from `__next__`, and its properties are its attributes,
+      // not its elements (wala/ML#1010).
+      elementRead = isLoopVariable(instruction.getDef());
+      try {
+        super.visitPropertyRead(instruction);
+      } finally {
+        elementRead = false;
+      }
       processListContentsRead(instruction);
       processNegativeSubscript(instruction);
       processUnknownIndexRead(instruction);
@@ -1610,9 +1767,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IField one = resolveRootField(cha, "1");
       if (zero == null || one == null) return;
       InstanceKey list =
-          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.list));
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.list));
       InstanceKey tuple =
-          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.tuple));
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.tuple));
       if (list == null || tuple == null) return;
       InstanceKey zeroKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0);
       InstanceKey oneKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(1), 1);
@@ -1831,7 +1988,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         return;
       }
       InstanceKey list =
-          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.list));
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.list));
       if (list == null) return;
       AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
       IField zero = resolveRootField(getClassHierarchy(), "0");
@@ -2042,6 +2199,67 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The result of a binary operator over an array (wala/ML#1009), attached to an operand: each
+   * operand key of a type {@link #freshBinaryOpResultTypes} names yields a fresh key of the mapped
+   * type at the operator's instruction index, added to the result's points-to set by an instance
+   * constraint. Keys of other types contribute nothing.
+   */
+  public final class ArrayOperationOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final Map<TypeReference, TypeReference> types;
+
+    private ArrayOperationOperator(
+        CGNode node, int pc, PointerKey resultKey, Map<TypeReference, TypeReference> types) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.types = types;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      rhs.getValue().foreach(i -> contribute(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds the fresh result an operand key yields, if its type is named, to the result's points-to
+     * set.
+     *
+     * @param key An operand's instance key.
+     */
+    private void contribute(InstanceKey key) {
+      TypeReference resultType = types.get(key.concreteType().getReference());
+      if (resultType == null) return;
+      InstanceKey fresh = getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, resultType));
+      if (fresh == null) return;
+      getSystem().newConstraint(resultKey, fresh);
+      attachArrayAttributes(node, pc, fresh);
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + resultKey.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ArrayOperationOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && resultKey.equals(other.resultKey);
+    }
+
+    @Override
+    public String toString() {
+      return "array operation@" + pc;
+    }
+  }
+
+  /**
    * The result of a list repetition or concatenation (wala/ML#960), attached to ONE operand: for
    * each list or tuple key flowing into that operand, when the operation's rule holds against the
    * other operand's contents, a fresh key of the same type allocated at the binop's instruction
@@ -2127,7 +2345,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       contributed.add(key);
       InstanceKey fresh =
           getInstanceKeyForAllocation(
-              node, NewSiteReference.make(pc, key.concreteType().getReference()));
+              node, TypedSiteReference.at(pc, key.concreteType().getReference()));
       if (fresh == null) return;
       getSystem().newConstraint(resultKey, fresh);
       copyElements(key, fresh);
@@ -2311,7 +2529,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (this.pack == null) {
         this.pack =
             getInstanceKeyForAllocation(
-                this.caller, NewSiteReference.make(this.call.iIndex(), PythonTypes.tuple));
+                this.caller, TypedSiteReference.at(this.call.iIndex(), PythonTypes.tuple));
         if (this.pack != null)
           getSystem()
               .newConstraint(getPointerKeyForLocal(this.target, this.varargs + 1), this.pack);
@@ -2573,7 +2791,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (this.keywordPack == null) {
         this.keywordPack =
             getInstanceKeyForAllocation(
-                this.caller, NewSiteReference.make(this.call.iIndex(), PythonTypes.dict));
+                this.caller, TypedSiteReference.at(this.call.iIndex(), PythonTypes.dict));
         if (this.keywordPack == null) return;
         getSystem()
             .newConstraint(getPointerKeyForLocal(this.target, this.keywords + 1), this.keywordPack);
@@ -2680,6 +2898,32 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public String toString() {
       return "starred element at " + pc + " into " + target;
     }
+  }
+
+  /**
+   * Attaches to a fresh array the methods its type's model attaches per instance (wala/ML#1009):
+   * each named attribute receives a fresh instance of the summary class the model's own allocators
+   * attach, allocated at the same site, so a slice or an arithmetic result dispatches its methods
+   * as an array the summaries allocate does. Per-instance attachment mirrors the NumPy summaries;
+   * wala/ML#551 replaces both with class-level methods.
+   *
+   * @param node The node allocating the array.
+   * @param pc The allocation's site.
+   * @param array The fresh array.
+   */
+  private void attachArrayAttributes(CGNode node, int pc, InstanceKey array) {
+    Map<String, TypeReference> attributes =
+        freshArrayAttributes.get(array.concreteType().getReference());
+    if (attributes == null) return;
+    AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+    IClassHierarchy cha = getClassHierarchy();
+    attributes.forEach(
+        (name, type) -> {
+          IField f = resolveRootField(cha, name);
+          InstanceKey method = getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, type));
+          if (f != null && method != null)
+            getSystem().newConstraint(factory.getPointerKeyForInstanceField(array, f), method);
+        });
   }
 
   /**
@@ -2797,8 +3041,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 TypeReference type = key.concreteType().getReference();
                 InstanceKey allocation =
                     fresh.contains(type)
-                        ? getInstanceKeyForAllocation(caller, NewSiteReference.make(pc, type))
+                        ? getInstanceKeyForAllocation(caller, TypedSiteReference.at(pc, type))
                         : null;
+                // The slice is an array of the receiver's kind, with its methods (wala/ML#1009).
+                if (allocation != null) attachArrayAttributes(caller, pc, allocation);
                 // A declined allocation (null) falls back to the receiver's own key: the type came
                 // off an existing key, so the class resolves and this is not expected to happen,
                 // but a null inside the solver would take the whole analysis down (the wala/ML#925
@@ -2833,7 +3079,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (range != null) {
         slice =
             getInstanceKeyForAllocation(
-                caller, NewSiteReference.make(pc, key.concreteType().getReference()));
+                caller, TypedSiteReference.at(pc, key.concreteType().getReference()));
         if (slice != null) populate(key, slice, range[0], range[1], range[2]);
       }
       sliced.put(key, slice);

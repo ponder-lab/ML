@@ -1058,6 +1058,125 @@ public class TensorGeneratorFactory {
         || def instanceof SSABinaryOpInstruction;
   }
 
+  /**
+   * The generator of the dataset element a {@code next} result holds, if any (wala/ML#1010): the
+   * manual generator of the element allocation, anchored on the iterator's {@code __next__} node.
+   *
+   * @param source The {@code next} result's points-to set variable.
+   * @param builder The propagation call graph builder.
+   * @return The element's generator, or {@code null} when the result holds no element allocation.
+   */
+  private static TensorGenerator datasetIteratorElement(
+      PointsToSetVariable source,
+      PointsToSetVariable iterated,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    List<AllocationSiteInNode> elements =
+        DatasetIteratorElementGenerator.elementAllocations(source, builder);
+    if (elements.isEmpty()) return null;
+    // The datasets the elements came from, by allocation. When the iterated value in the reading
+    // node is exactly one of them, that value's own generator types the element: it is the
+    // generator the dataset's chain built in the program's frame (a batched dataset's batch axis
+    // is read from its arguments there), where a generator anchored on the allocation inside the
+    // summary node reads the same dataset without its frame. Several datasets, or an iterated
+    // value naming none of them, are typed from the allocations and joined.
+    Set<AllocationSiteInNode> datasets = HashSetFactory.make();
+    for (AllocationSiteInNode element : elements)
+      datasets.addAll(DatasetIteratorElementGenerator.datasetAllocationsOf(element, builder));
+    if (iterated != null && datasets.size() == 1) {
+      Set<AllocationSiteInNode> iteratedAllocations = HashSetFactory.make();
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(iterated.getPointerKey())) {
+        AllocationSiteInNode asin;
+        try {
+          asin = getAllocationSiteInNode(ik);
+        } catch (IllegalArgumentException e) {
+          continue;
+        }
+        if (asin != null) iteratedAllocations.add(asin);
+      }
+      // The iterated value names the dataset when it holds exactly that dataset: a value holding
+      // more (a chain's intermediates, a second dataset) has no one generator of its own to read.
+      if (iteratedAllocations.equals(datasets)) {
+        TensorGenerator iteratedGenerator = tryGetGenerator(iterated, builder, visited);
+        if (iteratedGenerator instanceof DatasetGenerator)
+          return new DatasetIteratorElementGenerator(source, List.of(iteratedGenerator));
+      }
+    }
+    List<TensorGenerator> generators =
+        DatasetIteratorElementGenerator.datasetsOf(elements, builder);
+    return generators.isEmpty() ? null : new DatasetIteratorElementGenerator(source, generators);
+  }
+
+  /**
+   * The value an {@code iter} call in a node iterates, when the given iterator is that call's
+   * result (wala/ML#1010).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @param node The node holding the iterator.
+   * @param iteratorVn The iterator's value number in {@code node}.
+   * @return The iterated value's variable, or {@code null} when the iterator is no {@code iter}
+   *     call's result there or the variable is not materialized.
+   */
+  private static PointsToSetVariable iterArgument(
+      PropagationCallGraphBuilder builder, CGNode node, int iteratorVn) {
+    SSAInstruction def = node.getDU().getDef(iteratorVn);
+    if (!(def instanceof SSAAbstractInvokeInstruction iterCall) || iterCall.getNumberOfUses() < 2)
+      return null;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, iterCall.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.ITER_BUILTIN))
+        return getPointsToSetVariable(
+            builder
+                .getPointerAnalysis()
+                .getHeapModel()
+                .getPointerKeyForLocal(node, iterCall.getUse(1)),
+            builder);
+    return null;
+  }
+
+  /**
+   * Whether an iterator a {@code next} call reads is made by {@code iter} over values that are all
+   * Python containers (lists, tuples, sets or dictionaries), whose elements are stored values
+   * rather than slices of a tensor (wala/ML#1010).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @param node The node of the {@code next} call.
+   * @param iteratorVn The iterator's value number in {@code node}.
+   * @return {@code true} iff the iterator is an {@code iter} call's result in {@code node} whose
+   *     argument's points-to set is non-empty and holds Python containers only.
+   */
+  private static boolean iteratesPythonContainersOnly(
+      PropagationCallGraphBuilder builder, CGNode node, int iteratorVn) {
+    SSAInstruction def = node.getDU().getDef(iteratorVn);
+    if (!(def instanceof SSAAbstractInvokeInstruction iterCall) || iterCall.getNumberOfUses() < 2)
+      return false;
+    boolean viaIter = false;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, iterCall.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.ITER_BUILTIN))
+        viaIter = true;
+    if (!viaIter) return false;
+    OrdinalSet<InstanceKey> pts =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(node, iterCall.getUse(1)));
+    if (pts == null || pts.isEmpty()) return false;
+    IClassHierarchy cha = builder.getClassHierarchy();
+    for (InstanceKey ik : pts) {
+      IClass type = ik.concreteType();
+      boolean container = false;
+      for (TypeReference t :
+          List.of(PythonTypes.list, PythonTypes.tuple, PythonTypes.set, PythonTypes.dict)) {
+        IClass c = cha.lookupClass(t);
+        if (c != null && cha.isSubclassOf(type, c)) container = true;
+      }
+      if (!container) return false;
+    }
+    return true;
+  }
+
   private static PointsToSetVariable getPointsToSetVariable(
       PointerKey key, PropagationCallGraphBuilder builder) {
     // Materializing an implicitly-represented key makes WALA dump the entire call graph's IR via an
@@ -1759,7 +1878,14 @@ public class TensorGeneratorFactory {
               .getReference()
               .getDeclaringClass()
               .equals(PythonTypes.NEXT_BUILTIN)) {
+            // The element a dataset iterator's `__next__` allocates (wala/ML#1010): a result
+            // holding that allocation is typed by the allocation's own generator, which reads the
+            // dataset's element structure off the allocation, not by the iterated value.
             int iterableVn = call.getUse(1);
+            TensorGenerator fromElement =
+                datasetIteratorElement(
+                    source, iterArgument(builder, node, iterableVn), builder, visited);
+            if (fromElement != null) return fromElement;
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
@@ -1808,6 +1934,27 @@ public class TensorGeneratorFactory {
               }
             }
 
+            // A loop lowers to `next(iter(x))` (wala/ML#1010), so the element kinds the element
+            // read distinguished arrive here, decided by the iterated value's own generator: a
+            // `tf.split` or `tf.unstack` result's generator, and a model's weights', describe one
+            // element; a dataset's element is read within the element, so a subscript of it does
+            // not read across the dataset; over a Python container with no generator of its own
+            // the element is a stored value, which the pointer analysis carries to the result, and
+            // peeling an axis would be a tensor's iteration, not a list's.
+            PointsToSetVariable iterated = iterArgument(builder, node, iterableVn);
+            TensorGenerator iteratedGenerator =
+                iterated == null ? null : tryGetGenerator(iterated, builder, visited);
+            if (iteratedGenerator instanceof Split
+                || iteratedGenerator instanceof Unstack
+                || iteratedGenerator instanceof ModelWeightsGenerator) return iteratedGenerator;
+            if (iteratedGenerator instanceof DatasetGenerator)
+              return new DatasetElementGenerator(iterated, iteratedGenerator);
+            if (iteratedGenerator == null
+                && iteratesPythonContainersOnly(builder, node, iterableVn)) return null;
+            // Otherwise an element of the iterated value, over its own generator where it has
+            // one, as the element read built it.
+            if (iteratedGenerator != null)
+              return new TensorElementGenerator(source, iteratedGenerator);
             return (containerGenerator instanceof DatasetGenerator)
                 ? containerGenerator
                 : new TensorElementGenerator(source, containerGenerator);
@@ -2047,11 +2194,13 @@ public class TensorGeneratorFactory {
         // A string-keyed subscript on a dataset element (e.g. `batch["t"]` over a
         // dict-structured dataset) navigates the element's record structure rather than
         // extracting a positional slice of a tensor, so no dimension is peeled: the field
-        // carries the element's (per-field-unioned) type. wala/ML#673.
+        // carries the element's (per-field-unioned) type. wala/ML#673. An element read off the
+        // iterator protocol's allocation (wala/ML#1010) is the same element.
         if (propertyName != null
             && propertyIndex == null
             && !isNonTensorAttribute(propertyName)
-            && containerGenerator instanceof DatasetElementGenerator) {
+            && (containerGenerator instanceof DatasetElementGenerator
+                || containerGenerator instanceof DatasetIteratorElementGenerator)) {
           return containerGenerator;
         }
 
@@ -2123,6 +2272,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
         || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
+    else if (isType(calledFunction, TensorFlowTypes.PAD.getDeclaringClass()))
+      return new Pad(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
     else if (isType(calledFunction, SCATTER_ND.getDeclaringClass())) return new ScatterNd(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))

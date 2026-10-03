@@ -49,9 +49,17 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
    * expand_dims} phantom, reaching the encoder through {@code reshape_from_matrix}'s {@code
    * get_shape_list} &mdash; is gone with wala/ML#900, which resolves that {@code get_shape_list}
    * parameter through its caller argument so φ feasibility prunes the pre-{@code expand_dims} arm;
-   * a reappearance of any {@code (batch, U)} member is a wala/ML#900 regression. The {@code mask}
-   * (value number 4) union is the attention mask's {@code (batch, seq, seq)} broadcast per the same
-   * six entry pipelines.
+   * a reappearance of any {@code (batch, U)} member from that phantom is a wala/ML#900 regression.
+   * The {@code (8, U)}, {@code (16, U)} and {@code (U)} members are not that phantom: they come
+   * from the rank-1 {@code (8,)} and {@code (16,)} input ids the loader's dataset loop now types
+   * (wala/ML#1010), whose label component unions two feature descriptions the analysis cannot
+   * choose between (the pin of {@code testNlpgnnFullEmbeddingInput}), and a rank-1 id reaches the
+   * embedding where expanding it is live. The follow-up that removes them is the one that removes
+   * the embedding's: the equal-shape constraint at the operation that packs the CRF model's input
+   * list into a tensor. The unknown-rank member is gone because {@code reshape_from_matrix}'s
+   * result now resolves to the {@code (U, seq, U)} members, one per entry pipeline's sequence
+   * length (wala/ML#1009). The {@code mask} (value number 4) union is the attention mask's {@code
+   * (batch, seq, seq)} broadcast per the same six entry pipelines.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -68,7 +76,6 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
     expected.put(
         3,
         Set.of(
-            new TensorType(FLOAT_32, null),
             new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
             new TensorType(
                 FLOAT_32,
@@ -96,8 +103,22 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
                 FLOAT_32,
                 asList(new NumericDim(16), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
             new TensorType(
+                FLOAT_32, asList(new NumericDim(16), new NumericDim(100), UnresolvedDim.INSTANCE)),
+            new TensorType(FLOAT_32, asList(new NumericDim(16), UnresolvedDim.INSTANCE)),
+            new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
+            new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE)),
+            new TensorType(
                 FLOAT_32,
-                asList(new NumericDim(16), new NumericDim(100), UnresolvedDim.INSTANCE))));
+                asList(UnresolvedDim.INSTANCE, new NumericDim(10), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                FLOAT_32,
+                asList(UnresolvedDim.INSTANCE, new NumericDim(100), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                FLOAT_32,
+                asList(UnresolvedDim.INSTANCE, new NumericDim(128), UnresolvedDim.INSTANCE)),
+            new TensorType(
+                FLOAT_32,
+                asList(UnresolvedDim.INSTANCE, new NumericDim(4), UnresolvedDim.INSTANCE))));
 
     expected.put(
         4,

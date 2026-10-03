@@ -324,10 +324,10 @@ public class DenseCall extends TensorGenerator {
    * result of another layer call (e.g., {@code Flatten.__call__}, {@code Dense.__call__}, {@code
    * Dropout.__call__}), whose allocating node type is not in {@link #createManualGenerator(CGNode,
    * PropagationCallGraphBuilder)}'s switch — walks to the {@code inputs} value number in this
-   * summary method's IR and delegates to {@link #getShapesOrSSAChain(PropagationCallGraphBuilder,
-   * CGNode, int)}. That path re-enters the factory via {@link TensorGeneratorFactory#getGenerator}
-   * on the upstream call's result, which knows {@code FLATTEN_LAYER_CALL}, {@code DENSE_CALL}, etc.
-   * See wala/ML#358.
+   * summary method's IR and delegates to {@link #getShapes(PropagationCallGraphBuilder, CGNode,
+   * int)}. That path re-enters the factory via {@link TensorGeneratorFactory#getGenerator} on the
+   * upstream call's result, which knows {@code FLATTEN_LAYER_CALL}, {@code DENSE_CALL}, etc. See
+   * wala/ML#358.
    *
    * @param builder The propagation call graph builder used for points-to analysis and factory
    *     dispatch.
@@ -339,45 +339,13 @@ public class DenseCall extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
 
-    Set<List<Dimension<?>>> ret = new HashSet<>();
-    boolean primaryUnknown = false;
-
-    for (InstanceKey inputIK : inputPts) {
-      LOGGER.fine(() -> "Found input tensor instance key: " + describe(inputIK));
-      AllocationSiteInNode inputASIN = getAllocationSiteInNode(inputIK);
-      if (inputASIN == null) continue;
-
-      CGNode node = inputASIN.getNode();
-      TensorGenerator generator = createManualGenerator(node, builder);
-      LOGGER.fine(
-          () ->
-              "Found input tensor generator: "
-                  + generator
-                  + " for instance key: "
-                  + describe(inputIK)
-                  + " at node: "
-                  + describe(node)
-                  + ".");
-
-      if (generator != null) {
-        // Divert through the engine's memo layer (wala/ML#365): a direct 1-arg call recurses
-        // outside the engine, so a cyclic chain breaks at the wala/ML#599 thread-local guard with
-        // an evaluation-order-dependent null instead of converging (wala/ML#753). The resolvable
-        // members stand; an unknown remainder drops, as the legacy null-filtered call did.
-        ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
-        LOGGER.fine(() -> "Found input shapes: " + generatorShapes + ".");
-        ret.addAll(generatorShapes.members());
-        if (generatorShapes.hasUnknown()) primaryUnknown = true;
-      } else {
-        LOGGER.fine(
-            () ->
-                "No generator found for instance key: "
-                    + describe(inputIK)
-                    + " at node: "
-                    + describe(node)
-                    + ".");
-      }
-    }
+    // The input is read like any other value: each instance key's shape comes from the
+    // generator its allocation resolves to, whether a producer summary, a slice or an arithmetic
+    // result allocated at its operator, or a summarized array (wala/ML#1009).
+    ShapeResult fromValue = this.getShapeResultOfValue(builder, inputPts, false);
+    LOGGER.fine(() -> "Found input shapes: " + fromValue + ".");
+    Set<List<Dimension<?>>> ret = new HashSet<>(fromValue.members());
+    boolean primaryUnknown = fromValue.hasUnknown();
 
     if (!ret.isEmpty()) return ret;
 
@@ -392,7 +360,7 @@ public class DenseCall extends TensorGenerator {
     LOGGER.fine(
         () -> "PTS walk produced no shapes; attempting SSA-chain fallback on vn=" + inputsVn + ".");
     try {
-      Set<List<Dimension<?>>> viaSsa = this.getShapesOrSSAChain(builder, this.getNode(), inputsVn);
+      Set<List<Dimension<?>>> viaSsa = this.getShapes(builder, this.getNode(), inputsVn);
       LOGGER.fine(() -> "SSA-chain fallback shapes for vn=" + inputsVn + ": " + viaSsa + ".");
       if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
     } catch (IllegalArgumentException e) {

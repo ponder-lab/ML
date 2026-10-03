@@ -2,7 +2,9 @@ package com.ibm.wala.cast.python.ipa.summaries;
 
 import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.loader.AstDynamicField;
+import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.IClass;
@@ -15,12 +17,14 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.ClassTargetSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.ConstantValue;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.Selector;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.types.annotations.Annotation;
 import com.ibm.wala.util.collections.HashMapFactory;
+import com.ibm.wala.util.collections.Pair;
 import java.io.Reader;
 import java.util.Collection;
 import java.util.Collections;
@@ -136,6 +140,11 @@ public class BuiltinFunctions {
       x.addStatement(factory.PropertyRead(idx++, element, arg, elementKey));
       x.addConstant(fieldKey, new ConstantValue(arg - 2));
       x.addStatement(factory.PropertyWrite(idx++, tuple, fieldKey, element));
+      // The iteration protocol (wala/ML#1010): an argument whose class declares `__iter__` and
+      // `__next__` contributes what `next(iter(arg))` yields, beside the sequence read above, which
+      // the builder leaves empty for such an argument.
+      idx = protocolElement(x, factory, idx, arg, tuple, fieldKey, v);
+      v += 8;
     }
 
     x.addConstant(containerKey, new ConstantValue(0));
@@ -195,10 +204,53 @@ public class BuiltinFunctions {
 
     x.addStatement(factory.PropertyWrite(idx++, tuple, zero, index));
     x.addStatement(factory.PropertyWrite(idx++, tuple, one, element));
+    // The iteration protocol (wala/ML#1010); see `zipSummary`.
+    idx = protocolElement(x, factory, idx, 2, tuple, one, 19);
     x.addStatement(factory.PropertyWrite(idx++, container, zero, tuple));
     x.addStatement(factory.ReturnInstruction(idx++, container, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
+  }
+
+  /**
+   * Adds to a summary the iteration-protocol read of one argument's element (wala/ML#1010): {@code
+   * arg.__iter__()} then {@code .__next__()} on its result, each a call of the bound method value,
+   * with the yield written into the given field of the given tuple. Eight value numbers from {@code
+   * firstValue} are used.
+   *
+   * @param x The summary.
+   * @param factory The instruction factory.
+   * @param idx The next instruction index.
+   * @param arg The iterable argument's value number.
+   * @param tuple The tuple the element is written into.
+   * @param fieldKey The value number of the field's constant key.
+   * @param firstValue The first of eight free value numbers.
+   * @return The next instruction index.
+   */
+  private static int protocolElement(
+      PythonSummary x,
+      AstInstructionFactory factory,
+      int idx,
+      int arg,
+      int tuple,
+      int fieldKey,
+      int firstValue) {
+    int iterName = firstValue;
+    int iterMethod = firstValue + 1;
+    int iterator = firstValue + 2;
+    int iterException = firstValue + 3;
+    int nextName = firstValue + 4;
+    int nextMethod = firstValue + 5;
+    int element = firstValue + 6;
+    int nextException = firstValue + 7;
+    x.addConstant(iterName, new ConstantValue(ITER_METHOD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, iterMethod, arg, iterName));
+    x.addStatement(protocolCall(idx++, iterator, iterException, iterMethod));
+    x.addConstant(nextName, new ConstantValue(NEXT_METHOD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, nextMethod, iterator, nextName));
+    x.addStatement(protocolCall(idx++, element, nextException, nextMethod));
+    x.addStatement(factory.PropertyWrite(idx++, tuple, fieldKey, element));
+    return idx;
   }
 
   /**
@@ -248,10 +300,72 @@ public class BuiltinFunctions {
     x.addConstant(joinKey, new ConstantValue(0));
     x.addStatement(factory.PropertyWrite(idx++, box, joinKey, content));
     x.addStatement(factory.PropertyWrite(idx++, box, joinKey, 3));
+
+    // The iteration protocol (wala/ML#1010): an iterator whose class declares `__next__` yields
+    // what that method returns.
+    int nextName = 16;
+    int nextMethod = 17;
+    int nextResult = 18;
+    int nextException = 19;
+    x.addConstant(nextName, new ConstantValue(NEXT_METHOD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, nextMethod, 2, nextName));
+    x.addStatement(protocolCall(idx++, nextResult, nextException, nextMethod));
+    x.addStatement(factory.PropertyWrite(idx++, box, joinKey, nextResult));
+
+    // The sequence route: an iterator `iter` made over a sequence yields the sequence's elements,
+    // read as a loop reads them; the builder reads none off an object whose class declares the
+    // protocol, whose elements come from `__next__` instead.
+    int iterated = 20;
+    int elementKey = 21;
+    int element = 22;
+    int nullKey = 23;
+    x.addConstant(nullKey, new ConstantValue(null));
+    x.addStatement(factory.GetInstruction(idx++, iterated, 2, ITERATED_FIELD));
+    x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, iterated, nullKey));
+    x.addStatement(factory.PropertyRead(idx++, element, iterated, elementKey));
+    x.addStatement(factory.PropertyWrite(idx++, box, joinKey, element));
+
     x.addStatement(factory.PropertyRead(idx++, result, box, joinKey));
     x.addStatement(factory.ReturnInstruction(idx++, result, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
+  }
+
+  /** The name of the method an iterator yields its next element through. */
+  public static final String NEXT_METHOD_NAME = "__next__";
+
+  /** The name of the method an iterable returns its iterator through. */
+  public static final String ITER_METHOD_NAME = "__iter__";
+
+  /**
+   * The field of an iterator {@code iter} allocates holding the iterable it was made over
+   * (wala/ML#1010): an ordinary field rather than a property, so it is no element of the iterator's
+   * catalog and iterating the iterator does not yield the iterable itself.
+   */
+  public static final FieldReference ITERATED_FIELD =
+      FieldReference.findOrCreate(
+          PythonTypes.Root, Atom.findOrCreateUnicodeAtom("__iterated__"), PythonTypes.Root);
+
+  /**
+   * A call of a method value with no arguments, as {@code x.__iter__()} or {@code it.__next__()}
+   * dispatches: the bound method supplies its receiver.
+   *
+   * @param iindex The instruction index.
+   * @param result The result's value number.
+   * @param exception The exception's value number.
+   * @param method The method value's value number.
+   * @return The call.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static PythonInvokeInstruction protocolCall(
+      int iindex, int result, int exception, int method) {
+    return new PythonInvokeInstruction(
+        iindex,
+        result,
+        exception,
+        new DynamicCallSiteReference(PythonTypes.CodeBody, iindex),
+        new int[] {method},
+        new Pair[0]);
   }
 
   /**
@@ -286,7 +400,28 @@ public class BuiltinFunctions {
     x.addConstant(fieldKey, new ConstantValue(PythonTypes.GENERATOR_CONTENT_FIELD_NAME));
     x.addStatement(factory.PropertyRead(idx++, content, 2, fieldKey));
     x.addStatement(factory.PropertyWrite(idx++, iterator, fieldKey, content));
-    x.addStatement(factory.ReturnInstruction(idx++, iterator, false));
+    // The sequence route (wala/ML#1010): the iterator holds its iterable, which `next` reads.
+    x.addStatement(factory.PutInstruction(idx++, iterator, 2, ITERATED_FIELD));
+
+    // The iteration protocol: an iterable whose class declares `__iter__` iterates through what
+    // that method returns, joined with the fresh iterator through a common box field.
+    int iterName = 14;
+    int iterMethod = 15;
+    int protocolIterator = 16;
+    int iterException = 17;
+    int box = 18;
+    int joinKey = 19;
+    int result = 20;
+    x.addConstant(iterName, new ConstantValue(ITER_METHOD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, iterMethod, 2, iterName));
+    x.addStatement(protocolCall(idx++, protocolIterator, iterException, iterMethod));
+    x.addStatement(
+        factory.NewInstruction(idx++, box, NewSiteReference.make(1, PythonTypes.object)));
+    x.addConstant(joinKey, new ConstantValue(0));
+    x.addStatement(factory.PropertyWrite(idx++, box, joinKey, iterator));
+    x.addStatement(factory.PropertyWrite(idx++, box, joinKey, protocolIterator));
+    x.addStatement(factory.PropertyRead(idx++, result, box, joinKey));
+    x.addStatement(factory.ReturnInstruction(idx++, result, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
   }

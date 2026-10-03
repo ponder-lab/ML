@@ -996,12 +996,17 @@ public abstract class TensorGenerator {
    * Whether an allocation was synthesized by the list repetition and concatenation model
    * (wala/ML#960): such a key's allocation site is a binary-op instruction of its node, never a
    * {@code new}. Its elements sit under a single non-numeric field and its length is unknown, so a
-   * reader counting numeric fields must not read it as a literal.
+   * reader counting numeric fields must not read it as a literal. An arithmetic result over arrays
+   * is allocated at a binary-op site as well, but as an array, so only a list or tuple allocation
+   * there is a list operation's result.
    *
    * @param asin The allocation to test.
-   * @return {@code true} iff the allocation's site indexes a binary-op instruction.
+   * @return {@code true} iff the allocation is a list or tuple whose site indexes a binary-op
+   *     instruction.
    */
   protected static boolean isListOperationResult(AllocationSiteInNode asin) {
+    TypeReference allocated = asin.getSite().getDeclaredType();
+    if (!allocated.equals(list) && !allocated.equals(tuple)) return false;
     IR ir = asin.getNode().getIR();
     if (ir == null) return false;
     int pc = asin.getSite().getProgramCounter();
@@ -4192,7 +4197,7 @@ public abstract class TensorGenerator {
                   + vn
                   + ".");
       try {
-        Set<List<Dimension<?>>> viaSsa = this.getShapesOrSSAChain(builder, this.getNode(), vn);
+        Set<List<Dimension<?>>> viaSsa = this.getShapes(builder, this.getNode(), vn);
         if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
       } catch (IllegalArgumentException e) {
         LOGGER.fine(() -> "SSA-chain fallback IAE for vn=" + vn + ": " + e.getMessage() + ".");
@@ -4224,7 +4229,7 @@ public abstract class TensorGenerator {
     int vn = this.getArgumentValueNumber(builder, index, name, true);
     if (vn > 0) {
       try {
-        Set<DType> viaSsa = this.getDTypesOrSSAChain(builder, this.getNode(), vn);
+        Set<DType> viaSsa = this.getDTypes(builder, this.getNode(), vn);
         if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
       } catch (IllegalArgumentException e) {
         LOGGER.fine(
@@ -4232,124 +4237,6 @@ public abstract class TensorGenerator {
       }
     }
     return null;
-  }
-
-  /**
-   * PTS-first wrapper: tries {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} and falls
-   * back to the SSA-substrate DU walk in {@link #shapesFromSSAChain} if that throws {@link
-   * IllegalArgumentException} (implicit PK with empty PTS).
-   *
-   * <p>Every recursive step re-enters this wrapper so non-implicit intermediates (e.g., mnist
-   * receivers reachable via factory dispatch) shortcut the walk.
-   *
-   * <p>If {@code getShapes} threw IAE and the DU walk doesn't find a concrete shape either, the IAE
-   * is rethrown so callers relying on it to fail identification aren't misled.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The CG node whose IR contains {@code vn}.
-   * @param vn The SSA value number to resolve.
-   * @return The resolved shapes (non-empty) from either path, or {@code null} / the empty set if
-   *     {@code getShapes} returned those and the DU walk didn't help either. Rethrows IAE when
-   *     {@code getShapes} throws and the DU walk doesn't help.
-   */
-  protected Set<List<Dimension<?>>> getShapesOrSSAChain(
-      PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    try {
-      Set<List<Dimension<?>>> shapes = getShapes(builder, node, vn);
-      if (shapes != null && !shapes.isEmpty()) return shapes;
-      // `getShapes` returned null/empty without throwing — either "tensor with unknown shape"
-      // (null) or "not a tensor" (empty). Try the DU walk for a concrete shape; fall through
-      // to the original result if the walk doesn't help.
-      Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, node, vn);
-      if (chain != null && !chain.isEmpty()) return chain;
-      return shapes;
-    } catch (IllegalArgumentException e) {
-      // IAE means "empty PTS and couldn't trace properties" — the caller is relying on this
-      // to fail identification. Only override it if the SSA chain actually recovers a
-      // concrete shape; otherwise rethrow so callers aren't misled into identifying
-      // non-tensor parameters as tensors.
-      Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, node, vn);
-      if (chain != null && !chain.isEmpty()) return chain;
-      throw e;
-    }
-  }
-
-  /**
-   * SSA-substrate shape lookup: walks the DU chain from {@code vn} backward, peeling tuple-unpack
-   * {@link PythonPropertyRead}s and stopping at invokes it recognises.
-   *
-   * <p>Handles: mnist x_train/y_train/x_test/y_test invokes (hardcoded shapes via {@link
-   * MnistInputData}); astype invokes (shape-preserving, recurses on the astype receiver);
-   * tuple-field reads (peel via {@link #findTupleFieldStore}). Returns {@code null} for any other
-   * creator kind — preserves today's ⊤-fallback rather than guessing.
-   *
-   * <p>Complements {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)}'s assignment-graph
-   * walk: that one walks PTS propagation edges; this one walks SSA def-use edges. Where PTS is
-   * implicit (summary-method returns), the PTS walk crashes on {@code findOrCreatePointsToSet} and
-   * the DU walk is the only viable path.
-   *
-   * <p>TODO(wala/ML#402): delete once wala/WALA#1889 lands and summary-method returns materialise
-   * concrete PTS — the normal PTS path will then recover these shapes via factory recursion.
-   *
-   * @param builder The propagation call graph builder used to resolve callees.
-   * @param node The CG node whose IR contains {@code vn}.
-   * @param vn The SSA value number whose shape we need.
-   * @return The resolved shapes, or {@code null} if the DU walk doesn't recognise the creator.
-   */
-  protected Set<List<Dimension<?>>> shapesFromSSAChain(
-      PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return shapesFromSSAChain(builder, node, vn, HashSetFactory.make());
-  }
-
-  /**
-   * Cross-frame counterpart of {@code findTupleFieldStore} (wala/ML#796): when a tuple-unpack
-   * read's object was produced by an invoke, the tuple and its field stores live in the callee's
-   * frame; find the callee returns whose results are tuple allocations and the store into the
-   * read's field on each, yielding (callee, stored value number) pairs the SSA-chain walkers
-   * continue in.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The reading node.
-   * @param propRead The tuple-unpack property read.
-   * @return The (callee node, stored value number) pairs; empty if none resolve.
-   */
-  private static Set<Pair<CGNode, Integer>> findCalleeTupleFieldStores(
-      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
-    SymbolTable symbolTable = node.getIR().getSymbolTable();
-    int memberVn = propRead.getMemberRef();
-    if (!symbolTable.isConstant(memberVn)) return HashSetFactory.make();
-    String fieldName = String.valueOf(symbolTable.getConstantValue(memberVn));
-    SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
-    if (!(objDef instanceof SSAAbstractInvokeInstruction call)) {
-      // The object is a parameter: the tuple was built in a frame reachable only through the
-      // CALLERS' actuals, so hop the object out and peel the same field against each actual's
-      // producing invoke (`edge_index, batch = data` inside a callee whose caller passes
-      // `load(...)`'s result). wala/ML#796.
-      Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
-      int objVn = propRead.getObjectRef();
-      if (objDef == null)
-        for (Pair<CGNode, Integer> producerSite : producingInvokeSites(builder, node, objVn, 0)) {
-          SSAInstruction producerDef = producerSite.fst.getDU().getDef(producerSite.snd);
-          if (producerDef instanceof SSAAbstractInvokeInstruction producer) {
-            // The enumerate peel: field #1 of an enumerate element is the iterated container's
-            // element, so the continuation is the enumerate ARGUMENT in the producing frame.
-            // Field #0 is the integer index (the wala/ML#409 drop) and gets no continuation.
-            SSAInstruction producerFn =
-                producer.getNumberOfUses() < 2
-                    ? null
-                    : producerSite.fst.getDU().getDef(producer.getUse(0));
-            if ("1".equals(fieldName)
-                && producerFn instanceof AstLexicalRead lexRead
-                && lexRead.getAccessCount() > 0
-                && "enumerate".equals(lexRead.getAccess(0).getName().fst))
-              ret.add(Pair.make(producerSite.fst, producer.getUse(1)));
-            else
-              ret.addAll(calleeTupleFieldStoresOf(builder, producerSite.fst, producer, fieldName));
-          }
-        }
-      return ret;
-    }
-    return calleeTupleFieldStoresOf(builder, node, call, fieldName);
   }
 
   /**
@@ -4450,78 +4337,6 @@ public abstract class TensorGenerator {
         }
       }
     }
-    return ret;
-  }
-
-  /**
-   * The {@code enumerate} peel (wala/ML#796): {@code for i, x in enumerate(xs)} reads field {@code
-   * #1} of the enumerate tuples, whose values are exactly the elements of {@code xs} — so the walk
-   * continues on the {@code enumerate} ARGUMENT. Field {@code #0} is the integer index (the
-   * wala/ML#409 drop) and must not continue. Matches a constant-member read over a dynamic element
-   * read over an invoke whose function is the lexical builtin {@code enumerate}.
-   *
-   * @param node The CG node whose IR contains {@code propRead}.
-   * @param propRead The constant-member tuple-field read over the loop element.
-   * @return The {@code xs} argument's value number, or {@code -1} when the structure does not match
-   *     or the field is not {@code 1}.
-   */
-  private static int enumerateArgumentVn(CGNode node, PythonPropertyRead propRead) {
-    SymbolTable symbolTable = node.getIR().getSymbolTable();
-    int memberVn = propRead.getMemberRef();
-    if (!symbolTable.isConstant(memberVn)) return -1;
-    if (!"1".equals(String.valueOf(symbolTable.getConstantValue(memberVn)))) return -1;
-    SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
-    if (!(objDef instanceof PythonPropertyRead elementRead)) return -1;
-    SSAInstruction iterDef = node.getDU().getDef(elementRead.getObjectRef());
-    if (!(iterDef instanceof SSAAbstractInvokeInstruction call) || call.getNumberOfUses() < 2)
-      return -1;
-    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
-    if (!(funcDef instanceof AstLexicalRead read) || read.getAccessCount() == 0) return -1;
-    if (!"enumerate".equals(read.getAccess(0).getName().fst)) return -1;
-    return call.getUse(1);
-  }
-
-  /**
-   * The generator-yield counterpart of {@code findCalleeTupleFieldStores} (wala/ML#796): a {@code
-   * for x, y in gen(...)} unpack reads a constant tuple field off a loop element that is a DYNAMIC
-   * member read over the generator call's result, so the invoke sits one property-read further out
-   * than the direct-call peel expects. A {@code yield a, b} lowers to a tuple allocation stored
-   * into the generator function object's {@code __content__} field; this peel expands the generator
-   * call's callees through trampolines, collects the {@code __content__}-stored tuples, and returns
-   * the (generator frame, value number) pairs stored under the read's field on those tuples.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The CG node whose IR contains {@code propRead}.
-   * @param propRead The constant-member tuple-field read over the loop element.
-   * @return The (generator node, stored value number) pairs; empty if the structure does not match.
-   */
-  private static Set<Pair<CGNode, Integer>> findGeneratorYieldTupleStores(
-      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
-    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
-    SymbolTable symbolTable = node.getIR().getSymbolTable();
-    int memberVn = propRead.getMemberRef();
-    if (!symbolTable.isConstant(memberVn)) return ret;
-    String fieldName = String.valueOf(symbolTable.getConstantValue(memberVn));
-    SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
-    if (!(objDef instanceof PythonPropertyRead elementRead)) return ret;
-    // The element read's member is the loop-carried iteration key, deliberately not required to
-    // be constant.
-    SSAInstruction genDef = node.getDU().getDef(elementRead.getObjectRef());
-    if (!(genDef instanceof SSAAbstractInvokeInstruction call)) return ret;
-    ret.addAll(
-        yieldTupleFieldStores(
-            generatorBodiesReachedBy(
-                builder, builder.getCallGraph().getPossibleTargets(node, call.getCallSite())),
-            fieldName));
-    LOGGER.fine(
-        () ->
-            "Resolved "
-                + ret.size()
-                + " generator-yield store(s) for field "
-                + fieldName
-                + " in "
-                + describe(node)
-                + ".");
     return ret;
   }
 
@@ -4744,535 +4559,12 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Recursive worker for {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
-   *
-   * @param builder The propagation call graph builder used to resolve callees.
-   * @param node The CG node whose IR contains {@code vn}.
-   * @param vn The SSA value number whose shape we need.
-   * @param visited The set of value numbers already visited on this walk; used to break cycles when
-   *     the DU chain loops through phi nodes or self-referential definitions.
-   * @return The resolved shapes, or {@code null} if the DU walk doesn't recognise the creator or
-   *     has already visited {@code vn} on this walk (cycle guard).
-   */
-  private Set<List<Dimension<?>>> shapesFromSSAChain(
-      PropagationCallGraphBuilder builder,
-      CGNode node,
-      int vn,
-      Set<Pair<CGNode, Integer>> visited) {
-    if (!visited.add(Pair.make(node, vn))) return null; // cycle guard (per-frame, wala/ML#796)
-    SSAInstruction def = node.getDU().getDef(vn);
-    LOGGER.fine(
-        () ->
-            "shapesFromSSAChain: entered, vn="
-                + vn
-                + ", def="
-                + (def == null ? "null" : def.getClass().getSimpleName()));
-
-    // Peel tuple-unpack: `x, y = a, b` lowers to `tmp = Tuple(a, b); x = tmp[0]; y = tmp[1]`.
-    // Find the store that wrote the matching field on the same tuple and trace its stored vn.
-    if (def instanceof PythonPropertyRead) {
-      PythonPropertyRead propRead = (PythonPropertyRead) def;
-      int storedVn = findTupleFieldStore(node, propRead);
-      if (storedVn > 0) {
-        LOGGER.fine(
-            () ->
-                "shapesFromSSAChain: peeled PythonPropertyRead at vn="
-                    + vn
-                    + " to storedVn="
-                    + storedVn);
-        try {
-          Set<List<Dimension<?>>> viaPts = getShapes(builder, node, storedVn);
-          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through
-        }
-        return shapesFromSSAChain(builder, node, storedVn, visited);
-      }
-      // The tuple was built in a callee (a cross-frame unpack, wala/ML#796); continue at the
-      // callee-side field stores.
-      for (Pair<CGNode, Integer> store : findCalleeTupleFieldStores(builder, node, propRead)) {
-        try {
-          Set<List<Dimension<?>>> viaPts = getShapes(builder, store.fst, store.snd);
-          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the callee-frame chain walk
-        }
-        Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, store.fst, store.snd, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      // The generator-yield peel; see the dtype walker's arm. wala/ML#796.
-      for (Pair<CGNode, Integer> store : findGeneratorYieldTupleStores(builder, node, propRead)) {
-        try {
-          Set<List<Dimension<?>>> viaPts = getShapes(builder, store.fst, store.snd);
-          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the generator-frame chain walk
-        }
-        Set<List<Dimension<?>>> chain2 = shapesFromSSAChain(builder, store.fst, store.snd, visited);
-        if (chain2 != null && !chain2.isEmpty()) return chain2;
-      }
-      return null;
-    }
-
-    // A comprehension body reads its enclosing frame's locals lexically; continue the walk in
-    // the definer frame(s) (wala/ML#796).
-    if (def instanceof AstLexicalRead) {
-      for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
-        try {
-          Set<List<Dimension<?>>> viaPts = getShapes(builder, definer.fst, definer.snd);
-          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the definer-frame chain walk
-        }
-        Set<List<Dimension<?>>> chain =
-            shapesFromSSAChain(builder, definer.fst, definer.snd, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      return null;
-    }
-
-    // A multiply-written local (e.g. a variable rebound after a comprehension) reaches the walk
-    // as the phi over its writes; union the arms, skipping null-constant substrate uses. The
-    // per-frame visited set breaks loop-carried self-reference. wala/ML#796.
-    if (def instanceof SSAPhiInstruction) {
-      SymbolTable st = node.getIR() == null ? null : node.getIR().getSymbolTable();
-      Set<List<Dimension<?>>> union = HashSetFactory.make();
-      for (int i = 0; i < def.getNumberOfUses(); i++) {
-        int use = def.getUse(i);
-        if (use <= 0 || (st != null && st.isNullConstant(use))) continue;
-        try {
-          Set<List<Dimension<?>>> viaPts = getShapes(builder, node, use);
-          if (viaPts != null && !viaPts.isEmpty()) {
-            union.addAll(viaPts);
-            continue;
-          }
-        } catch (IllegalArgumentException e) {
-          // fall through to the chain walk on this arm
-        }
-        Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, node, use, visited);
-        if (chain != null) union.addAll(chain);
-      }
-      return union.isEmpty() ? null : union;
-    }
-
-    // A function parameter has no defining instruction (DefUse is intraprocedural); continue the
-    // walk on the corresponding actual argument in each caller frame. Value numbers v1..vN are
-    // the parameters and use index vn-1 pairs the caller-side actual with the callee-side formal
-    // (use 0 holds the callee function object for v1). A trampoline caller's actual is itself a
-    // parameter, so interposed dispatch hops compose by recursion. wala/ML#796.
-    if (def == null
-        && node.getIR() != null
-        && vn <= node.getIR().getSymbolTable().getNumberOfParameters()) {
-      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
-          getCallerInvokes(builder, node)) {
-        int useIdx = vn - 1;
-        if (useIdx < 0 || useIdx >= callerInvoke.snd.getNumberOfUses()) continue;
-        int actualVn = callerInvoke.snd.getUse(useIdx);
-        try {
-          Set<List<Dimension<?>>> viaPts = getShapes(builder, callerInvoke.fst, actualVn);
-          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the caller-frame chain walk
-        }
-        Set<List<Dimension<?>>> chain =
-            shapesFromSSAChain(builder, callerInvoke.fst, actualVn, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      return null;
-    }
-
-    if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
-    SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
-    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
-      TypeReference declaring = callee.getMethod().getReference().getDeclaringClass();
-      if (declaring.equals(TensorFlowTypes.MNIST_X_TRAIN))
-        return Set.of(MnistInputData.X_TRAIN_SHAPE);
-      if (declaring.equals(TensorFlowTypes.MNIST_Y_TRAIN))
-        return Set.of(MnistInputData.Y_TRAIN_SHAPE);
-      if (declaring.equals(TensorFlowTypes.MNIST_X_TEST))
-        return Set.of(MnistInputData.X_TEST_SHAPE);
-      if (declaring.equals(TensorFlowTypes.MNIST_Y_TEST))
-        return Set.of(MnistInputData.Y_TEST_SHAPE);
-      if (declaring.equals(TensorFlowTypes.CIFAR10_X_TRAIN))
-        return Set.of(Cifar10InputData.X_TRAIN_SHAPE);
-      if (declaring.equals(TensorFlowTypes.CIFAR10_Y_TRAIN))
-        return Set.of(Cifar10InputData.Y_TRAIN_SHAPE);
-      if (declaring.equals(TensorFlowTypes.CIFAR10_X_TEST))
-        return Set.of(Cifar10InputData.X_TEST_SHAPE);
-      if (declaring.equals(TensorFlowTypes.CIFAR10_Y_TEST))
-        return Set.of(Cifar10InputData.Y_TEST_SHAPE);
-      if (declaring.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
-        // astype preserves shape; recurse on its receiver.
-        int astypeReceiverVn = propertyReadObjectRef(node, call);
-        if (astypeReceiverVn > 0) {
-          try {
-            Set<List<Dimension<?>>> viaPts = getShapes(builder, node, astypeReceiverVn);
-            if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-          } catch (IllegalArgumentException e) {
-            // fall through
-          }
-          return shapesFromSSAChain(builder, node, astypeReceiverVn, visited);
-        }
-      }
-      // Nested reshape is intentionally not handled here — the outer NdarrayReshape, if
-      // present, computes its own shape via `getShapes`. In practice the chains we care
-      // about ({reshape → EWO → from_tensor_slices}) route through EWO's binop handling,
-      // which in turn re-enters this walk on its operand.
-    }
-    return null;
-  }
-
-  /**
-   * Dtype counterpart to {@link #getShapesOrSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
-   * PTS-first via {@link #getDTypes(PropagationCallGraphBuilder, CGNode, int)}, SSA-DU fallback via
-   * {@link #dtypesFromSSAChain}. Rethrows {@link IllegalArgumentException} from {@code getDTypes}
-   * when the DU walk doesn't help, so callers that rely on IAE to fail identification are not
-   * misled.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The CG node whose IR contains {@code vn}.
-   * @param vn The SSA value number whose dtype we need.
-   * @return The resolved dtypes, or {@code null} if neither path finds a concrete dtype and {@code
-   *     getDTypes} didn't throw.
-   */
-  protected Set<DType> getDTypesOrSSAChain(
-      PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    try {
-      Set<DType> dtypes = getDTypes(builder, node, vn);
-      // A ⊤-only result (just `UNKNOWN`) is no better than "nothing concrete": the SSA chain may
-      // recover a real dtype through dtype-preserving ops (e.g. `reshape(pad(x))`), so prefer it
-      // over ⊤. wala/ML#602. (A ⊤-only result previously short-circuited the chain; that was masked
-      // until the wala/ML#603 catalog filter stopped a non-integer key from throwing here, which
-      // had
-      // incidentally produced an empty result that fell through to the chain.)
-      boolean concrete =
-          dtypes != null && !dtypes.isEmpty() && !(dtypes.size() == 1 && dtypes.contains(UNKNOWN));
-      if (concrete) return dtypes;
-      Set<DType> chain = dtypesFromSSAChain(builder, node, vn);
-      if (chain != null && !chain.isEmpty()) return chain;
-      return dtypes;
-    } catch (IllegalArgumentException e) {
-      Set<DType> chain = dtypesFromSSAChain(builder, node, vn);
-      if (chain != null && !chain.isEmpty()) return chain;
-      throw e;
-    }
-  }
-
-  /**
    * Names of dtype-preserving TensorFlow ops: each returns a tensor with the same dtype as its
    * first tensor operand. Recognized syntactically by {@link #dtypesFromSSAChain} so chains through
    * them recover the underlying dtype, even when an op is unmodeled. See wala/ML#602.
    */
   private static final Set<String> DTYPE_PRESERVING_OP_NAMES =
       Set.of("reshape", "pad", "expand_dims", "squeeze", "transpose", "identity", "tolist");
-
-  /**
-   * Dtype counterpart to {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
-   * Handles: mnist invokes (all uint8); astype invokes (use astype's dtype arg — FLOAT32 default if
-   * we can't resolve); tuple-unpack reads (peel via {@link #findTupleFieldStore}); binops involving
-   * a float scalar literal (FLOAT32 promotion).
-   *
-   * <p>Returns {@code null} if the DU walk doesn't recognise the creator.
-   */
-  protected Set<DType> dtypesFromSSAChain(
-      PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return dtypesFromSSAChain(builder, node, vn, HashSetFactory.make());
-  }
-
-  /**
-   * Recursive worker for {@link #dtypesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The CG node whose IR contains {@code vn}.
-   * @param vn The SSA value number whose dtype we need.
-   * @param visited The set of value numbers already visited on this walk; used to break cycles.
-   * @return The resolved dtypes, or {@code null} if the DU walk doesn't recognise the creator or
-   *     has already visited {@code vn} on this walk (cycle guard).
-   */
-  private Set<DType> dtypesFromSSAChain(
-      PropagationCallGraphBuilder builder,
-      CGNode node,
-      int vn,
-      Set<Pair<CGNode, Integer>> visited) {
-    if (!visited.add(Pair.make(node, vn))) return null; // cycle guard (per-frame, wala/ML#796)
-    SSAInstruction def = node.getDU().getDef(vn);
-
-    if (def instanceof PythonPropertyRead) {
-      PythonPropertyRead propRead = (PythonPropertyRead) def;
-      int storedVn = findTupleFieldStore(node, propRead);
-      if (storedVn > 0) {
-        try {
-          Set<DType> viaPts = getDTypes(builder, node, storedVn);
-          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through
-        }
-        return dtypesFromSSAChain(builder, node, storedVn, visited);
-      }
-      // The cross-frame unpack counterpart; see shapesFromSSAChain (wala/ML#796).
-      for (Pair<CGNode, Integer> store : findCalleeTupleFieldStores(builder, node, propRead)) {
-        try {
-          Set<DType> viaPts = getDTypes(builder, store.fst, store.snd);
-          if (viaPts != null
-              && !viaPts.isEmpty()
-              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the callee-frame chain walk
-        }
-        Set<DType> chain = dtypesFromSSAChain(builder, store.fst, store.snd, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      // The generator-yield peel: `for x, y in gen(...)` reads the yielded tuples' fields.
-      for (Pair<CGNode, Integer> store : findGeneratorYieldTupleStores(builder, node, propRead)) {
-        try {
-          Set<DType> viaPts = getDTypes(builder, store.fst, store.snd);
-          if (viaPts != null
-              && !viaPts.isEmpty()
-              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the generator-frame chain walk
-        }
-        Set<DType> chain = dtypesFromSSAChain(builder, store.fst, store.snd, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      // The enumerate peel: field #1 of an enumerate element is the iterated container's element.
-      int enumArgVn = enumerateArgumentVn(node, propRead);
-      if (enumArgVn > 0) {
-        try {
-          Set<DType> viaPts = getDTypes(builder, node, enumArgVn);
-          if (viaPts != null
-              && !viaPts.isEmpty()
-              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the chain walk on the argument
-        }
-        Set<DType> chain = dtypesFromSSAChain(builder, node, enumArgVn, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      // An element read whose member is not a constant (a loop-carried index) reads a homogeneous
-      // container position: the element's dtype is whatever array producer the CONTAINER's chain
-      // bottoms out at, so continue on the object. Constant-member reads already peeled above and
-      // must not fall through here, since a heterogeneous tuple's fields differ. wala/ML#796.
-      if (!node.getIR().getSymbolTable().isConstant(propRead.getMemberRef()))
-        return dtypesFromSSAChain(builder, node, propRead.getObjectRef(), visited);
-      return null;
-    }
-
-    if (def instanceof SSABinaryOpInstruction) {
-      // Binop: check for float-literal promotion. If either operand is a Python Double/Float
-      // constant, the result is FLOAT32 — same promotion rule as
-      // `ElementWiseOperation.getDefaultDTypes` applies.
-      int xVn = def.getUse(0);
-      int yVn = def.getUse(1);
-      if (isFloatLiteralVn(node, xVn) || isFloatLiteralVn(node, yVn)) {
-        return EnumSet.of(DType.FLOAT32);
-      }
-      // Otherwise take the first operand's dtype.
-      return dtypesFromSSAChain(builder, node, xVn, visited);
-    }
-
-    // A comprehension body reads its enclosing frame's locals lexically; continue the walk in
-    // the definer frame(s) (wala/ML#796).
-    if (def instanceof AstLexicalRead) {
-      for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
-        try {
-          Set<DType> viaPts = getDTypes(builder, definer.fst, definer.snd);
-          if (viaPts != null
-              && !viaPts.isEmpty()
-              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the definer-frame chain walk
-        }
-        Set<DType> chain = dtypesFromSSAChain(builder, definer.fst, definer.snd, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      return null;
-    }
-
-    // The dtype twin of the shape walker's phi arm: union over the writes of a multiply-written
-    // local, skipping null-constant substrate uses; the per-frame visited set breaks loop-carried
-    // self-reference. wala/ML#796.
-    if (def instanceof SSAPhiInstruction) {
-      SymbolTable st = node.getIR() == null ? null : node.getIR().getSymbolTable();
-      Set<DType> union = EnumSet.noneOf(DType.class);
-      for (int i = 0; i < def.getNumberOfUses(); i++) {
-        int use = def.getUse(i);
-        if (use <= 0 || (st != null && st.isNullConstant(use))) continue;
-        try {
-          Set<DType> viaPts = getDTypes(builder, node, use);
-          if (viaPts != null
-              && !viaPts.isEmpty()
-              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) {
-            union.addAll(viaPts);
-            continue;
-          }
-        } catch (IllegalArgumentException e) {
-          // fall through to the chain walk on this arm
-        }
-        Set<DType> chain = dtypesFromSSAChain(builder, node, use, visited);
-        if (chain != null) union.addAll(chain);
-      }
-      return union.isEmpty() ? null : union;
-    }
-
-    // The dtype twin of the shape walker's parameter arm: continue on each caller's actual
-    // argument (use index vn-1); trampoline hops compose by recursion. wala/ML#796.
-    if (def == null
-        && node.getIR() != null
-        && vn <= node.getIR().getSymbolTable().getNumberOfParameters()) {
-      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
-          getCallerInvokes(builder, node)) {
-        int useIdx = vn - 1;
-        if (useIdx < 0 || useIdx >= callerInvoke.snd.getNumberOfUses()) continue;
-        int actualVn = callerInvoke.snd.getUse(useIdx);
-        try {
-          Set<DType> viaPts = getDTypes(builder, callerInvoke.fst, actualVn);
-          if (viaPts != null
-              && !viaPts.isEmpty()
-              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
-        } catch (IllegalArgumentException e) {
-          // fall through to the caller-frame chain walk
-        }
-        Set<DType> chain = dtypesFromSSAChain(builder, callerInvoke.fst, actualVn, visited);
-        if (chain != null && !chain.isEmpty()) return chain;
-      }
-      return null;
-    }
-
-    if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
-    SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
-    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
-      TypeReference declaring = callee.getMethod().getReference().getDeclaringClass();
-      if (declaring.equals(TensorFlowTypes.MNIST_X_TRAIN)
-          || declaring.equals(TensorFlowTypes.MNIST_Y_TRAIN)
-          || declaring.equals(TensorFlowTypes.MNIST_X_TEST)
-          || declaring.equals(TensorFlowTypes.MNIST_Y_TEST)
-          || declaring.equals(TensorFlowTypes.CIFAR10_X_TRAIN)
-          || declaring.equals(TensorFlowTypes.CIFAR10_Y_TRAIN)
-          || declaring.equals(TensorFlowTypes.CIFAR10_X_TEST)
-          || declaring.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
-        return EnumSet.of(DType.UINT8);
-      }
-      if (declaring.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
-        // astype result takes its target dtype from the call's dtype arg. For now we return
-        // FLOAT32, which is the astype-use we see in practice (`x.astype(np.float32)` in the
-        // mnist chain) and also `AstypeOperation`'s fallback default. A precise lookup would
-        // resolve the arg via `FIELD_REFERENCE_TO_DTYPE` — not yet implemented here.
-        return EnumSet.of(DType.FLOAT32);
-      }
-    }
-
-    // Dtype-preserving ops (`tf.reshape`, `tf.pad`, `tf.expand_dims`, ...) return a tensor with the
-    // same dtype as their first tensor operand. Recognize them syntactically by the called
-    // attribute
-    // name (so this covers unmodeled ops too, e.g. `tf.pad`, which resolves to no call-graph
-    // target)
-    // and recurse on that operand. This lets chains like `reshape(pad(x))` recover `x`'s dtype
-    // rather than landing at ⊤ when no single op in the chain is itself dtype-modeled. See
-    // wala/ML#602.
-    String calledName = calledFunctionName(node, call);
-    if (calledName != null
-        && DTYPE_PRESERVING_OP_NAMES.contains(calledName)
-        && call.getNumberOfUses() >= 2) {
-      int inputVn = call.getUse(1);
-      LOGGER.fine(
-          () ->
-              "Recovering dtype through dtype-preserving op "
-                  + calledName
-                  + ": recursing from vn="
-                  + vn
-                  + " onto operand vn="
-                  + inputVn
-                  + ".");
-      try {
-        Set<DType> viaPts = getDTypes(builder, node, inputVn);
-        if (viaPts != null && !viaPts.isEmpty()) return viaPts;
-      } catch (IllegalArgumentException e) {
-        // Fall through to the SSA-DU recursion.
-      }
-      return dtypesFromSSAChain(builder, node, inputVn, visited);
-    }
-
-    // Generic callee-return continuation: for a user-body callee (an AstMethod, reached through
-    // synthetic trampolines), the invoke result's dtype is the callee's returned value's — chain
-    // into each return in the callee frame. Comprehension calls return the per-item value, so
-    // this is how a chain crosses `xs = [f(x) for x in ...]` producers. wala/ML#796.
-    for (Pair<CGNode, Integer> returned : calleeReturnedValues(builder, node, call)) {
-      try {
-        Set<DType> viaPts = getDTypes(builder, returned.fst, returned.snd);
-        if (viaPts != null
-            && !viaPts.isEmpty()
-            && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
-      } catch (IllegalArgumentException e) {
-        // fall through to the callee-frame chain walk
-      }
-      Set<DType> chain = dtypesFromSSAChain(builder, returned.fst, returned.snd, visited);
-      if (chain != null && !chain.isEmpty()) return chain;
-    }
-    return null;
-  }
-
-  /**
-   * Expands an invoke's callees through synthetic trampolines (bounded) to user bodies and returns
-   * the (callee frame, returned value number) pairs of their return instructions. The generic
-   * interprocedural continuation for the SSA-chain walkers' invoke arms. wala/ML#796.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The CG node whose IR contains {@code call}.
-   * @param call The invoke whose callee returns are wanted.
-   * @return The (callee node, returned value number) pairs; empty if no user body resolves.
-   */
-  private static Set<Pair<CGNode, Integer>> calleeReturnedValues(
-      PropagationCallGraphBuilder builder, CGNode node, SSAAbstractInvokeInstruction call) {
-    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
-    Deque<CGNode> work = new ArrayDeque<>();
-    Set<CGNode> seen = HashSetFactory.make();
-    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
-      if (seen.add(callee)) work.add(callee);
-    Set<CGNode> bodies = HashSetFactory.make();
-    while (!work.isEmpty() && seen.size() < 32) {
-      CGNode callee = work.poll();
-      if (callee.getMethod() instanceof AstMethod) {
-        bodies.add(callee);
-        continue;
-      }
-      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(callee); it.hasNext(); ) {
-        CGNode next = it.next();
-        if (seen.add(next)) work.add(next);
-      }
-    }
-    for (CGNode callee : bodies) {
-      IR calleeIr = callee.getIR();
-      if (calleeIr == null) continue;
-      for (SSAInstruction instruction : calleeIr.getInstructions())
-        if (instruction instanceof SSAReturnInstruction returnInstruction
-            && returnInstruction.getResult() > 0)
-          ret.add(Pair.make(callee, returnInstruction.getResult()));
-    }
-    return ret;
-  }
-
-  /**
-   * Returns the called attribute's name for a function/method-style invoke {@code obj.name(...)} by
-   * reading the member of the {@link PythonPropertyRead} that def'd the invoke's function object.
-   * Used to recognize dtype-preserving ops (e.g. {@code tf.reshape}, {@code tf.pad}) by name,
-   * including unmodeled ones that resolve to no call-graph target.
-   *
-   * @param node The {@link CGNode} whose IR contains {@code call}.
-   * @param call The invoke whose called-attribute name is wanted.
-   * @return The called attribute's name, or {@code null} if it can't be resolved to a string
-   *     constant.
-   */
-  protected static String calledFunctionName(CGNode node, SSAAbstractInvokeInstruction call) {
-    if (call.getNumberOfUses() < 1) return null;
-    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
-    if (funcDef instanceof PythonPropertyRead) {
-      int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
-      SymbolTable st = node.getIR().getSymbolTable();
-      if (st.isStringConstant(memberVn)) return st.getStringValue(memberVn);
-    }
-    return null;
-  }
 
   /**
    * Returns true iff {@code vn} is a Python float-literal constant in {@code node}'s symbol table
@@ -5308,48 +4600,6 @@ public abstract class TensorGenerator {
     if (!node.getIR().getSymbolTable().isConstant(vn)) return false;
     Object val = node.getIR().getSymbolTable().getConstantValue(vn);
     return val instanceof Integer || val instanceof Long;
-  }
-
-  /**
-   * Scans {@code node}'s IR for a {@link PythonPropertyWrite} whose {@code objectRef} and member
-   * value match {@code propRead}'s. Used to peel tuple-unpack patterns like {@code x, y = a, b}.
-   *
-   * @param node The CG node whose IR to scan.
-   * @param propRead The read whose matching store we seek.
-   * @return The stored value's SSA value number, or {@code -1} if no unique match is found.
-   */
-  protected static int findTupleFieldStore(CGNode node, PythonPropertyRead propRead) {
-    int objectRef = propRead.getObjectRef();
-    int memberRef = propRead.getMemberRef();
-    int found = -1;
-    for (SSAInstruction inst : node.getIR().getInstructions()) {
-      if (!(inst instanceof PythonPropertyWrite)) continue;
-      PythonPropertyWrite write = (PythonPropertyWrite) inst;
-      if (write.getUse(0) != objectRef) continue;
-      if (write.getUse(1) != memberRef) continue;
-      int stored = write.getUse(2);
-      if (found != -1 && found != stored) return -1; // ambiguous
-      found = stored;
-    }
-    return found;
-  }
-
-  /**
-   * For a method-style invoke {@code x.m(...)}, returns the receiver's SSA value number by reading
-   * the {@code objectRef} of the {@link PythonPropertyRead} that def'd the invoke's function
-   * object.
-   *
-   * @param node The CG node whose IR contains {@code call}.
-   * @param call The invoke instruction to inspect.
-   * @return The receiver's SSA value number, or {@code -1} if the invoke isn't a method-style call.
-   */
-  protected static int propertyReadObjectRef(CGNode node, SSAAbstractInvokeInstruction call) {
-    if (call.getNumberOfUses() < 1) return -1;
-    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
-    if (funcDef instanceof PythonPropertyRead) {
-      return ((PythonPropertyRead) funcDef).getObjectRef();
-    }
-    return -1;
   }
 
   /**
@@ -6007,6 +5257,14 @@ public abstract class TensorGenerator {
     SSAInstruction[] instructions = ir.getInstructions();
     if (pc < 0 || pc >= instructions.length) return null;
     SSAInstruction at = instructions[pc];
+    // A binary operator's result allocated at the operator (wala/ML#1009) resolves the same way:
+    // its shape and dtype are the operator's own generator's.
+    if (at instanceof SSABinaryOpInstruction && at.hasDef()) {
+      PointerKey key =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, at.getDef());
+      if (builder.getPropagationSystem().isImplicit(key)) return null;
+      return builder.getPropagationSystem().findOrCreatePointsToSet(key);
+    }
     if (!(at instanceof PythonInvokeInstruction) || !at.hasDef()) return null;
     PythonInvokeInstruction call = (PythonInvokeInstruction) at;
     boolean toSlice = false;
@@ -10333,6 +9591,43 @@ public abstract class TensorGenerator {
       return new DatasetMapGenerator(allocation.getNode(), allocation);
 
     TypeReference sanitized = sanitize(allocationType);
+    // A dataset element the iterator's `__next__` allocates, and its components (wala/ML#1010): a
+    // value read whose points-to member is an allocation in a synthetic node resolves it here, so a
+    // layer applied to the loop variable, or to an unpacked component, reads the element's type
+    // from the dataset the allocation's `dataset` field holds, a component by its index into the
+    // element's structure when the dataset yields tuples. A `next` result read as a value is typed
+    // in the factory's `next` branch instead, where the reading node's iterated value is known.
+    if (sanitized.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE))
+      return new DatasetIteratorElementGenerator(
+          node, DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder));
+    int component = TensorFlowTypes.datasetElementComponentIndex(sanitized);
+    if (component >= 0) {
+      List<TensorGenerator> datasets =
+          DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder);
+      for (TensorGenerator dataset : datasets)
+        if (dataset instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
+          LOGGER.fine(
+              () ->
+                  "Dataset element component "
+                      + component
+                      + " of "
+                      + allocation
+                      + " read by index into "
+                      + dataset
+                      + ".");
+          return new DatasetTupleElementGenerator(node, tep, component);
+        }
+      LOGGER.fine(
+          () ->
+              "Dataset element component "
+                  + component
+                  + " of "
+                  + allocation
+                  + " is not a tuple component of "
+                  + datasets
+                  + "; read as a tensor subscript.");
+      return null; // An index into a single-tensor element is a tensor subscript, read as one.
+    }
     // The data a Keras `fit`, `evaluate` or `predict` summary packs for the model's step, and an
     // `unpack_x_y_sample_weight` result: tuples whose components the step reads by constant index,
     // typed from the slots' own values (wala/ML#997).
@@ -10510,6 +9805,15 @@ public abstract class TensorGenerator {
       // Producer delegation for `tolist_result` allocations: dtype and shape recover from the
       // receiver (wala/ML#796).
       return new TolistOperation(node);
+    } else if (type.equals(NumpyTypes.RESHAPE.getDeclaringClass())) {
+      // Producer delegation for the `ndarray` the function form of `reshape` allocates
+      // (wala/ML#1009), as for the method form below.
+      return new NpReshape(node);
+    } else if (type.equals(NumpyTypes.RESHAPE_METHOD.getDeclaringClass())) {
+      // Producer delegation for the `ndarray` the method form of `reshape` allocates: a value that
+      // reaches it through a points-to read, not as the call's result, resolved nothing
+      // (wala/ML#1009).
+      return new NdarrayReshape(node);
     } else if (type.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
       // Producer delegation for the `ndarray` this operation allocates: without the arm, a
       // consumer reading a narrowed array reached the allocation and resolved nothing, unioning a
@@ -10609,6 +9913,8 @@ public abstract class TensorGenerator {
       return new Einsum(node);
     } else if (type.equals(TensorFlowTypes.RESHAPE.getDeclaringClass())) {
       return new Reshape(node);
+    } else if (type.equals(TensorFlowTypes.PAD.getDeclaringClass())) {
+      return new Pad(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
       return new Squeeze(node);
     } else if (type.equals(TensorFlowTypes.RNN_STEP.getDeclaringClass())) {

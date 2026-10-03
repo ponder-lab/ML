@@ -19,6 +19,7 @@ import com.ibm.wala.types.TypeReference;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Types found in the TensorFlow library.
@@ -238,6 +239,36 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/padded_batch"));
 
   public static final String DATASET_PADDED_BATCH_SIGNATURE = "tf.data.Dataset.padded_batch()";
+
+  /**
+   * The element a dataset iterator's {@code __next__} allocates (wala/ML#1010): the value a loop
+   * over a dataset binds, typed from the dataset's element structure.
+   */
+  public static final TypeReference DATASET_ELEMENT_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element"));
+
+  /** How many components of a dataset element the iterator's {@code __next__} allocates. */
+  public static final int DATASET_ELEMENT_COMPONENTS = 4;
+
+  /**
+   * The index of a dataset element component's allocation type, or {@code -1} for any other type
+   * (wala/ML#1010): the iterator's {@code __next__} allocates one class per index.
+   *
+   * @param type An allocation type.
+   * @return The component index, or {@code -1}.
+   */
+  public static int datasetElementComponentIndex(TypeReference type) {
+    String name = type.getName().toString();
+    String prefix = DATA_PACKAGE_PREFIX + "element_";
+    if (!name.startsWith(prefix)) return -1;
+    try {
+      int index = Integer.parseInt(name.substring(prefix.length()));
+      return index >= 0 && index < DATASET_ELEMENT_COMPONENTS ? index : -1;
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
 
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
@@ -1106,6 +1137,27 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String READ_DATA_SETS_SIGNATURE =
       "tf.contrib.learn.datasets.mnist.read_data_sets()";
+
+  /**
+   * The arrays the Keras dataset loaders' summaries allocate (wala/ML#1009). Each is a class of its
+   * own in the summaries, carrying the array methods, and a NumPy array at run time, so arithmetic
+   * on one is arithmetic on an array. {@code TestNdarrayAttributes} checks this set against every
+   * summary allocation that carries the array methods.
+   */
+  public static final Set<TypeReference> KERAS_DATASET_ARRAYS = kerasDatasetArrays();
+
+  private static Set<TypeReference> kerasDatasetArrays() {
+    Set<TypeReference> ret = new java.util.LinkedHashSet<>();
+    for (String dataset :
+        List.of(
+            "mnist", "fashion_mnist", "cifar10", "cifar100", "imdb", "reuters", "boston_housing"))
+      for (String part : List.of("x_train", "y_train", "x_test", "y_test"))
+        ret.add(
+            TypeReference.findOrCreate(
+                pythonLoader,
+                TypeName.findOrCreate("Ltensorflow/keras/datasets/" + dataset + "/" + part)));
+    return java.util.Collections.unmodifiableSet(ret);
+  }
 
   public static final TypeReference MNIST_X_TRAIN =
       TypeReference.findOrCreate(
@@ -2444,6 +2496,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RESHAPE_SIGNATURE = "tf.reshape()";
 
+  /** {@code tf.pad} (wala/ML#1009). */
+  public static final MethodReference PAD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/pad")),
+          AstMethodReference.fnSelector);
+
+  private static final String PAD_SIGNATURE = "tf.pad()";
+
   public static final MethodReference DATASET_BATCH =
       MethodReference.findOrCreate(DATASET, AstMethodReference.fnSelector);
 
@@ -2495,6 +2556,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(TENSOR_SPEC, TENSOR_SPEC_SIGNATURE),
           Map.entry(RAGGED_TENSOR_SPEC, RAGGED_TENSOR_SPEC_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
+          Map.entry(PAD.getDeclaringClass(), PAD_SIGNATURE),
           Map.entry(CONSTANT.getDeclaringClass(), CONSTANT_SIGNATURE),
           Map.entry(RANGE.getDeclaringClass(), RANGE_SIGNATURE),
           Map.entry(NORMAL.getDeclaringClass(), NORMAL_SIGNATURE),

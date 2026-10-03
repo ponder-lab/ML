@@ -2000,8 +2000,9 @@ public class TestMathOps extends AbstractTensorTest {
    * An {@code unsorted_segment_sum} whose {@code data} is passed by keyword and typed by dataflow
    * alone (a concat over a list built in a loop) takes {@code data}'s float32 through its feed, as
    * the positional call does (wala/ML#967). Before the fix the feed located its input by position
-   * only, so the keyword call read {@code ? of unknown}. The shape stays unknown, since the concat
-   * itself is rankless here.
+   * only, so the keyword call read {@code ? of unknown}. The list's elements are arithmetic
+   * results, each its own allocation (wala/ML#1009), so the concat reads them and the reduction's
+   * shape resolves as well.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2016,7 +2017,7 @@ public class TestMathOps extends AbstractTensorTest {
         "consume_seg_kw",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
   /**
@@ -2036,7 +2037,7 @@ public class TestMathOps extends AbstractTensorTest {
         "consume_seg_pos",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
   /**
@@ -2056,7 +2057,9 @@ public class TestMathOps extends AbstractTensorTest {
         "consume_cos_kw",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
 
   /**
@@ -2076,6 +2079,8 @@ public class TestMathOps extends AbstractTensorTest {
         "consume_cos_pos",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
 }
