@@ -190,6 +190,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
             LOGGER.fine("Resolved relative import: " + moduleName);
           }
 
+          String fromModule = moduleName;
           if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
@@ -197,12 +198,20 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           if (isLocalModule(moduleName)) {
             // An in-scope module is imported here and never reaches the base visitor, so its
             // wildcard is recorded here for base-class resolution (wala/ML#938), and so are its
-            // named bindings (wala/ML#946).
+            // named bindings (wala/ML#946). A name that is itself a submodule of the package
+            // (`from pkg import mod`) is bound to the submodule's own path, `pkg.mod`: recorded
+            // through the package's initialization module it named a script that does not exist,
+            // and a base written through it, `class C(mod.Base)`, resolved no superclass
+            // (wala/ML#1018). A name the initialization module defines keeps that module's path.
             for (alias n : importFrom.getInternalNames())
-              if (n.getInternalNameNodes() != null)
+              if (n.getInternalNameNodes() != null) {
+                String submodule = fromModule + "/" + n.getInternalName();
                 noteImportedName(
                     n.getInternalAsname() != null ? n.getInternalAsname() : n.getInternalName(),
-                    moduleName.replace('/', '.') + "." + n.getInternalName());
+                    isLocalModule(submodule)
+                        ? submodule.replace('/', '.')
+                        : moduleName.replace('/', '.') + "." + n.getInternalName());
+              }
             if (importFrom.getInternalNames().stream()
                 .anyMatch(a -> "*".equals(a.getInternalName())))
               noteWildcardSource(
