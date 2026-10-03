@@ -259,8 +259,8 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
    * so an iteration product is an eager-only value of the fed data: the PA aliases it with its
    * iterable, and without the iteration-product filter the parameter constant crossed onto it (the
    * pre-fix reading was {@code {NUMPY, PARAMETER}}). The parameter itself keeps its {@code
-   * {PARAMETER}} seed, and the {@code map}/{@code for}-loop contrast functions carry no
-   * tensor-typed locals at all.
+   * {PARAMETER}} seed; the {@code map} contrast function carries no tensor-typed local, and the
+   * {@code for}-loop contrast's element reads numpy-only as the comprehension's does.
    *
    * @throws ClassHierarchyException If the class hierarchy cannot be built.
    * @throws CancelException If the analysis is canceled.
@@ -280,8 +280,14 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
     for (String fragment : List.of(".g.do(", ".h.do(")) {
       MethodOrigins contrast = methodOrigins.get(fragment);
       assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(contrast.parameters()));
-      assertEquals(Map.of(), census(contrast.locals()));
     }
+    // The map contrast carries no tensor-typed local. The for-loop's element is numpy-only like
+    // the comprehension's: a loop reads its element through `next` (wala/ML#1010), which types it.
+    // The census counts SSA values, and the loop variable is two: the `next` result and the φ at
+    // the loop header that carries it.
+    assertEquals(Map.of(), census(methodOrigins.get(".g.do(").locals()));
+    assertEquals(
+        Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L), census(methodOrigins.get(".h.do(").locals()));
   }
 
   /** Temporary probe for wala/ML#731: dump build_graph's typed locals with their defs. */
