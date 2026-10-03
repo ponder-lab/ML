@@ -1879,6 +1879,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String AS_STRING_SIGNATURE = "tf.strings.as_string()";
 
+  /** https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/random/categorical. */
+  public static final MethodReference RANDOM_CATEGORICAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/categorical")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_CATEGORICAL_SIGNATURE = "tf.random.categorical()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/top_k. */
   public static final MethodReference TOP_K =
       MethodReference.findOrCreate(
@@ -2715,6 +2725,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CLIP_BY_VALUE.getDeclaringClass(), CLIP_BY_VALUE_SIGNATURE),
           Map.entry(AS_STRING.getDeclaringClass(), AS_STRING_SIGNATURE),
           Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
+          Map.entry(RANDOM_CATEGORICAL.getDeclaringClass(), RANDOM_CATEGORICAL_SIGNATURE),
           Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),
           Map.entry(WHERE.getDeclaringClass(), WHERE_SIGNATURE),
           Map.entry(LEAKY_RELU.getDeclaringClass(), LEAKY_RELU_SIGNATURE),
