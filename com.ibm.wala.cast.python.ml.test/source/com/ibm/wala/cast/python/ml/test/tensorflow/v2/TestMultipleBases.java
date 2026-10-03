@@ -1,9 +1,20 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
+import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -80,5 +91,52 @@ public class TestMultipleBases extends AbstractTensorTest {
   public void testDiamondShadowsBaseMethod()
       throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_multiple_bases.py", "consume_shadowed", 0, 0);
+  }
+
+  /**
+   * A class with two program-defined bases has its first declared base as its superclass
+   * (wala/ML#1014). The superclass was the first base in the iteration order of a hash set of the
+   * bases, which varies from run to run, so the `super()` body built from it bound one base's
+   * methods in some runs and the other's in others. Twelve such classes make a wrong pick for one
+   * of them all but certain under that order.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testFirstDeclaredBaseIsTheSuperclass() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(Collections.<File>emptyList(), "tf2_test_superclass_order.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    IClassHierarchy cha = builder.getClassHierarchy();
+    for (int k = 0; k < 12; k++) {
+      IClass both =
+          cha.lookupClass(
+              TypeReference.findOrCreate(
+                  PythonTypes.pythonLoader, "Lscript tf2_test_superclass_order.py/Both" + k));
+      assertNotNull("Both" + k + " is defined", both);
+      assertEquals(
+          "Both" + k + "'s superclass",
+          "Lscript tf2_test_superclass_order.py/First" + k,
+          both.getSuperclass().getName().toString());
+    }
+  }
+
+  /**
+   * `super().m()` in each two-base class reaches the first base's `m`, as Python's method
+   * resolution order requires (wala/ML#1014), so only the first bases' {@code (2, 2)} arrives.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSuperReachesTheFirstBase()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_superclass_order.py",
+        "consume_first",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2))));
   }
 }
