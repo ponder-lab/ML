@@ -2982,6 +2982,37 @@ public abstract class TensorGenerator {
       // A value with several creators is typed by all of them (wala/ML#1009); the factory's single
       // generator would be built from whichever creator its walk reaches first.
       ShapeResult viaCreators = this.creatorJoinShapeResult(builder, creators, exact);
+      {
+        final PointsToSetVariable probeVar = var;
+        String single;
+        try {
+          TensorGenerator g = TensorGeneratorFactory.getGenerator(probeVar, builder);
+          single =
+              g == null
+                  ? "null"
+                  : g.getClass().getSimpleName() + " " + memoizedShapeResult(builder, g);
+        } catch (RuntimeException e) {
+          single = "threw " + e;
+        }
+        final String singleF = single;
+        final Object partialF = partial;
+        LOGGER.fine(
+            () ->
+                "PROBE927 join value="
+                    + describe(probeVar.getPointerKey())
+                    + " asker="
+                    + this.getClass().getSimpleName()
+                    + " exact="
+                    + exact
+                    + " creators="
+                    + creators.size()
+                    + " joined="
+                    + viaCreators
+                    + " partial="
+                    + partialF
+                    + " masterSingle="
+                    + singleF);
+      }
       if (viaCreators != null) {
         if (viaCreators.members().isEmpty() && partial != null) return partial;
         return viaCreators;
@@ -4707,6 +4738,15 @@ public abstract class TensorGenerator {
       if (generator == null || this.isSameOperation(generator)) continue;
       typed = true;
       ShapeResult result = memoizedShapeResult(builder, generator);
+      final TensorGenerator probeGen = generator;
+      LOGGER.fine(
+          () ->
+              "PROBE927 creator "
+                  + describe(creator.getPointerKey())
+                  + " gen="
+                  + probeGen.getClass().getSimpleName()
+                  + " result="
+                  + result);
       // An exact read marks what a creator leaves unresolved; a default-mode read returns what the
       // creators prove, as every value read does (wala/ML#716).
       // A creator that is no tensor (a path that cannot execute) adds nothing.
