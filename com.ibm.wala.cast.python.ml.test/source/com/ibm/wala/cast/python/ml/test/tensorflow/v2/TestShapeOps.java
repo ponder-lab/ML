@@ -2551,4 +2551,101 @@ public class TestShapeOps extends AbstractTensorTest {
             Set.of(
                 TensorType.of(FLOAT_64, 6, 4, 4, 3, 4), TensorType.of(FLOAT_64, 6, 2, 2, 3, 4))));
   }
+
+  /**
+   * {@code tf.pad} on an input whose rank is not resolved: {@code paddings} holds one row per input
+   * axis, so the result has four axes, the last widened by an unresolved width. An unknown-rank
+   * result here reached a shape helper through a split of the padded tensor's last axis.
+   */
+  @Test
+  public void testPadUnknownRankInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pad_unknown_rank.py",
+        "consume_padded",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /** The same input padded by constant widths keeps the four axes, each extent unresolved. */
+  @Test
+  public void testPadUnknownRankInputConstantWidths()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pad_unknown_rank.py",
+        "consume_padded_constant",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A parameter reached by an input of unresolved rank and by a {@code (2, 3, 4, 5)} one: each
+   * member is padded, the unresolved one at the rank the {@code paddings} rows give.
+   */
+  @Test
+  public void testPadMixedRankInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pad_unknown_rank.py",
+        "consume_padded_mixed",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 4, 7),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * One context whose input unions an unresolved-rank member and a {@code (2, 3, 4, 5)} one, as a
+   * branch joins them: the known member is padded as before and the unresolved one takes the rank
+   * the {@code paddings} rows give, rather than the whole result losing its rank.
+   */
+  @Test
+  public void testPadUnionRankInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pad_unknown_rank.py",
+        "consume_padded_union",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 4, 7),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
 }

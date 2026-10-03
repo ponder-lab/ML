@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -13,6 +14,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -24,7 +26,8 @@ import java.util.Set;
  * <p>A row whose widths are not integer constants leaves its extent {@link UnresolvedDim}, a fixed
  * size the analysis did not compute; a {@link DynamicDim} input extent stays {@code Dynamic}, since
  * padding a feed-dependent axis leaves it feed-dependent. A {@code paddings} of a different rank
- * than the input is not this operation's input and contributes nothing.
+ * than the input is not this operation's input and contributes nothing. An input of unknown rank
+ * takes the rank of the {@code paddings} literal, one axis per row.
  *
  * @see <a href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/pad">tf.pad</a>
  */
@@ -57,12 +60,19 @@ public class Pad extends PassThroughUnaryTensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> inputShapes = super.getDefaultShapes(builder);
-    if (inputShapes == null) return null;
     OrdinalSet<InstanceKey> paddingsPts =
         this.getArgumentPointsToSet(builder, PADDINGS_POSITION, PADDINGS_NAME);
+    // An input of unknown rank still has the rank `paddings` gives, one row per axis; each extent
+    // is the unknown input extent grown by its row, which the analysis did not compute.
+    if (inputShapes == null) return unknownRankInputShapes(builder, paddingsPts);
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> input : inputShapes) {
-      if (input == null) return null;
+      if (input == null) {
+        Set<List<Dimension<?>>> byRows = unknownRankInputShapes(builder, paddingsPts);
+        if (byRows == null) return null;
+        ret.addAll(byRows);
+        continue;
+      }
       Set<List<Long[]>> rowsets = paddingRows(builder, paddingsPts, input.size());
       if (rowsets.isEmpty()) {
         // No paddings of this rank resolved: the rank stands, every non-dynamic extent is a fixed
@@ -78,6 +88,36 @@ public class Pad extends PassThroughUnaryTensorGenerator {
         for (int i = 0; i < input.size(); i++) out.add(padded(input.get(i), rows.get(i)));
         ret.add(out);
       }
+    }
+    return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * The result shapes for an input of unknown rank: {@code tf.pad} requires one {@code [before,
+   * after]} row of {@code paddings} per input axis, so each {@code paddings} literal's row count is
+   * the result's rank, every extent {@link UnresolvedDim} (wala/ML#1009).
+   *
+   * @param builder The propagation call graph builder.
+   * @param paddingsPts The {@code paddings} argument's points-to set.
+   * @return One shape per row count, or {@code null} when no {@code paddings} literal is resolved.
+   */
+  private static Set<List<Dimension<?>>> unknownRankInputShapes(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> paddingsPts) {
+    if (paddingsPts == null) return null;
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (InstanceKey outer : paddingsPts) {
+      if (!(outer instanceof AllocationSiteInNode outerSite)) return null;
+      int rows =
+          integerCatalogSize(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(outerSite)));
+      // A `paddings` with no indexed row is a tensor or an unread container, whose row count is
+      // not known here.
+      if (rows == 0) return null;
+      ret.add(new ArrayList<>(Collections.nCopies(rows, UnresolvedDim.INSTANCE)));
     }
     return ret.isEmpty() ? null : ret;
   }
