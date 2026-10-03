@@ -240,6 +240,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZERO_PADDING_2D_CALL;
 import static com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN;
+import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -1134,6 +1135,57 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The element generator of a container an iterator's summary allocated and stores (wala/ML#1010):
+   * the generator of the summary node that allocated each container, where every one is a
+   * dataset's, joined over the containers.
+   *
+   * @param builder The propagation call graph builder.
+   * @param value A {@code next} result holding only containers.
+   * @return The element generator, or {@code null} when some container was not allocated by a
+   *     dataset's summary, which leaves the value to the other element kinds.
+   */
+  private static TensorGenerator storedElement(
+      PropagationCallGraphBuilder builder, PointsToSetVariable value) {
+    List<TensorGenerator> datasets = new ArrayList<>();
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey())) {
+      AllocationSiteInNode asin = findAllocationSiteInNode(ik);
+      if (asin == null) return null;
+      TensorGenerator allocator = TensorGenerator.createManualGenerator(asin.getNode(), builder);
+      if (!(allocator instanceof DatasetGenerator)) return null;
+      datasets.add(allocator);
+    }
+    return datasets.isEmpty() ? null : new DatasetIteratorElementGenerator(value, datasets);
+  }
+
+  /**
+   * Whether a value's points-to set is non-empty and holds only Python containers (lists, tuples,
+   * sets, dictionaries), which are no tensors (wala/ML#1010).
+   *
+   * @param builder The propagation call graph builder.
+   * @param value The value.
+   * @return {@code true} iff every key in the value's points-to set is a container.
+   */
+  private static boolean holdsContainersOnly(
+      PropagationCallGraphBuilder builder, PointsToSetVariable value) {
+    if (value == null) return false;
+    OrdinalSet<InstanceKey> pts =
+        builder.getPointerAnalysis().getPointsToSet(value.getPointerKey());
+    if (pts == null || pts.isEmpty()) return false;
+    IClassHierarchy cha = builder.getClassHierarchy();
+    for (InstanceKey ik : pts) {
+      IClass type = ik.concreteType();
+      boolean container = false;
+      for (TypeReference t :
+          List.of(PythonTypes.list, PythonTypes.tuple, PythonTypes.set, PythonTypes.dict)) {
+        IClass c = cha.lookupClass(t);
+        if (c != null && cha.isSubclassOf(type, c)) container = true;
+      }
+      if (!container) return false;
+    }
+    return true;
+  }
+
+  /**
    * Whether an iterator a {@code next} call reads is made by {@code iter} over values that are all
    * Python containers (lists, tuples, sets or dictionaries), whose elements are stored values
    * rather than slices of a tensor (wala/ML#1010).
@@ -1949,6 +2001,15 @@ public class TensorGeneratorFactory {
                 || iteratedGenerator instanceof ModelWeightsGenerator) return iteratedGenerator;
             if (iteratedGenerator == null
                 && iteratesPythonContainersOnly(builder, node, iterableVn)) return null;
+            // A `next` that yields a container the iterator stores yields that container, as a
+            // Keras preprocessing iterator stores its `(images, labels)` batch in its content
+            // field. The container is the element the iterator's summary allocated, typed by that
+            // summary's own generator where it is a dataset's; an element of the iterated value's
+            // generator would peel the batch axis off it.
+            if (holdsContainersOnly(builder, source)) {
+              TensorGenerator stored = storedElement(builder, source);
+              if (stored != null) return stored;
+            }
             // Otherwise an element of the iterated value, over its own generator where it has
             // one, as the element read built it.
             if (iteratedGenerator != null)
