@@ -113,4 +113,24 @@ public class TestNdarraySliceMethods extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1))));
   }
+
+  /**
+   * An {@code np.reshape} result read through a tuple's element, as a dataset reads its components,
+   * is typed by the reshape (wala/ML#1009): the value reaches the array the function's body
+   * allocates, and the reshape generator answers for it as for the call's own result.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpReshapeInDataset()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_np_reshape_in_dataset.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 32))));
+  }
 }
