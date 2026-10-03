@@ -9591,6 +9591,43 @@ public abstract class TensorGenerator {
       return new DatasetMapGenerator(allocation.getNode(), allocation);
 
     TypeReference sanitized = sanitize(allocationType);
+    // A dataset element the iterator's `__next__` allocates, and its components (wala/ML#1010): a
+    // value read whose points-to member is an allocation in a synthetic node resolves it here, so a
+    // layer applied to the loop variable, or to an unpacked component, reads the element's type
+    // from the dataset the allocation's `dataset` field holds, a component by its index into the
+    // element's structure when the dataset yields tuples. A `next` result read as a value is typed
+    // in the factory's `next` branch instead, where the reading node's iterated value is known.
+    if (sanitized.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE))
+      return new DatasetIteratorElementGenerator(
+          node, DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder));
+    int component = TensorFlowTypes.datasetElementComponentIndex(sanitized);
+    if (component >= 0) {
+      List<TensorGenerator> datasets =
+          DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder);
+      for (TensorGenerator dataset : datasets)
+        if (dataset instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
+          LOGGER.fine(
+              () ->
+                  "Dataset element component "
+                      + component
+                      + " of "
+                      + allocation
+                      + " read by index into "
+                      + dataset
+                      + ".");
+          return new DatasetTupleElementGenerator(node, tep, component);
+        }
+      LOGGER.fine(
+          () ->
+              "Dataset element component "
+                  + component
+                  + " of "
+                  + allocation
+                  + " is not a tuple component of "
+                  + datasets
+                  + "; read as a tensor subscript.");
+      return null; // An index into a single-tensor element is a tensor subscript, read as one.
+    }
     // The data a Keras `fit`, `evaluate` or `predict` summary packs for the model's step, and an
     // `unpack_x_y_sample_weight` result: tuples whose components the step reads by constant index,
     // typed from the slots' own values (wala/ML#997).

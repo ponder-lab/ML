@@ -4073,22 +4073,58 @@
           <call class="LRoot" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x"/>
           <return value="x"/>
         </method>
-        <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+        <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <!-- The dispatch trampoline calls a method's body with the method's function object first and the bound instance second, as every summary method here declares them (wala/ML#1010). -->
           <new def="it" class="Ltensorflow/data/iterator"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="it" value="self"/>
           <return value="it"/>
         </method>
       </class>
+      <!-- The iterator a dataset's `__iter__` returns. Its `__next__` (and `next`, the same body) allocates the ELEMENT the loop binds, with a component allocated at each of the first four constant indexes so an unpack `x, y = batch` reads an allocation, and each carries the dataset it came from on a `dataset` field, which its generator reads to type it from the dataset's element structure (wala/ML#1010). Until this, `__next__` returned the dataset itself: a loop variable WAS the dataset, so its unpack read the dataset's chainable-method fields (`batch`, `map`, ...) as its components, and nothing allocated an element for a generator to type. -->
       <class name="iterator" allocatable="true">
-        <method name="__next__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+        <method name="__next__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
           <getfield class="LRoot" field="dataset" fieldType="LRoot" ref="self" def="ds"/>
-          <return value="ds"/>
+          <new def="e" class="Ltensorflow/data/element"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="e" value="ds"/>
+          <new def="c0" class="Ltensorflow/data/element_0"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c0" value="ds"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="e" value="c0"/>
+          <new def="c1" class="Ltensorflow/data/element_1"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c1" value="ds"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="e" value="c1"/>
+          <new def="c2" class="Ltensorflow/data/element_2"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c2" value="ds"/>
+          <putfield class="LRoot" field="2" fieldType="LRoot" ref="e" value="c2"/>
+          <new def="c3" class="Ltensorflow/data/element_3"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c3" value="ds"/>
+          <putfield class="LRoot" field="3" fieldType="LRoot" ref="e" value="c3"/>
+          <return value="e"/>
         </method>
-        <method name="next" descriptor="()LRoot;" numArgs="1" paramNames="self">
+        <method name="next" descriptor="()LRoot;" numArgs="2" paramNames="func self">
           <getfield class="LRoot" field="dataset" fieldType="LRoot" ref="self" def="ds"/>
-          <return value="ds"/>
+          <new def="e" class="Ltensorflow/data/element"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="e" value="ds"/>
+          <new def="c0" class="Ltensorflow/data/element_0"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c0" value="ds"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="e" value="c0"/>
+          <new def="c1" class="Ltensorflow/data/element_1"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c1" value="ds"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="e" value="c1"/>
+          <new def="c2" class="Ltensorflow/data/element_2"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c2" value="ds"/>
+          <putfield class="LRoot" field="2" fieldType="LRoot" ref="e" value="c2"/>
+          <new def="c3" class="Ltensorflow/data/element_3"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c3" value="ds"/>
+          <putfield class="LRoot" field="3" fieldType="LRoot" ref="e" value="c3"/>
+          <return value="e"/>
         </method>
       </class>
+      <!-- A dataset element and its components; `<new>` targets only, typed by their generators from the `dataset` field their allocator writes (wala/ML#1010). -->
+      <class name="element" allocatable="true"></class>
+      <class name="element_0" allocatable="true"></class>
+      <class name="element_1" allocatable="true"></class>
+      <class name="element_2" allocatable="true"></class>
+      <class name="element_3" allocatable="true"></class>
       <!-- Distinct type for `tf.data.TextLineDataset` so the factory dispatches to `TextLineDatasetGenerator` (intrinsic 0-D string element type). `do` allocates a fresh `TextLineDataset` per call site (parallel to the per-endpoint allocation pattern in `shuffle`/`batch`/etc.) so 1-CFA context preserves call-site distinctness rather than aliasing every `tf.data.TextLineDataset(...)` to the same singleton from the import-time field allocation. The chain-method fields are bound on the new instance just like the other dataset endpoints, so `tf.data.TextLineDataset(...).shuffle(...).batch(...)` chains resolve. See wala/ML#452. -->
       <class name="TextLineDataset" allocatable="true">
         <method name="read_dataset" descriptor="()LRoot;" numArgs="1" paramNames="self">
@@ -4125,7 +4161,8 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
-        <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+        <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <!-- The dispatch trampoline calls a method's body with the method's function object first and the bound instance second, as every summary method here declares them (wala/ML#1010). -->
           <new def="it" class="Ltensorflow/data/iterator"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="it" value="self"/>
           <return value="it"/>
@@ -4166,7 +4203,8 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
-        <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+        <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <!-- The dispatch trampoline calls a method's body with the method's function object first and the bound instance second, as every summary method here declares them (wala/ML#1010). -->
           <new def="it" class="Ltensorflow/data/iterator"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="it" value="self"/>
           <return value="it"/>
