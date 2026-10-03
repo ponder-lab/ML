@@ -3,7 +3,10 @@ import tensorflow as tf
 # Test https://github.com/wala/ML/issues/1010: a component of a batched TFRecord element read by an
 # operation (`tf.cast`, `tf.stack` over a list of components), not only by a sink's parameter. The
 # operation reads the component's allocation, so the element's type must survive the route that
-# starts at the allocation rather than at the loop's iterated value.
+# starts at the allocation rather than at the loop's iterated value. The label is read under two
+# feature descriptions, so its static shape is either of two; a list packed into a tensor by
+# `tf.split` or `tf.stack` requires equal element shapes, so only the shape every element can have
+# packs (wala/ML#1016).
 # Static-analysis-only (no real tfrecord at runtime).
 
 
@@ -27,8 +30,12 @@ def consume_split(x):
     pass
 
 
+def consume_stack_label_first(x):
+    pass
+
+
 def split_inputs(inputs):
-    first, second, third = tf.split(inputs, 3, 0)
+    first, second, third, fourth = tf.split(inputs, 4, 0)
     consume_split(tf.cast(tf.squeeze(first, axis=0), tf.int32))
 
 
@@ -77,4 +84,5 @@ for X, token_type_id, input_mask, Y in load.load_train():
     consume_cast(tf.cast(X, tf.int32))
     consume_stack(tf.stack([X, token_type_id, input_mask]))
     consume_label(tf.cast(Y, tf.int32))
-    split_inputs([X, token_type_id, input_mask])
+    split_inputs([X, token_type_id, input_mask, Y])
+    consume_stack_label_first(tf.stack([Y, X, token_type_id]))
