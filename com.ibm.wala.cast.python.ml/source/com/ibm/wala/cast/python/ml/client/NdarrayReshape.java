@@ -7,6 +7,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -69,6 +70,18 @@ public class NdarrayReshape extends TensorGenerator {
   }
 
   /**
+   * Manual (node-based) anchor, for producer delegation from the {@code numpy/ndarray} allocation
+   * made inside this method's synthetic body (wala/ML#1009): a value that reaches the reshaped
+   * array through a points-to read (a tuple's element, a dataset's component) rather than as the
+   * call's own result.
+   *
+   * @param node The synthetic {@code do()} node that allocated the value.
+   */
+  public NdarrayReshape(CGNode node) {
+    super(node);
+  }
+
+  /**
    * Resolves the value number of the receiver (the tensor being reshaped). For method-style calls
    * {@code x.reshape(shape)}, the receiver is captured in the function-object's closure rather than
    * appearing as an explicit argument. We read it from the {@link PythonPropertyRead} whose member
@@ -79,6 +92,9 @@ public class NdarrayReshape extends TensorGenerator {
    *     invoke's function object isn't a property read (defensive fallback).
    */
   private int getReceiverVn() {
+    // A manual anchor has no invoke, and a caller-frame value number paired with the synthetic
+    // body's IR resolves an unrelated value; the receiver walk below answers for it instead.
+    if (this.source == null) return -1;
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) {
       int funcVn = call.getUse(0);
@@ -185,13 +201,19 @@ public class NdarrayReshape extends TensorGenerator {
     // means we can't resolve `-1`, not that the receiver isn't a tensor — the caller in {@link
     // #getShapes} is expected to fall back to a partial shape (SymbolicDim for the `-1` slot).
     int receiverVn = getReceiverVn();
-    if (receiverVn <= 0) return null;
-    try {
-      return getShapes(builder, getNode(), receiverVn);
-    } catch (IllegalArgumentException e) {
-      LOGGER.fine("NdarrayReshape.getDefaultShapes: IAE on receiver vn=" + receiverVn);
-      return null;
+    if (receiverVn > 0) {
+      try {
+        return getShapes(builder, getNode(), receiverVn);
+      } catch (IllegalArgumentException e) {
+        LOGGER.fine("NdarrayReshape.getDefaultShapes: IAE on receiver vn=" + receiverVn);
+        return null;
+      }
     }
+    // The receiver is never passed as an argument, so a manual anchor reads it through the
+    // caller-aware walk, which finds the `x` of `x.reshape(...)` at each call site dispatching to
+    // this body, as AstypeOperation does (wala/ML#849).
+    return this.getShapesOfValue(
+        builder, this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, null));
   }
 
   @Override
@@ -206,6 +228,11 @@ public class NdarrayReshape extends TensorGenerator {
     if (receiverVn > 0) {
       Set<DType> dtypes = getDTypes(builder, receiverVn);
       if (!dtypes.isEmpty()) return dtypes;
+    } else {
+      Set<DType> dtypes =
+          this.getDTypesOfValue(
+              builder, this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, null));
+      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
     }
     return Set.of(DType.UNKNOWN);
   }
