@@ -161,6 +161,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_CATEGORICAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_FLIP_LEFT_RIGHT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
@@ -744,6 +745,8 @@ public class TensorGeneratorFactory {
     if (isType(type, TENSORDOT.getDeclaringClass()))
       return anchor.makeGenerator(Tensordot::new, Tensordot::new);
     if (isType(type, TOP_K.getDeclaringClass())) return anchor.makeGenerator(TopK::new, TopK::new);
+    if (isType(type, RANDOM_CATEGORICAL.getDeclaringClass()))
+      return anchor.makeGenerator(Categorical::new, Categorical::new);
     if (isType(type, TRACE.getDeclaringClass()))
       return anchor.makeGenerator(Trace::new, Trace::new);
     if (isType(type, WHERE.getDeclaringClass()))
