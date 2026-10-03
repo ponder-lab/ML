@@ -667,11 +667,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // tensor or a variable operand yields a tensor and an ndarray operand an ndarray, so a
     // container that stores the result holds it. Its shape and dtype are the operator's own
     // generator's, which delegation reaches from the allocation's site.
-    builder.setFreshBinaryOpResultTypes(
-        Map.of(
-            TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE,
-            TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE,
-            NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE));
+    // An array a Keras dataset loader returns is a NumPy array, so arithmetic on it allocates one.
+    Map<TypeReference, TypeReference> binaryOpResults = new HashMap<>();
+    binaryOpResults.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE);
+    binaryOpResults.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE);
+    binaryOpResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
+      binaryOpResults.put(array, NumpyTypes.NDARRAY_TYPE);
+    builder.setFreshBinaryOpResultTypes(binaryOpResults);
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     builder.setFreshArrayAttributes(Map.of(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_ATTRIBUTES));

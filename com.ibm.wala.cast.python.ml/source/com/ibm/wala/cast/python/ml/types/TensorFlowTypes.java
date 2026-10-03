@@ -19,6 +19,7 @@ import com.ibm.wala.types.TypeReference;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Types found in the TensorFlow library.
@@ -1106,6 +1107,27 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String READ_DATA_SETS_SIGNATURE =
       "tf.contrib.learn.datasets.mnist.read_data_sets()";
+
+  /**
+   * The arrays the Keras dataset loaders' summaries allocate (wala/ML#1009). Each is a class of its
+   * own in the summaries, carrying the array methods, and a NumPy array at run time, so arithmetic
+   * on one is arithmetic on an array. {@code TestNdarrayAttributes} checks this set against every
+   * summary allocation that carries the array methods.
+   */
+  public static final Set<TypeReference> KERAS_DATASET_ARRAYS = kerasDatasetArrays();
+
+  private static Set<TypeReference> kerasDatasetArrays() {
+    Set<TypeReference> ret = new java.util.LinkedHashSet<>();
+    for (String dataset :
+        List.of(
+            "mnist", "fashion_mnist", "cifar10", "cifar100", "imdb", "reuters", "boston_housing"))
+      for (String part : List.of("x_train", "y_train", "x_test", "y_test"))
+        ret.add(
+            TypeReference.findOrCreate(
+                pythonLoader,
+                TypeName.findOrCreate("Ltensorflow/keras/datasets/" + dataset + "/" + part)));
+    return java.util.Collections.unmodifiableSet(ret);
+  }
 
   public static final TypeReference MNIST_X_TRAIN =
       TypeReference.findOrCreate(
