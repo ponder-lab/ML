@@ -8763,7 +8763,10 @@ public abstract class TensorGenerator {
     // resolve-side walk unions the callers and marks the unmappable ones as the unknown
     // remainder. The callers are enumerated unfiltered: a structural question does not depend on
     // a site's reachability, and the filtered enumerator's guard folds ask this predicate back
-    // (wala/ML#1020).
+    // (wala/ML#1020). Because SOME caller suffices, another caller may pass a plain tensor or a
+    // list; a `len` fold over such a parameter is sound only because the vector reader declines on
+    // that caller's argument (an unknown read declines the fold), which the len-operand pins
+    // measure: a reader that resolved a tensor or a list as a vector would break the fold here.
     if (def == null && !st.isConstant(vn)) {
       int paramPos = parameterPosition(node, vn);
       if (paramPos >= 0)
