@@ -9768,6 +9768,10 @@ public abstract class TensorGenerator {
       // Producer delegation for `tolist_result` allocations: dtype and shape recover from the
       // receiver (wala/ML#796).
       return new TolistOperation(node);
+    } else if (type.equals(NumpyTypes.RESHAPE.getDeclaringClass())) {
+      // Producer delegation for the `ndarray` the function form of `reshape` allocates
+      // (wala/ML#1009), as for the method form below.
+      return new NpReshape(node);
     } else if (type.equals(NumpyTypes.RESHAPE_METHOD.getDeclaringClass())) {
       // Producer delegation for the `ndarray` the method form of `reshape` allocates: a value that
       // reaches it through a points-to read, not as the call's result, resolved nothing
