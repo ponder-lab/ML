@@ -2528,4 +2528,27 @@ public class TestShapeOps extends AbstractTensorTest {
         Map.of(
             2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
+
+  /**
+   * A parameter fed by a starred subscript, {@code compute_loss(pred, *target[i], i)}: the unpack
+   * spreads one {@code (label, bboxes)} pair over {@code label} and {@code bboxes}, so the slice
+   * {@code label[:, :, :, :, 0:4]} is of the pair's first array. The caller walk that resolves a
+   * subscript-fed parameter aligned {@code label} with the starred argument itself, read the whole
+   * pair as a packed tensor, and gave the slice a leading pair axis and the wrong sliced axis.
+   */
+  @Test
+  public void testStarredSubscriptArgument()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_starred_subscript_argument.py",
+        "consume_boxes",
+        2,
+        2,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 6, 4, 4, 3, 4), TensorType.of(FLOAT_32, 6, 2, 2, 3, 4)),
+            3,
+            Set.of(
+                TensorType.of(FLOAT_64, 6, 4, 4, 3, 4), TensorType.of(FLOAT_64, 6, 2, 2, 3, 4))));
+  }
 }
