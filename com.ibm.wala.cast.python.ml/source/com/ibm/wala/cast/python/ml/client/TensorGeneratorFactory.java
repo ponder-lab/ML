@@ -1059,6 +1059,55 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The generator of the dataset element a {@code next} result holds, if any (wala/ML#1010): the
+   * manual generator of the element allocation, anchored on the iterator's {@code __next__} node.
+   *
+   * @param source The {@code next} result's points-to set variable.
+   * @param builder The propagation call graph builder.
+   * @return The element's generator, or {@code null} when the result holds no element allocation.
+   */
+  private static TensorGenerator datasetIteratorElement(
+      PointsToSetVariable source,
+      PointsToSetVariable iterated,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    List<AllocationSiteInNode> elements =
+        DatasetIteratorElementGenerator.elementAllocations(source, builder);
+    if (elements.isEmpty()) return null;
+    // The datasets the elements came from, by allocation. When the iterated value in the reading
+    // node is exactly one of them, that value's own generator types the element: it is the
+    // generator the dataset's chain built in the program's frame (a batched dataset's batch axis
+    // is read from its arguments there), where a generator anchored on the allocation inside the
+    // summary node reads the same dataset without its frame. Several datasets, or an iterated
+    // value naming none of them, are typed from the allocations and joined.
+    Set<AllocationSiteInNode> datasets = HashSetFactory.make();
+    for (AllocationSiteInNode element : elements)
+      datasets.addAll(DatasetIteratorElementGenerator.datasetAllocationsOf(element, builder));
+    if (iterated != null && datasets.size() == 1) {
+      Set<AllocationSiteInNode> iteratedAllocations = HashSetFactory.make();
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(iterated.getPointerKey())) {
+        AllocationSiteInNode asin;
+        try {
+          asin = getAllocationSiteInNode(ik);
+        } catch (IllegalArgumentException e) {
+          continue;
+        }
+        if (asin != null) iteratedAllocations.add(asin);
+      }
+      // The iterated value names the dataset when it holds exactly that dataset: a value holding
+      // more (a chain's intermediates, a second dataset) has no one generator of its own to read.
+      if (iteratedAllocations.equals(datasets)) {
+        TensorGenerator iteratedGenerator = tryGetGenerator(iterated, builder, visited);
+        if (iteratedGenerator instanceof DatasetGenerator)
+          return new DatasetIteratorElementGenerator(source, List.of(iteratedGenerator));
+      }
+    }
+    List<TensorGenerator> generators =
+        DatasetIteratorElementGenerator.datasetsOf(elements, builder);
+    return generators.isEmpty() ? null : new DatasetIteratorElementGenerator(source, generators);
+  }
+
+  /**
    * The value an {@code iter} call in a node iterates, when the given iterator is that call's
    * result (wala/ML#1010).
    *
@@ -1829,7 +1878,14 @@ public class TensorGeneratorFactory {
               .getReference()
               .getDeclaringClass()
               .equals(PythonTypes.NEXT_BUILTIN)) {
+            // The element a dataset iterator's `__next__` allocates (wala/ML#1010): a result
+            // holding that allocation is typed by the allocation's own generator, which reads the
+            // dataset's element structure off the allocation, not by the iterated value.
             int iterableVn = call.getUse(1);
+            TensorGenerator fromElement =
+                datasetIteratorElement(
+                    source, iterArgument(builder, node, iterableVn), builder, visited);
+            if (fromElement != null) return fromElement;
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
@@ -2138,11 +2194,13 @@ public class TensorGeneratorFactory {
         // A string-keyed subscript on a dataset element (e.g. `batch["t"]` over a
         // dict-structured dataset) navigates the element's record structure rather than
         // extracting a positional slice of a tensor, so no dimension is peeled: the field
-        // carries the element's (per-field-unioned) type. wala/ML#673.
+        // carries the element's (per-field-unioned) type. wala/ML#673. An element read off the
+        // iterator protocol's allocation (wala/ML#1010) is the same element.
         if (propertyName != null
             && propertyIndex == null
             && !isNonTensorAttribute(propertyName)
-            && containerGenerator instanceof DatasetElementGenerator) {
+            && (containerGenerator instanceof DatasetElementGenerator
+                || containerGenerator instanceof DatasetIteratorElementGenerator)) {
           return containerGenerator;
         }
 

@@ -140,6 +140,11 @@ public class BuiltinFunctions {
       x.addStatement(factory.PropertyRead(idx++, element, arg, elementKey));
       x.addConstant(fieldKey, new ConstantValue(arg - 2));
       x.addStatement(factory.PropertyWrite(idx++, tuple, fieldKey, element));
+      // The iteration protocol (wala/ML#1010): an argument whose class declares `__iter__` and
+      // `__next__` contributes what `next(iter(arg))` yields, beside the sequence read above, which
+      // the builder leaves empty for such an argument.
+      idx = protocolElement(x, factory, idx, arg, tuple, fieldKey, v);
+      v += 8;
     }
 
     x.addConstant(containerKey, new ConstantValue(0));
@@ -199,10 +204,53 @@ public class BuiltinFunctions {
 
     x.addStatement(factory.PropertyWrite(idx++, tuple, zero, index));
     x.addStatement(factory.PropertyWrite(idx++, tuple, one, element));
+    // The iteration protocol (wala/ML#1010); see `zipSummary`.
+    idx = protocolElement(x, factory, idx, 2, tuple, one, 19);
     x.addStatement(factory.PropertyWrite(idx++, container, zero, tuple));
     x.addStatement(factory.ReturnInstruction(idx++, container, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
+  }
+
+  /**
+   * Adds to a summary the iteration-protocol read of one argument's element (wala/ML#1010): {@code
+   * arg.__iter__()} then {@code .__next__()} on its result, each a call of the bound method value,
+   * with the yield written into the given field of the given tuple. Eight value numbers from {@code
+   * firstValue} are used.
+   *
+   * @param x The summary.
+   * @param factory The instruction factory.
+   * @param idx The next instruction index.
+   * @param arg The iterable argument's value number.
+   * @param tuple The tuple the element is written into.
+   * @param fieldKey The value number of the field's constant key.
+   * @param firstValue The first of eight free value numbers.
+   * @return The next instruction index.
+   */
+  private static int protocolElement(
+      PythonSummary x,
+      AstInstructionFactory factory,
+      int idx,
+      int arg,
+      int tuple,
+      int fieldKey,
+      int firstValue) {
+    int iterName = firstValue;
+    int iterMethod = firstValue + 1;
+    int iterator = firstValue + 2;
+    int iterException = firstValue + 3;
+    int nextName = firstValue + 4;
+    int nextMethod = firstValue + 5;
+    int element = firstValue + 6;
+    int nextException = firstValue + 7;
+    x.addConstant(iterName, new ConstantValue(ITER_METHOD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, iterMethod, arg, iterName));
+    x.addStatement(protocolCall(idx++, iterator, iterException, iterMethod));
+    x.addConstant(nextName, new ConstantValue(NEXT_METHOD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, nextMethod, iterator, nextName));
+    x.addStatement(protocolCall(idx++, element, nextException, nextMethod));
+    x.addStatement(factory.PropertyWrite(idx++, tuple, fieldKey, element));
+    return idx;
   }
 
   /**

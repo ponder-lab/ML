@@ -239,6 +239,36 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_PADDED_BATCH_SIGNATURE = "tf.data.Dataset.padded_batch()";
 
+  /**
+   * The element a dataset iterator's {@code __next__} allocates (wala/ML#1010): the value a loop
+   * over a dataset binds, typed from the dataset's element structure.
+   */
+  public static final TypeReference DATASET_ELEMENT_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element"));
+
+  /** How many components of a dataset element the iterator's {@code __next__} allocates. */
+  public static final int DATASET_ELEMENT_COMPONENTS = 4;
+
+  /**
+   * The index of a dataset element component's allocation type, or {@code -1} for any other type
+   * (wala/ML#1010): the iterator's {@code __next__} allocates one class per index.
+   *
+   * @param type An allocation type.
+   * @return The component index, or {@code -1}.
+   */
+  public static int datasetElementComponentIndex(TypeReference type) {
+    String name = type.getName().toString();
+    String prefix = DATA_PACKAGE_PREFIX + "element_";
+    if (!name.startsWith(prefix)) return -1;
+    try {
+      int index = Integer.parseInt(name.substring(prefix.length()));
+      return index >= 0 && index < DATASET_ELEMENT_COMPONENTS ? index : -1;
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
+
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
