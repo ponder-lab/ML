@@ -1442,7 +1442,7 @@ public class TestModules extends AbstractTensorTest {
         "Padding2D.call",
         "importmod_proj",
         1,
-        1,
+        2,
         Map.of(
             3,
             Set.of(
@@ -1476,7 +1476,7 @@ public class TestModules extends AbstractTensorTest {
         "Padding2D.call",
         "importmod_proj",
         1,
-        1,
+        2,
         Map.of(
             3,
             Set.of(
@@ -1507,7 +1507,7 @@ public class TestModules extends AbstractTensorTest {
         "Padding2D.call",
         "importmod_proj",
         1,
-        1,
+        2,
         Map.of(
             3,
             Set.of(
