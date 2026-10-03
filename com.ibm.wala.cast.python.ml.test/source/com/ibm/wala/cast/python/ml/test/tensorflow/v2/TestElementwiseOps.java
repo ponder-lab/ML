@@ -2116,7 +2116,7 @@ public class TestElementwiseOps extends AbstractTensorTest {
         "tf2_test_scalar_variable_broadcast.py",
         "linear_regression",
         1,
-        4,
+        5,
         Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 

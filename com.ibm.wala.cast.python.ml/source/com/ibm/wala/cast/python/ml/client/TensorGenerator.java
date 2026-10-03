@@ -996,12 +996,17 @@ public abstract class TensorGenerator {
    * Whether an allocation was synthesized by the list repetition and concatenation model
    * (wala/ML#960): such a key's allocation site is a binary-op instruction of its node, never a
    * {@code new}. Its elements sit under a single non-numeric field and its length is unknown, so a
-   * reader counting numeric fields must not read it as a literal.
+   * reader counting numeric fields must not read it as a literal. An arithmetic result over arrays
+   * is allocated at a binary-op site as well, but as an array, so only a list or tuple allocation
+   * there is a list operation's result.
    *
    * @param asin The allocation to test.
-   * @return {@code true} iff the allocation's site indexes a binary-op instruction.
+   * @return {@code true} iff the allocation is a list or tuple whose site indexes a binary-op
+   *     instruction.
    */
   protected static boolean isListOperationResult(AllocationSiteInNode asin) {
+    TypeReference allocated = asin.getSite().getDeclaredType();
+    if (!allocated.equals(list) && !allocated.equals(tuple)) return false;
     IR ir = asin.getNode().getIR();
     if (ir == null) return false;
     int pc = asin.getSite().getProgramCounter();

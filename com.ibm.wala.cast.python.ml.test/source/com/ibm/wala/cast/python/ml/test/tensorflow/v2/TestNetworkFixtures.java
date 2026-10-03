@@ -1157,7 +1157,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_masked_sparse_ce.py",
         "MaskSparseCategoricalCrossentropy.__call__",
         3,
-        7,
+        8,
         Map.of(
             3, Set.of(TENSOR_4_INT32),
             4, Set.of(TENSOR_4_10_FLOAT32),
@@ -1638,7 +1638,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        30,
+        31,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -1667,7 +1667,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        21,
+        22,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -1820,7 +1820,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        20,
+        21,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -1857,8 +1857,8 @@ public class TestNetworkFixtures extends AbstractTensorTest {
     Set<TensorType> logits = Set.of(TensorType.of(FLOAT_32, 2, 20));
     Set<TensorType> indices =
         Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)));
-    test(files, file, "_gather_elements_along_row", "", 2, 20, Map.of(2, logits, 3, indices));
-    test(files, file, "HardNegativeMining.call", "", 2, 11, Map.of(3, logits, 4, logits));
+    test(files, file, "_gather_elements_along_row", "", 2, 21, Map.of(2, logits, 3, indices));
+    test(files, file, "HardNegativeMining.call", "", 2, 12, Map.of(3, logits, 4, logits));
   }
 
   /**

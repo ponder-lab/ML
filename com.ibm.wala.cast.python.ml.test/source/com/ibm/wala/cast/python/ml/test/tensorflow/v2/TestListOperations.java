@@ -94,7 +94,7 @@ public class TestListOperations extends AbstractTensorTest {
   @Test
   public void testRepeatedArrayDecline()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FILE, "decline_np_repeated", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(FILE, "decline_np_repeated", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
   }
 
   /**
