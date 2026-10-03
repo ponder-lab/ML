@@ -152,19 +152,23 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
         return Ast.makeNode(
             CAstNode.BLOCK_STMT,
             importNames.stream()
-                .map(alias::getInternalName)
                 .map(
-                    n -> {
-                      n = n.split("\\.")[0];
+                    a -> {
+                      String member = a.getInternalName().split("\\.")[0];
+                      // `from pkg import mod as alias` binds the alias, not the member's name: an
+                      // in-scope import that declared the member left the alias unbound, so a call
+                      // through it reached nothing (wala/ML#1017). The import itself names the
+                      // member, as before.
+                      String bound = a.getInternalAsname() != null ? a.getInternalAsname() : member;
 
                       return Ast.makeNode(
                           CAstNode.DECL_STMT,
-                          Ast.makeConstant(new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
+                          Ast.makeConstant(new CAstSymbolImpl(bound, PythonCAstToIRTranslator.Any)),
                           Ast.makeNode(
                               CAstNode.PRIMITIVE,
                               Ast.makeConstant("import"),
                               Ast.makeConstant(yuck),
-                              Ast.makeConstant(n)));
+                              Ast.makeConstant(member)));
                     })
                 .collect(Collectors.toList()));
       }
