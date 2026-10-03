@@ -171,12 +171,14 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     TypeName typeName = TypeName.findOrCreate("L" + typeNameStr);
     walaTypeNames.put(cls, typeName);
 
-    Set<CAstType> present =
-        cls.getSupertypes().stream()
-            .filter(t -> !(t instanceof MissingType))
-            .collect(Collectors.toSet());
+    // In declaration order: the parser keeps the bases in the order the class statement names
+    // them, and a hash set of them would not, which made the superclass of a class with several
+    // resolvable bases vary from run to run (wala/ML#1014).
+    List<CAstType> present =
+        cls.getSupertypes().stream().filter(t -> !(t instanceof MissingType)).toList();
 
-    // The superclass is the first non-missing supertype that resolves to a class in this unit. A
+    // The superclass is the first non-missing supertype, in declaration order, that resolves to a
+    // class in this unit, the first entry of Python's method resolution order after the class. A
     // supertype's `walaTypeNames` entry is null when its base-class name mis-resolves to a
     // same-named class in another module (e.g. a user `class Model` colliding with `from
     // tensorflow.keras import Model; class X(Model)`): it is non-missing but was never registered
