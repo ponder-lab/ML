@@ -2648,4 +2648,45 @@ public class TestShapeOps extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * The matrix round trip of a transformer layer, {@code reshape_to_matrix} and {@code
+   * reshape_from_matrix} over shape lists read by a {@code get_shape_list} helper: the layer
+   * flattens its rank-3 input to a matrix and reshapes the dense output back with the input's
+   * leading dims and the output's width, so the round trip is the identity on {@code (8, 10, 32)}.
+   * The helpers' guards, {@code if len(tensor.shape) == 0: return tensor} and {@code if
+   * len(orig_shape_list) == 2: return output_tensor}, are infeasible here; their arms returned the
+   * matrix {@code (80, 32)} as a second member before the {@code len} fold decided them
+   * (wala/ML#1020).
+   */
+  @Test
+  public void testReshapeRoundTrip()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_round_trip.py",
+        "consume_round_trip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 32))));
+  }
+
+  /**
+   * The same round trip in a layer loop, {@code for one in layers: h = one(h)}: the loop carries
+   * each layer's output back as the next input, so the carried value keeps the input's shape at
+   * every layer. Before, the matrix leaked through the infeasible arm reached the loop variable's
+   * points-to set and every parameter and call result downstream of it, where no guard fold could
+   * decide against the rank-heterogeneous union it had itself produced; the value reads now resolve
+   * such a union through the callers' arguments, the callees' feasible returns and the phi's arms,
+   * deferring to the engine's settlement pass while a read is still converging (wala/ML#1020).
+   */
+  @Test
+  public void testReshapeRoundTripLayerLoop()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_round_trip.py",
+        "consume_layered",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 32))));
+  }
 }
