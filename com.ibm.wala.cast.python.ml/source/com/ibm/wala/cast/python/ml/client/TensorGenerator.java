@@ -2829,10 +2829,15 @@ public abstract class TensorGenerator {
    *     positionally (a defaulted argument); {@link #AMBIGUOUS_ARGUMENT} when the call carries
    *     keyword arguments the positional slots do not cover, since a {@link
    *     PythonInvokeInstruction} stores keywords in call-site order and a positional index into
-   *     them selects the wrong value.
+   *     them selects the wrong value; also {@link #AMBIGUOUS_ARGUMENT} when a starred argument at
+   *     or before the parameter's slot spreads over a statically unknown number of parameters, so
+   *     the slot's use is the unpacked sequence or a later argument, never the parameter's value
+   *     (wala/ML#751).
    */
   protected static int callerArgumentValueNumber(SSAAbstractInvokeInstruction call, int paramPos) {
     if (call instanceof PythonInvokeInstruction pyCall) {
+      int firstStarred = pyCall.firstStarredPosition();
+      if (firstStarred > 0 && paramPos + 1 >= firstStarred) return AMBIGUOUS_ARGUMENT;
       int positionals = pyCall.getNumberOfPositionalParameters() - 1;
       if (paramPos < positionals) return pyCall.getUse(paramPos + 1);
       return pyCall.getNumberOfKeywordParameters() > 0 ? AMBIGUOUS_ARGUMENT : 0;
