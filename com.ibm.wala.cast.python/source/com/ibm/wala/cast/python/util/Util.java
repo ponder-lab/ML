@@ -358,8 +358,48 @@ public class Util {
    *     AllocationSiteInNode}.
    * @return <code>null</code>.
    */
+  private static final java.util.concurrent.ConcurrentHashMap<
+          String, java.util.concurrent.atomic.LongAdder>
+      PROBE_CK_CALLERS = new java.util.concurrent.ConcurrentHashMap<>();
+
+  private static final java.util.concurrent.atomic.AtomicLong PROBE_CK_TOTAL =
+      new java.util.concurrent.atomic.AtomicLong();
+
   private static AllocationSiteInNode getAllocationSiteInNode(ConstantKey<?> constantKey) {
     Object value = constantKey.getValue();
+    String callers =
+        StackWalker.getInstance()
+            .walk(
+                frames ->
+                    frames
+                        .filter(f -> !f.getClassName().equals(Util.class.getName()))
+                        .limit(4)
+                        .map(
+                            f ->
+                                f.getClassName().replaceAll(".*\\.", "")
+                                    + "."
+                                    + f.getMethodName()
+                                    + ":"
+                                    + f.getLineNumber())
+                        .collect(java.util.stream.Collectors.joining(" <- ")));
+    PROBE_CK_CALLERS
+        .computeIfAbsent(callers, k -> new java.util.concurrent.atomic.LongAdder())
+        .increment();
+    long n = PROBE_CK_TOTAL.incrementAndGet();
+    if (n % Long.parseLong(System.getenv().getOrDefault("PROBE_CK_EVERY", "100000")) == 0) {
+      StringBuilder sb = new StringBuilder("PROBE-CK total=" + n + "\n");
+      PROBE_CK_CALLERS.entrySet().stream()
+          .sorted((a, b) -> Long.compare(b.getValue().sum(), a.getValue().sum()))
+          .limit(12)
+          .forEach(
+              e ->
+                  sb.append("PROBE-CK ")
+                      .append(e.getValue().sum())
+                      .append(" ")
+                      .append(e.getKey())
+                      .append("\n"));
+      System.err.print(sb);
+    }
 
     if (value == null)
       LOGGER.warning("Can't extract AllocationSiteInNode from: " + constantKey + ".");
