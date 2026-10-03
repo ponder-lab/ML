@@ -2551,4 +2551,50 @@ public class TestShapeOps extends AbstractTensorTest {
             Set.of(
                 TensorType.of(FLOAT_64, 6, 4, 4, 3, 4), TensorType.of(FLOAT_64, 6, 2, 2, 3, 4))));
   }
+
+  /**
+   * {@code tf.pad} on an input whose rank is not resolved: {@code paddings} holds one row per input
+   * axis, so the result has four axes, the last widened by an unresolved width. An unknown-rank
+   * result here reached a shape helper through a split of the padded tensor's last axis.
+   */
+  @Test
+  public void testPadUnknownRankInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pad_unknown_rank.py",
+        "consume_padded",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /** The same input padded by constant widths keeps the four axes, each extent unresolved. */
+  @Test
+  public void testPadUnknownRankInputConstantWidths()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pad_unknown_rank.py",
+        "consume_padded_constant",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
+  }
 }
