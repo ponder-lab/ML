@@ -25,6 +25,7 @@ import com.ibm.wala.ipa.callgraph.ContextSelector;
 import com.ibm.wala.ipa.callgraph.DelegatingContext;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.DelegatingSSAContextInterpreter;
@@ -450,6 +451,16 @@ public class PythonSuper {
           return new ExplicitSuperContext(actualParameters[1].concreteType(), actualParameters[2]);
         }
         if (actualParameters.length == 1) {
+          // A `super` object is allocated by one method body with that body's `self`, so the stub
+          // call on it is keyed on the object: one stub node per super object, whose `$self` read
+          // is that one instance. Keyed on the caller's context instead, a stub node collected the
+          // super objects of every instance reaching it, its `$self` read was their union, and the
+          // explicit body below bound every base method to all of them, so a method reached
+          // through `super()` dispatched on every instance of the class (wala/ML#1015).
+          InstanceKey superObject = actualParameters[0];
+          if (superObject != null)
+            return new DelegatingContext(
+                implicitSuperContext, new ReceiverInstanceContext(superObject));
           return new DelegatingContext(
               implicitSuperContext, base.getCalleeTarget(caller, site, callee, actualParameters));
         } else {
