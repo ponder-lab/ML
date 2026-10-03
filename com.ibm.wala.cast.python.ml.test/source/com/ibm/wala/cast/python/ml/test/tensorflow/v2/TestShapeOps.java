@@ -2717,4 +2717,16 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 5))));
   }
+
+  /**
+   * The same guard over {@code tf.shape(t)}, which IS a shape vector by construction: its {@code
+   * len} is the rank, {@code 2}, so {@code if len(tf.shape(t)) == 3:} is decided against its arm
+   * and the arm's sink is reached with no tensor. A {@code (0, 0)} pin asserts the sink is present
+   * and untyped; it fails with one tensor parameter when the guard is left undecided.
+   */
+  @Test
+  public void testLenGuardOverTfShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_len_guard_operands.py", "consume_d", 0, 0, Map.of());
+  }
 }

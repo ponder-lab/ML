@@ -14,11 +14,18 @@ def consume_b(t):
     return t
 
 
+def consume_d(t):
+    raise AssertionError("unreachable: a rank-2 tensor's tf.shape has two elements")
+
+
 def f(t, xs):
     if len(t) == 3:
         consume_a(t)
     if len(xs) == 3:
         consume_b(xs[0])
+    # `tf.shape(t)` IS a shape vector, so this `len` is the rank, 2, and the arm never runs.
+    if len(tf.shape(t)) == 3:
+        consume_d(t)
 
 
 t = tf.ones((3, 5))

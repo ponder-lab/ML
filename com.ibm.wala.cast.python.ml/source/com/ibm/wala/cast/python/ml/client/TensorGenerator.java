@@ -8791,6 +8791,9 @@ public abstract class TensorGenerator {
     if (def instanceof PythonInvokeInstruction) {
       PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
       if (invoke.getNumberOfUses() < 1) return false;
+      // tf.shape(x) is a shape vector by construction (the walk's wala/ML#722 arm); its callee is
+      // itself a property read, `shape` on the module, so it is decided before the `as_list` arm.
+      if (dispatchesToTfShape(builder, node, invoke) && invoke.getNumberOfUses() >= 2) return true;
       SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
       if (funcDef instanceof PythonPropertyRead) {
         int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
@@ -8801,9 +8804,6 @@ public abstract class TensorGenerator {
       }
       if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2)
         return isShapeVectorChain(builder, node, invoke.getUse(1), visited);
-      // tf.shape(x) is a shape vector by construction (the walk's wala/ML#722 arm).
-      if (dispatchesToTfShape(builder, node, invoke) && invoke.getNumberOfUses() >= 2) return true;
-
       // A call to a user helper: the chain is a shape vector iff every callee's every returned
       // value is (wala/ML#706).
       Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
