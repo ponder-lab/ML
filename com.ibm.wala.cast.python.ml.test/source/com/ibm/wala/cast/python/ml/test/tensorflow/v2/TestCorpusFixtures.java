@@ -1042,16 +1042,21 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new SymbolicDim("?"),
                         new NumericDim(4))),
                 // `past_layer` in the sampling contexts, where `key` concatenates the unstacked
-                // past with the fresh key: the concatenation keeps the rank now, and its extent
-                // grows with each sampling call, so it is dynamic (wala/ML#985); its batch axis
-                // reads its runtime 2 by the same route as the first member's (wala/ML#986).
+                // past with the fresh key: the concatenation keeps the rank (wala/ML#985), and its
+                // extent is the sum of the two elements' extents, which grows with each sampling
+                // call. Both elements' shapes are known, the unstacked past's with several
+                // candidates (wala/ML#1009), and neither extent is dynamic, so the sum is a fixed
+                // size per call that the analysis does not compute: the loop runs eagerly, where
+                // TensorFlow reports it, (2, 2, 2, 5, 4) after three calls. Its batch axis reads
+                // its
+                // runtime 2 by the same route as the first member's (wala/ML#986).
                 new TensorType(
                     FLOAT_32,
                     asList(
                         new NumericDim(2),
                         new NumericDim(2),
                         new NumericDim(2),
-                        DynamicDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
                         new NumericDim(4))))));
   }
 
