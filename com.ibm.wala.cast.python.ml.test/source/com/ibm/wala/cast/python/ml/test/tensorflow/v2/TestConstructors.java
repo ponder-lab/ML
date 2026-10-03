@@ -1935,4 +1935,47 @@ public class TestConstructors extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_np_scalar_types.py", "consume4", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT64)));
   }
+
+  /**
+   * {@code tf.random.categorical(logits, 3)} over {@code (2, 10)} logits draws a fresh {@code (2,
+   * 3)} tensor of the default {@code int64}, not the logits.
+   */
+  @Test
+  public void testRandomCategoricalDefault()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_random_categorical.py",
+        "consume_default",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 2, 3))));
+  }
+
+  /** The {@code num_samples} and {@code dtype} keywords give a {@code (2, 1)} {@code int32}. */
+  @Test
+  public void testRandomCategoricalInt32()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_random_categorical.py",
+        "consume_int32",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 1))));
+  }
+
+  /**
+   * A draw fed back as the next step's input, as a sampling loop does: the loop variable is the
+   * initial {@code (2, 3)} prompt or a {@code (2, 1)} draw. A draw that aliased its logits carried
+   * their shape into the lookup, which added a dimension each round.
+   */
+  @Test
+  public void testRandomCategoricalFedBack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_random_categorical.py",
+        "consume_fed_back",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 3), TensorType.of(INT_32, 2, 1))));
+  }
 }
