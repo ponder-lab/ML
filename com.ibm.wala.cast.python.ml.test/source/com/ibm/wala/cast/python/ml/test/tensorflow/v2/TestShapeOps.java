@@ -2684,4 +2684,37 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 32))));
   }
+
+  /**
+   * The {@code len(...)} fold's operand domain (wala/ML#1020): {@code len(t)} of a tensor is its
+   * first extent, {@code 3} for a {@code (3, 5)} tensor, not its rank, so the guard {@code if
+   * len(t) == 3:} is taken at run time and its arm must be reached with the tensor. A fold reading
+   * the operand as a shape vector would decide the guard against the arm and this pin would find no
+   * tensor parameter.
+   */
+  @Test
+  public void testLenGuardOverTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_len_guard_operands.py",
+        "consume_a",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 5))));
+  }
+
+  /**
+   * The same over a list of tensors, {@code len(xs) == 3} for {@code xs = [t, t, t]}: the list's
+   * length, not an element's rank or a shape; the arm is taken and its element is reached.
+   */
+  @Test
+  public void testLenGuardOverList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_len_guard_operands.py",
+        "consume_b",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 5))));
+  }
 }

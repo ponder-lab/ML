@@ -4039,6 +4039,12 @@ public abstract class TensorGenerator {
           target.getMethod().getDeclaringClass().getReference().getName().toString())) return null;
     int argVn = invoke.getUse(1);
     if (argVn <= 0) return null;
+    // The operand must be a shape vector by construction: a tensor's `shape`, `tf.shape(x)`, an
+    // `as_list()` result, a slice of one, a helper whose every return is one, or a parameter some
+    // caller passes one to. `len(t)` of a tensor is its first extent and `len(xs)` of a list is the
+    // list's length, neither a rank; the structural predicate decides, not whether the vector
+    // reader happens to resolve the operand.
+    if (!isShapeVectorChain(builder, node, argVn)) return null;
     Pair<CGNode, Integer> frame = Pair.make(node, argVn);
     Set<Pair<CGNode, Integer>> onStack = LEN_FOLD_ON_STACK.get();
     if (!onStack.add(frame)) {
@@ -7383,6 +7389,34 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns every calling invocation of the given node, whatever the reachability of its site: the
+   * structural companion of {@link #getCallerInvokes}, for predicates that ask what a value IS
+   * rather than what it resolves to (wala/ML#1020). The filtered enumerator decides each site's
+   * reachability by folding the caller's guards, and a {@code len} guard's fold asks the structural
+   * predicate about its operand, which for a parameter asks for the callers: through the filtered
+   * enumerator that is a cycle (measured as a stack overflow on a transformer stack), and it is not
+   * the predicate's question.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph to consult.
+   * @param node The callee {@link CGNode}.
+   * @return The (caller, invoke) pairs whose invocations can dispatch to the given node.
+   */
+  protected static List<Pair<CGNode, SSAAbstractInvokeInstruction>> getAllCallerInvokes(
+      PropagationCallGraphBuilder builder, CGNode node) {
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> ret = new ArrayList<>();
+    CallGraph callGraph = builder.getCallGraph();
+    for (Iterator<CGNode> it = callGraph.getPredNodes(node); it.hasNext(); ) {
+      CGNode caller = it.next();
+      if (caller.getIR() == null) continue;
+      for (Iterator<CallSiteReference> sites = callGraph.getPossibleSites(caller, node);
+          sites.hasNext(); )
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next()))
+          ret.add(Pair.make(caller, call));
+    }
+    return ret;
+  }
+
+  /**
    * Returns the calling invocations of the given node: for each call-graph predecessor, the invoke
    * instructions at the sites that can dispatch to it. Derived from call-graph edges rather than a
    * {@code CALL_STRING} lookup, so it works for any {@link com.ibm.wala.ipa.callgraph.Context}
@@ -8727,12 +8761,14 @@ public abstract class TensorGenerator {
 
     // A parameter chains iff some caller's corresponding argument chains (wala/ML#706); the
     // resolve-side walk unions the callers and marks the unmappable ones as the unknown
-    // remainder.
+    // remainder. The callers are enumerated unfiltered: a structural question does not depend on
+    // a site's reachability, and the filtered enumerator's guard folds ask this predicate back
+    // (wala/ML#1020).
     if (def == null && !st.isConstant(vn)) {
       int paramPos = parameterPosition(node, vn);
       if (paramPos >= 0)
         for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
-            getCallerInvokes(builder, node)) {
+            getAllCallerInvokes(builder, node)) {
           CGNode caller = callerInvoke.fst;
           if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
           PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
@@ -8762,6 +8798,8 @@ public abstract class TensorGenerator {
       }
       if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2)
         return isShapeVectorChain(builder, node, invoke.getUse(1), visited);
+      // tf.shape(x) is a shape vector by construction (the walk's wala/ML#722 arm).
+      if (dispatchesToTfShape(builder, node, invoke) && invoke.getNumberOfUses() >= 2) return true;
 
       // A call to a user helper: the chain is a shape vector iff every callee's every returned
       // value is (wala/ML#706).
