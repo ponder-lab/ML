@@ -59,6 +59,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
@@ -711,6 +712,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 // the trampoline's and the element function's own sites and merge again.
                 if (isComprehensionMachinery(callee, comprehensionClass, filterClass))
                   return caller.getContext();
+                // The `iter` and `next` builtins a loop is lowered to (wala/ML#1010) are keyed on
+                // the calling node and the site. The element read they replace was
+                // intraprocedural, so it never merged across the callers of the function it is
+                // in; under a call string they had one node per site, and a function called with
+                // two iterables read both in every context. The site stays in the key, since one
+                // node can iterate several values, and a node so keyed has the calls it makes (the
+                // iteration protocol's methods) keyed on it in turn by the trampoline rules.
+                if (isIterationBuiltin(callee)) return new CallerSiteContext(caller, site);
                 if (receivesTargetedContext(callee, modelClass)) {
                   return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
                 }
@@ -742,6 +751,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     IClass c = callee.getDeclaringClass();
     return (comprehensionClass != null && cha.isSubclassOf(c, comprehensionClass))
         || (filterClass != null && cha.isSubclassOf(c, filterClass));
+  }
+
+  /**
+   * Whether the given method is one of the {@code iter} and {@code next} builtins a loop is lowered
+   * to (wala/ML#1010).
+   *
+   * @param callee The method being dispatched.
+   * @return Whether {@code callee} is declared by the {@code iter} or {@code next} builtin.
+   */
+  private static boolean isIterationBuiltin(IMethod callee) {
+    TypeReference declaring = callee.getDeclaringClass().getReference();
+    return declaring.equals(PythonTypes.ITER_BUILTIN) || declaring.equals(PythonTypes.NEXT_BUILTIN);
   }
 
   /**
