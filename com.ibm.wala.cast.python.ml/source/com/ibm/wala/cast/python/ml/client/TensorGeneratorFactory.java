@@ -1947,8 +1947,6 @@ public class TensorGeneratorFactory {
             if (iteratedGenerator instanceof Split
                 || iteratedGenerator instanceof Unstack
                 || iteratedGenerator instanceof ModelWeightsGenerator) return iteratedGenerator;
-            if (iteratedGenerator instanceof DatasetGenerator)
-              return new DatasetElementGenerator(iterated, iteratedGenerator);
             if (iteratedGenerator == null
                 && iteratesPythonContainersOnly(builder, node, iterableVn)) return null;
             // Otherwise an element of the iterated value, over its own generator where it has
