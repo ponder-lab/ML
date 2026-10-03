@@ -22,9 +22,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -174,6 +176,10 @@ public class Concat extends TensorGenerator {
       if (outShape.isBottom()) sawConvergingElement = true;
       ret.addAll(outShape.members());
     }
+    // A concat every one of whose lists has an element that cannot execute is itself no tensor, a
+    // settled answer rather than a converging one (wala/ML#961, wala/ML#962).
+    if (ret.isEmpty() && sawConvergingElement && this.cannotExecute(builder))
+      return Collections.emptySet();
     if (ret.isEmpty()) {
       // Clause 3 (wala/ML#758): with the element reads engine-visible, a memberless evaluation
       // that consumed a still-converging (⊥) element contributes ⊥, so the ascent delivers the
@@ -202,6 +208,8 @@ public class Concat extends TensorGenerator {
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
     int valuesVn = getArgumentValueNumber(this.getValuesParameterIndex());
     if (valuesVn <= 0) return null;
+    // A concat that cannot execute is no tensor, so nothing feeds its result (wala/ML#1009).
+    if (this.cannotExecute(builder)) return null;
     PointerKey argument =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), valuesVn);
     List<PointerKey> operands = new ArrayList<>();
@@ -336,7 +344,12 @@ public class Concat extends TensorGenerator {
     // ambiguous no longer decides the result by itself: `tf.concat` requires every element to have
     // the same rank and the same non-axis dimensions, so any element whose shape is known fixes
     // both, and only the axis extent stays open (wala/ML#985).
-    List<List<Dimension<?>>> known = new ArrayList<>();
+    // An element with several possible shapes (a value typed differently in different calling
+    // contexts) is enumerated, as Einsum's multi-shape inputs are (wala/ML#737): each combination
+    // of one shape per element is concatenated, and the result is the union. Past
+    // MAX_COMPOSITION_COMBINATIONS, such an element counts as unknown instead, which still lets the
+    // single-shape elements fix the rank and the non-axis extents.
+    List<Set<List<Dimension<?>>>> candidates = new ArrayList<>();
     boolean anyUnknown = false;
     for (InstanceKey catalogIK : catalog) {
       if (!(catalogIK instanceof ConstantKey)) return ShapeResult.unknown();
@@ -351,17 +364,72 @@ public class Concat extends TensorGenerator {
       if (allInfeasible(builder, elemPts)) return ShapeResult.bottom(); // wala/ML#962
       ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
       if (elemResult.isBottom()) return ShapeResult.bottom();
-      if (elemResult.hasUnknown() || elemResult.members().size() != 1) anyUnknown = true;
-      else known.add(elemResult.members().iterator().next());
+      // An element with several shapes is enumerated only when an exact read leaves no remainder:
+      // a default-mode read returns a partial value's resolvable subset, which for a loop-carried
+      // element omits the values the loop goes on to build (wala/ML#931), and enumerating that
+      // subset would assert them absent. The exact read marks that remainder only where the
+      // worklist resolver iterates the cycle; on the null-engine path (wala/ML#753) a recursion
+      // guard answers it once and the mark is lost, so there an element with several shapes stays
+      // unknown.
+      if (elemResult.members().size() > 1
+          && (WorklistTypeResolver.active(builder) == null
+              || this.getShapeResultOfValue(builder, elemPts, true).hasUnknown()))
+        anyUnknown = true;
+      else if (elemResult.hasUnknown() || elemResult.members().isEmpty()) anyUnknown = true;
+      else candidates.add(elemResult.members());
     }
-    if (known.isEmpty()) return ShapeResult.unknown();
 
+    long combinations = 1;
+    for (Set<List<Dimension<?>>> shapes : candidates) combinations *= shapes.size();
+    if (combinations > MAX_COMPOSITION_COMBINATIONS) {
+      int before = candidates.size();
+      candidates.removeIf(shapes -> shapes.size() > 1);
+      if (candidates.size() < before) anyUnknown = true;
+    }
+    if (candidates.isEmpty()) return ShapeResult.unknown();
+
+    // A combination whose elements disagree on the rank or on a non-axis extent cannot run, since
+    // `tf.concat` raises on it, so it contributes nothing; the result is unknown only when no
+    // combination can run.
+    Set<List<Dimension<?>>> outShapes = HashSetFactory.make();
+    List<List<List<Dimension<?>>>> combos = new ArrayList<>();
+    combos.add(new ArrayList<>());
+    for (Set<List<Dimension<?>>> shapes : candidates) {
+      List<List<List<Dimension<?>>>> next = new ArrayList<>();
+      for (List<List<Dimension<?>>> prefix : combos)
+        for (List<Dimension<?>> shape : shapes) {
+          List<List<Dimension<?>>> extended = new ArrayList<>(prefix);
+          extended.add(shape);
+          next.add(extended);
+        }
+      combos = next;
+    }
+    for (List<List<Dimension<?>>> known : combos) {
+      List<Dimension<?>> outShape = concatenate(known, anyUnknown, axis);
+      if (outShape != null) outShapes.add(outShape);
+    }
+    if (outShapes.isEmpty()) return ShapeResult.unknown();
+    return ShapeResult.of(outShapes);
+  }
+
+  /** The cross-product cap for multi-shape elements, as for Einsum's inputs (wala/ML#737). */
+  private static final int MAX_COMPOSITION_COMBINATIONS = 8;
+
+  /**
+   * Concatenates one shape per known element along an axis.
+   *
+   * @param known The known elements' shapes, one per element, at least one.
+   * @param anyUnknown Whether some element's shape is unknown, so its axis extent is too.
+   * @param axis The axis, possibly negative.
+   * @return The result's shape, or {@code null} when the elements disagree on the rank or on a
+   *     non-axis extent, or the axis is out of range, so the concatenation cannot run.
+   */
+  private static List<Dimension<?>> concatenate(
+      List<List<Dimension<?>>> known, boolean anyUnknown, int axis) {
     int rank = known.get(0).size();
-    for (List<Dimension<?>> shape : known)
-      if (shape.size() != rank)
-        return ShapeResult.unknown(); // rank mismatch — can't concat soundly
+    for (List<Dimension<?>> shape : known) if (shape.size() != rank) return null;
     int normalizedAxis = axis < 0 ? axis + rank : axis;
-    if (normalizedAxis < 0 || normalizedAxis >= rank) return ShapeResult.unknown();
+    if (normalizedAxis < 0 || normalizedAxis >= rank) return null;
 
     List<Dimension<?>> outShape = new ArrayList<>(known.get(0));
     // A non-axis dimension is the same in every element at run time, so a numeric reading from any
@@ -373,7 +441,7 @@ public class Concat extends TensorGenerator {
         if (!(dim instanceof NumericDim)) continue;
         Dimension<?> current = outShape.get(d);
         if (!(current instanceof NumericDim)) outShape.set(d, dim);
-        else if (!current.equals(dim)) return ShapeResult.unknown();
+        else if (!current.equals(dim)) return null;
       }
     }
 
@@ -399,7 +467,7 @@ public class Concat extends TensorGenerator {
     }
     if (summable) outShape.set(normalizedAxis, new NumericDim((int) sum));
     else outShape.set(normalizedAxis, dynamic ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
-    return ShapeResult.of(Collections.singleton(outShape));
+    return outShape;
   }
 
   /**
@@ -431,6 +499,89 @@ public class Concat extends TensorGenerator {
       else if (ret != v) return null;
     }
     return ret == null ? this.getDefaultAxis() : ret;
+  }
+
+  /**
+   * Whether this concat cannot execute: every caller passes it lists or tuples only, all visible,
+   * and each has an element that is the {@code None} constant (wala/ML#961) or a value every
+   * producer of which cannot run on its {@code None}-only input (wala/ML#962). Such a concat
+   * raises, so its result is no tensor. A caller whose argument has no allocation the points-to
+   * analysis sees could pass a list that executes, so it makes the answer {@code false} rather than
+   * being left out (the silent-skip class of wala/ML#900).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @return {@code true} iff every caller's every list has such an element.
+   */
+  private boolean cannotExecute(PropagationCallGraphBuilder builder) {
+    int valuesVn = getArgumentValueNumber(this.getValuesParameterIndex());
+    if (valuesVn <= 0) return false;
+    CGNode node = this.getNode();
+    // Anchored on the call's result, the generator reads the argument at that one call site, in
+    // the calling frame; anchored on the concat's own body, every caller passes it.
+    if (this.getInvokeInstruction() != null) return listsCannotExecute(builder, node, valuesVn);
+    int paramPos = parameterPosition(node, valuesVn);
+    if (paramPos < 0) return false;
+    boolean anyCaller = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      anyCaller = true;
+      int argVn = callerArgumentValueNumber(callerInvoke.snd, paramPos);
+      if (argVn <= 0 || !listsCannotExecute(builder, callerInvoke.fst, argVn)) return false;
+    }
+    return anyCaller;
+  }
+
+  /**
+   * Whether a value is visible, only lists or tuples, and each has an element that cannot execute.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @param node The node whose frame holds the value.
+   * @param vn The value's number.
+   * @return {@code true} iff the value's points-to set is non-empty and every member is a list or
+   *     tuple with an element that cannot execute.
+   */
+  private boolean listsCannotExecute(PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    // A literal list's key is implicitly represented; the pointer analysis computes its contents.
+    OrdinalSet<InstanceKey> pts =
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn));
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey valIk : pts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
+      if (asin == null) return false;
+      TypeReference ref = asin.concreteType().getReference();
+      if (!(ref.equals(list) || ref.equals(tuple))) return false;
+      OrdinalSet<InstanceKey> catalog =
+          pa.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+      if (!cannotExecute(builder, asin, catalog)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Whether a list or tuple this concat receives has an element that cannot execute; see {@link
+   * #cannotExecute(PropagationCallGraphBuilder)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} resolving elements and producers.
+   * @param listAsin The list or tuple.
+   * @param catalog The list's object catalog.
+   * @return {@code true} iff some element cannot execute.
+   */
+  private boolean cannotExecute(
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode listAsin,
+      OrdinalSet<InstanceKey> catalog) {
+    for (InstanceKey catalogIK : catalog) {
+      if (!(catalogIK instanceof ConstantKey)) continue;
+      Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+      if (fieldIndex == null) continue;
+      OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
+      if (elemPts != null && (allNullConstants(elemPts) || allInfeasible(builder, elemPts)))
+        return true;
+    }
+    return false;
   }
 
   /**
