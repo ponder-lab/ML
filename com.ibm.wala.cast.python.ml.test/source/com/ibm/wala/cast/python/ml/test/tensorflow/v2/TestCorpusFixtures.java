@@ -705,17 +705,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * divided out by the split and squeezed away, leaving the per-entry {@code (batch_size, maxlen)}
    * pairs; all are {@code int32} after the cast.
    *
-   * <p>The two rank-1 members, {@code (8,)} and {@code (16,)}, arrive through the loop over the
-   * loader's dataset (<a href="https://github.com/wala/ML/issues/1010">wala/ML#1010</a>): the CRF
-   * entry scripts pass the loop's label component in the model's input list, {@code model([X,
-   * token_type_id, input_mask, Y])}, and the CRF model's {@code tf.split(inputs, 4, 0)} reads the
-   * list as a stacked tensor. The loader's {@code decode_record} chooses between two feature
-   * descriptions by {@code self.task.lower() == "ner"}, which the analysis cannot fold, so the
-   * label is {@code (batch, maxlen)} by one description and the scalar {@code (batch,)} by the
-   * other, and the list read unions its fields' shapes. The route was blind before the element
-   * allocations (a list of components held nothing a read could type), so the members are a newly
-   * reached over-approximation of the flow-insensitive description union, not a wrong element read;
-   * a stack read that drops element shapes unable to stack together would remove them.
+   * <p>The loop over the loader's dataset types the CRF entry scripts' label component under two
+   * feature descriptions ({@code (batch, maxlen)} by one, scalar by the other, chosen by a {@code
+   * self.task.lower()} the analysis cannot fold), and those scripts pack the label with the ids in
+   * the model's input list, {@code model([X, token_type_id, input_mask, Y])}, which the CRF model
+   * splits as one tensor. A packing needs one shape every element can have, so the label's scalar
+   * alternative packs with nothing and the ids keep their {@code (batch, maxlen)} alone
+   * (wala/ML#1016); a reappearance of a rank-1 {@code (batch,)} member here is that constraint
+   * regressing.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -741,9 +738,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 TensorType.of(INT_32, 1, 512),
                 TensorType.of(INT_32, 6, 128),
                 TensorType.of(INT_32, 2, 4),
-                TensorType.of(INT_32, 2, 10),
-                TensorType.of(INT_32, 8),
-                TensorType.of(INT_32, 16))));
+                TensorType.of(INT_32, 2, 10))));
   }
 
   /**

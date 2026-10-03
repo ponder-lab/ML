@@ -50,16 +50,14 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
    * get_shape_list} &mdash; is gone with wala/ML#900, which resolves that {@code get_shape_list}
    * parameter through its caller argument so φ feasibility prunes the pre-{@code expand_dims} arm;
    * a reappearance of any {@code (batch, U)} member from that phantom is a wala/ML#900 regression.
-   * The {@code (8, U)}, {@code (16, U)} and {@code (U)} members are not that phantom: they come
-   * from the rank-1 {@code (8,)} and {@code (16,)} input ids the loader's dataset loop now types
-   * (wala/ML#1010), whose label component unions two feature descriptions the analysis cannot
-   * choose between (the pin of {@code testNlpgnnFullEmbeddingInput}), and a rank-1 id reaches the
-   * embedding where expanding it is live. The follow-up that removes them is the one that removes
-   * the embedding's: the equal-shape constraint at the operation that packs the CRF model's input
-   * list into a tensor. The unknown-rank member is gone because {@code reshape_from_matrix}'s
-   * result now resolves to the {@code (U, seq, U)} members, one per entry pipeline's sequence
-   * length (wala/ML#1009). The {@code mask} (value number 4) union is the attention mask's {@code
-   * (batch, seq, seq)} broadcast per the same six entry pipelines.
+   * A rank-1 {@code (8,)} or {@code (16,)} id, and the {@code (8, U)}, {@code (16, U)} and {@code
+   * (U)} members it would make here, came from the loader's label component packed with the ids in
+   * the CRF model's input list; the equal-shape constraint at the packing operation (wala/ML#1016)
+   * keeps them out, as in {@code testNlpgnnFullEmbeddingInput}. The unknown-rank member is gone
+   * because {@code reshape_from_matrix}'s result now resolves to the {@code (U, seq, U)} members,
+   * one per entry pipeline's sequence length (wala/ML#1009). The {@code mask} (value number 4)
+   * union is the attention mask's {@code (batch, seq, seq)} broadcast per the same six entry
+   * pipelines.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -104,9 +102,6 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
                 asList(new NumericDim(16), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
             new TensorType(
                 FLOAT_32, asList(new NumericDim(16), new NumericDim(100), UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(new NumericDim(16), UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
-            new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE)),
             new TensorType(
                 FLOAT_32,
                 asList(UnresolvedDim.INSTANCE, new NumericDim(10), UnresolvedDim.INSTANCE)),

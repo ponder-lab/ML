@@ -119,8 +119,11 @@ public class Stack extends TensorGenerator {
       int n = catalog.size();
       if (n == 0) continue;
 
-      // Read first element's shape via field "0" of the values list.
-      Set<List<Dimension<?>>> firstShapes = getShapesOfFirstElement(builder, asin, catalog);
+      // The shape every element can have (wala/ML#1016): a stack needs equal element shapes, so
+      // an element with several possible shapes contributes only those the others share, and a
+      // container no combination of whose elements packs contributes nothing. Reading the first
+      // element alone took its every shape and missed the others' constraints.
+      Set<List<Dimension<?>>> firstShapes = packedElementShapes(builder, asin);
       if (firstShapes == null) continue;
 
       for (List<Dimension<?>> firstShape : firstShapes) {
