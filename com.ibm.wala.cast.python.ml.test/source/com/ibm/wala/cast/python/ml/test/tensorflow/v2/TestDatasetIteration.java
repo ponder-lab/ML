@@ -82,4 +82,52 @@ public class TestDatasetIteration extends AbstractTensorTest {
     test(
         FIXTURE, "consume_either_x", 1, 1, Map.of(2, Set.of(BATCH, TensorType.of(FLOAT_32, 8, 5))));
   }
+
+  private static final String RECORDS = "tf2_test_tfrecord_component_layer.py";
+
+  private static final TensorType IDS = TensorType.of(INT_64, 8, 100);
+
+  /** A component of a batched record element, read by a sink's parameter. */
+  @Test
+  public void testRecordComponent() throws ClassHierarchyException, CancelException, IOException {
+    test(RECORDS, "consume", 1, 1, Map.of(2, Set.of(IDS)));
+  }
+
+  /**
+   * A component of a batched record element read by an operation, which starts at the component's
+   * allocation rather than at the loop's iterated value.
+   */
+  @Test
+  public void testRecordComponentCast()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(RECORDS, "consume_cast", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 8, 100))));
+  }
+
+  /** Three components of a batched record element stacked from a list. */
+  @Test
+  public void testRecordComponentsStacked()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(RECORDS, "consume_stack", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 3, 8, 100))));
+  }
+
+  /** The scalar label component of a batched record element, read by an operation. */
+  @Test
+  public void testRecordLabelCast() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        RECORDS,
+        "consume_label",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 8), TensorType.of(INT_32, 8, 100))));
+  }
+
+  /**
+   * The first of three record components passed as a list, split along the stacked axis and
+   * squeezed, as a model wrapper reads its inputs.
+   */
+  @Test
+  public void testRecordComponentsSplitFromList()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(RECORDS, "consume_split", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 8, 100))));
+  }
 }
