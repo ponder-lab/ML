@@ -11,6 +11,7 @@ import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
@@ -18,6 +19,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -606,6 +608,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * one definition is a user call typed across its calling contexts, including a dataset-fed one
    * whose batch axis TensorFlow reports as {@code None}.
    *
+   * <p>The four members with an unresolved leading or second extent arrive with the loaders' typed
+   * loop components (wala/ML#1010), joined with the contract members in the contexts the entry
+   * scripts share.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -657,6 +663,34 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     asList(
                         DynamicDim.INSTANCE,
                         new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    Arrays.<Dimension<?>>asList(
+                        new NumericDim(8),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    Arrays.<Dimension<?>>asList(
+                        DynamicDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    Arrays.<Dimension<?>>asList(
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    Arrays.<Dimension<?>>asList(
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(100),
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
   }
@@ -944,6 +978,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * prunes the embedding arm at that site. The function-local count is nine: the {@code loss_ =
    * self.loss_object(real, pred)} call result is a tensor local once the loss instance call is
    * modeled (wala/ML#951).
+   *
+   * <p>The member with an unresolved batch and a dynamic sequence extent arrives with the training
+   * loop's typed components (wala/ML#1010): {@code for _, (inputs, targets) in
+   * enumerate(train_dataset)} now types the loop variables from the dataset's elements, and the
+   * predictions of its final, shorter batch carry an unresolved batch extent.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -973,7 +1012,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     FLOAT_32,
-                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))))));
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))),
+                new TensorType(
+                    FLOAT_32,
+                    Arrays.<Dimension<?>>asList(
+                        UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -994,6 +1037,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * reshape target now resolves with the projection's unresolvable filter size as an unresolved
    * axis instead of emptying, so {@code tf.shape(x)[0]} reaches the stack; before, the axis was
    * unresolved.
+   *
+   * <p>The parameter {@code x} also gains {@code (2, ?, 8)} and a member with an unresolved batch
+   * and a dynamic sequence extent: the training loop's components, typed now (wala/ML#1010), reach
+   * the attention layer in the contexts the sampling calls share with it, and the reshape
+   * placeholder that cannot divide a dynamic extent reads {@code ?}.
    */
   @Test
   public void testGpt2SamplingLoopPastLayer()
@@ -1020,8 +1068,15 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
+                    FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
+                new TensorType(
                     FLOAT_32,
-                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8)))),
+                    Arrays.<Dimension<?>>asList(
+                        new NumericDim(2), new SymbolicDim("?"), new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    Arrays.<Dimension<?>>asList(
+                        UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8)))),
             4,
             Set.of(
                 new TensorType(
@@ -1418,6 +1473,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * x} and {@code DecoderLayer.call}'s {@code x}: the three shapes are the loop-carried members;
    * none carries int32.
    *
+   * <p>The three locals beyond the eleven are {@code normalized * self.gamma}, its sum with {@code
+   * self.beta} and the scaled difference, arithmetic results the builder now allocates
+   * (wala/ML#1009), each typed as the hidden state.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -1448,7 +1507,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "LayerNormalization.call",
         "gpt2_vendored",
         1,
-        11,
+        14,
         Map.of(3, hidden));
   }
 

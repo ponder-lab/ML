@@ -1607,6 +1607,11 @@ public class TestDatasets extends AbstractTensorTest {
    * href="https://github.com/wala/ML/issues/746">wala/ML#746</a>'s per-call-site arm filtering
    * prunes the embedding arm at that site.
    *
+   * <p>The {@code (2, ?, 10)} member is the module driver's training loop reaching the forward pass
+   * the probe also calls: the loop's components are typed now (wala/ML#1010), its sequence extent
+   * is dynamic, and in the context the two callers share, the reshape placeholder that cannot
+   * divide that extent reads {@code ?} beside the probe's {@code 3}.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -1629,7 +1634,13 @@ public class TestDatasets extends AbstractTensorTest {
         "gpt2_vendored",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 10))));
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 10),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(2), new SymbolicDim("?"), new NumericDim(10))))));
   }
 
   /**
