@@ -120,6 +120,20 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // method never dispatched.
       if (allocatedBySuperBody(receiver)) return new ReceiverInstanceContext(receiver);
 
+      // A Keras layer builds once per instance: `Layer.__call__` runs `build` only while
+      // `self.built` is false, and an explicit `layer.build(input_shape)` sets it, so the lazy
+      // build a layer-call trampoline injects (wala/ML#595) and the program's explicit call reach
+      // ONE build of the instance. Keyed on the receiver alone, a `build` trampoline has one node
+      // per instance; keyed on its caller and site as well, it had one per build site per receiver
+      // chain, and everything beneath a tower whose layers build their sublayers explicitly
+      // doubled with it (wala/ML#1013). The body's `input_shape` then joins the explicit call's
+      // shape with the injected call's absence of one, as the one build Keras runs sees whichever
+      // site ran it.
+      if (isBuildTrampoline(callee)) {
+        LOGGER.fine(() -> "Keying build trampoline: " + callee + " on receiver: " + receiver + ".");
+        return new ReceiverInstanceContext(receiver);
+      }
+
       if (receiverDepth(caller) >= MAX_RECEIVER_DEPTH) {
         // Past the cap the trampoline is keyed on the dispatched receiver alone. Inheriting the
         // caller's context instead keyed it on the CALLER's receiver, and since a trampoline's
@@ -177,6 +191,23 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Whether a method is the trampoline of a Keras {@code build} method: its declaring class is a
+   * trampoline for a method whose class name ends in the build method's name.
+   *
+   * @param callee The method being called.
+   * @return {@code true} iff the method is a {@code build} trampoline.
+   */
+  private static boolean isBuildTrampoline(IMethod callee) {
+    return callee.getDeclaringClass() instanceof PythonInstanceMethodTrampoline trampoline
+        && trampoline
+            .getRealClass()
+            .getReference()
+            .getName()
+            .toString()
+            .endsWith("/" + PythonTypes.KERAS_BUILD_METHOD_NAME);
   }
 
   /**
