@@ -1259,9 +1259,9 @@ public class TestShapeOps extends AbstractTensorTest {
    * where {@code orig_dims} slices the {@code orig_shape_list} <em>parameter</em> — the def-use
    * walk roots at a parameter and maps it back to the corresponding argument at the caller's invoke
    * (the {@code get_shape_list(t)} chain), continuing in the caller's frame. The reshape resolves
-   * to the precise runtime {@code (4, 5, 6)}; the {@code (20, 6)} member is the rank-2 early-return
-   * arm's path-insensitive phantom (runtime skips it since {@code len(input_shape) == 3}), its
-   * {@code -1} target folded against the input's element count.
+   * to the precise runtime {@code (4, 5, 6)} alone: the {@code (20, 6)} member this pin formerly
+   * carried was the rank-2 early-return arm's phantom, which the {@code len(orig_shape_list) == 2}
+   * guard fold now decides against, since the list has three elements (wala/ML#1020).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1271,12 +1271,7 @@ public class TestShapeOps extends AbstractTensorTest {
   @Test
   public void testShapeHelperParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_shape_helper_param.py",
-        "f",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 20, 6), TENSOR_4_5_6_FLOAT32)));
+    test("tf2_test_shape_helper_param.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_5_6_FLOAT32)));
   }
 
   /**

@@ -140,6 +140,10 @@ public class Reshape extends TensorGenerator {
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
     // A partially resolvable target keeps its members; the remainder rides through (wala/ML#718).
     if (!vectorShapes.members().isEmpty()) return vectorShapes;
+    // A target whose walk reads as the engine's interim ⊥ (an operand still converging in a layer
+    // loop) is not yet determined, and an unknown here would freeze under the join; the result is
+    // ⊥ until the operand converges (wala/ML#1020).
+    if (isInterimBottom(builder, vectorShapes)) return vectorShapes;
     // Soundness: a structurally-recognized shape vector whose walk fails (e.g. a bound that
     // isn't statically constant) determines the output shape but is unknown, so the output is ⊤;
     // falling through to input-shape inference would leak the input's shape (wala/ML#704).

@@ -1360,6 +1360,22 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Whether a read's emptiness is the engine's interim ⊥ (a still-converging value) rather than a
+   * final one, deferring the evaluating query to the settlement pass when it is (wala/ML#1020). A
+   * walk that answered such a read with ⊤ would freeze the mark under the join (the wala/ML#758
+   * clause 3 contract); it answers ⊥ instead, and the engine re-evaluates it when the read grows
+   * and at settlement.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose engine (if any) is resolving.
+   * @param result The read.
+   * @return {@code true} iff the read is ⊥ and the observation is not provably final.
+   */
+  protected static boolean isInterimBottom(
+      PropagationCallGraphBuilder builder, ShapeResult result) {
+    return result.isBottom() && !isObservationFinal(builder);
+  }
+
+  /**
    * Decides whether an emptiness the calling arm just observed is provably final, registering the
    * evaluating query for a settled recomputation when it is not. Under the engine an observed
    * emptiness can be interim (a still-converging read), and a finality-dependent arm firing on it
@@ -2949,10 +2965,87 @@ public abstract class TensorGenerator {
           // descent's members when they add anything, so the operator-produced arms surface
           // (wala/ML#739). A descent that adds no members leaves the resolved union untouched.
           SSAInstruction valueDef = node.getDU().getDef(valueNumber);
+          // The gates below run under the engine only: their walks read the callers, the callees
+          // and the arms, which read back into this value; the engine answers such a read with the
+          // value's current state and iterates, while the null-engine path (a public read outside
+          // an analysis run) would re-evaluate every producer on the way, once per path, and the
+          // walks of a layer loop multiply. That path keeps the points-to union, as before.
+          boolean gateOpen = WorklistTypeResolver.active(builder) != null;
+          // The points-to union of a parameter or of a call result retains an allocation that
+          // reaches it only through a return the governing guard makes infeasible, since the
+          // substrate holds the allocation the feasibility machinery never removes; a
+          // rank-heterogeneous union is the signature of such an arm (the wala/ML#900 gate, there
+          // on the shape-vector walk's `.shape` read). The matrix round trip's `if
+          // len(orig_shape_list) == 2: return output_tensor` arm delivers the flattened matrix to
+          // a
+          // layer loop's carried value this way (wala/ML#1020). Resolve the parameter through its
+          // callers' arguments and the call result through its callees' feasible returns instead,
+          // when the walk is complete; a walk incomplete on an interim read defers to the
+          // settlement pass rather than answer the wide union, which the join would keep.
+          if (gateOpen
+              && valueDef instanceof SSAPhiInstruction
+              && distinctRankCount(fromValue) >= 2) {
+            ShapeResult arms =
+                this.shapeResultOfPhiArms(builder, node, (SSAPhiInstruction) valueDef, exact);
+            boolean complete = !arms.hasUnknown() && !arms.members().isEmpty();
+            boolean deferred = !complete && !isObservationFinal(builder);
+            LOGGER.fine(
+                () ->
+                    "Rank-heterogeneous phi union for vn "
+                        + valueNumber
+                        + " in "
+                        + describe(node)
+                        + ": points-to union "
+                        + fromValue.members()
+                        + ", arms "
+                        + arms
+                        + (complete
+                            ? "; reading the arms."
+                            : deferred ? "; deferred." : "; kept."));
+            if (complete) return arms;
+            if (deferred) return ShapeResult.bottom();
+          }
+          if (gateOpen && valueDef == null && distinctRankCount(fromValue) >= 2) {
+            ShapeResult viaCallers =
+                this.shapeResultOfTensorParameterViaCallers(builder, node, valueNumber, exact);
+            boolean deferred = viaCallers == null && !isObservationFinal(builder);
+            LOGGER.fine(
+                () ->
+                    "Rank-heterogeneous parameter union for vn "
+                        + valueNumber
+                        + " in "
+                        + describe(node)
+                        + ": points-to union "
+                        + fromValue.members()
+                        + ", via callers "
+                        + viaCallers
+                        + (deferred ? "; deferred." : "."));
+            if (viaCallers != null) return viaCallers;
+            if (deferred) return ShapeResult.bottom();
+          }
           if (valueDef instanceof SSAAbstractInvokeInstruction) {
             ShapeResult fromCallees =
                 this.shapeResultOfCalleeReturnValues(
                     builder, node, (SSAAbstractInvokeInstruction) valueDef, exact);
+            if (gateOpen && distinctRankCount(fromValue) >= 2) {
+              boolean complete = !fromCallees.hasUnknown() && !fromCallees.members().isEmpty();
+              boolean deferred = !complete && !isObservationFinal(builder);
+              LOGGER.fine(
+                  () ->
+                      "Rank-heterogeneous call-result union for vn "
+                          + valueNumber
+                          + " in "
+                          + describe(node)
+                          + ": points-to union "
+                          + fromValue.members()
+                          + ", feasible returns "
+                          + fromCallees
+                          + (complete
+                              ? "; reading the returns."
+                              : deferred ? "; deferred." : "; kept."));
+              if (complete) return fromCallees;
+              if (deferred) return ShapeResult.bottom();
+            }
             if (!fromValue.members().containsAll(fromCallees.members())) {
               Set<List<Dimension<?>>> merged = HashSetFactory.make(fromValue.members());
               merged.addAll(fromCallees.members());
@@ -3063,48 +3156,9 @@ public abstract class TensorGenerator {
     // vendored einsum-via-matmul's inner-dimension count is a single constant per context, so
     // the conditional-reshape φ keeps only its runtime arm.
     if (def instanceof SSAPhiInstruction) {
-      boolean engineActive = WorklistTypeResolver.active(builder) != null;
-      boolean armUnknown = false;
-      Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
-      for (int i = 0; i < def.getNumberOfUses(); i++) {
-        int useVn = def.getUse(i);
-        if (useVn <= 0) {
-          armUnknown = true;
-          continue;
-        }
-        if (Boolean.FALSE.equals(
-            computePhiArmFeasibility(builder, node, (SSAPhiInstruction) def, i))) {
-          final int arm = i;
-          LOGGER.fine(
-              () ->
-                  "Pruning infeasible arm "
-                      + arm
-                      + " (vn "
-                      + useVn
-                      + ") of the phi for vn "
-                      + valueNumber
-                      + " in "
-                      + describe(node)
-                      + " (wala/ML#746).");
-          continue;
-        }
-        ShapeResult armResult;
-        try {
-          armResult = this.getShapeResult(builder, node, useVn, exact);
-        } catch (IllegalArgumentException e) {
-          armUnknown = true;
-          continue;
-        }
-        // Under the engine a ⊥ arm read is still converging or holds no tensor; it contributes
-        // nothing, and the pure-cycle promotion turns a finally-baseless arm into the marked ⊤,
-        // which arrives here as hasUnknown on re-evaluation (wala/ML#758 clause 3). A mark taken
-        // from an interim ⊥ would survive the join permanently. Outside the engine a ⊥ read is
-        // final, so it keeps the conservative mark.
-        if (armResult.hasUnknown() || (!engineActive && armResult.isBottom())) armUnknown = true;
-        armMembers.addAll(armResult.members());
-      }
-      if (!armMembers.isEmpty()) return new ShapeResult(armMembers, armUnknown);
-      if (armUnknown && partial == null) partial = ShapeResult.unknown();
+      ShapeResult arms = this.shapeResultOfPhiArms(builder, node, (SSAPhiInstruction) def, exact);
+      if (!arms.members().isEmpty()) return arms;
+      if (arms.hasUnknown() && partial == null) partial = ShapeResult.unknown();
     }
 
     if (def == null) {
@@ -3303,6 +3357,61 @@ public abstract class TensorGenerator {
     if (!(def instanceof SSANewInstruction alloc)) return false;
     TypeReference allocated = alloc.getNewSite().getDeclaredType();
     return allocated.equals(list) || allocated.equals(tuple);
+  }
+
+  /**
+   * Reads a φ's arms directly and unions them, pruning an arm whose governing branch is
+   * constant-decidable against its edge (wala/ML#746); see the φ stage of {@link #getShapeResult}
+   * for why the arms are read rather than the points-to union (wala/ML#739).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the φ.
+   * @param phi The φ.
+   * @param exact Whether the read is exact.
+   * @return The feasible arms' union; ⊥ when no arm contributes and none is unknown.
+   */
+  private ShapeResult shapeResultOfPhiArms(
+      PropagationCallGraphBuilder builder, CGNode node, SSAPhiInstruction phi, boolean exact) {
+    boolean engineActive = WorklistTypeResolver.active(builder) != null;
+    boolean armUnknown = false;
+    Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
+    for (int i = 0; i < phi.getNumberOfUses(); i++) {
+      int useVn = phi.getUse(i);
+      if (useVn <= 0) {
+        armUnknown = true;
+        continue;
+      }
+      if (Boolean.FALSE.equals(computePhiArmFeasibility(builder, node, phi, i))) {
+        final int arm = i;
+        LOGGER.fine(
+            () ->
+                "Pruning infeasible arm "
+                    + arm
+                    + " (vn "
+                    + useVn
+                    + ") of the phi for vn "
+                    + phi.getDef()
+                    + " in "
+                    + describe(node)
+                    + " (wala/ML#746).");
+        continue;
+      }
+      ShapeResult armResult;
+      try {
+        armResult = this.getShapeResult(builder, node, useVn, exact);
+      } catch (IllegalArgumentException e) {
+        armUnknown = true;
+        continue;
+      }
+      // Under the engine a ⊥ arm read is still converging or holds no tensor; it contributes
+      // nothing, and the pure-cycle promotion turns a finally-baseless arm into the marked ⊤,
+      // which arrives here as hasUnknown on re-evaluation (wala/ML#758 clause 3). A mark taken
+      // from an interim ⊥ would survive the join permanently. Outside the engine a ⊥ read is
+      // final, so it keeps the conservative mark.
+      if (armResult.hasUnknown() || (!engineActive && armResult.isBottom())) armUnknown = true;
+      armMembers.addAll(armResult.members());
+    }
+    return new ShapeResult(armMembers, armUnknown);
   }
 
   /**
@@ -3748,6 +3857,16 @@ public abstract class TensorGenerator {
       if (rank != null) return rank;
     }
 
+    // A `len(v)` over a shape vector folds to the vector's common rank, as a rank predicate does:
+    // the matrix round trip's guards `if len(tensor.shape) == 0:` and `if len(orig_shape_list) ==
+    // 2:` decide when the vector's rank is known, and the infeasible arm otherwise returns the
+    // input, or the flattened matrix, as the round trip's result, a member a layer loop then
+    // carries into every later layer's input (wala/ML#1020).
+    if (def instanceof PythonInvokeInstruction invoke) {
+      Integer rank = resolveLenOfShapeVector(builder, node, invoke);
+      if (rank != null) return rank;
+    }
+
     // A receiver-field read folds when every instance holds the same single constant in the
     // field (wala/ML#761): guards like `if self.use_einsum:` compare a configuration constant
     // the local points-to set cannot see.
@@ -3841,6 +3960,192 @@ public abstract class TensorGenerator {
     return constant;
   }
 
+  /** The type the {@code len} builtin's summary is declared on. */
+  private static final String LEN_BUILTIN_TYPE_NAME = "Lwala/builtin/len";
+
+  /**
+   * The {@code (node, argument)} pairs whose {@code len} fold is in progress on this thread. The
+   * shape-vector walk the fold reads resolves a parameter through its callers, whose
+   * branch-reachability filter evaluates this same predicate; on the null-engine recursive path
+   * that would not terminate, so a fold reachable from its own walk declines (as the phi fold's
+   * {@link #PHI_FOLD_ON_STACK} does).
+   */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> LEN_FOLD_ON_STACK =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  /**
+   * How many guard folds on this thread have declined because the value they compare read as the
+   * engine's interim ⊥ (wala/ML#1020). Such a decline leaves the branch two-way for the evaluation,
+   * so a return the guard will prune once its operand converges counts as feasible meanwhile; a
+   * reader that unions a callee's feasible returns snapshots the count around its reachability
+   * computation and answers ⊥ (converging) when it moved, instead of a union the join would keep.
+   */
+  private static final ThreadLocal<int[]> INTERIM_GUARD_DECLINES =
+      ThreadLocal.withInitial(() -> new int[1]);
+
+  /**
+   * Records that a guard fold declined on an interim read (see {@link #INTERIM_GUARD_DECLINES}),
+   * deferring the evaluating query to the settlement pass.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose engine (if any) is resolving.
+   * @param read The fold's read.
+   * @return {@code true} iff the read is an interim ⊥, now recorded.
+   */
+  private static boolean recordInterimGuardDecline(
+      PropagationCallGraphBuilder builder, ShapeResult read) {
+    if (!isInterimBottom(builder, read)) return false;
+    INTERIM_GUARD_DECLINES.get()[0]++;
+    return true;
+  }
+
+  /**
+   * The current {@link #INTERIM_GUARD_DECLINES} count, for a reader's snapshot.
+   *
+   * @return The count.
+   */
+  private static int interimGuardDeclines() {
+    return INTERIM_GUARD_DECLINES.get()[0];
+  }
+
+  /**
+   * Resolves a {@code len(v)} call to the rank of the shape vector {@code v} denotes, when it does
+   * (wala/ML#1020). The call must target the {@code len} builtin alone, and {@code v} is read by
+   * the shape-vector walk ({@link #getShapeResultOfShapeVector(PropagationCallGraphBuilder, CGNode,
+   * int)}): a tensor's {@code shape}, an {@code as_list()} result, a slice of one, a helper's
+   * returned shape list, a parameter resolved through its callers. Declines unless every resolved
+   * member is present and all agree on rank, as {@link #resolveRankPredicate} does: a read with no
+   * members and no unknown mark is the engine's interim value of a cycle, and declining keeps the
+   * branch two-way until the value grows, when the engine re-evaluates the reader.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and shape lookup.
+   * @param node The {@link CGNode} whose IR contains the call.
+   * @param invoke The call.
+   * @return The vector's rank, or {@code null} when the call is not {@code len} of a shape vector
+   *     or the vector's rank is not statically and unambiguously known.
+   */
+  private static Integer resolveLenOfShapeVector(
+      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction invoke) {
+    // Exactly `len(x)`: the callable plus one positional argument.
+    if (invoke.getNumberOfUses() != 2 || invoke.getNumberOfReturnValues() == 0) return null;
+    // Under the engine only: the fold's walk is a query the engine memoizes and converges, and a
+    // decline on an interim read is revisited; on the null-engine path the walk re-evaluates every
+    // producer it meets, once per guard evaluation, and a layer loop multiplies those. There the
+    // guard stays undecided, as before this fold existed.
+    if (WorklistTypeResolver.active(builder) == null) return null;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return null;
+    for (CGNode target : targets)
+      if (!LEN_BUILTIN_TYPE_NAME.equals(
+          target.getMethod().getDeclaringClass().getReference().getName().toString())) return null;
+    int argVn = invoke.getUse(1);
+    if (argVn <= 0) return null;
+    Pair<CGNode, Integer> frame = Pair.make(node, argVn);
+    Set<Pair<CGNode, Integer>> onStack = LEN_FOLD_ON_STACK.get();
+    if (!onStack.add(frame)) {
+      // Re-entered through its own walk: the vector's walk descends into a helper whose returns'
+      // reachability evaluates this same guard. The outer fold has not answered yet, so under the
+      // engine this is an interim decline, recorded so the descent defers (wala/ML#1020); on the
+      // null-engine path it is the recursion the guard exists to bound.
+      if (!isObservationFinal(builder)) {
+        INTERIM_GUARD_DECLINES.get()[0]++;
+        LOGGER.fine(
+            () -> "The len fold of vn " + argVn + " in " + describe(node) + " re-entered itself.");
+      }
+      return null;
+    }
+    try {
+      ShapeResult shapes =
+          new ShapeVectorReader(node).getShapeResultOfShapeVector(builder, node, argVn);
+      if (recordInterimGuardDecline(builder, shapes)) {
+        LOGGER.fine(
+            () ->
+                "The len fold of vn "
+                    + argVn
+                    + " in "
+                    + describe(node)
+                    + " read a converging vector.");
+        return null;
+      }
+      if (shapes.hasUnknown() || shapes.members().isEmpty()) {
+        LOGGER.fine(
+            () ->
+                "The len fold of vn "
+                    + argVn
+                    + " in "
+                    + describe(node)
+                    + " declines on "
+                    + shapes
+                    + ".");
+        return null;
+      }
+      Integer rank = null;
+      for (List<Dimension<?>> member : shapes.members()) {
+        if (member == null) return null;
+        if (rank == null) rank = member.size();
+        else if (rank != member.size()) return null;
+      }
+      final Integer folded = rank;
+      LOGGER.fine(
+          () ->
+              "Folded len of shape vector vn "
+                  + argVn
+                  + " in "
+                  + describe(node)
+                  + " to "
+                  + folded
+                  + " (wala/ML#1020).");
+      return rank;
+    } catch (RuntimeException e) {
+      return null;
+    } finally {
+      onStack.remove(frame);
+    }
+  }
+
+  /**
+   * A generator that exists only to run the shape-vector walk from a static fold (wala/ML#1020).
+   * The walk resolves the node and value number it is handed and consults no anchor, and under the
+   * engine its steps are {@code (node, vn)}-keyed queries, so which instance runs it does not
+   * matter; the fold has no generator of its own, since a shape list held in a local has no tensor
+   * to anchor one on. It produces nothing itself.
+   */
+  private static final class ShapeVectorReader extends TensorGenerator {
+
+    ShapeVectorReader(CGNode node) {
+      super(node);
+    }
+
+    @Override
+    protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+      return null;
+    }
+
+    @Override
+    protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+      return EnumSet.of(DType.UNKNOWN);
+    }
+
+    @Override
+    protected int getShapeParameterPosition() {
+      return UNDEFINED_PARAMETER_POSITION;
+    }
+
+    @Override
+    protected String getShapeParameterName() {
+      return null;
+    }
+
+    @Override
+    protected int getDTypeParameterPosition() {
+      return UNDEFINED_PARAMETER_POSITION;
+    }
+
+    @Override
+    protected String getDTypeParameterName() {
+      return null;
+    }
+  }
+
   /**
    * Resolves a rank predicate operand — {@code x.shape.ndims} or {@code x.shape.rank} — to the base
    * tensor's statically-known rank (wala/ML#882). The operand's def is a property read of {@code
@@ -3892,7 +4197,9 @@ public abstract class TensorGenerator {
       // read saw a partial result as null through every generator's legacy path, so the predicate
       // declined on it, and toLegacy() holds that; members() would have decided a rank from the
       // resolvable subset while an unknown remainder may hold another (wala/ML#934).
-      shapes = memoizedShapeResult(builder, generator).toLegacy();
+      ShapeResult read = memoizedShapeResult(builder, generator);
+      if (recordInterimGuardDecline(builder, read)) return null;
+      shapes = read.toLegacy();
     } catch (RuntimeException e) {
       return null;
     }
@@ -5179,8 +5486,11 @@ public abstract class TensorGenerator {
                         + ", unknown="
                         + fromTensor.hasUnknown()
                         + ".");
-          // An empty result means no producer resolved for this member, not a scalar.
-          if (fromTensor.hasUnknown() || fromTensor.isBottom()) {
+          // An empty result means no producer resolved for this member, not a scalar. A producer
+          // reading as the engine's interim ⊥ is still converging: it contributes nothing yet and
+          // does not mark the union, which the join would keep (wala/ML#1020).
+          if (fromTensor.hasUnknown()
+              || (fromTensor.isBottom() && !isInterimBottom(builder, fromTensor))) {
             if (exact) hasUnknown = true; // The union is incomplete, wala/ML#718.
           }
           sawUnknown |= fromTensor.hasUnknown();
@@ -7218,6 +7528,7 @@ public abstract class TensorGenerator {
 
     // Synthetic/manual node: walk the call-graph callers to find the argument's value number.
     boolean callerUnknown = false;
+    boolean callerInterim = false;
     Set<List<Dimension<?>>> combined = null;
     List<Pair<CGNode, SSAAbstractInvokeInstruction>> callerInvokes =
         getCallerInvokes(builder, this.getNode());
@@ -7241,12 +7552,17 @@ public abstract class TensorGenerator {
       if (argVn <= 0) continue;
       ShapeResult shapes = this.getShapeResultOfShapeVector(builder, caller, argVn);
       if (shapes.hasUnknown()) callerUnknown = true;
+      // A caller's argument reading as the engine's interim ⊥ is still converging; it does not
+      // make the union unknown, which the join would keep (wala/ML#1020).
+      if (isInterimBottom(builder, shapes)) callerInterim = true;
       if (!shapes.members().isEmpty()) {
         if (combined == null) combined = HashSetFactory.make();
         combined.addAll(shapes.members());
       }
     }
-    return combined == null ? ShapeResult.unknown() : new ShapeResult(combined, callerUnknown);
+    if (combined == null)
+      return callerInterim && !callerUnknown ? ShapeResult.bottom() : ShapeResult.unknown();
+    return new ShapeResult(combined, callerUnknown);
   }
 
   /**
@@ -7513,6 +7829,7 @@ public abstract class TensorGenerator {
                     + describe(node)
                     + " via its callers.");
         boolean callerUnknown = false;
+        boolean callerInterim = false;
         Set<List<Dimension<?>>> combined = null;
         for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
             getCallerInvokes(builder, node)) {
@@ -7529,7 +7846,10 @@ public abstract class TensorGenerator {
           }
           try {
             ShapeResult shapes = this.walkShapeVector(builder, caller, argVn, visited);
-            if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
+            // A caller's argument reading as the engine's interim ⊥ is still converging: it marks
+            // nothing yet, since the join would keep the mark (wala/ML#1020).
+            if (shapes.isBottom() && isInterimBottom(builder, shapes)) callerInterim = true;
+            else if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
             if (!shapes.members().isEmpty()) {
               if (combined == null) combined = HashSetFactory.make();
               combined.addAll(shapes.members());
@@ -7538,7 +7858,9 @@ public abstract class TensorGenerator {
             visited.remove(caller);
           }
         }
-        return combined == null ? ShapeResult.unknown() : new ShapeResult(combined, callerUnknown);
+        if (combined == null)
+          return callerInterim && !callerUnknown ? ShapeResult.bottom() : ShapeResult.unknown();
+        return new ShapeResult(combined, callerUnknown);
       }
     }
 
@@ -7614,7 +7936,8 @@ public abstract class TensorGenerator {
       // v[a:b]: a slice-builtin invoke of the form slice(receiver, lower, upper, step).
       if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2) {
         ShapeResult base = this.walkShapeVector(builder, node, invoke.getUse(1), visited);
-        if (base.members().isEmpty()) return ShapeResult.unknown();
+        if (base.members().isEmpty())
+          return isInterimBottom(builder, base) ? ShapeResult.bottom() : ShapeResult.unknown();
 
         // A nested slice object as a bound means a multi-dim subscript; a shape vector is 1-D, so
         // that form isn't a shape-list slice.
@@ -7680,7 +8003,10 @@ public abstract class TensorGenerator {
                   + " resolved "
                   + left.members().size()
                   + " member(s).");
-      if (left.members().isEmpty()) return ShapeResult.unknown();
+      // An operand reading as the engine's interim ⊥ defers rather than freezing an unknown
+      // under the join (wala/ML#1020).
+      if (left.members().isEmpty())
+        return isInterimBottom(builder, left) ? ShapeResult.bottom() : ShapeResult.unknown();
       ShapeResult right =
           this.shapeResultOfShapeVectorOrLiteralList(builder, node, def.getUse(1), visited);
       LOGGER.fine(
@@ -7692,7 +8018,8 @@ public abstract class TensorGenerator {
                   + " resolved "
                   + right.members().size()
                   + " member(s).");
-      if (right.members().isEmpty()) return ShapeResult.unknown();
+      if (right.members().isEmpty())
+        return isInterimBottom(builder, right) ? ShapeResult.bottom() : ShapeResult.unknown();
       Set<List<Dimension<?>>> concatenated = HashSetFactory.make();
       for (List<Dimension<?>> l : left.members())
         for (List<Dimension<?>> r : right.members()) {
@@ -7736,6 +8063,9 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, int vn, Set<CGNode> visited) {
     ShapeResult shapes = this.walkShapeVector(builder, node, vn, visited);
     if (!shapes.members().isEmpty()) return shapes;
+    // The walk answers ⊥ only for a still-converging operand under the engine (an unrecognized
+    // form is ⊤), and an unknown taken from it would freeze under the join (wala/ML#1020).
+    if (isInterimBottom(builder, shapes)) return shapes;
 
     SSAInstruction def = node.getDU().getDef(vn);
     if (!(def instanceof SSANewInstruction)) return ShapeResult.unknown();
@@ -7744,6 +8074,7 @@ public abstract class TensorGenerator {
 
     SymbolTable st = node.getIR().getSymbolTable();
     TreeMap<Integer, Set<Dimension<?>>> byIndex = new TreeMap<>();
+    Map<Integer, Integer> vnByIndex = HashMapFactory.make();
     for (Iterator<SSAInstruction> uses = node.getDU().getUses(vn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       int objRef;
@@ -7759,9 +8090,9 @@ public abstract class TensorGenerator {
         if (w.getRef() != vn) continue; // A write to some other object.
         writtenVal = w.getVal();
         try {
-          byIndex.put(
-              Integer.parseInt(w.getDeclaredField().getName().toString()),
-              elementDims(builder, node, st, writtenVal));
+          int fieldIndex = Integer.parseInt(w.getDeclaredField().getName().toString());
+          byIndex.put(fieldIndex, elementDims(builder, node, st, writtenVal));
+          vnByIndex.put(fieldIndex, writtenVal);
         } catch (NumberFormatException e) {
           // Not an index write.
         }
@@ -7780,8 +8111,16 @@ public abstract class TensorGenerator {
       }
       if (index == null) continue;
       byIndex.put(index, elementDims(builder, node, st, writtenVal));
+      vnByIndex.put(index, writtenVal);
     }
     if (byIndex.isEmpty() || byIndex.containsValue(null)) {
+      // An element that subscripts a shape vector reading as the engine's interim ⊥ (the width of
+      // a still-converging layer output in a layer loop) is unresolved, not unresolvable: an
+      // unknown answered here would freeze under the join, so defer (wala/ML#1020).
+      for (Map.Entry<Integer, Set<Dimension<?>>> entry : byIndex.entrySet())
+        if (entry.getValue() == null
+            && this.subscriptsInterimShapeVector(builder, node, st, vnByIndex.get(entry.getKey())))
+          return ShapeResult.bottom();
       final TreeMap<Integer, Set<Dimension<?>>> resolved = byIndex;
       LOGGER.fine(
           () ->
@@ -7848,6 +8187,25 @@ public abstract class TensorGenerator {
     if (constant == null) return DynamicDim.INSTANCE; // None: the dynamic-dim marker.
     if (Objects.equals(constant, UNRESOLVED_BOUND)) return null;
     return new NumericDim(constant);
+  }
+
+  /**
+   * Whether a literal-list element is a constant-indexed subscript of a shape vector whose walk
+   * reads as the engine's interim ⊥ (wala/ML#1020); see {@link #isInterimBottom}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The element's value number, or {@code null} when unrecorded.
+   * @return {@code true} iff the element has that form and its vector is interim.
+   */
+  private boolean subscriptsInterimShapeVector(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, Integer vn) {
+    if (vn == null || vn <= 0) return false;
+    if (!(node.getDU().getDef(vn) instanceof PythonPropertyRead read)) return false;
+    if (subscriptIndexOrNull(builder, node, st, read.getMemberRef()) == null) return false;
+    return isInterimBottom(
+        builder, this.getShapeResultOfShapeVector(builder, node, read.getObjectRef()));
   }
 
   /**
@@ -8155,8 +8513,11 @@ public abstract class TensorGenerator {
         // like the tensor-value twin's (wala/ML#746).
         Map<Integer, Object> bindings =
             computeCallSiteConstantBindings(builder, node, invoke, callee);
+        int declinesBefore = interimGuardDeclines();
         Set<ISSABasicBlock> reachable =
             computeReachableBlocksUnderBindings(builder, callee, bindings);
+        // See the tensor-value twin: a still-converging guard defers the union (wala/ML#1020).
+        if (interimGuardDeclines() != declinesBefore) return ShapeResult.bottom();
         boolean sawReturn = false;
         for (ISSABasicBlock block : callee.getIR().getControlFlowGraph()) {
           if (!reachable.contains(block)) continue;
@@ -8170,7 +8531,10 @@ public abstract class TensorGenerator {
             ShapeResult shapes = this.walkShapeVector(builder, callee, ret.getResult(), visited);
             // Every return must resolve; an unresolvable remainder is marked rather than
             // collapsing the resolvable members (wala/ML#718).
-            if (shapes.members().isEmpty()) return ShapeResult.unknown();
+            if (shapes.members().isEmpty())
+              return isInterimBottom(builder, shapes)
+                  ? ShapeResult.bottom()
+                  : ShapeResult.unknown();
             if (shapes.hasUnknown()) hasUnknown = true;
             combined.addAll(shapes.members());
           }
@@ -8219,11 +8583,29 @@ public abstract class TensorGenerator {
       // runtime-infeasible here (wala/ML#746).
       Map<Integer, Object> bindings =
           computeCallSiteConstantBindings(builder, node, invoke, callee);
+      int declinesBefore = interimGuardDeclines();
       Set<ISSABasicBlock> reachable =
           computeReachableBlocksUnderBindings(builder, callee, bindings);
+      // A guard still converging leaves its arms' feasibility undecided for this evaluation; the
+      // union over the returns is not yet determinable, and answering it would let the join keep
+      // a return the guard will prune (wala/ML#1020).
+      if (interimGuardDeclines() != declinesBefore) {
+        LOGGER.fine(
+            () -> "Deferring the returns of " + describe(callee) + " on a still-converging guard.");
+        return ShapeResult.bottom();
+      }
       boolean sawReturn = false;
       for (ISSABasicBlock block : callee.getIR().getControlFlowGraph()) {
-        if (!reachable.contains(block)) continue;
+        if (!reachable.contains(block)) {
+          LOGGER.fine(
+              () ->
+                  "Skipping the returns of unreachable block "
+                      + block.getNumber()
+                      + " of "
+                      + describe(callee)
+                      + " (wala/ML#746).");
+          continue;
+        }
         for (SSAInstruction instruction : block) {
           if (!(instruction instanceof SSAReturnInstruction)) continue;
           SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
@@ -8245,6 +8627,16 @@ public abstract class TensorGenerator {
             continue;
           }
           if (shapes.hasUnknown() || shapes.isBottom()) hasUnknown = true;
+          final ShapeResult read = shapes;
+          LOGGER.fine(
+              () ->
+                  "Return vn "
+                      + ret.getResult()
+                      + " of "
+                      + describe(callee)
+                      + " reads "
+                      + read
+                      + ".");
           combined.addAll(shapes.members());
         }
       }

@@ -435,6 +435,16 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * {@code bert_ner_crf} sequence output). A reappearance of {@code (8, D)} here is a wala/ML#900
    * regression.
    *
+   * <p>The {@code (Dynamic, U, U)} member arrived with wala/ML#1020, which folds {@code len(...)}
+   * rank guards: {@code einsum_via_matmul}'s {@code len(w_shape) > 2} and {@code len(outer_dims) >
+   * 1} now decide per weight rank (measured folding to 3, 2 and 1 on this project), so a projection
+   * output is read from its live arm alone, the matmul for a rank-1 {@code outer_dims}, instead of
+   * the undecided arms' union; for the ALBERT pipeline, whose batch axis is dynamic, that output is
+   * {@code (Dynamic, U, U)}, and it reaches this input beside the fully unresolved member the union
+   * contributed before. The sequence axis is unresolved because the loop-carried input it is read
+   * from is degraded on that pipeline, a residual this pin keeps visible. The signature is
+   * unchanged: Dynamic and Unresolved both read as {@code None} per axis.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -461,8 +471,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
-                    asList(
-                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**
