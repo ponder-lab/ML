@@ -1767,9 +1767,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IField one = resolveRootField(cha, "1");
       if (zero == null || one == null) return;
       InstanceKey list =
-          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.list));
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.list));
       InstanceKey tuple =
-          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.tuple));
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.tuple));
       if (list == null || tuple == null) return;
       InstanceKey zeroKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0);
       InstanceKey oneKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(1), 1);
@@ -1988,7 +1988,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         return;
       }
       InstanceKey list =
-          getInstanceKeyForAllocation(node, NewSiteReference.make(pc, PythonTypes.list));
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.list));
       if (list == null) return;
       AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
       IField zero = resolveRootField(getClassHierarchy(), "0");
@@ -2234,7 +2234,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private void contribute(InstanceKey key) {
       TypeReference resultType = types.get(key.concreteType().getReference());
       if (resultType == null) return;
-      InstanceKey fresh = getInstanceKeyForAllocation(node, NewSiteReference.make(pc, resultType));
+      InstanceKey fresh = getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, resultType));
       if (fresh == null) return;
       getSystem().newConstraint(resultKey, fresh);
       attachArrayAttributes(node, pc, fresh);
@@ -2345,7 +2345,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       contributed.add(key);
       InstanceKey fresh =
           getInstanceKeyForAllocation(
-              node, NewSiteReference.make(pc, key.concreteType().getReference()));
+              node, TypedSiteReference.at(pc, key.concreteType().getReference()));
       if (fresh == null) return;
       getSystem().newConstraint(resultKey, fresh);
       copyElements(key, fresh);
@@ -2529,7 +2529,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (this.pack == null) {
         this.pack =
             getInstanceKeyForAllocation(
-                this.caller, NewSiteReference.make(this.call.iIndex(), PythonTypes.tuple));
+                this.caller, TypedSiteReference.at(this.call.iIndex(), PythonTypes.tuple));
         if (this.pack != null)
           getSystem()
               .newConstraint(getPointerKeyForLocal(this.target, this.varargs + 1), this.pack);
@@ -2791,7 +2791,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (this.keywordPack == null) {
         this.keywordPack =
             getInstanceKeyForAllocation(
-                this.caller, NewSiteReference.make(this.call.iIndex(), PythonTypes.dict));
+                this.caller, TypedSiteReference.at(this.call.iIndex(), PythonTypes.dict));
         if (this.keywordPack == null) return;
         getSystem()
             .newConstraint(getPointerKeyForLocal(this.target, this.keywords + 1), this.keywordPack);
@@ -2920,7 +2920,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     attributes.forEach(
         (name, type) -> {
           IField f = resolveRootField(cha, name);
-          InstanceKey method = getInstanceKeyForAllocation(node, NewSiteReference.make(pc, type));
+          InstanceKey method = getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, type));
           if (f != null && method != null)
             getSystem().newConstraint(factory.getPointerKeyForInstanceField(array, f), method);
         });
@@ -3041,7 +3041,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 TypeReference type = key.concreteType().getReference();
                 InstanceKey allocation =
                     fresh.contains(type)
-                        ? getInstanceKeyForAllocation(caller, NewSiteReference.make(pc, type))
+                        ? getInstanceKeyForAllocation(caller, TypedSiteReference.at(pc, type))
                         : null;
                 // The slice is an array of the receiver's kind, with its methods (wala/ML#1009).
                 if (allocation != null) attachArrayAttributes(caller, pc, allocation);
@@ -3079,7 +3079,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (range != null) {
         slice =
             getInstanceKeyForAllocation(
-                caller, NewSiteReference.make(pc, key.concreteType().getReference()));
+                caller, TypedSiteReference.at(pc, key.concreteType().getReference()));
         if (slice != null) populate(key, slice, range[0], range[1], range[2]);
       }
       sliced.put(key, slice);
