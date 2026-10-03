@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector.AnchoredCallerSiteContext;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IMethod;
@@ -363,13 +364,21 @@ final class WorklistTypeResolver {
       StringBuilder description =
           new StringBuilder("return of ").append(node.getMethod().getSignature());
       Context context = node.getContext();
-      if (context instanceof CallerSiteContext) {
-        CGNode caller = ((CallerSiteContext) context).getCaller();
-        int pc = ((CallerSiteContext) context).getCallSite().getProgramCounter();
-        description.append(" called from ").append(caller.getMethod().getSignature());
-        if (caller.getMethod() instanceof AstMethod) {
-          Position position =
-              ((AstMethod) caller.getMethod()).debugInfo().getInstructionPosition(pc);
+      if (context instanceof CallerSiteContext || context instanceof AnchoredCallerSiteContext) {
+        // The site is a program counter within the method it belongs to: the caller node's method
+        // for a caller-site context, the calling method for a context the selector anchored on
+        // another node.
+        IMethod caller =
+            context instanceof AnchoredCallerSiteContext anchored
+                ? anchored.getCallerMethod()
+                : ((CallerSiteContext) context).getCaller().getMethod();
+        int pc =
+            context instanceof AnchoredCallerSiteContext anchored
+                ? anchored.getCallSite().getProgramCounter()
+                : ((CallerSiteContext) context).getCallSite().getProgramCounter();
+        description.append(" called from ").append(caller.getSignature());
+        if (caller instanceof AstMethod) {
+          Position position = ((AstMethod) caller).debugInfo().getInstructionPosition(pc);
           if (position != null) {
             String file = position.getURL() == null ? "?" : position.getURL().getPath();
             description
