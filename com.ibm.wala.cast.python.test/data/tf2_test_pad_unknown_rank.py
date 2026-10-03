@@ -15,6 +15,28 @@ def consume_padded_constant(x):
     return x
 
 
+def consume_padded_mixed(x):
+    assert x.shape in [(1, 1, 1, 6), (2, 3, 4, 7)] and x.dtype == tf.float32
+    return x
+
+
+def pad_mixed(attn):
+    consume_padded_mixed(tf.pad(attn, [[0, 0], [0, 0], [0, 0], [1, 1]]))
+
+
+def consume_padded_union(x):
+    assert x.shape in [(1, 1, 1, 6), (2, 3, 4, 7)] and x.dtype == tf.float32
+    return x
+
+
+def pad_union(use_unresolved):
+    if use_unresolved:
+        attn = tf.constant([[[values]]], dtype=tf.float32)
+    else:
+        attn = tf.ones((2, 3, 4, 5))
+    consume_padded_union(tf.pad(attn, [[0, 0], [0, 0], [0, 0], [1, 1]]))
+
+
 def pad_heads(attn):
     width = tf.math.mod(-tf.shape(attn)[1], 3)
     consume_padded(tf.pad(attn, [[0, 0], [0, 0], [0, 0], [0, width + 2]]))
@@ -23,3 +45,7 @@ def pad_heads(attn):
 
 values = list(map(float, "1234"))
 pad_heads(tf.constant([[[values]]], dtype=tf.float32))
+pad_mixed(tf.constant([[[values]]], dtype=tf.float32))
+pad_mixed(tf.ones((2, 3, 4, 5)))
+pad_union(True)
+pad_union(False)
