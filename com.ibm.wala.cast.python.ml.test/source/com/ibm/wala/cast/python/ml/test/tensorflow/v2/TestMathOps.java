@@ -44,6 +44,7 @@ import static java.util.Collections.emptyList;
 import com.ibm.wala.cast.python.ml.client.BroadcastTo;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -1701,6 +1702,35 @@ public class TestMathOps extends AbstractTensorTest {
   public void testConcatMultirank()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_concat_multirank.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_6_INT32)));
+  }
+
+  /**
+   * A concat whose known element has two possible shapes, {@code (1, 3, 4)} and {@code (2, 3, 4)},
+   * beside an element whose shape is unknown (wala/ML#1009): each shape fixes the result's rank and
+   * its non-axis extents, so the result has one member per shape, with the axis extent open since
+   * the unknown element's is. Before, an element with several shapes counted as unknown, and with
+   * no element known the concat's shape was unknown.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatMultiShapeElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_concat_multi_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(1), DynamicDim.INSTANCE, new NumericDim(4))),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE, new NumericDim(4))))));
   }
 
   /**
