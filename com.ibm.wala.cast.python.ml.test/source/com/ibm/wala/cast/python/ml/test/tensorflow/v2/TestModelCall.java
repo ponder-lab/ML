@@ -1291,6 +1291,34 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * Companion to {@link #testMultiGPUTraining()} on {@code cross_entropy_loss}, which two callers
+   * reach: the display step, on the whole batch's logits ({@code (4096, 10)}), and {@code
+   * backprop}, on the logits of one GPU's share, {@code x[i * gpu_batch_size : (i + 1) *
+   * gpu_batch_size]} in {@code run_optimization} ({@code (1024, 10)} at runtime, a size the
+   * analysis does not fold, so {@code Unresolved}). The labels arrive the same two ways.
+   *
+   * <p>The batch is a component of the element the dataset iterator allocates, whose class records
+   * its index rather than its kind, so a slice of it aliased the whole batch: the model call on one
+   * GPU's share read the full extent, and the share's logits lost their own member (wala/ML#1010).
+   */
+  @Test
+  public void testMultiGPUTraining3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "multigpu_training.py",
+        "cross_entropy_loss",
+        2,
+        5,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4096, 10),
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(10)))),
+            3,
+            Set.of(TENSOR_4096_UINT8, new TensorType(UINT_8, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
    * Verifies that {@code tf.estimator.EstimatorSpec(...)} produces a fresh allocation with each
    * named parameter stored as a field on the result. The test reads {@code spec.loss} and asserts
    * that it round-trips back to the original {@code loss_tensor} (a scalar float32). If

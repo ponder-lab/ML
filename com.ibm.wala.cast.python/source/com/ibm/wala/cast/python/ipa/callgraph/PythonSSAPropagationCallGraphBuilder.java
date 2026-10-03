@@ -177,23 +177,26 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * with slice syntax lowers to a call of the {@code slice} builtin, whose result used to be its
    * receiver's points-to set, so every reader of the result through the points-to set saw the
    * receiver's pre-slice window. For a receiver key whose concrete type is in this set, the result
-   * instead gets a fresh allocation of that type at the call site; every other key passes through
-   * as before. Empty by default, so a client that has no element types to name sees no change; the
-   * tensor analysis names its tensor and array types. Staged on purpose: only where the element
-   * type is known does a slice yield a value of the same kind, so dispatch through the result
-   * survives; a general container's subscript yields an element of unknown type and keeps the
-   * pass-through.
+   * instead gets a fresh allocation of the type it maps to at the call site; every other key passes
+   * through as before. A key maps to a type other than its own where the receiver's class names
+   * where it came from rather than what it is: a dataset element's component is a tensor whose
+   * class records its index, and its slice is a tensor (wala/ML#1010). Empty by default, so a
+   * client that has no element types to name sees no change; the tensor analysis names its tensor
+   * and array types. Staged on purpose: only where the element type is known does a slice yield a
+   * value of a known kind, so dispatch through the result survives; a general container's subscript
+   * yields an element of unknown type and keeps the pass-through.
    */
-  private Set<TypeReference> freshSliceResultTypes = Collections.emptySet();
+  private Map<TypeReference, TypeReference> freshSliceResultTypes = Collections.emptyMap();
 
   /**
    * Names the element types whose slice results get an allocation of their own (wala/ML#916); see
    * {@link #freshSliceResultTypes}.
    *
-   * @param types The concrete receiver types whose slices allocate.
+   * @param types Each concrete receiver type whose slices allocate, mapped to the type of the
+   *     slice.
    */
-  public void setFreshSliceResultTypes(Set<TypeReference> types) {
-    this.freshSliceResultTypes = types == null ? Collections.emptySet() : Set.copyOf(types);
+  public void setFreshSliceResultTypes(Map<TypeReference, TypeReference> types) {
+    this.freshSliceResultTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
   }
 
   /**
@@ -1646,14 +1649,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * Supplies the result of a {@code slice} builtin call (wala/ML#916). The builtin's body returns
    * nothing; the result is the first argument's points-to set, as the body used to return, except
    * that a key whose concrete type is one of the {@link #freshSliceResultTypes} becomes a fresh
-   * allocation of that type at this call, so a tensor's slice is a tensor of its own rather than an
-   * alias of its receiver. The result is a unary constraint from the receiver to the result, an
-   * edge of the assignment graph like the one the body used to make through its parameter and
-   * return, because the tensor dataflow analysis uses that graph as its flow graph: a side effect
-   * would supply the same keys but sever the edge, and every value flowing through a slice of a
-   * pass-through receiver (an array's dtype state, a named tuple's element types) would stop at the
-   * call. A constant first argument (the {@code slice(None, n, None)} form a subscript's bounds
-   * lower to) flows as the constant, as before.
+   * allocation of the type it maps to at this call, so a tensor's slice is a tensor of its own
+   * rather than an alias of its receiver. The result is a unary constraint from the receiver to the
+   * result, an edge of the assignment graph like the one the body used to make through its
+   * parameter and return, because the tensor dataflow analysis uses that graph as its flow graph: a
+   * side effect would supply the same keys but sever the edge, and every value flowing through a
+   * slice of a pass-through receiver (an array's dtype state, a named tuple's element types) would
+   * stop at the call. A constant first argument (the {@code slice(None, n, None)} form a
+   * subscript's bounds lower to) flows as the constant, as before.
    *
    * @param caller The node containing the call.
    * @param call The {@code slice} call.
@@ -2999,8 +3002,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   /**
    * The assignment from a {@code slice} call's receiver to its result (wala/ML#916): every key
    * passes through except one of a {@link #freshSliceResultTypes fresh type}, which becomes the
-   * fresh allocation of that type at the call. Equal for the same call, so the constraint is
-   * idempotent like an assignment.
+   * fresh allocation of the type it maps to at the call. Equal for the same call, so the constraint
+   * is idempotent like an assignment.
    *
    * <p>Every key of a fresh type in the receiver's set maps to the ONE allocation of that type at
    * this call, so two distinct tensors reaching the slice through a merge are one object after it.
@@ -3027,7 +3030,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
       if (rhs.getValue() == null) return NOT_CHANGED;
-      Set<TypeReference> fresh = freshSliceResultTypes;
+      Map<TypeReference, TypeReference> fresh = freshSliceResultTypes;
       MutableIntSet out = IntSetUtil.make();
       rhs.getValue()
           .foreach(
@@ -3038,9 +3041,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                   out.add(getSystem().findOrCreateIndexForInstanceKey(slice));
                   return;
                 }
-                TypeReference type = key.concreteType().getReference();
+                TypeReference type = fresh.get(key.concreteType().getReference());
                 InstanceKey allocation =
-                    fresh.contains(type)
+                    type != null
                         ? getInstanceKeyForAllocation(caller, TypedSiteReference.at(pc, type))
                         : null;
                 // The slice is an array of the receiver's kind, with its methods (wala/ML#1009).

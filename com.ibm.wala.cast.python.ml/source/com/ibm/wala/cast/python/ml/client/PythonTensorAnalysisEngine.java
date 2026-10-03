@@ -660,8 +660,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // lacks (measured: four `tolist` nodes vanished from one whole-program call graph); the slice
     // therefore receives those methods as well, so dispatch through it survives (wala/ML#1009). The
     // ragged and sparse kinds and every general container keep the
-    // pass-through; that is the named remainder.
-    builder.setFreshSliceResultTypes(Set.of(TensorFlowTypes.TENSOR_TYPE, NumpyTypes.NDARRAY_TYPE));
+    // pass-through; that is the named remainder. A dataset element's component, which the
+    // iterator's `__next__` allocates under a class naming its index, is a tensor, so its slice is
+    // one: `x[i * n : (i + 1) * n]` on a loop's batch used to alias the whole batch and read its
+    // full extent (wala/ML#1010).
+    Map<TypeReference, TypeReference> sliceResults = new HashMap<>();
+    sliceResults.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE);
+    sliceResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
+      sliceResults.put(component, TensorFlowTypes.TENSOR_TYPE);
+    builder.setFreshSliceResultTypes(sliceResults);
 
     // Arithmetic over an array yields an array the pointer analysis can see (wala/ML#1009): a
     // tensor or a variable operand yields a tensor and an ndarray operand an ndarray, so a

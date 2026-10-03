@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Types found in the TensorFlow library.
@@ -250,6 +252,18 @@ public class TensorFlowTypes extends PythonTypes {
 
   /** How many components of a dataset element the iterator's {@code __next__} allocates. */
   public static final int DATASET_ELEMENT_COMPONENTS = 4;
+
+  /**
+   * The allocation types of a dataset element's components, one per index the iterator's {@code
+   * __next__} allocates (wala/ML#1010).
+   */
+  public static final Set<TypeReference> DATASET_ELEMENT_COMPONENT_TYPES =
+      IntStream.range(0, DATASET_ELEMENT_COMPONENTS)
+          .mapToObj(
+              i ->
+                  TypeReference.findOrCreate(
+                      pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_" + i)))
+          .collect(Collectors.toUnmodifiableSet());
 
   /**
    * The index of a dataset element component's allocation type, or {@code -1} for any other type
