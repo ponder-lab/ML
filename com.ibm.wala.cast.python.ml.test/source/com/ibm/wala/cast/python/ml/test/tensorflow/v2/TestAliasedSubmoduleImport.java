@@ -18,7 +18,12 @@ import org.junit.Test;
 public class TestAliasedSubmoduleImport extends AbstractTensorTest {
 
   private static final String[] FILES = {
-    "alias_import_proj/pkg/__init__.py", "alias_import_proj/pkg/mod.py", "alias_import_proj/main.py"
+    "alias_import_proj/pkg/__init__.py",
+    "alias_import_proj/pkg/mod.py",
+    "alias_import_proj/shadow/__init__.py",
+    "alias_import_proj/shadow/mod.py",
+    "alias_import_proj/main.py",
+    "alias_import_proj/main2.py"
   };
 
   private static final String PROJECT = "alias_import_proj";
@@ -91,5 +96,26 @@ public class TestAliasedSubmoduleImport extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * A package whose initialization module binds a name a submodule also has: Python's {@code from
+   * shadow import mod} takes the package's attribute and never loads the submodule, so the call
+   * reaches the attribute's method, (7, 7), not the submodule's, (9, 9). The loader binds the name
+   * to the submodule whenever a file of that name exists, so the parameter reads (9, 9).
+   *
+   * <p>TODO: Flip to a plain {@code @Test} when wala/ML#1019 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testPackageAttributeShadowsSubmodule()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILES,
+        "main2.py",
+        "consume_shadow_direct",
+        PROJECT,
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 7, 7))));
   }
 }
