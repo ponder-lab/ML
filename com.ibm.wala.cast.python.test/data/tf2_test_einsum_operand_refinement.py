@@ -91,11 +91,11 @@ assert r1.shape == (2, 5)
 assert r1.dtype == tf.float32
 f(r1)
 
-phi = (
-    tf.keras.Input(shape=(5,))
-    if len(get_shape_list(x0)) == 2
-    else tf.keras.Input(shape=(7,))
-)
+# The flag is opaque to the analysis (an environment read), so both arms stay live and the
+# operand carries both `keras.Input` members; a `len(...)` rank guard would fold (wala/ML#1020).
+# At run time the unset variable takes the `(5,)` arm.
+flag_phi = os.environ.get("ARIADNE_PHI", "") == ""
+phi = tf.keras.Input(shape=(5,)) if flag_phi else tf.keras.Input(shape=(7,))
 w2 = tf.ones((3, 2))
 r2 = fill(phi, w2)
 assert r2.shape == (5, 2)

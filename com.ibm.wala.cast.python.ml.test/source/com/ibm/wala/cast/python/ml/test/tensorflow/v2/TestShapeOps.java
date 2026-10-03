@@ -1259,9 +1259,9 @@ public class TestShapeOps extends AbstractTensorTest {
    * where {@code orig_dims} slices the {@code orig_shape_list} <em>parameter</em> — the def-use
    * walk roots at a parameter and maps it back to the corresponding argument at the caller's invoke
    * (the {@code get_shape_list(t)} chain), continuing in the caller's frame. The reshape resolves
-   * to the precise runtime {@code (4, 5, 6)}; the {@code (20, 6)} member is the rank-2 early-return
-   * arm's path-insensitive phantom (runtime skips it since {@code len(input_shape) == 3}), its
-   * {@code -1} target folded against the input's element count.
+   * to the precise runtime {@code (4, 5, 6)} alone: the {@code (20, 6)} member this pin formerly
+   * carried was the rank-2 early-return arm's phantom, which the {@code len(orig_shape_list) == 2}
+   * guard fold now decides against, since the list has three elements (wala/ML#1020).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1271,12 +1271,7 @@ public class TestShapeOps extends AbstractTensorTest {
   @Test
   public void testShapeHelperParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_shape_helper_param.py",
-        "f",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 20, 6), TENSOR_4_5_6_FLOAT32)));
+    test("tf2_test_shape_helper_param.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_5_6_FLOAT32)));
   }
 
   /**
@@ -2647,5 +2642,91 @@ public class TestShapeOps extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The matrix round trip of a transformer layer, {@code reshape_to_matrix} and {@code
+   * reshape_from_matrix} over shape lists read by a {@code get_shape_list} helper: the layer
+   * flattens its rank-3 input to a matrix and reshapes the dense output back with the input's
+   * leading dims and the output's width, so the round trip is the identity on {@code (8, 10, 32)}.
+   * The helpers' guards, {@code if len(tensor.shape) == 0: return tensor} and {@code if
+   * len(orig_shape_list) == 2: return output_tensor}, are infeasible here; their arms returned the
+   * matrix {@code (80, 32)} as a second member before the {@code len} fold decided them
+   * (wala/ML#1020).
+   */
+  @Test
+  public void testReshapeRoundTrip()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_round_trip.py",
+        "consume_round_trip",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 32))));
+  }
+
+  /**
+   * The same round trip in a layer loop, {@code for one in layers: h = one(h)}: the loop carries
+   * each layer's output back as the next input, so the carried value keeps the input's shape at
+   * every layer. Before, the matrix leaked through the infeasible arm reached the loop variable's
+   * points-to set and every parameter and call result downstream of it, where no guard fold could
+   * decide against the rank-heterogeneous union it had itself produced; the value reads now resolve
+   * such a union through the callers' arguments, the callees' feasible returns and the phi's arms,
+   * deferring to the engine's settlement pass while a read is still converging (wala/ML#1020).
+   */
+  @Test
+  public void testReshapeRoundTripLayerLoop()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_round_trip.py",
+        "consume_layered",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 32))));
+  }
+
+  /**
+   * The {@code len(...)} fold's operand domain (wala/ML#1020): {@code len(t)} of a tensor is its
+   * first extent, {@code 3} for a {@code (3, 5)} tensor, not its rank, so the guard {@code if
+   * len(t) == 3:} is taken at run time and its arm must be reached with the tensor. A fold reading
+   * the operand as a shape vector would decide the guard against the arm and this pin would find no
+   * tensor parameter.
+   */
+  @Test
+  public void testLenGuardOverTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_len_guard_operands.py",
+        "consume_a",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 5))));
+  }
+
+  /**
+   * The same over a list of tensors, {@code len(xs) == 3} for {@code xs = [t, t, t]}: the list's
+   * length, not an element's rank or a shape; the arm is taken and its element is reached.
+   */
+  @Test
+  public void testLenGuardOverList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_len_guard_operands.py",
+        "consume_b",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 5))));
+  }
+
+  /**
+   * The same guard over {@code tf.shape(t)}, which IS a shape vector by construction: its {@code
+   * len} is the rank, {@code 2}, so {@code if len(tf.shape(t)) == 3:} is decided against its arm
+   * and the arm's sink is reached with no tensor. A {@code (0, 0)} pin asserts the sink is present
+   * and untyped; it fails with one tensor parameter when the guard is left undecided.
+   */
+  @Test
+  public void testLenGuardOverTfShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_len_guard_operands.py", "consume_d", 0, 0, Map.of());
   }
 }

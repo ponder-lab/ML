@@ -279,7 +279,10 @@ public class TestEinsum extends AbstractTensorTest {
   /**
    * A multi-shape einsum operand is constrained too (wala/ML#704): the guard-φ argument carries
    * both {@code keras.Input} members, and each fills its non-numeric leading axis from the
-   * constraint's known {@code n = 3} while keeping its own trailing size.
+   * constraint's known {@code n = 3} while keeping its own trailing size. The fixture's guard is an
+   * opaque flag (an environment read): its former {@code len(get_shape_list(x0)) == 2} now folds
+   * (wala/ML#1020), which would have pruned the {@code (7,)} arm and left the operand single-shape,
+   * and this pin is about the multi-shape case.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
