@@ -1,7 +1,11 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -9,11 +13,13 @@ import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -68,7 +74,7 @@ public class Split extends PassThroughUnaryTensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    Set<List<Dimension<?>>> inputShapes = super.getDefaultShapes(builder);
+    Set<List<Dimension<?>>> inputShapes = packedInputShapes(builder);
     if (inputShapes == null) return null;
 
     Integer count = constantIntArgOrNull(builder, 1, "num_or_size_splits");
@@ -124,6 +130,63 @@ public class Split extends PassThroughUnaryTensorGenerator {
       ret.add(out);
     }
     return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * The {@code value} operand's shapes, with a list or tuple operand packed into one tensor
+   * (wala/ML#1016): its leading extent is the container's length and its element shape is one every
+   * element can have, so an element with several possible shapes contributes only the shapes the
+   * other elements share. The pass-through read unions the fields instead, which is the container's
+   * reading, not the packed tensor's. A tensor operand keeps the pass-through read; an operand none
+   * of whose elements has a known shape, or a tensor member whose shape is unknown, falls back to
+   * the pass-through read and its resolutions (the callers' arguments, a declared build contract);
+   * a container no combination of whose elements packs contributes nothing.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The operand's shapes as the operation sees them, or {@code null} when unknown.
+   */
+  private Set<List<Dimension<?>>> packedInputShapes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pts =
+        this.getArgumentPointsToSet(builder, getInputParameterPosition(), getInputParameterName());
+    boolean container = false;
+    if (pts != null)
+      for (InstanceKey ik : pts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin == null) continue;
+        TypeReference ref = asin.concreteType().getReference();
+        if (ref.equals(list) || ref.equals(tuple)) container = true;
+      }
+    if (!container) return super.getDefaultShapes(builder);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (InstanceKey ik : pts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      TypeReference ref = asin.concreteType().getReference();
+      if (ref.equals(list) || ref.equals(tuple)) {
+        Set<List<Dimension<?>>> packed = packedElementShapes(builder, asin);
+        // No element's shape is known here: the pass-through read's own resolutions (the callers'
+        // arguments, a declared build contract) decide, as they did before.
+        if (packed == null) return super.getDefaultShapes(builder);
+        int count =
+            integerCatalogSize(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
+        for (List<Dimension<?>> shape : packed) {
+          List<Dimension<?>> out = new ArrayList<>(shape.size() + 1);
+          out.add(new NumericDim(count));
+          out.addAll(shape);
+          ret.add(out);
+        }
+      } else {
+        ShapeResult member = this.getShapeResultFromTensor(builder, asin, false);
+        if (member.hasUnknown()) return super.getDefaultShapes(builder);
+        ret.addAll(member.members());
+      }
+    }
+    return ret;
   }
 
   /**

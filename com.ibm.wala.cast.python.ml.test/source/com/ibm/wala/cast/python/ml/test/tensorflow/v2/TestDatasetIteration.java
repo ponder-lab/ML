@@ -122,12 +122,30 @@ public class TestDatasetIteration extends AbstractTensorTest {
   }
 
   /**
-   * The first of three record components passed as a list, split along the stacked axis and
-   * squeezed, as a model wrapper reads its inputs.
+   * The first of four record components passed as a list, split along the stacked axis and
+   * squeezed, as a model wrapper reads its inputs. The fourth is the label, whose shape is either
+   * of two under the decoder's two feature descriptions; packing the list into a tensor needs one
+   * shape every element can have, so the label's scalar alternative packs with nothing and the
+   * result has the ids' shape alone (wala/ML#1016).
    */
   @Test
   public void testRecordComponentsSplitFromList()
       throws ClassHierarchyException, CancelException, IOException {
     test(RECORDS, "consume_split", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 8, 100))));
+  }
+
+  /**
+   * A stack whose first element is the label with two possible shapes: the shape every element can
+   * have is the only one that packs, whichever element comes first (wala/ML#1016).
+   */
+  @Test
+  public void testRecordComponentsStackedLabelFirst()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        RECORDS,
+        "consume_stack_label_first",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 3, 8, 100))));
   }
 }

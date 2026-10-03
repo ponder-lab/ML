@@ -4679,6 +4679,90 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * The shapes a list or tuple of tensors has when an operation packs it into one tensor
+   * (wala/ML#1016): one shape every element can have. A packing requires every element to have the
+   * same shape at run time, so the result's element shapes are the combinations of one shape per
+   * element that agree on rank and on every numeric extent, an unresolved extent agreeing with any
+   * and taking the numeric one; a combination that cannot pack contributes nothing. The union the
+   * value read takes over the fields (each element contributing every shape it may have) is right
+   * for a container read as a container and wrong for a packing, so the constraint sits at the
+   * packing operation, not in the shared read: a Keras multi-input list is not a stack.
+   *
+   * @param builder The propagation call graph builder.
+   * @param container The list or tuple allocation.
+   * @return The packable element shapes, without the leading count; empty when no combination
+   *     packs; {@code null} when the container has no indexed element whose shapes are known.
+   */
+  protected Set<List<Dimension<?>>> packedElementShapes(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode container) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    OrdinalSet<InstanceKey> catalog =
+        pointerAnalysis.getPointsToSet(
+            ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                .getPointerKeyForObjectCatalog(container));
+    TreeMap<Integer, Set<List<Dimension<?>>>> fields = new TreeMap<>();
+    for (InstanceKey catalogIK : catalog) {
+      if (!(catalogIK instanceof ConstantKey)) continue;
+      Integer index = getFieldIndex((ConstantKey<?>) catalogIK);
+      if (index == null) continue;
+      IField field =
+          builder
+              .getClassHierarchy()
+              .resolveField(
+                  FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(index.toString()), Root));
+      if (field == null) return null;
+      PointerKey key = builder.getPointerKeyForInstanceField(container, field);
+      Set<List<Dimension<?>>> shapes =
+          this.readElementShapes(builder, key, pointerAnalysis.getPointsToSet(key), false)
+              .toLegacy();
+      // An element whose shapes are unknown constrains nothing: the packed shape is what the known
+      // elements share, and the unknown one has that shape at run time or the packing raises.
+      if (shapes == null) continue;
+      fields.put(index, shapes);
+    }
+    if (fields.isEmpty()) return null;
+    Set<List<Dimension<?>>> packed = null;
+    for (Set<List<Dimension<?>>> shapes : fields.values()) {
+      if (packed == null) {
+        packed = HashSetFactory.make(shapes);
+        continue;
+      }
+      Set<List<Dimension<?>>> next = HashSetFactory.make();
+      for (List<Dimension<?>> a : packed)
+        for (List<Dimension<?>> b : shapes) {
+          List<Dimension<?>> merged = packableShape(a, b);
+          if (merged != null) next.add(merged);
+        }
+      packed = next;
+      if (packed.isEmpty()) break;
+    }
+    return packed;
+  }
+
+  /**
+   * The one shape two packed elements share, or {@code null} when they cannot pack: the ranks
+   * differ, or two numeric extents differ. A numeric extent fixes an unresolved one.
+   *
+   * @param a One element's shape.
+   * @param b Another element's shape.
+   * @return The shared shape, or {@code null}.
+   */
+  private static List<Dimension<?>> packableShape(List<Dimension<?>> a, List<Dimension<?>> b) {
+    if (a.size() != b.size()) return null;
+    List<Dimension<?>> merged = new ArrayList<>(a.size());
+    for (int i = 0; i < a.size(); i++) {
+      Dimension<?> x = a.get(i), y = b.get(i);
+      if (x instanceof NumericDim && y instanceof NumericDim) {
+        if (!x.equals(y)) return null;
+        merged.add(x);
+      } else if (x instanceof NumericDim) merged.add(x);
+      else if (y instanceof NumericDim) merged.add(y);
+      else merged.add(x);
+    }
+    return merged;
+  }
+
+  /**
    * Returns whether the argument at the given position or keyword name is SYNTACTICALLY supplied,
    * independent of whether its value resolves to anything.
    *
@@ -5211,7 +5295,7 @@ public abstract class TensorGenerator {
    * @param asin the allocation site of the tensor
    * @return the resolution result; ⊥ when no producer resolves
    */
-  private ShapeResult getShapeResultFromTensor(
+  protected ShapeResult getShapeResultFromTensor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin, boolean exact) {
     // A producer chain that re-encounters an allocation site is a cycle in the value's producer
     // graph (a loop-carried tensor whose points-to union includes its own downstream producers).
