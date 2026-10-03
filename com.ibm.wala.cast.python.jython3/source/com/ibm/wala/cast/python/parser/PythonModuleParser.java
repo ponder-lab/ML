@@ -152,19 +152,23 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
         return Ast.makeNode(
             CAstNode.BLOCK_STMT,
             importNames.stream()
-                .map(alias::getInternalName)
                 .map(
-                    n -> {
-                      n = n.split("\\.")[0];
+                    a -> {
+                      String member = a.getInternalName().split("\\.")[0];
+                      // `from pkg import mod as alias` binds the alias, not the member's name: an
+                      // in-scope import that declared the member left the alias unbound, so a call
+                      // through it reached nothing (wala/ML#1017). The import itself names the
+                      // member, as before.
+                      String bound = a.getInternalAsname() != null ? a.getInternalAsname() : member;
 
                       return Ast.makeNode(
                           CAstNode.DECL_STMT,
-                          Ast.makeConstant(new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
+                          Ast.makeConstant(new CAstSymbolImpl(bound, PythonCAstToIRTranslator.Any)),
                           Ast.makeNode(
                               CAstNode.PRIMITIVE,
                               Ast.makeConstant("import"),
                               Ast.makeConstant(yuck),
-                              Ast.makeConstant(n)));
+                              Ast.makeConstant(member)));
                     })
                 .collect(Collectors.toList()));
       }
@@ -186,6 +190,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
             LOGGER.fine("Resolved relative import: " + moduleName);
           }
 
+          String fromModule = moduleName;
           if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
@@ -193,12 +198,20 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           if (isLocalModule(moduleName)) {
             // An in-scope module is imported here and never reaches the base visitor, so its
             // wildcard is recorded here for base-class resolution (wala/ML#938), and so are its
-            // named bindings (wala/ML#946).
+            // named bindings (wala/ML#946). A name that is itself a submodule of the package
+            // (`from pkg import mod`) is bound to the submodule's own path, `pkg.mod`: recorded
+            // through the package's initialization module it named a script that does not exist,
+            // and a base written through it, `class C(mod.Base)`, resolved no superclass
+            // (wala/ML#1018). A name the initialization module defines keeps that module's path.
             for (alias n : importFrom.getInternalNames())
-              if (n.getInternalNameNodes() != null)
+              if (n.getInternalNameNodes() != null) {
+                String submodule = fromModule + "/" + n.getInternalName();
                 noteImportedName(
                     n.getInternalAsname() != null ? n.getInternalAsname() : n.getInternalName(),
-                    moduleName.replace('/', '.') + "." + n.getInternalName());
+                    isLocalModule(submodule)
+                        ? submodule.replace('/', '.')
+                        : moduleName.replace('/', '.') + "." + n.getInternalName());
+              }
             if (importFrom.getInternalNames().stream()
                 .anyMatch(a -> "*".equals(a.getInternalName())))
               noteWildcardSource(
