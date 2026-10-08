@@ -9927,8 +9927,9 @@ public abstract class TensorGenerator {
       } else if (val == null) {
         ret.add(null);
       }
-      // Any other constant (a bool, a string) contributes nothing: every caller reads a range
-      // bound, and a range rejects a non-numeric bound at run time, so the value yields no tensor.
+      // Any other constant (a bool, a string) adds no value: every caller reads a range bound, and
+      // a range rejects a non-numeric bound at run time. A bound left with no value at all takes
+      // its caller's default reading (a range's start 0, step 1, or unresolved length).
     }
 
     return ret;
