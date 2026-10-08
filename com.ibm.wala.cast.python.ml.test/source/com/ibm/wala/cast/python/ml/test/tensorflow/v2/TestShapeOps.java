@@ -2729,4 +2729,45 @@ public class TestShapeOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_len_guard_operands.py", "consume_d", 0, 0, Map.of());
   }
+
+  /**
+   * A dense layer over a stored encoder output (wala/ML#1021): the encoder's round trip returns the
+   * exact {@code (8, 10, 32)}, but the dead {@code return output_tensor} arm leaves the flattened
+   * {@code (80, 32)} matrix in the points-to set of the stored attribute, of its getter's result
+   * and of the dense layer's argument, which the layer's generator read as its input. The dense
+   * output is the exact {@code (8, 10, 7)} alone: the generator resolves a rank-heterogeneous
+   * argument in the callers' frames, where the attribute read resolves through its writer's stored
+   * value and that layer-call result through its callees' feasible returns.
+   */
+  @Test
+  public void testDenseOverStoredEncoderOutput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_stored_output_dense.py",
+        "consume_logits",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7))));
+  }
+
+  /**
+   * The stored encoder output written from outside the model's own methods too (wala/ML#1021): a
+   * helper taking the model as its second parameter stores a rank-2 {@code (5, 32)} under the same
+   * attribute that {@code call} stores the rank-3 encoder output under. Both stored values are
+   * real, so the dense over the attribute reads both, {@code (8, 10, 7)} and {@code (5, 7)}, and
+   * the round trip's dead-arm matrix {@code (80, 7)} still not. A reader resolving the attribute
+   * through the writes it finds must find this writer, whose object is neither {@code self} nor the
+   * writing function's first parameter, or decline; a reader that scans only first-parameter writes
+   * drops the {@code (5, 7)}.
+   */
+  @Test
+  public void testDenseOverStoredOutputWrittenOutside()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_stored_output_outside_writer.py",
+        "consume_logits",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7), TensorType.of(FLOAT_32, 5, 7))));
+  }
 }

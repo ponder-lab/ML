@@ -478,6 +478,50 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The CRF loss's input in the vendored NLPGNN subject ({@code CrfLogLikelihood.call} in {@code
+   * nlpgnn/metrics/crf.py}, the wala/ML#1021 witness): a dense over the BERT model's stored
+   * sequence output, reshaped to {@code (batch, seq, -1)}, for the two entry pipelines reaching it,
+   * {@code (8, 10)} and {@code (16, 100)} with {@code 46} tags. The tag count the loss reads from
+   * this input's last axis is the quantity the pin protects.
+   *
+   * <p>Before wala/ML#1021 the union also carried a {@code (8, 10, ?)} member per pipeline: the
+   * sequence output reaches the dense through {@code self.sequence_output} and a getter, and the
+   * dense read its input from the argument's points-to union, which held the previous layer's
+   * pre-reshape matrix delivered by {@code reshape_from_matrix}'s dead {@code return output_tensor}
+   * arm (the arm wala/ML#1020 prunes on the value reads, not on a generator's argument read). The
+   * dense output then had rank-2 and rank-3 degraded members beside the exact one, and the reshape
+   * could not infer its {@code -1} for them. The dense input now resolves through its callers when
+   * its union is rank-heterogeneous, an attribute read with such a union resolves through the
+   * field's writers on the read's receiver instances, and a call result whose callees' returns are
+   * still converging defers instead of standing as its union's members; the {@code ?} member is
+   * gone. The tag indices (value number 4) and sequence lengths (value number 5) are the loader's
+   * {@code int64} labels per pipeline, unchanged.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullCrfLogLikelihoodInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/metrics/crf.py",
+        "CrfLogLikelihood.call",
+        "nlpgnn_full_proj",
+        3,
+        11,
+        Map.of(
+            3,
+            Set.of(TensorType.of(FLOAT_32, 8, 10, 46), TensorType.of(FLOAT_32, 16, 100, 46)),
+            4,
+            Set.of(TensorType.of(INT_64, 8, 10), TensorType.of(INT_64, 16, 100)),
+            5,
+            Set.of(TensorType.of(INT_64, 8), TensorType.of(INT_64, 16))));
+  }
+
+  /**
    * Regression guard for wala/ML#893: {@code NpArray} must not emit a confident dtype for an {@code
    * np.array} whose content is a partial union &mdash; an unresolvable tensor leaf sitting beside a
    * resolved sibling. In the vendored NLPGNN subject, {@code merge_batch_graph} ({@code

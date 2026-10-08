@@ -38,30 +38,36 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
    * per entry pipeline reaching the encoder &mdash; the {@code (2, 4)}, {@code (2, 10)}, {@code (8,
    * 10)}, {@code (8, 100)}, {@code (6, 128)}, and {@code (16, 100)} leading pairs from the entry
    * scripts' {@code model.build} contracts (wala/ML#717) through the embedding's output reshape,
-   * each trailing hidden dimension a config-derived {@link UnresolvedDim} (wala/ML#721) &mdash;
-   * plus the fully-unresolved rank-2/rank-3 members. Each pair's loop-carried rank-3 degraded
-   * siblings, {@code (batch, U, U)} and {@code (U, seq, U)}, which the {@code
-   * reshape_to_matrix}/{@code reshape_from_matrix} round trip's non-entry contexts contributed, are
-   * gone with wala/ML#1020: the round trip's {@code len(...)} guards fold, the loop-carried value's
-   * rank-heterogeneous points-to union resolves through the callers' arguments, the callees'
-   * feasible returns and the phi's arms, and a still-converging read defers instead of freezing an
-   * unknown under the join. A reappearance of a {@code (batch, U, U)} or {@code (U, seq, U)} member
-   * is a wala/ML#1020 regression. The unknown-rank {@code float32} member the restored {@code
-   * reshape_from_matrix} opaque-operand pin contributed (wala/ML#765) was already gone: that
-   * reshape's result is generator-⊥ here, so the pin was its only tensor evidence. The rank-2
-   * {@code (batch, U)} sibling this union formerly carried per entry pair &mdash; the embedding
-   * guard-φ's pre-{@code expand_dims} phantom, reaching the encoder through {@code
-   * reshape_from_matrix}'s {@code get_shape_list} &mdash; is gone with wala/ML#900, which resolves
-   * that {@code get_shape_list} parameter through its caller argument so φ feasibility prunes the
-   * pre-{@code expand_dims} arm; a reappearance of any {@code (batch, U)} member from that phantom
-   * is a wala/ML#900 regression. A rank-1 {@code (8,)} or {@code (16,)} id, and the {@code (8, U)},
-   * {@code (16, U)} and {@code (U)} members it would make here, came from the loader's label
-   * component packed with the ids in the CRF model's input list; the equal-shape constraint at the
-   * packing operation (wala/ML#1016) keeps them out, as in {@code testNlpgnnFullEmbeddingInput}.
-   * The unknown-rank member went when {@code reshape_from_matrix}'s result resolved to the {@code
-   * (U, seq, U)} members, one per entry pipeline's sequence length (wala/ML#1009), themselves gone
-   * now (above). The {@code mask} (value number 4) union is the attention mask's {@code (batch,
-   * seq, seq)} broadcast per the same six entry pipelines.
+   * each trailing hidden dimension a config-derived {@link UnresolvedDim} (wala/ML#721). The
+   * fully-unresolved rank-2 and rank-3 members, {@code (U, U)} and {@code (U, U, U)}, are gone with
+   * wala/ML#1021: they were the pre-reshape dense output of the previous layer, delivered by the
+   * {@code reshape_from_matrix} round trip's dead {@code return output_tensor} arm into the dense
+   * layer's input points-to set, which the dense read as its argument's union; the dense input now
+   * resolves through its callers when its union is rank-heterogeneous, and a call result whose
+   * callees' returns are still converging defers instead of standing as the members its union
+   * happens to hold. A reappearance of either member is a wala/ML#1021 regression. Each pair's
+   * loop-carried rank-3 degraded siblings, {@code (batch, U, U)} and {@code (U, seq, U)}, which the
+   * {@code reshape_to_matrix}/{@code reshape_from_matrix} round trip's non-entry contexts
+   * contributed, are gone with wala/ML#1020: the round trip's {@code len(...)} guards fold, the
+   * loop-carried value's rank-heterogeneous points-to union resolves through the callers'
+   * arguments, the callees' feasible returns and the phi's arms, and a still-converging read defers
+   * instead of freezing an unknown under the join. A reappearance of a {@code (batch, U, U)} or
+   * {@code (U, seq, U)} member is a wala/ML#1020 regression. The unknown-rank {@code float32}
+   * member the restored {@code reshape_from_matrix} opaque-operand pin contributed (wala/ML#765)
+   * was already gone: that reshape's result is generator-⊥ here, so the pin was its only tensor
+   * evidence. The rank-2 {@code (batch, U)} sibling this union formerly carried per entry pair
+   * &mdash; the embedding guard-φ's pre-{@code expand_dims} phantom, reaching the encoder through
+   * {@code reshape_from_matrix}'s {@code get_shape_list} &mdash; is gone with wala/ML#900, which
+   * resolves that {@code get_shape_list} parameter through its caller argument so φ feasibility
+   * prunes the pre-{@code expand_dims} arm; a reappearance of any {@code (batch, U)} member from
+   * that phantom is a wala/ML#900 regression. A rank-1 {@code (8,)} or {@code (16,)} id, and the
+   * {@code (8, U)}, {@code (16, U)} and {@code (U)} members it would make here, came from the
+   * loader's label component packed with the ids in the CRF model's input list; the equal-shape
+   * constraint at the packing operation (wala/ML#1016) keeps them out, as in {@code
+   * testNlpgnnFullEmbeddingInput}. The unknown-rank member went when {@code reshape_from_matrix}'s
+   * result resolved to the {@code (U, seq, U)} members, one per entry pipeline's sequence length
+   * (wala/ML#1009), themselves gone now (above). The {@code mask} (value number 4) union is the
+   * attention mask's {@code (batch, seq, seq)} broadcast per the same six entry pipelines.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -78,10 +84,6 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
     expected.put(
         3,
         Set.of(
-            new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-            new TensorType(
-                FLOAT_32,
-                asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
             new TensorType(
                 FLOAT_32, asList(new NumericDim(2), new NumericDim(4), UnresolvedDim.INSTANCE)),
             new TensorType(
