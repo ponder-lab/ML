@@ -1978,4 +1978,72 @@ public class TestConstructors extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(INT_32, 2, 3), TensorType.of(INT_32, 2, 1))));
   }
+
+  /**
+   * {@code tf.range} over an argument that may be {@code 4} or {@code False}: {@code tf.range}
+   * rejects a bool limit at run time, so the bool yields no tensor and the result is the {@code
+   * (4,)} range. Reading the bool as a number threw and ended the whole analysis.
+   */
+  @Test
+  public void testRangeBoolArgument()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_range_bool_argument.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4))));
+  }
+
+  /**
+   * {@code k or 7} with {@code k} of {@code 3} evaluates to {@code k}, so the range is {@code
+   * (3,)}. Lowering {@code or} to a made-up {@code False} when {@code k} is truthy dropped that
+   * value and left only {@code (7,)}. The {@code 7} stays beside it: the branch on {@code k}'s
+   * truthiness is not decided.
+   */
+  @Test
+  public void testRangeOverOrOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bool_op_operand.py",
+        "consume_or",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3), TensorType.of(INT_32, 7))));
+  }
+
+  /**
+   * {@code k and 5} evaluates to {@code k} itself when {@code k} is falsy, so with {@code k} of
+   * {@code 2} or {@code 0} the bound is {@code 5} or {@code 0}. Lowering {@code and} to a made-up
+   * {@code False} dropped the {@code 0}. The {@code 2} is the undecided branch's left operand.
+   */
+  @Test
+  public void testRangeOverAndOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bool_op_operand.py",
+        "consume_and",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(TensorType.of(INT_32, 5), TensorType.of(INT_32, 0), TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * A beam width read as {@code parent_ids.shape[2] or tf.shape(parent_ids)[2]}, as a beam-search
+   * helper reads it: the operand is the static extent or the shape element, never a bool. The
+   * static extent is not resolved as an integer here, so the range keeps the shape element's
+   * unresolved length.
+   */
+  @Test
+  public void testRangeOverShapeOrIdiom()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bool_op_operand.py",
+        "consume_beam",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
+  }
 }

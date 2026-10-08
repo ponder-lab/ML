@@ -9911,8 +9911,9 @@ public abstract class TensorGenerator {
    * Returns the possible double values for the given points-to set.
    *
    * @param pts The points-to set of the argument.
-   * @return A set of possible double values, or {@code null} if the points-to set contains a
-   *     non-constant key (the value is not statically resolvable, wala/ML#669).
+   * @return A set of possible double values, without any non-numeric constant, or {@code null} if
+   *     the points-to set contains a non-constant key (the value is not statically resolvable,
+   *     wala/ML#669).
    */
   protected static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
     Set<Object> constants = getConstantValues(pts, true);
@@ -9925,9 +9926,10 @@ public abstract class TensorGenerator {
         ret.add(((Number) val).doubleValue());
       } else if (val == null) {
         ret.add(null);
-      } else {
-        throw new IllegalStateException("Expected a number but found: " + val.getClass() + ".");
       }
+      // Any other constant (a bool, a string) adds no value: every caller reads a range bound, and
+      // a range rejects a non-numeric bound at run time. A bound left with no value at all takes
+      // its caller's default reading (a range's start 0, step 1, or unresolved length).
     }
 
     return ret;

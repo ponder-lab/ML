@@ -277,6 +277,16 @@ public class Range extends TensorGenerator {
     if (argPts.isEmpty()) result = EnumSet.of(DType.INT32);
     else {
       Set<DType> derived = this.getDTypesOfValue(builder, argPts);
+      // A non-numeric bound (a bool, a string) raises at run time, since `tf.range` accepts only
+      // numeric bounds, so its dtype is not among the result's, as its value is not among the
+      // lengths. An unknown dtype stays, being possibly numeric; with no dtype left, the int32
+      // default below applies.
+      if (derived != null) {
+        Set<DType> numeric = EnumSet.noneOf(DType.class);
+        for (DType dtype : derived)
+          if (dtype.isNumeric() || dtype == DType.UNKNOWN) numeric.add(dtype);
+        derived = numeric;
+      }
 
       if (derived == null || derived.isEmpty()) result = EnumSet.of(DType.INT32);
       // TF's runtime promotion: any float operand promotes the entire result to float32, dropping
