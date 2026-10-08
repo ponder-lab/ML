@@ -86,18 +86,57 @@ public class MatMul extends TensorGenerator {
    * h_flat} flattens the decoder-stack output, whose producer walk does not resolve, while the
    * weight types {@code float32}.
    *
+   * <p>When both operands resolve, the result is their common dtypes: a pairing whose dtypes differ
+   * raises at run time ({@code tf.matmul} of an {@code int32} and a {@code float32} operand is an
+   * {@code InvalidArgumentError}), so it yields no tensor. A layer whose undecided {@code mode}
+   * branch also hands its integer ids to a projection against float weights has such a pairing.
+   * Operands that share no dtype raise in every pairing, so the dtypes are empty and {@link
+   * #getTensorTypes} yields no tensor type for the call. The shape query does not read the dtypes,
+   * so the engine's shape dependencies stay as they were.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The dtypes of the first operand when any resolves beyond ⊤, else the second operand's,
-   *     else {@code UNKNOWN}.
+   * @return The common dtypes when both operands resolve (empty when they share none), else the
+   *     dtypes of the first operand when any resolves beyond ⊤, else the second operand's, else
+   *     {@code UNKNOWN}.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     Set<DType> aDTypes = dtypesOfArg(builder, 0, "a");
-    if (aDTypes != null && !aDTypes.isEmpty() && !aDTypes.equals(EnumSet.of(DType.UNKNOWN)))
+    if (aDTypes != null && !aDTypes.isEmpty() && !aDTypes.equals(EnumSet.of(DType.UNKNOWN))) {
+      if (isResolved(aDTypes)) {
+        Set<DType> bDTypes = dtypesOfArg(builder, 1, "b");
+        if (isResolved(bDTypes)) return commonDTypes(aDTypes, bDTypes);
+      }
       return aDTypes;
+    }
     Set<DType> bDTypes = dtypesOfArg(builder, 1, "b");
     if (bDTypes != null && !bDTypes.isEmpty()) return bDTypes;
     return aDTypes == null || aDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : aDTypes;
+  }
+
+  /**
+   * The dtypes two operands share.
+   *
+   * @param aDTypes The first operand's dtypes.
+   * @param bDTypes The second operand's dtypes.
+   * @return Their intersection.
+   */
+  private static Set<DType> commonDTypes(Set<DType> aDTypes, Set<DType> bDTypes) {
+    Set<DType> common = EnumSet.noneOf(DType.class);
+    common.addAll(aDTypes);
+    common.retainAll(bDTypes);
+    return common;
+  }
+
+  /**
+   * Whether an operand's dtypes are resolved: present, and with no {@code UNKNOWN} member that
+   * would let the operand be any dtype.
+   *
+   * @param dtypes An operand's dtypes.
+   * @return {@code true} iff every member is a known dtype.
+   */
+  private static boolean isResolved(Set<DType> dtypes) {
+    return dtypes != null && !dtypes.isEmpty() && !dtypes.contains(DType.UNKNOWN);
   }
 
   /**

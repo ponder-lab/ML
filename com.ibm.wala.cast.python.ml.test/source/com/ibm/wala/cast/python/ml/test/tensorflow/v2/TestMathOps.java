@@ -2083,4 +2083,21 @@ public class TestMathOps extends AbstractTensorTest {
             2,
             Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3))))));
   }
+
+  /**
+   * {@code tf.matmul} reached with an int32 operand against a float32 weight, when a layer's {@code
+   * mode} branch is not decided and its projection also receives the int32 ids: {@code tf.matmul}
+   * raises on operands of different dtypes, so that pairing yields no tensor and the projection's
+   * logits are float32 alone.
+   */
+  @Test
+  public void testMatMulMixedDTypeBranch()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_mixed_dtype_branch.py",
+        "consume_logits",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 10))));
+  }
 }
