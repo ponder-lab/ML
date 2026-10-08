@@ -347,6 +347,38 @@ public class DenseCall extends TensorGenerator {
     Set<List<Dimension<?>>> ret = new HashSet<>(fromValue.members());
     boolean primaryUnknown = fromValue.hasUnknown();
 
+    // A rank-heterogeneous union is the signature of an allocation a dead return arm delivered
+    // (wala/ML#900, wala/ML#1020): the input's points-to set holds it although the input's value
+    // never does. Read the argument in the callers' frames instead, where the value read's gates
+    // apply, when that read is complete and narrower. Under the engine only, as the value read's
+    // gates are (wala/ML#1021).
+    if (!ret.isEmpty()
+        && !primaryUnknown
+        && distinctRankCount(fromValue) >= 2
+        && WorklistTypeResolver.active(builder) != null) {
+      ShapeResult viaCallers =
+          this.getArgumentShapeResultViaCallers(
+              builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
+      // Only a complete read that is strictly narrower than the union replaces it: a wider or
+      // equal complete read is another union, not a narrowing, and no ⊥ is minted here, since a
+      // generator-level ⊥ made without an on-stack read is one a later producer read takes as final
+      // and marks unknown, which the join keeps (measured on a transformer stack: the round trip's
+      // guards stopped deciding).
+      boolean narrower =
+          !viaCallers.hasUnknown()
+              && !viaCallers.members().isEmpty()
+              && fromValue.members().containsAll(viaCallers.members())
+              && viaCallers.members().size() < fromValue.members().size();
+      LOGGER.fine(
+          () ->
+              "Rank-heterogeneous Dense input union "
+                  + fromValue.members()
+                  + ", via callers "
+                  + viaCallers
+                  + (narrower ? "; reading the callers." : "; kept."));
+      if (narrower) return new HashSet<>(viaCallers.members());
+    }
+
     if (!ret.isEmpty()) return ret;
 
     // Fallback: chained layer calls. The input's allocating node is a layer `__call__` summary
