@@ -325,7 +325,10 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
       List<List<IClass>> sequences = new ArrayList<>();
       for (IClass base : bases) sequences.add(methodResolutionOrder(cha, base, onStack));
       sequences.add(new ArrayList<>(bases));
-      List<IClass> merged = c3Merge(sequences);
+      // The merge consumes its sequences, so it gets copies: the fallback needs them whole.
+      List<List<IClass>> consumed = new ArrayList<>();
+      for (List<IClass> sequence : sequences) consumed.add(new ArrayList<>(sequence));
+      List<IClass> merged = c3Merge(consumed);
       List<IClass> order = new ArrayList<>();
       order.add(type);
       if (merged != null) order.addAll(merged);
@@ -397,8 +400,9 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
   /**
    * The callable an instance is called through: its class's {@code __call__}, one a program-defined
-   * base declares (wala/ML#994), the Keras {@code call} convention, or {@code do}, in Python's
-   * lookup order. The class is the instance's concrete type when that names a callable, and
+   * base declares (wala/ML#994), its class's {@code do} or Keras {@code call}, or a {@code call} or
+   * {@code do} a program-defined base declares, in Python's lookup order, the bases in method
+   * resolution order. The class is the instance's concrete type when that names a callable, and
    * otherwise the class whose method allocated the instance, since a program class's instance is
    * allocated in its synthesized constructor.
    *
