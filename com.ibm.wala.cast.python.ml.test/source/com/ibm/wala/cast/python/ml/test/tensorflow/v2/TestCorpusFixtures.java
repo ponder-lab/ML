@@ -503,7 +503,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    */
   @Test
-  public void testNlpgnnCrfLogLikelihoodInput()
+  public void testNlpgnnFullCrfLogLikelihoodInput()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         NLPGNN_FULL_PROJECT_FILES,
