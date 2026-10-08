@@ -2729,4 +2729,24 @@ public class TestShapeOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_len_guard_operands.py", "consume_d", 0, 0, Map.of());
   }
+
+  /**
+   * A dense layer over a stored encoder output (wala/ML#1021): the encoder's round trip returns the
+   * exact {@code (8, 10, 32)}, but the dead {@code return output_tensor} arm leaves the flattened
+   * {@code (80, 32)} matrix in the points-to set of the stored attribute, of its getter's result
+   * and of the dense layer's argument, which the layer's generator read as its input. The dense
+   * output is the exact {@code (8, 10, 7)} alone: the generator resolves a rank-heterogeneous
+   * argument in the callers' frames, where the attribute read resolves through its writer's stored
+   * value and that layer-call result through its callees' feasible returns.
+   */
+  @Test
+  public void testDenseOverStoredEncoderOutput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_stored_output_dense.py",
+        "consume_logits",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7))));
+  }
 }
