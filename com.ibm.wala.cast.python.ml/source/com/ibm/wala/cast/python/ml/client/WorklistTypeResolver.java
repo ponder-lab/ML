@@ -140,8 +140,12 @@ final class WorklistTypeResolver {
   /**
    * Queries whose recomputation in {@link #canonicalize} deferred under a re-entered {@code len}
    * fold (wala/ML#1021). Such a recomputation answers ⊥, which never replaces a non-⊥ settled
-   * value; a query among these whose settled value is itself ⊥ is the one case the deferral could
-   * have left undecided, so the pass counts and names them.
+   * value; a query among these whose settled value is itself ⊥ is a member of a cycle the engine
+   * cannot see (the fold runs on the Java stack, not as a query) that no evaluation ever gave a
+   * base, and the pass gives it the unknown-marked element, the pure-cycle policy of {@link
+   * #promotePureCycles}, and its readers are recomputed against the settled state by the pass's own
+   * sweep: the value has tensor evidence (the gates defer only on a non-empty points-to union), so
+   * ⊥ there is a drop and ⊤ the sound reading.
    */
   private final Set<Object> reentryDeferredAtSettlement = HashSetFactory.make();
 
@@ -732,62 +736,47 @@ final class WorklistTypeResolver {
    */
   private void canonicalize() {
     int replaced = 0;
-    String probeFilter = System.getProperty("ariadne.typeResolution.canonProbe");
-    Set<Object> changed = HashSetFactory.make();
     this.settling = true;
     try {
-      for (List<Object> scc : this.tarjan()) {
-        boolean cyclic =
-            scc.size() > 1
-                || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
-        List<Object> targets = new ArrayList<>();
-        // Beyond the cyclic-SCC and changed-read criteria, an ever-stale reader is targeted (its
-        // join history can hold artifacts of the since-grown consumption even after re-evaluation
-        // caught it up), and so is a settlement-requested query (its transfer withheld a
-        // finality-dependent arm that must now fire against the settled state). wala/ML#758.
-        for (Object key : scc)
-          if (cyclic
-              || this.staleReaders.contains(key)
-              || this.settlementRequested.contains(key)
-              || !Collections.disjoint(
-                  this.reads.getOrDefault(key, Collections.emptySet()), changed)) targets.add(key);
-        if (probeFilter != null)
-          for (Object key : scc) {
-            Object settled = this.state.get(key);
-            if (!(settled instanceof ShapeResult)) continue;
-            ShapeResult shapes = (ShapeResult) settled;
-            if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
-            if (!String.valueOf(key).contains(probeFilter)) continue;
-            boolean targeted = targets.contains(key);
-            boolean inCycle = cyclic;
-            LOGGER.fine(
-                () ->
-                    "CANON-PROBE "
-                        + brief(key)
-                        + " cyclic="
-                        + inCycle
-                        + " sccSize="
-                        + scc.size()
-                        + " targeted="
-                        + targeted
-                        + " edges="
-                        + this.reads.getOrDefault(key, Collections.emptySet()).size());
-          }
-        if (targets.isEmpty()) continue;
-        Map<Object, Object> replacements = HashMapFactory.make();
-        for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
-        for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
-          Object key = replacement.getKey();
-          Object value = replacement.getValue();
-          Object settled = this.state.get(key);
-          if (probeFilter != null && String.valueOf(key).contains(probeFilter))
-            LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
-          if (value == null || value.equals(settled)) continue;
-          if (isBottomValue(value) && !isBottomValue(settled)) continue;
-          this.state.put(key, value);
-          changed.add(key);
-          replaced++;
+      Set<Object> changed = HashSetFactory.make();
+      replaced += this.sweep(changed, true);
+      // The closing step (wala/ML#1021): a query whose settled value is ⊥ and whose recomputation
+      // deferred under a re-entered len fold is a member of a cycle the engine cannot see that no
+      // evaluation gave a base; it takes the unknown-marked element, the pure-cycle policy, and
+      // its readers are recomputed against the settled state by the same sweep, under the same
+      // guards and in the same reverse-topological order. The step repeats until a round promotes
+      // nothing: a recomputed reader may itself defer under a re-entry and stand at ⊥. It
+      // terminates, since a promoted query never returns to ⊥ (a recomputation may not degrade a
+      // non-⊥ settled value) and the queries are finitely many.
+      while (true) {
+        List<Object> promoted = new ArrayList<>();
+        for (Object query : this.reentryDeferredAtSettlement) {
+          // Only shape-valued queries promote, as in promotePureCycles; a bottom dtype set already
+          // reads as "no info."
+          if (!Boolean.TRUE.equals(this.shapeKinds.get(query))) continue;
+          if (!isBottomValue(this.state.get(query))) continue;
+          promoted.add(query);
         }
+        int deferred = this.reentryDeferredAtSettlement.size();
+        LOGGER.fine(
+            () ->
+                "Settled recomputations deferring under a re-entered len fold: "
+                    + deferred
+                    + ", of which settled at ⊥ and promoted to the unknown-marked element: "
+                    + promoted.size()
+                    + (promoted.isEmpty()
+                        ? "."
+                        : " " + promoted.stream().map(WorklistTypeResolver::brief).toList() + "."));
+        this.reentryDeferredAtSettlement.clear();
+        if (promoted.isEmpty()) break;
+        Set<Object> promotedNow = HashSetFactory.make();
+        for (Object query : promoted) {
+          this.state.put(query, ShapeResult.unknown());
+          this.versions.merge(query, 1, Integer::sum);
+          promotedNow.add(query);
+        }
+        replaced += promoted.size();
+        replaced += this.sweep(promotedNow, false);
       }
     } finally {
       this.settling = false;
@@ -795,25 +784,84 @@ final class WorklistTypeResolver {
       // set above, and later solves must not re-target (and re-replace) on stale membership.
       this.staleReaders.clear();
       this.settlementRequested.clear();
-      List<Object> undecided = new ArrayList<>();
-      for (Object query : this.reentryDeferredAtSettlement)
-        if (isBottomValue(this.state.get(query))) undecided.add(query);
-      int deferred = this.reentryDeferredAtSettlement.size();
-      LOGGER.fine(
-          () ->
-              "Settled recomputations deferring under a re-entered len fold: "
-                  + deferred
-                  + ", of which settled at ⊥: "
-                  + undecided.size()
-                  + (undecided.isEmpty()
-                      ? "."
-                      : " " + undecided.stream().map(WorklistTypeResolver::brief).toList() + "."));
       this.reentryDeferredAtSettlement.clear();
     }
     if (replaced > 0) {
       int count = replaced;
       LOGGER.fine(() -> "Canonicalization replaced " + count + " settled values.");
     }
+  }
+
+  /**
+   * One sweep of {@link #canonicalize} over the SCC condensation in reverse-topological order: a
+   * key is recomputed when it reads a key in {@code changed}, and in the full sweep also when it
+   * sits in a cyclic SCC, is an ever-stale reader or requested a settled recomputation; a
+   * replacement that differs from the settled value is written back and its key added to {@code
+   * changed}, so later SCCs see it.
+   *
+   * @param changed The keys whose settled values changed; grown by this sweep.
+   * @param full Whether the cyclic, stale and requested criteria apply (the pass's first sweep) or
+   *     only the changed-read criterion (the promotion rounds).
+   * @return The number of settled values replaced.
+   */
+  private int sweep(Set<Object> changed, boolean full) {
+    int replaced = 0;
+    String probeFilter = System.getProperty("ariadne.typeResolution.canonProbe");
+    for (List<Object> scc : this.tarjan()) {
+      boolean cyclic =
+          scc.size() > 1
+              || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
+      List<Object> targets = new ArrayList<>();
+      // Beyond the cyclic-SCC and changed-read criteria, an ever-stale reader is targeted (its
+      // join history can hold artifacts of the since-grown consumption even after re-evaluation
+      // caught it up), and so is a settlement-requested query (its transfer withheld a
+      // finality-dependent arm that must now fire against the settled state). wala/ML#758.
+      for (Object key : scc)
+        if ((full
+                && (cyclic
+                    || this.staleReaders.contains(key)
+                    || this.settlementRequested.contains(key)))
+            || !Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), changed))
+          targets.add(key);
+      if (full && probeFilter != null)
+        for (Object key : scc) {
+          Object settled = this.state.get(key);
+          if (!(settled instanceof ShapeResult)) continue;
+          ShapeResult shapes = (ShapeResult) settled;
+          if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
+          if (!String.valueOf(key).contains(probeFilter)) continue;
+          boolean targeted = targets.contains(key);
+          boolean inCycle = cyclic;
+          LOGGER.fine(
+              () ->
+                  "CANON-PROBE "
+                      + brief(key)
+                      + " cyclic="
+                      + inCycle
+                      + " sccSize="
+                      + scc.size()
+                      + " targeted="
+                      + targeted
+                      + " edges="
+                      + this.reads.getOrDefault(key, Collections.emptySet()).size());
+        }
+      if (targets.isEmpty()) continue;
+      Map<Object, Object> replacements = HashMapFactory.make();
+      for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
+      for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
+        Object key = replacement.getKey();
+        Object value = replacement.getValue();
+        Object settled = this.state.get(key);
+        if (probeFilter != null && String.valueOf(key).contains(probeFilter))
+          LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
+        if (value == null || value.equals(settled)) continue;
+        if (isBottomValue(value) && !isBottomValue(settled)) continue;
+        this.state.put(key, value);
+        changed.add(key);
+        replaced++;
+      }
+    }
+    return replaced;
   }
 
   /**
