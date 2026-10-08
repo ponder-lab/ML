@@ -1049,13 +1049,17 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
              * the right. A member of rank below 2, with an unknown shape, or with batch prefixes
              * that would fail to broadcast at run time composes to an unknown shape. The dtype is
              * the pair's proven one, taken from {@code a} first since the runtime requires the
-             * operands to agree.
+             * operands to agree; a pair of two known, different dtypes raises at run time, so it
+             * composes to nothing.
              *
              * @param a The first operand's member.
              * @param b The second operand's member.
-             * @return The composed member.
+             * @return The composed member, or {@code null} when the pair cannot execute.
              */
             private TensorType matmulMembers(TensorType a, TensorType b) {
+              if (a.getDType() != DType.UNKNOWN
+                  && b.getDType() != DType.UNKNOWN
+                  && a.getDType() != b.getDType()) return null;
               DType dtype = a.getDType() != DType.UNKNOWN ? a.getDType() : b.getDType();
               List<Dimension<?>> aDims = a.getDims();
               List<Dimension<?>> bDims = b.getDims();
