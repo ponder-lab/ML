@@ -440,31 +440,43 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     public CAstNode visitBoolOp(BoolOp arg0) throws Exception {
       Iterator<expr> vs = ReverseIterator.reverse(arg0.getInternalValues().iterator());
       CAstNode v = vs.next().accept(this);
+      boolean and;
       switch (arg0.getInternalOp()) {
         case And:
-          while (vs.hasNext()) {
-            CAstNode n = vs.next().accept(this);
-            v = notePosition(Ast.makeNode(CAstNode.IF_EXPR, n, v, Ast.makeConstant(false)), arg0);
-          }
-          return v;
+          and = true;
+          break;
         case Or:
-          while (vs.hasNext()) {
-            CAstNode n = vs.next().accept(this);
-            v =
-                notePosition(
-                    Ast.makeNode(
-                        CAstNode.IF_EXPR,
-                        Ast.makeNode(CAstNode.UNARY_EXPR, CAstOperator.OP_NOT, n),
-                        v,
-                        Ast.makeConstant(false)),
-                    arg0);
-          }
-          return v;
+          and = false;
+          break;
         case UNDEFINED:
         default:
           assert false;
           return null;
       }
+      // `a and b` and `a or b` evaluate to one of their operands, never to a bool of their own: `a
+      // and b` is `a` when `a` is falsy and `b` otherwise, and `a or b` is `a` when `a` is truthy
+      // and
+      // `b` otherwise. The left operand is evaluated once, into a temporary that is both the test
+      // and the selected value; `b` is evaluated only on the branch that needs it.
+      while (vs.hasNext()) {
+        CAstNode n = vs.next().accept(this);
+        String name = "boolop temp " + boolOpTempIndex++;
+        CAstNode test = Ast.makeNode(CAstNode.VAR, Ast.makeConstant(name));
+        CAstNode left = Ast.makeNode(CAstNode.VAR, Ast.makeConstant(name));
+        v =
+            notePosition(
+                Ast.makeNode(
+                    CAstNode.BLOCK_EXPR,
+                    Ast.makeNode(
+                        CAstNode.DECL_STMT,
+                        Ast.makeConstant(new CAstSymbolImpl(name, PythonCAstToIRTranslator.Any)),
+                        n),
+                    and
+                        ? Ast.makeNode(CAstNode.IF_EXPR, test, v, left)
+                        : Ast.makeNode(CAstNode.IF_EXPR, test, left, v)),
+                arg0);
+      }
+      return v;
     }
 
     @Override
@@ -1767,6 +1779,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     }
 
     private int tmpIndex = 0;
+
+    /**
+     * The index of the next temporary that holds a boolean operator's left operand. It is kept
+     * apart from {@link #tmpIndex}, which also numbers comprehensions and lambdas, so introducing
+     * these temporaries renames no function.
+     */
+    private int boolOpTempIndex = 0;
 
     @Override
     public CAstNode visitWith(With arg0) throws Exception {
