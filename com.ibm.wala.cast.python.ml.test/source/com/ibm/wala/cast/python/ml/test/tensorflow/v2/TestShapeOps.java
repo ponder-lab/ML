@@ -2749,4 +2749,25 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7))));
   }
+
+  /**
+   * The stored encoder output written from outside the model's own methods too (wala/ML#1021): a
+   * helper taking the model as its second parameter stores a rank-2 {@code (5, 32)} under the same
+   * attribute that {@code call} stores the rank-3 encoder output under. Both stored values are
+   * real, so the dense over the attribute reads both, {@code (8, 10, 7)} and {@code (5, 7)}, and
+   * the round trip's dead-arm matrix {@code (80, 7)} still not. A reader resolving the attribute
+   * through the writes it finds must find this writer, whose object is neither {@code self} nor the
+   * writing function's first parameter, or decline; a reader that scans only first-parameter writes
+   * drops the {@code (5, 7)}.
+   */
+  @Test
+  public void testDenseOverStoredOutputWrittenOutside()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_stored_output_outside_writer.py",
+        "consume_logits",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7), TensorType.of(FLOAT_32, 5, 7))));
+  }
 }
