@@ -137,6 +137,23 @@ final class WorklistTypeResolver {
   /** Whether the post-fixpoint canonicalization pass is running; see {@link #isSettling}. */
   private boolean settling;
 
+  /**
+   * Queries whose recomputation in {@link #canonicalize} deferred under a re-entered {@code len}
+   * fold (wala/ML#1021). Such a recomputation answers ⊥, which never replaces a non-⊥ settled
+   * value; a query among these whose settled value is itself ⊥ is the one case the deferral could
+   * have left undecided, so the pass counts and names them.
+   */
+  private final Set<Object> reentryDeferredAtSettlement = HashSetFactory.make();
+
+  /**
+   * Records that the query being recomputed in {@link #canonicalize} deferred under a re-entered
+   * {@code len} fold; a no-op outside the pass.
+   */
+  void noteReentryDeferralAtSettlement() {
+    Object query = this.evaluating.peek();
+    if (this.settling && query != null) this.reentryDeferredAtSettlement.add(query);
+  }
+
   private final Deque<Object> worklist = new ArrayDeque<>();
   private final Set<Object> enqueued = HashSetFactory.make();
   private final Map<Object, Integer> evaluationCounts = HashMapFactory.make();
@@ -778,6 +795,20 @@ final class WorklistTypeResolver {
       // set above, and later solves must not re-target (and re-replace) on stale membership.
       this.staleReaders.clear();
       this.settlementRequested.clear();
+      List<Object> undecided = new ArrayList<>();
+      for (Object query : this.reentryDeferredAtSettlement)
+        if (isBottomValue(this.state.get(query))) undecided.add(query);
+      int deferred = this.reentryDeferredAtSettlement.size();
+      LOGGER.fine(
+          () ->
+              "Settled recomputations deferring under a re-entered len fold: "
+                  + deferred
+                  + ", of which settled at ⊥: "
+                  + undecided.size()
+                  + (undecided.isEmpty()
+                      ? "."
+                      : " " + undecided.stream().map(WorklistTypeResolver::brief).toList() + "."));
+      this.reentryDeferredAtSettlement.clear();
     }
     if (replaced > 0) {
       int count = replaced;

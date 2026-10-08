@@ -388,6 +388,11 @@ public abstract class TensorGenerator {
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
     SHAPE_ANNOTATION_CANDIDATES.remove(builder);
+    // Their values hold the builder's call-graph nodes, which keep the weak key reachable, so the
+    // entries never expire on their own; a shard running several whole-project analyses in one JVM
+    // exhausted its heap on them (wala/ML#1021).
+    PROPERTY_WRITE_INDEX.remove(builder);
+    ATTRIBUTE_WRITERS_CACHE.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -1394,9 +1399,18 @@ public abstract class TensorGenerator {
   protected static boolean isObservationFinal(PropagationCallGraphBuilder builder) {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     if (engine == null) return true;
-    // A re-entered len fold in progress: its own ⊥ is the fixpoint's start, not a final answer
-    // (see RANK_FOLDS_REENTERED).
-    if (!RANK_FOLDS_REENTERED.get().isEmpty()) return false;
+    // A re-entered len fold in progress is a cycle the engine cannot see: the fold runs on the Java
+    // stack, not as a query, so no on-stack read sets the cycle flag for it. An observed ⊥ is then
+    // interim as under any cycle, in both phases (see RANK_FOLDS_REENTERED). During the fixpoint
+    // the deferring query is registered for the settled recomputation like any other: a deferral
+    // that left no such request would stay ⊥ in the settled state whenever none of its reads grew,
+    // by query order. At the settlement pass a recomputation that still re-enters answers ⊥, which
+    // never replaces a non-⊥ settled value, and is noted for the pass's diagnostic.
+    if (!RANK_FOLDS_REENTERED.get().isEmpty()) {
+      if (engine.isSettling()) engine.noteReentryDeferralAtSettlement();
+      else if (engine.isEvaluating()) engine.requestSettledRecomputation();
+      return false;
+    }
     if (!engine.isEvaluating() || engine.isSettling()) return true;
     if (!engine.mayObserveInterim()) return true;
     engine.requestSettledRecomputation();
@@ -3038,14 +3052,16 @@ public abstract class TensorGenerator {
               && distinctRankCount(fromValue) >= 2) {
             ShapeResult viaWriters =
                 this.shapeResultOfStoredAttributeViaWriters(builder, node, attributeRead, exact);
-            // Only a complete read strictly narrower than the union replaces it, and no ⊥ is minted
-            // (see DenseCall's input gate for why).
+            // Only a complete read strictly narrower than the union replaces it; a writer still
+            // converging defers the read, as the gates above do, so the wide union is not what the
+            // join keeps meanwhile.
             boolean narrower =
                 viaWriters != null
                     && !viaWriters.hasUnknown()
                     && !viaWriters.members().isEmpty()
                     && fromValue.members().containsAll(viaWriters.members())
                     && viaWriters.members().size() < fromValue.members().size();
+            boolean deferred = viaWriters != null && isInterimBottom(builder, viaWriters);
             LOGGER.fine(
                 () ->
                     "Rank-heterogeneous attribute union for vn "
@@ -3056,8 +3072,11 @@ public abstract class TensorGenerator {
                         + fromValue.members()
                         + ", via writers "
                         + viaWriters
-                        + (narrower ? "; reading the writers." : "; kept."));
+                        + (narrower
+                            ? "; reading the writers."
+                            : deferred ? "; deferred." : "; kept."));
             if (narrower) return viaWriters;
+            if (deferred) return ShapeResult.bottom();
           }
           if (valueDef instanceof SSAAbstractInvokeInstruction) {
             ShapeResult fromCallees =
@@ -4033,13 +4052,16 @@ public abstract class TensorGenerator {
    * The {@code len} folds in progress on this thread, as {@code (node, operand)} frames, and those
    * among them that were re-entered: a guard whose vector is read through a descent into the
    * guard's own function asks for its own rank mid-computation. The re-entry has no answer yet, and
-   * a re-entry read as final (at the settlement pass, or before an engine cycle was seen) left both
-   * arms feasible and the dead arm's member in the vector's own read. So while a re-entered fold is
-   * in progress an observed ⊥ is interim in both phases (wala/ML#1021): the descent that asked
-   * defers, the dead arm contributes nothing, and the fold decides from the live members, the least
-   * fixpoint the resolver computes from ⊥ everywhere else. On the null-engine recursive path, where
-   * nothing iterates, the re-entry is the recursion the frames exist to bound (as the phi fold's
-   * {@link #PHI_FOLD_ON_STACK} does) and declines outright.
+   * a re-entry read as final before an engine cycle was seen left both arms feasible and the dead
+   * arm's member in the vector's own read. So while a re-entered fold is in progress an observed ⊥
+   * is interim during the fixpoint (wala/ML#1021), the fold being a cycle the engine's own flag
+   * cannot see: the descent that asked defers and is registered for the settled recomputation, the
+   * dead arm contributes nothing, and the fold decides from the live members, the least fixpoint
+   * the resolver computes from ⊥ everywhere else. At the settlement pass the re-entry stays
+   * interim: the recomputation answers ⊥, which never replaces a non-⊥ settled value, where a final
+   * decline there was measured to let both arms stand and widen the exact fixpoint values. On the
+   * null-engine recursive path, where nothing iterates, the re-entry is the recursion the frames
+   * exist to bound (as the phi fold's {@link #PHI_FOLD_ON_STACK} does) and declines outright.
    */
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RANK_FOLDS_IN_PROGRESS =
       ThreadLocal.withInitial(HashSetFactory::make);
@@ -4130,18 +4152,21 @@ public abstract class TensorGenerator {
     }
     // The fold is computed per evaluation, never joined: a guard whose vector is read through a
     // descent into the guard's own function (a layer loop whose layers share one instance key)
-    // re-enters the fold, and the re-entry has no answer yet. Under the engine it is an interim
-    // decline in both phases (RANK_FOLDS_REENTERED): the descent that asked defers, the dead arm
-    // contributes nothing to the vector's own read, and the fold decides from the live members,
-    // the least fixpoint the resolver computes from ⊥ everywhere else. On the null-engine path it
-    // is the recursion the guard exists to bound, a plain decline. A joined query was measured to
-    // freeze one evaluation's unknown for good; a re-entry read as final was measured to leave
-    // three contexts of a transformer stack undecided at the sweep.
+    // re-enters the fold, and the re-entry has no answer yet. During the fixpoint it is an interim
+    // decline whether or not the engine saw a cycle (RANK_FOLDS_REENTERED): the descent that asked
+    // defers and is registered for the settled recomputation, the dead arm contributes nothing to
+    // the vector's own read, and the fold decides from the live members, the least fixpoint the
+    // resolver computes from ⊥ everywhere else. At the settlement pass it stays interim, the
+    // recomputation's ⊥ never replacing a non-⊥ settled value; on the null-engine path it is a
+    // plain decline, both arms standing. A joined query was measured to freeze one evaluation's
+    // unknown for good; a re-entry read as final during the fixpoint was measured to leave three
+    // contexts of a transformer stack undecided, and one read as final at settlement to widen the
+    // exact values the fixpoint had reached.
     Pair<CGNode, Integer> frame = Pair.make(node, argVn);
     Set<Pair<CGNode, Integer>> inProgress = RANK_FOLDS_IN_PROGRESS.get();
     if (inProgress.contains(frame)) {
       RANK_FOLDS_REENTERED.get().add(frame);
-      INTERIM_GUARD_DECLINES.get()[0]++;
+      if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
       LOGGER.fine(
           () -> "The len fold of vn " + argVn + " in " + describe(node) + " re-entered itself.");
       return null;
@@ -7800,24 +7825,29 @@ public abstract class TensorGenerator {
       ThreadLocal.withInitial(HashSetFactory::make);
 
   /**
-   * Resolves a {@code self} attribute read as the union, over the attribute's writes on the read's
-   * receiver instances, of the stored values read in their writing frames (wala/ML#1021). The
-   * field's points-to set unions every allocation ever stored under the field, including those a
-   * dead return arm delivered; the writing frame's value read applies the arm-feasibility gates (a
+   * Resolves an attribute read as the union, over the attribute's writes on the read's receiver
+   * instances, of the stored values read in their writing frames (wala/ML#1021). The field's
+   * points-to set unions every allocation ever stored under the field, including those a dead
+   * return arm delivered; the writing frame's value read applies the arm-feasibility gates (a
    * layer-call result descends into its callees' feasible returns, a phi reads its arms). The
-   * writers are the {@code self.<attribute> = v} property writes in method bodies whose {@code
-   * self} may be one of the read's receiver instances, the same scan the stored-attribute dimension
-   * chase makes per class, narrowed to the instances so the union is never wider than the field's.
+   * writers are every property write, in any node, whose object may be one of the read's receiver
+   * instances and whose member is this attribute: through {@code self}, through another parameter,
+   * through a local alias or at script scope alike, since the field's set does not distinguish them
+   * and a writer left out of the union would be a member dropped.
    *
-   * <p>Returns {@code null}, leaving the caller on the points-to union, unless the walk is
-   * complete: at least one write, every stored value read with members and no unknown remainder.
-   * The stable, structural part (which writes exist) is memoized per builder.
+   * <p>Returns {@code null}, leaving the caller on the points-to union, when the walk is incomplete
+   * for good: no write found, a write on a possible receiver whose member is not a string constant
+   * (it may write this attribute), or a stored value with an unknown remainder or reading as no
+   * tensor. Returns ⊥ when a stored value reads as the engine's interim ⊥: the union is not yet
+   * determinable and the caller defers, as the other gates do. The structural part, which writes
+   * exist, is indexed once per builder.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose IR contains the read.
    * @param read The attribute read.
    * @param exact Whether the stored values are read exactly.
-   * @return The writers' union, or {@code null} when the walk is not complete.
+   * @return The writers' union, ⊥ while a writer converges, or {@code null} when the walk is
+   *     incomplete for good.
    */
   private ShapeResult shapeResultOfStoredAttributeViaWriters(
       PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read, boolean exact) {
@@ -7830,8 +7860,9 @@ public abstract class TensorGenerator {
     Set<InstanceKey> receiverKeys = HashSetFactory.make();
     for (InstanceKey ik : receivers) receiverKeys.add(ik);
     List<Pair<CGNode, Integer>> writers = attributeWriters(builder, receiverKeys, attributeName);
-    if (writers.isEmpty()) return null;
+    if (writers == null || writers.isEmpty()) return null;
     Set<List<Dimension<?>>> combined = HashSetFactory.make();
+    boolean interim = false;
     for (Pair<CGNode, Integer> writer : writers) {
       ShapeResult stored;
       try {
@@ -7839,26 +7870,76 @@ public abstract class TensorGenerator {
       } catch (IllegalArgumentException e) {
         return null;
       }
+      if (isInterimBottom(builder, stored)) {
+        interim = true;
+        continue;
+      }
       if (stored.isBottom() || stored.hasUnknown() || stored.members().isEmpty()) return null;
       combined.addAll(stored.members());
     }
-    return ShapeResult.of(combined);
+    return interim ? ShapeResult.bottom() : ShapeResult.of(combined);
   }
 
-  /** Memo of {@link #attributeWriters}: the writes are a function of the final call graph. */
+  /** A property write: the writing node, its object's value number and the stored value's. */
+  private record PropertyWriteSite(CGNode node, int object, int value) {}
+
+  /**
+   * Every property write in the final call graph, those with a string-constant member by attribute
+   * name and those without one apart (wala/ML#1021); one scan per builder.
+   */
+  private record PropertyWriteIndex(
+      Map<String, List<PropertyWriteSite>> byAttribute,
+      List<PropertyWriteSite> nonConstantMember) {}
+
+  private static final Map<PropagationCallGraphBuilder, PropertyWriteIndex> PROPERTY_WRITE_INDEX =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
+  private static PropertyWriteIndex propertyWriteIndex(PropagationCallGraphBuilder builder) {
+    return PROPERTY_WRITE_INDEX.computeIfAbsent(
+        builder,
+        b -> {
+          Map<String, List<PropertyWriteSite>> byAttribute = new HashMap<>();
+          List<PropertyWriteSite> nonConstantMember = new ArrayList<>();
+          for (CGNode candidate : b.getCallGraph()) {
+            IR ir = candidate.getIR();
+            if (ir == null) continue;
+            SymbolTable st = ir.getSymbolTable();
+            for (SSAInstruction inst : ir.getInstructions()) {
+              if (!(inst instanceof PythonPropertyWrite write)) continue;
+              PropertyWriteSite site =
+                  new PropertyWriteSite(candidate, write.getObjectRef(), write.getValue());
+              int memberVn = write.getMemberRef();
+              if (!st.isStringConstant(memberVn)) nonConstantMember.add(site);
+              else if (write.getValue() > 0)
+                byAttribute
+                    .computeIfAbsent(st.getStringValue(memberVn), k -> new ArrayList<>())
+                    .add(site);
+            }
+          }
+          return new PropertyWriteIndex(byAttribute, nonConstantMember);
+        });
+  }
+
+  /**
+   * Memo of {@link #attributeWriters} per builder: a {@code null} value records a declined key (a
+   * possible receiver is written through a non-constant member).
+   */
   private static final Map<
           PropagationCallGraphBuilder,
           Map<Pair<Set<InstanceKey>, String>, List<Pair<CGNode, Integer>>>>
       ATTRIBUTE_WRITERS_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
-   * The {@code self.<attribute> = v} writes, as {@code (node, v)} pairs, in method bodies whose
-   * {@code self} may be one of the given instances (wala/ML#1021).
+   * The writes of the attribute on the given instances, as {@code (node, value)} pairs: every
+   * property write whose object may be one of the instances and whose member is the attribute,
+   * whatever the object's value number (wala/ML#1021). Declines with {@code null} when a write on a
+   * possible receiver has a member that is not a string constant, since it may write this
+   * attribute.
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph is scanned.
    * @param receivers The instances the read's object may be.
    * @param attributeName The attribute.
-   * @return The writes, possibly empty.
+   * @return The writes, possibly empty, or {@code null} when the set is not determinable.
    */
   private static List<Pair<CGNode, Integer>> attributeWriters(
       PropagationCallGraphBuilder builder, Set<InstanceKey> receivers, String attributeName) {
@@ -7866,35 +7947,41 @@ public abstract class TensorGenerator {
         ATTRIBUTE_WRITERS_CACHE.computeIfAbsent(
             builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<Set<InstanceKey>, String> key = Pair.make(receivers, attributeName);
-    List<Pair<CGNode, Integer>> memo = cache.get(key);
-    if (memo != null) return memo;
-    List<Pair<CGNode, Integer>> writers = new ArrayList<>();
+    if (cache.containsKey(key)) return cache.get(key);
+    PropertyWriteIndex index = propertyWriteIndex(builder);
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    for (CGNode candidate : builder.getCallGraph()) {
-      if (candidate.getIR() == null || candidate.getDU() == null) continue;
-      IMethod method = candidate.getMethod();
-      if (!(method instanceof AstMethod) || method.getNumberOfParameters() < 2) continue;
-      int selfVn = candidate.getIR().getParameter(1);
-      boolean sameReceiver = false;
-      for (InstanceKey ik :
-          pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(candidate, selfVn)))
-        if (receivers.contains(ik)) {
-          sameReceiver = true;
-          break;
-        }
-      if (!sameReceiver) continue;
-      SymbolTable st = candidate.getIR().getSymbolTable();
-      for (SSAInstruction inst : candidate.getIR().getInstructions()) {
-        if (!(inst instanceof PythonPropertyWrite write)) continue;
-        int memberVn = write.getMemberRef();
-        if (write.getObjectRef() == selfVn
-            && st.isStringConstant(memberVn)
-            && attributeName.equals(st.getStringValue(memberVn))
-            && write.getValue() > 0) writers.add(Pair.make(candidate, write.getValue()));
+    List<Pair<CGNode, Integer>> writers = new ArrayList<>();
+    for (PropertyWriteSite site : index.nonConstantMember())
+      if (mayPointTo(pa, site.node(), site.object(), receivers)) {
+        writers = null;
+        break;
       }
-    }
+    if (writers != null)
+      for (PropertyWriteSite site :
+          index.byAttribute().getOrDefault(attributeName, Collections.emptyList()))
+        if (mayPointTo(pa, site.node(), site.object(), receivers))
+          writers.add(Pair.make(site.node(), site.value()));
     cache.put(key, writers);
     return writers;
+  }
+
+  /**
+   * Whether a local's points-to set meets the given instances.
+   *
+   * @param pa The pointer analysis.
+   * @param node The local's node.
+   * @param vn The local's value number.
+   * @param keys The instances.
+   * @return {@code true} iff some member of the local's points-to set is one of the instances.
+   */
+  private static boolean mayPointTo(
+      PointerAnalysis<InstanceKey> pa, CGNode node, int vn, Set<InstanceKey> keys) {
+    if (vn <= 0) return false;
+    OrdinalSet<InstanceKey> pts =
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn));
+    if (pts == null) return false;
+    for (InstanceKey ik : pts) if (keys.contains(ik)) return true;
+    return false;
   }
 
   /**
