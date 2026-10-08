@@ -24,6 +24,14 @@ def consume_override(x):
     assert x.shape == (2, 3, 4)
 
 
+def consume_mixin(x):
+    assert x.shape == (2, 3, 4)
+
+
+def consume_mixed_override(x):
+    assert x.shape == (2, 3, 4)
+
+
 class SingleBase(tf.keras.layers.Layer):
     def call(self, inputs):
         consume_single(inputs)
@@ -73,10 +81,21 @@ class Mixed(MixedBase):
     pass
 
 
+class MixedOverride(MixedBase):
+    def call(self, inputs):
+        consume_mixed_override(inputs)
+        return inputs
+
+
 class Stack(tf.keras.layers.Layer):
     def __init__(self):
         super().__init__()
-        self.layers_list = [tf.keras.layers.Dense(4), Mixed(), tf.keras.layers.ReLU()]
+        self.layers_list = [
+            tf.keras.layers.Dense(4),
+            Mixed(),
+            MixedOverride(),
+            tf.keras.layers.ReLU(),
+        ]
 
     def call(self, x):
         for f in self.layers_list:
@@ -95,9 +114,25 @@ class Override(OverrideBase):
         return inputs
 
 
+class Mixin:
+    def describe(self):
+        return "mixin"
+
+
+class MixinBase(tf.keras.layers.Layer):
+    def call(self, inputs):
+        consume_mixin(inputs)
+        return inputs
+
+
+class MixinFirst(Mixin, MixinBase):
+    pass
+
+
 x = tf.ones((2, 3, 4))
 Single()(x)
 OwnInit(4)(x)
 Grandchild()(x)
 Stack()(x)
 Override()(x)
+MixinFirst()(x)

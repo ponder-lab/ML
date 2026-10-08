@@ -56,4 +56,25 @@ public class TestInheritedKerasCall extends AbstractTensorTest {
   public void testOverridingCall() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_override", 1, 1, Map.of(2, Set.of(INPUT)));
   }
+
+  /**
+   * Control: a subclass's own {@code call} still overrides its base's at the site several classes
+   * reach, beside a sibling that inherits the base's.
+   */
+  @Test
+  public void testOverridingCallMixedSite()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_mixed_override", 1, 1, Map.of(2, Set.of(INPUT)));
+  }
+
+  /**
+   * The {@code call} of a second declared base, after a first base, a plain mixin, that declares
+   * none: Python's method resolution order reaches the second base, where the first base's own
+   * chain ends.
+   */
+  @Test
+  public void testInheritedCallAfterMixin()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_mixin", 1, 1, Map.of(2, Set.of(INPUT)));
+  }
 }
