@@ -2203,4 +2203,53 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_2_3_INT32, TENSOR_2_3_FLOAT32)));
   }
+
+  /**
+   * An elementwise operation whose operand is a call result the analysis resolves only in part: a
+   * {@code log10} helper is called from one method on a tensor of unknown shape and on a scalar,
+   * and the {@code tf.math.log} the helper calls is one node for both sites, so its argument is the
+   * scalar beside an unknown remainder. The division must not read that operand as the scalar the
+   * other site supplied: the features it feeds, expanded by one axis, are of unknown rank, not a
+   * vector of one.
+   */
+  @Test
+  public void testSharedHelperOperandRemainder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shared_helper_operand.py",
+        "consume_features",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The helper's scalar call site reads the scalar alone: the shared {@code tf.math.log} node must
+   * not lend it the known operand of another site.
+   */
+  @Test
+  public void testSharedHelperScalarSite()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shared_helper_operand.py",
+        "consume_scalar",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * A known operand through the same method keeps its shape alone: the shared node must not lend it
+   * the scalar of another site, which expanded by one axis reads as a vector of one.
+   */
+  @Test
+  public void testSharedHelperKnownOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shared_helper_operand.py",
+        "consume_known",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 1))));
+  }
 }
