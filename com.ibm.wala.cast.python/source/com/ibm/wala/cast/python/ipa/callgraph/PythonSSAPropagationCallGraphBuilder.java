@@ -253,6 +253,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private Map<TypeReference, TypeReference> freshBinaryOpResultTypes = Collections.emptyMap();
 
   /**
+   * The length of each {@code *args} pack whose call fixes it: the positional arguments from the
+   * {@code *args} formal's index on, when no starred argument can add to them. A pack is allocated
+   * at its call rather than by a {@code new} of the caller's IR, so its length is not read off a
+   * literal; recorded when the pack is allocated, before its key can reach a reader. Two targets of
+   * one call with different {@code *args} indices share one pack, and a length they disagree on is
+   * recorded as unknown, {@code -1}.
+   */
+  private final Map<InstanceKey, Integer> packLengths = HashMapFactory.make();
+
+  /**
    * The exact leading elements of each tuple concatenation whose left operand is a tuple literal,
    * by the concatenation's node and instruction index: the literal's length. A tuple cannot grow,
    * so in {@code (first,) + rest} element {@code i} below that length is the literal's element
@@ -2459,7 +2469,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IClassHierarchy cha = getClassHierarchy();
       IClass tupleClass = cha.lookupClass(PythonTypes.tuple);
       if (tupleClass == null || !key.concreteType().equals(tupleClass)) return;
-      int length = tupleLength(asin);
+      int length = knownTupleLength(asin);
       int element = length + index;
       if (length < 0 || element < 0) return;
       IField field = resolveRootField(cha, Integer.toString(element));
@@ -2617,6 +2627,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public String toString() {
       return "unknown-index read at " + pc + " into " + resultKey;
     }
+  }
+
+  /**
+   * The length of a tuple: an {@code *args} pack's recorded length, else the length read off its
+   * allocation by {@link #tupleLength(AllocationSiteInNode)}.
+   *
+   * @param asin The tuple's allocation.
+   * @return The length, or {@code -1} when neither determines it.
+   */
+  private int knownTupleLength(AllocationSiteInNode asin) {
+    Integer packed = packLengths.get(asin);
+    return packed != null ? packed : tupleLength(asin);
   }
 
   /**
@@ -3036,9 +3058,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         this.pack =
             getInstanceKeyForAllocation(
                 this.caller, TypedSiteReference.at(this.call.iIndex(), PythonTypes.tuple));
-        if (this.pack != null)
+        if (this.pack != null) {
+          // Without a starred argument, the pack holds exactly the positional arguments from the
+          // `*args` formal's index on.
+          int length =
+              this.call.firstStarredPosition() < 0
+                  ? Math.max(
+                      0, this.call.getNumberOfPositionalParameters() - Math.max(1, this.varargs))
+                  : -1;
+          packLengths.merge(this.pack, length, (a, b) -> a.equals(b) ? a : -1);
           getSystem()
               .newConstraint(getPointerKeyForLocal(this.target, this.varargs + 1), this.pack);
+        }
       }
       return this.pack;
     }
@@ -3611,7 +3642,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (list != null
           && cha.isSubclassOf(type, list)
           && asin.getNode().getMethod().isWalaSynthetic()) return null;
-      int length = tupleLength(asin);
+      int length = knownTupleLength(asin);
       if (length < 0) return null;
       SSAInstruction inst = caller.getIR().getInstructions()[pc];
       if (!(inst instanceof PythonInvokeInstruction call)
