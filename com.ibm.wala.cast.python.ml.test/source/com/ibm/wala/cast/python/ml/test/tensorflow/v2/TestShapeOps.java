@@ -2836,4 +2836,36 @@ public class TestShapeOps extends AbstractTensorTest {
         Map.of(
             2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3))))));
   }
+
+  /**
+   * A {@code tf.repeat} whose supplied axis holds a value the analysis cannot read: it is not the
+   * omitted default, so the input is not flattened. Each axis it may be gives a member with the
+   * input's rank.
+   */
+  @Test
+  public void testRepeatComputedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_computed_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3), TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * A {@code tf.repeat} by a list of counts one of which is a runtime tensor: the repeated axis's
+   * length is one TensorFlow's static shape reports as {@code None}.
+   */
+  @Test
+  public void testRepeatCountsWithTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_mixed_counts",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3))))));
+  }
 }
