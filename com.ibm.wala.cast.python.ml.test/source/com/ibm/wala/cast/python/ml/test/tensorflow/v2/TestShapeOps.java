@@ -2770,4 +2770,102 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7), TensorType.of(FLOAT_32, 5, 7))));
   }
+
+  /** A {@code tf.repeat} of a {@code (2, 3)} input by a scalar {@code 2} along axis 0. */
+  @Test
+  public void testRepeatScalarAlongAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_scalar",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /** A {@code tf.repeat} by the constant counts {@code [1, 2, 3]} along axis 1, which sum to 6. */
+  @Test
+  public void testRepeatCountsAlongAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_counts",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * A {@code tf.repeat} with no axis flattens its {@code (2, 3)} input, then repeats it 3 times.
+   */
+  @Test
+  public void testRepeatFlattened()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_flat",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 18))));
+  }
+
+  /** A {@code tf.repeat} keeps its input's {@code int32} dtype, along a negative axis. */
+  @Test
+  public void testRepeatKeepsDTypeNegativeAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_int",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 6))));
+  }
+
+  /**
+   * A {@code tf.repeat} by a runtime tensor of counts: the repeated axis's length is one
+   * TensorFlow's static shape reports as {@code None}.
+   */
+  @Test
+  public void testRepeatTensorCounts()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_tensor",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3))))));
+  }
+
+  /**
+   * A {@code tf.repeat} whose supplied axis holds a value the analysis cannot read: it is not the
+   * omitted default, so the input is not flattened. Each axis it may be gives a member with the
+   * input's rank.
+   */
+  @Test
+  public void testRepeatComputedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_computed_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3), TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * A {@code tf.repeat} by a list of counts one of which is a runtime tensor: the repeated axis's
+   * length is one TensorFlow's static shape reports as {@code None}.
+   */
+  @Test
+  public void testRepeatCountsWithTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tf_repeat.py",
+        "consume_mixed_counts",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3))))));
+  }
 }
