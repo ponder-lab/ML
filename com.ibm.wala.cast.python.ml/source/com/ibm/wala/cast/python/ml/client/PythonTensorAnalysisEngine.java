@@ -3489,6 +3489,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     addSummaryBypassLogic(options, "numpy.xml");
     addSummaryBypassLogic(options, "scipy.xml");
     addSummaryBypassLogic(options, "tensorflow.xml");
+    // SentencePiece's id encodings are lists of Python ints a text model's prompt is built from.
+    addSummaryBypassLogic(options, "sentencepiece.xml");
   }
 
   /**
