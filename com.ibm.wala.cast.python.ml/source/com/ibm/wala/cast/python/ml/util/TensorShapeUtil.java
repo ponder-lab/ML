@@ -155,6 +155,16 @@ public class TensorShapeUtil {
           ret.add(x instanceof RaggedDim ? x : y);
         else if (x instanceof DynamicDim || y instanceof DynamicDim)
           ret.add(x instanceof DynamicDim ? x : y);
+        else if (x instanceof UnresolvedDim || y instanceof UnresolvedDim)
+          ret.add(UnresolvedDim.INSTANCE);
+        // A placeholder size (`?`, wala/ML#741) against a numeric extent broadcasts to the
+        // placeholder, as `getBroadcastedShapes` reads the same pair: the placeholder already says
+        // the size is unknown, and the numeric side is either that size or 1. Read as an unresolved
+        // size, the pair claimed a fixed extent it never established, and the claim reached a
+        // batched value's own members: its concrete batch paired with its partial-batch sibling
+        // minted a third batch extent the value never has.
+        else if (x instanceof SymbolicDim || y instanceof SymbolicDim)
+          ret.add(x instanceof SymbolicDim ? x : y);
         else ret.add(UnresolvedDim.INSTANCE);
       }
     }
