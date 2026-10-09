@@ -662,6 +662,9 @@ public abstract class TensorGenerator {
           }
           @SuppressWarnings({"unchecked", "rawtypes"})
           Set<Dimension<?>>[] possibleDimensions = new Set[elementCount];
+          // The positions an element of which may be a scalar tensor, such as `tf.reduce_max(d)`:
+          // the element is a dimension whose value TensorFlow's static shape reports as `None`.
+          boolean[] tensorValued = new boolean[elementCount];
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -747,6 +750,17 @@ public abstract class TensorGenerator {
                   if (nestedShapes == null) return null;
                   for (List<Dimension<?>> nestedShape : nestedShapes)
                     tensorDimensions.add(new CompoundDim(nestedShape));
+                } else if (innerReference.equals(TensorFlowTypes.TENSOR_TYPE)) {
+                  // A tensor element is one dimension, not a nested shape: the list's length still
+                  // fixes the rank. Its value is resolved below, with the position's other members.
+                  LOGGER.fine(
+                      () ->
+                          "Tensor-valued shape element at position "
+                              + fieldIndex
+                              + ": "
+                              + describe(instanceFieldIK)
+                              + ".");
+                  tensorValued[fieldIndex] = true;
                 } else {
                   // Nested element of an unrecognized form; the shape's structure isn't statically
                   // resolvable, so return ⊤ rather than aborting (wala/ML#471).
@@ -772,7 +786,7 @@ public abstract class TensorGenerator {
             // A multi-constant element is commonly a dead library default unioned with the live
             // caller override (wala/ML#769); the same-body store's flow-refined value is the one
             // that holds at the read, and a declined refinement keeps the union.
-            if (tensorDimensions.size() > 1) {
+            if (tensorDimensions.size() > 1 && !tensorValued[fieldIndex]) {
               Integer refined = refineAmbiguousFieldConstant(builder, asin, fieldIndex);
               if (refined != null) {
                 LOGGER.fine(
@@ -786,6 +800,11 @@ public abstract class TensorGenerator {
                 tensorDimensions.add(new NumericDim(refined));
               }
             }
+
+            // A position whose members include a tensor beside constants keeps the tensor's
+            // dimension too; a position of tensors alone is resolved with the empty positions.
+            if (tensorValued[fieldIndex] && !tensorDimensions.isEmpty())
+              tensorDimensions.add(DynamicDim.INSTANCE);
 
             LOGGER.fine(
                 "Found possible shape dimensions: "
@@ -838,12 +857,14 @@ public abstract class TensorGenerator {
             // expands into per-possibility members (wala/ML#748). An unfoldable position is a
             // fixed runtime size the analysis could not compute — `UnresolvedDim`, not
             // `DynamicDim`; an explicit `None` resolves through the constant path above
-            // (wala/ML#721).
+            // (wala/ML#721). An unfoldable tensor element is `DynamicDim`: TensorFlow's static
+            // shape reports `None` for a dimension a runtime tensor supplies.
             Set<Dimension<?>> folded = this.foldArithmeticShapeDims(builder, asin, k);
             resolved.add(
                 folded != null && !folded.isEmpty()
                     ? folded
-                    : Collections.singleton(UnresolvedDim.INSTANCE));
+                    : Collections.singleton(
+                        tensorValued[k] ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE));
           }
 
           List<List<Dimension<?>>> shapes = new ArrayList<>();
