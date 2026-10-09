@@ -2023,6 +2023,11 @@ public class TensorGeneratorFactory {
                 ? containerGenerator
                 : new TensorElementGenerator(source, containerGenerator);
           }
+          // The `slice` builtin's body returns nothing: its result is supplied at the call
+          // (wala/ML#916), so its return value creates nothing, and a generator built on that
+          // return has no call site of its own once the builtin's node serves several sites of one
+          // caller. The call's own result dispatches to the slice generator below.
+          if (callee.getMethod().getReference().getDeclaringClass().equals(SLICE_BUILTIN)) continue;
           PointerKey retKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
           PointsToSetVariable retSrc = getPointsToSetVariable(retKey, builder);
