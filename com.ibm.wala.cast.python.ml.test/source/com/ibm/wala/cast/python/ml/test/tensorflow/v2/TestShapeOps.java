@@ -2770,4 +2770,55 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7), TensorType.of(FLOAT_32, 5, 7))));
   }
+
+  /**
+   * A shape list built by a comprehension whose element is the conditional {@code dynamic[i] if s
+   * is None else s}, read in the function that builds it: the axis the static shape leaves
+   * undeclared is the scalar {@code int32} the shape vector's subscript yields, not the Python
+   * integer of the other arm and not nothing.
+   */
+  @Test
+  public void testShapeListConditionalComprehensionInline()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_inline",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /** The same list built by a {@code shape_list} helper and read through its return value. */
+  @Test
+  public void testShapeListConditionalComprehensionHelper()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_helper",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /** The helper's list read through tuple unpacking, {@code _, max_len, dmodel = shape_list(x)}. */
+  @Test
+  public void testShapeListConditionalComprehensionUnpacked()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_unpacked",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Control: the element at a declared axis is the Python integer of the other arm, no tensor; the
+   * sink is reached with none.
+   */
+  @Test
+  public void testShapeListConditionalComprehensionStaticAxis()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_shape_list_conditional_comprehension.py", "consume_static", 0, 0, Map.of());
+  }
 }
