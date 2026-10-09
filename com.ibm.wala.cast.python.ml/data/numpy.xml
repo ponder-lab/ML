@@ -89,6 +89,8 @@
         <putfield class="LRoot" field="ndarray" fieldType="LRoot" ref="x" value="ndarray_fn"/>
         <new def="array_fn" class="Lnumpy/array"/>
         <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn"/>
+        <new def="copy_fn" class="Lnumpy/copy"/>
+        <putfield class="LRoot" field="copy" fieldType="LRoot" ref="x" value="copy_fn"/>
         <new def="ones_fn" class="Lnumpy/ones"/>
         <putfield class="LRoot" field="ones" fieldType="LRoot" ref="x" value="ones_fn"/>
         <new def="concatenate_fn" class="Lnumpy/concatenate"/>
@@ -236,6 +238,22 @@
       <!-- Modeled as a class-per-function so that `np.array` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray preserves shape from arg 0 and takes dtype from arg 1; see `NpArray`. -->
       <class name="array" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.copy.html -->
+      <!-- A fresh ndarray of its argument's dtype and shape: typed by `NpArray`, which keeps an existing array's dtype and shape rather than promoting them. -->
+      <class name="copy" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self a">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>

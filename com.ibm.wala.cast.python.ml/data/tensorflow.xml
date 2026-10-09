@@ -1137,6 +1137,8 @@
         <new def="cast" class="Ltensorflow/functions/cast"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="cast"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="dtypes" value="cast"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/convert_image_dtype. Typed as `tf.cast` types its result: the image's shape in the requested `dtype`. The image is read at the first position and the dtype at the second or by its `dtype` keyword, as `cast` reads them; the third, `saturate`, lands in `cast`'s unread `name` slot. The image passed by its `image` keyword is not read, since `cast` names that parameter `x`, so the shape is then unknown. The function also rescales the values, which no type records. -->
+        <putfield class="LRoot" field="convert_image_dtype" fieldType="LRoot" ref="image" value="cast"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend. The `tf.keras.backend` module object, reached through aliases such as `import tensorflow.keras.backend as K` (wala/ML#666). The functions real subjects hit are wired to existing models: `cast` shares `tf.cast`; `equal` shares `tf.equal`; `one_hot` shares `tf.one_hot` (wala/ML#711); `gather` and `dropout` are typing-wise pass-throughs, mirroring `tf.gather` and `tf.nn.dropout`. -->
         <new def="backend" class="Lobject"/>
         <putfield class="LRoot" field="backend" fieldType="LRoot" ref="keras" value="backend"/>
@@ -2659,12 +2661,25 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cond -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self pred true_fn false_fn name">
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="true_fn" def="v"/>
+          <!-- Both branches are traced, so `false_fn` is called as well: a function reached only through a false branch gets a call-graph node and typed parameters (wala/ML#1029). The result stays `true_fn`'s; joining the branches' results is a separate change. -->
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="false_fn" def="w"/>
           <return value="v"/>
         </method>
       </class>
       <class name="while_loop" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/while_loop -->
         <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self cond body loop_vars shape_invariants parallel_iterations back_prop swap_memory maximum_iterations name">
+          <!-- `cond` and `body` are called with the loop variables unpacked positionally, `body(*loop_vars)`, so a function reached only through a loop gets a call-graph node and its parameters read the loop variables (wala/ML#942). A summary cannot unpack a sequence of unknown length, so the first 8 positions are read; a position past the sequence's end reads nothing, so a body parameter with a default past the loop variables receives that empty position rather than its default, as under `strategy.run`'s padded call. The result stays the loop variables: the body's result is not joined into it. -->
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="loop_vars" def="v0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="loop_vars" def="v1"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="loop_vars" def="v2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="loop_vars" def="v3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="loop_vars" def="v4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="loop_vars" def="v5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="loop_vars" def="v6"/>
+          <getfield class="LRoot" field="7" fieldType="LRoot" ref="loop_vars" def="v7"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="cond" arg1="v0" arg2="v1" arg3="v2" arg4="v3" arg5="v4" arg6="v5" arg7="v6" arg8="v7" numArgs="9" def="c"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="body" arg1="v0" arg2="v1" arg3="v2" arg4="v3" arg5="v4" arg6="v5" arg7="v6" arg8="v7" numArgs="9" def="b"/>
           <return value="loop_vars"/>
         </method>
       </class>

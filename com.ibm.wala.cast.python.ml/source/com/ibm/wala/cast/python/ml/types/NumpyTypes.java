@@ -66,6 +66,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String ARRAY_SIGNATURE = "numpy.array()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.copy.html */
+  public static final MethodReference COPY =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/copy")),
+          AstMethodReference.fnSelector);
+
+  private static final String COPY_SIGNATURE = "numpy.copy()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.concatenate.html. */
   public static final MethodReference CONCATENATE =
       MethodReference.findOrCreate(
@@ -426,6 +435,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(RANDOM_UNIFORM.getDeclaringClass(), RANDOM_UNIFORM_SIGNATURE),
           Map.entry(RANDOM_PERMUTATION.getDeclaringClass(), RANDOM_PERMUTATION_SIGNATURE),
           Map.entry(ARRAY.getDeclaringClass(), ARRAY_SIGNATURE),
+          Map.entry(COPY.getDeclaringClass(), COPY_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(CONCATENATE.getDeclaringClass(), CONCATENATE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
