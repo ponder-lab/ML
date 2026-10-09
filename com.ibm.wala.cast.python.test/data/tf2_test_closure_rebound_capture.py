@@ -44,6 +44,6 @@ def loop_erase(image, max_area=0.1):
 
 
 img = tf.zeros((8, 8, 3), dtype=tf.float32)
-erase(img, max_area=tf.clip_by_value(tf.cast(0.5, tf.float32), 0.0, 1.0))
+erase(img, max_area=tf.constant(0.5, dtype=tf.float32))
 erase(img, max_area=0.5)
 loop_erase(img, max_area=tf.clip_by_value(tf.cast(0.5, tf.float32), 0.0, 1.0))

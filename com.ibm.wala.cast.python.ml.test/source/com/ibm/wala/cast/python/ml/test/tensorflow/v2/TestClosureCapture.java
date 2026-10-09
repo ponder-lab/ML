@@ -54,4 +54,23 @@ public class TestClosureCapture extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32), TensorType.of(INT_32))));
   }
+
+  /**
+   * The control on the creator itself: the capture rule changes what the closure reads, never the
+   * creator's parameter, which stays the float32 scalar its callers pass.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCreatorParameterUnchanged()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_closure_rebound_capture.py",
+        "erase",
+        2,
+        14,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 8, 3)), 3, Set.of(TensorType.of(FLOAT_32))));
+  }
 }
