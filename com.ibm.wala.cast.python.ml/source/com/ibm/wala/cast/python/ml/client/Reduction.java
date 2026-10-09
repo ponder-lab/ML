@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -16,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * Base for axis-reduction generators ({@code tf.reduce_*}, {@code tf.argmax}/{@code tf.argmin}):
@@ -28,6 +31,8 @@ import java.util.Set;
  * href="https://github.com/wala/ML/issues/514">wala/ML#514</a>).
  */
 public abstract class Reduction extends TensorGenerator {
+
+  private static final Logger LOGGER = Logger.getLogger(Reduction.class.getName());
 
   protected enum Parameters {
     INPUT_TENSOR,
@@ -95,7 +100,13 @@ public abstract class Reduction extends TensorGenerator {
 
     Set<Boolean> keepDimsValues = new HashSet<>();
     if (keepDimsPts == null || keepDimsPts.isEmpty()) {
-      keepDimsValues.add(false); // Default
+      // An omitted argument and a supplied one the analysis cannot read leave the same empty set
+      // (wala/ML#896); only the omitted one is the default, and the other may be either value.
+      keepDimsValues.add(false);
+      if (!Boolean.FALSE.equals(
+          this.isArgumentSyntacticallySupplied(
+              builder, Parameters.KEEPDIMS.getIndex(), Parameters.KEEPDIMS.getName())))
+        keepDimsValues.add(true);
     } else {
       for (InstanceKey ik : keepDimsPts) {
         if (ik instanceof ConstantKey) {
@@ -149,6 +160,15 @@ public abstract class Reduction extends TensorGenerator {
     boolean axisIsNone = false;
 
     if (axisPts == null || axisPts.isEmpty()) {
+      // Only an omitted axis is the default, `None`. A supplied one the analysis cannot read may
+      // be any axis or list of axes, so the reduced rank is unknown (wala/ML#896).
+      if (!Boolean.FALSE.equals(
+          this.isArgumentSyntacticallySupplied(
+              builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName()))) {
+        LOGGER.fine(
+            () -> "Unreadable supplied axis for " + describe(this.getSource()) + "; returning ⊤.");
+        return null;
+      }
       axisIsNone = true;
     } else {
       for (InstanceKey ik : axisPts) {
