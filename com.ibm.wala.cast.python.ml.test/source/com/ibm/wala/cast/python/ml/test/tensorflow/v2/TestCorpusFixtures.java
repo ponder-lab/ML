@@ -1030,10 +1030,12 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * self.loss_object(real, pred)} call result is a tensor local once the loss instance call is
    * modeled (wala/ML#951).
    *
-   * <p>The member with an unresolved batch and a dynamic sequence extent arrives with the training
-   * loop's typed components (wala/ML#1010): {@code for _, (inputs, targets) in
-   * enumerate(train_dataset)} now types the loop variables from the dataset's elements, and the
-   * predictions of its final, shorter batch carry an unresolved batch extent.
+   * <p>A third member with an unresolved batch extent appeared when arithmetic results gained
+   * allocations (wala/ML#1009) and was read as the loop's final, shorter batch; it was not. The
+   * attention's matmul paired the batched element's concrete extent with its partial-batch sibling
+   * and read the pair as an unresolved extent, where the broadcast rule reads it as the sibling
+   * (wala/ML#878); the allocated residual then carried that member through the loop-carried hidden
+   * state to the projection. With the pair read as the sibling, the two batches are all there is.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -1063,11 +1065,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     FLOAT_32,
-                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
-                    FLOAT_32,
-                    Arrays.<Dimension<?>>asList(
-                        UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -1089,10 +1087,12 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * axis instead of emptying, so {@code tf.shape(x)[0]} reaches the stack; before, the axis was
    * unresolved.
    *
-   * <p>The parameter {@code x} also gains {@code (2, ?, 8)} and a member with an unresolved batch
-   * and a dynamic sequence extent: the training loop's components, typed now (wala/ML#1010), reach
-   * the attention layer in the contexts the sampling calls share with it, and the reshape
-   * placeholder that cannot divide a dynamic extent reads {@code ?}.
+   * <p>The parameter {@code x} also gains {@code (2, ?, 8)}: the training loop's components, typed
+   * now (wala/ML#1010), reach the attention layer in the contexts the sampling calls share with it,
+   * and the reshape placeholder that cannot divide a dynamic extent reads {@code ?}. A member with
+   * an unresolved batch extent that arrived with them was the attention matmul's pairing of the
+   * batched element's concrete extent with its partial-batch sibling; the pair reads as the sibling
+   * (wala/ML#878).
    */
   @Test
   public void testGpt2SamplingLoopPastLayer()
@@ -1123,11 +1123,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     Arrays.<Dimension<?>>asList(
-                        new NumericDim(2), new SymbolicDim("?"), new NumericDim(8))),
-                new TensorType(
-                    FLOAT_32,
-                    Arrays.<Dimension<?>>asList(
-                        UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8)))),
+                        new NumericDim(2), new SymbolicDim("?"), new NumericDim(8)))),
             4,
             Set.of(
                 new TensorType(
@@ -1524,8 +1520,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * the seed, proven on both axes, got no feed; the int32 member then rode the loop-carried hidden
    * state into every decoder layer and the final layer norm. Under {@code DTYPE_COMPOSE} the
    * operands' float32 decides the add's dtype. Pinned at {@code LayerNormalization.call}'s {@code
-   * x} and {@code DecoderLayer.call}'s {@code x}: the three shapes are the loop-carried members;
-   * none carries int32.
+   * x} and {@code DecoderLayer.call}'s {@code x}: the two shapes are the loop-carried members; none
+   * carries int32. A third, with an unresolved batch extent, was the attention matmul's pairing of
+   * the batched element's concrete extent with its partial-batch sibling; the pair reads as the
+   * sibling (wala/ML#878).
    *
    * <p>The three locals beyond the eleven are {@code normalized * self.gamma}, its sum with {@code
    * self.beta} and the scaled difference, arithmetic results the builder now allocates
@@ -1552,9 +1550,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             new TensorType(
                 FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(8))),
             new TensorType(
-                FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
-            new TensorType(
-                FLOAT_32, asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))));
+                FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))));
     test(
         files,
         "layers/layer_norm.py",
@@ -1605,19 +1601,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))),
-                new TensorType(
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(16))),
                 new TensorType(
                     FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))),
-                new TensorType(
-                    FLOAT_32,
                     asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(16))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new NumericDim(8))),
@@ -1678,9 +1665,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(8))),
-                new TensorType(
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(16))),
                 new TensorType(
                     FLOAT_32,
@@ -1688,9 +1672,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(16))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(16))),
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new NumericDim(8))),
