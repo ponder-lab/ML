@@ -2585,6 +2585,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SPARSE_CATEGORICAL_CROSSENTROPY_CALL.getDeclaringClass()))
       return new SparseCategoricalCrossentropyCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
+    else if (isType(calledFunction, TensorFlowTypes.EMBEDDING_WEIGHT.getDeclaringClass()))
+      return new EmbeddingWeight(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
       return new FlattenCall(source);

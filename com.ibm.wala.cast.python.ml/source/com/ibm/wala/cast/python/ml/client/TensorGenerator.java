@@ -10969,6 +10969,9 @@ public abstract class TensorGenerator {
       return new ConcatenateCall(node);
     } else if (type.equals(TensorFlowTypes.KERAS_CONCATENATE.getDeclaringClass())) {
       return new KerasConcatenate(node);
+    } else if (type.equals(TensorFlowTypes.EMBEDDING_WEIGHT.getDeclaringClass())) {
+      // The `embeddings` weight a subclass's `super().__init__(...)` allocates.
+      return new EmbeddingWeight(node);
     } else if (type.equals(TensorFlowTypes.EMBEDDING_LAYER_CALL.getDeclaringClass())) {
       return new EmbeddingCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {
