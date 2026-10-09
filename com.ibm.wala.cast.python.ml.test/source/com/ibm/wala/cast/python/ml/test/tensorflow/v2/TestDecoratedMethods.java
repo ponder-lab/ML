@@ -776,4 +776,25 @@ public class TestDecoratedMethods extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32))));
   }
+
+  /**
+   * A step function taking {@code *args} from {@code strategy.run} and forwarding its last two,
+   * {@code last(*args[-2:])}: the library's summary calls the function with its argument tuple's
+   * positions padded to a fixed count, so the pack's length is not the program's, and the slice
+   * must not read it as such. Counted from the padded end, the slice would hold neither argument.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testVarargsSliceOfSummaryCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_strategy_run_varargs_slice.py",
+        "consume_last",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
 }
