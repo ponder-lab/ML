@@ -176,8 +176,27 @@ public class PythonSuper {
     private final Map<IClass, PythonSummarizedFunction> ctors = HashMapFactory.make();
     private final Map<CGNode, PythonSummarizedFunction> trampolines = HashMapFactory.make();
 
+    /**
+     * Each node's IR and def-use information, built once. A node's body depends only on its context
+     * and the class hierarchy, both fixed once the node exists, and a client walking every node (a
+     * reader looking for an attribute's writes) otherwise rebuilt the body, its control-flow graph
+     * and its def-use information on every visit of every super node.
+     */
+    private final Map<CGNode, IR> irs = HashMapFactory.make();
+
+    private final Map<CGNode, DefUse> dus = HashMapFactory.make();
+
     @Override
     public IR getIR(CGNode node) {
+      IR ir = irs.get(node);
+      if (ir == null) {
+        ir = makeIR(node);
+        irs.put(node, ir);
+      }
+      return ir;
+    }
+
+    private IR makeIR(CGNode node) {
       int v = 4;
       int pc = 0;
       if (node.getContext().get(superClass) == null) {
@@ -409,7 +428,12 @@ public class PythonSuper {
 
     @Override
     public DefUse getDU(CGNode node) {
-      return new DefUse(getIR(node));
+      DefUse du = dus.get(node);
+      if (du == null) {
+        du = new DefUse(getIR(node));
+        dus.put(node, du);
+      }
+      return du;
     }
 
     @Override
