@@ -2046,4 +2046,56 @@ public class TestConstructors extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * A {@code tf.zeros} whose shape list holds a scalar tensor, {@code [0, tf.reduce_max(d), 8]}:
+   * the list's length fixes rank 3, and the tensor element is a dimension TensorFlow's static shape
+   * reports as {@code None}.
+   */
+  @Test
+  public void testZerosShapeListTensorElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_tensor_shape_element.py",
+        "consume_reduced",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(0), DynamicDim.INSTANCE, new NumericDim(8))))));
+  }
+
+  /** A {@code tf.ones} whose shape list ends in a scalar tensor, {@code [3, tf.reduce_max(d)]}. */
+  @Test
+  public void testOnesShapeListTensorElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_tensor_shape_element.py",
+        "consume_ones",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(3), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * A shape list whose first element may be the constant {@code 4} or a scalar tensor: the position
+   * keeps both, one member per possibility.
+   */
+  @Test
+  public void testZerosShapeListConstantOrTensorElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_tensor_shape_element.py",
+        "consume_either",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4, 2),
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2))))));
+  }
 }
