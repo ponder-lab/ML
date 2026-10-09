@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.MNIST_INPUT;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
@@ -11,6 +12,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -687,5 +689,52 @@ public class TestDecoratedMethods extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
+  }
+
+  /**
+   * One decorator built on {@code functools.wraps} over two functions of different arity
+   * (wala/ML#188 for the decorator form): the converting wrapper forwards {@code (image, bboxes,
+   * *rest, **kwargs)} when positional arguments follow the image and {@code (image, **kwargs)}
+   * otherwise. The second decorated function's keyword parameter is the float32 scalar its own call
+   * passes, never the first function's {@code (1, 4)} bounding boxes: the library's pass-through
+   * decorator is applied once per decorated function from one site, and keyed on that site alone it
+   * bound every wrapper to every decorated name, so each wrapper dispatched to both functions with
+   * the other's arguments. The shape-unknown float32 twin beside the scalar is the wrapper's own
+   * forwarding arm: {@code len(args) >= 1} over the empty varargs tuple is not folded by the branch
+   * decider, so the arm's cast of a missing {@code args[0]} still reaches the function with the
+   * cast's dtype and no shape. That arm is a separate gap; the dtype is float32 throughout.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWrapsDecoratorOverTwoFunctions()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_wraps_two_functions.py",
+        "consume_param",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The control for {@link #testWrapsDecoratorOverTwoFunctions()}: the first decorated function's
+   * bounding boxes, cast by the wrapper, are the {@code (1, 4)} float32 the fixture asserts.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWrapsDecoratorOverTwoFunctionsBoxes()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_wraps_two_functions.py",
+        "consume_boxes",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 4))));
   }
 }
