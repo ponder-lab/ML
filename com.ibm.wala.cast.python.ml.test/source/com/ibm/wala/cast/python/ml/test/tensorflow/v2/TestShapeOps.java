@@ -2787,6 +2787,64 @@ public class TestShapeOps extends AbstractTensorTest {
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1, 1, 1, 150, 4))));
   }
 
+  /**
+   * A shape list built by a comprehension whose element is the conditional {@code dynamic[i] if s
+   * is None else s}, read in the function that builds it: the axis the static shape leaves
+   * undeclared is the scalar {@code int32} the shape vector's subscript yields, not the Python
+   * integer of the other arm and not nothing.
+   */
+  @Test
+  public void testShapeListConditionalComprehensionInline()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_inline",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /** The same list built by a {@code shape_list} helper and read through its return value. */
+  @Test
+  public void testShapeListConditionalComprehensionHelper()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_helper",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /** The helper's list read through tuple unpacking, {@code _, max_len, dmodel = shape_list(x)}. */
+  @Test
+  public void testShapeListConditionalComprehensionUnpacked()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_unpacked",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * The element at a declared axis is the Python integer of the other arm at run time. The
+   * comprehension's list keeps every element under one key, so the element reads as the union of
+   * the arms over every position, which is the tensor arm's type: the integer arm is no tensor and
+   * adds nothing. The read was no tensor when nothing in the list was typed.
+   */
+  @Test
+  public void testShapeListConditionalComprehensionStaticAxis()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_static",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   /** A {@code tf.repeat} of a {@code (2, 3)} input by a scalar {@code 2} along axis 0. */
   @Test
   public void testRepeatScalarAlongAxis()

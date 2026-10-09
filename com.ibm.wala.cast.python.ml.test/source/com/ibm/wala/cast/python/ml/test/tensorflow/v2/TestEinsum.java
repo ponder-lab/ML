@@ -396,6 +396,11 @@ public class TestEinsum extends AbstractTensorTest {
    * so the batched product also composes against the un-reshaped def, taking its trailing {@code
    * 5}. Both extras are path-insensitive unions, not miscomputations.
    *
+   * <p>The former {@code (2, 4, 15)} member, the {@code tf.matmul} result the {@code
+   * len(outer_dims) > 1} guard's untaken arm carried to the return's φ, is gone: the return value's
+   * dispatch reads every creator of the returned local and leaves out the arms the guard's fold
+   * proves untaken (wala/ML#962), so the result is the runtime shape alone.
+   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
@@ -409,16 +414,7 @@ public class TestEinsum extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 4, 3, 5),
-                // The former (2, 4, 5) member is gone with wala/ML#878's batch broadcasting. It
-                // came from crossing the input with the UNRESHAPED `w`, a matmul of (2, 4, 6) by
-                // (6, 3, 5) whose batch extents are 2 and 6: unequal and neither of them 1, so it
-                // fails at run time and is not an execution this program can have. Composing it by
-                // taking one operand's prefix invented a member for an impossible pairing.
-                TensorType.of(FLOAT_32, 2, 4, 15))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5))));
   }
 
   /**
