@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.TOLIST_METHOD_NAME;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ABS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ACOSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD_WEIGHT;
@@ -2486,6 +2487,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
       return new ClipByValue(source);
     else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
+    else if (isType(calledFunction, ABS.getDeclaringClass())) return new Abs(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
     else if (isType(calledFunction, SIN.getDeclaringClass())) return new Sin(source);
     else if (isType(calledFunction, COS.getDeclaringClass())) return new Cos(source);
