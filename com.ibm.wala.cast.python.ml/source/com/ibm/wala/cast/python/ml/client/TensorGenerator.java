@@ -10838,7 +10838,8 @@ public abstract class TensorGenerator {
       return new ConvertToTensor(node);
     } else if (type.equals(TensorFlowTypes.RANGE.getDeclaringClass())) {
       return new Range(node);
-    } else if (type.equals(NumpyTypes.ARRAY.getDeclaringClass())) {
+    } else if (type.equals(NumpyTypes.ARRAY.getDeclaringClass())
+        || type.equals(NumpyTypes.COPY.getDeclaringClass())) {
       return new NpArray(node);
     } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
       return new Sigmoid(node);
