@@ -16,10 +16,10 @@ import org.junit.Test;
  * the weight's {@code (input_dim, output_dim)} float32 type: a rank-3 gather over the rank-2
  * weight, where the weight was untyped and the gather rankless.
  *
- * <p>Each pin also holds a member whose last extent is unresolved: the subclass's synthesized
- * constructor dispatches {@code __init__} to the inherited one as well as to the subclass's own,
- * and on that path the constructor's arguments do not reach the inherited one's dimensions. The
- * call through {@code super().__init__(*args, **kwargs)} binds them, and gives the exact member.
+ * <p>Each pin also holds a member with unresolved extents: the subclass's synthesized constructor
+ * dispatches {@code __init__} to the inherited one as well as to the subclass's own, and on that
+ * path the constructor's arguments do not reach the inherited one's dimensions. The call through
+ * {@code super().__init__(*args, **kwargs)} binds them, and gives the exact member.
  */
 public class TestEmbeddingSubclassWeight extends AbstractTensorTest {
 
@@ -69,5 +69,76 @@ public class TestEmbeddingSubclassWeight extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     List.of(new NumericDim(1), new NumericDim(3), UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The weight itself, {@code (input_dim, output_dim)} float32, read off the instance: a pin the
+   * layer's own call rule cannot satisfy, and one that sees {@code input_dim}, which the gather
+   * drops.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWeight() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_weight",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 11, 8),
+                new TensorType(
+                    FLOAT_32, List.of(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A second instance, its {@code output_dim} passed by keyword through the subclass's {@code
+   * **kwargs}: its own {@code (5, 4)} weight, and nothing of the first instance's dimensions.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testKeywordWeight() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_keyword_weight",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 5, 4),
+                new TensorType(
+                    FLOAT_32, List.of(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * An instance whose {@code output_dim} the analysis cannot read: the column count is unknown, not
+   * {@code input_dim}. An identity matrix's column count defaults to its row count, an embedding
+   * weight's does not, so the weight is {@code (11, ?)} and never the square {@code (11, 11)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testUnreadWeight() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_unread_weight",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, List.of(new NumericDim(11), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32, List.of(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 }
