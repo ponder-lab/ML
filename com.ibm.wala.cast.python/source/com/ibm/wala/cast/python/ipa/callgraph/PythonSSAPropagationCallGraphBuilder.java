@@ -70,6 +70,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
+import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
@@ -242,6 +243,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * change; the tensor analysis names its tensor and array types.
    */
   private Map<TypeReference, TypeReference> freshBinaryOpResultTypes = Collections.emptyMap();
+
+  /**
+   * The exact leading elements of each tuple concatenation whose left operand is a tuple literal,
+   * by the concatenation's node and instruction index: the literal's length. A tuple cannot grow,
+   * so in {@code (first,) + rest} element {@code i} below that length is the literal's element
+   * {@code i} whatever {@code rest} holds. Recorded when the operator is visited, before its result
+   * can be allocated, so a constant subscript never reads a result before its prefix is known.
+   */
+  private final Map<Pair<CGNode, Integer>, Integer> exactListOperationPrefixes =
+      HashMapFactory.make();
 
   /**
    * Names the array types whose arithmetic allocates a result (wala/ML#1009); see {@link
@@ -756,6 +767,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (symtab.isConstant(memberRef) && symtab.getConstantValue(memberRef) instanceof String)
         return;
 
+      // A constant index below a concatenation's exact prefix names the prefix element alone,
+      // which the ordinary read takes from its numbered field; the order-free contents are read
+      // only by an index the prefix does not cover.
+      if (symtab.isConstant(memberRef)
+          && (symtab.getConstantValue(memberRef) instanceof Long
+              || symtab.getConstantValue(memberRef) instanceof Integer)) {
+        long index = ((Number) symtab.getConstantValue(memberRef)).longValue();
+        if (index >= 0 && index <= Integer.MAX_VALUE) {
+          ConstantIndexContentsReadOperator operator =
+              getBuilder()
+              .new ConstantIndexContentsReadOperator(
+                  getPointerKeyForLocal(instruction.getDef()), (int) index);
+          int objectVn = instruction.getObjectRef();
+          PointerKey objectKey = getPointerKeyForLocal(objectVn);
+          if (contentsAreInvariant(symtab, du, objectVn) || system.isImplicit(objectKey)) {
+            for (InstanceKey key : getInvariantContents(symtab, du, node, objectVn))
+              operator.read(key);
+            return;
+          }
+          system.newSideEffect(operator, objectKey);
+          return;
+        }
+      }
+
       InstanceKey contentsKey =
           getBuilder().getInstanceKeyForConstant(PythonTypes.string, LIST_APPEND_CONTENTS_FIELD);
       InstanceKey operationKey =
@@ -953,6 +988,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       PointerKey resultKey = getPointerKeyForLocal(binop.getDef());
       SymbolTable symtab = ir.getSymbolTable();
       int[] operands = {binop.getUse(0), binop.getUse(1)};
+      if (operator == IBinaryOpInstruction.Operator.ADD) {
+        int prefix = literalTupleLength(symtab, du, operands[0]);
+        if (prefix > 0)
+          getBuilder().exactListOperationPrefixes.put(Pair.make(node, binop.iIndex()), prefix);
+      }
       PointerKey[] keys = new PointerKey[2];
       InstanceKey[][] invariant = new InstanceKey[2][];
       for (int i = 0; i < 2; i++) {
@@ -2168,6 +2208,73 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Reads the order-free contents of each object a constant subscript {@code xs[i]} may be into the
+   * read's result, except an object whose exact prefix covers {@code i}: a tuple concatenation
+   * whose left operand is a tuple literal at least {@code i + 1} long, whose element {@code i} is
+   * the literal's (see {@link #exactListOperationPrefixes}). The ordinary read takes that element
+   * from its numbered field. Every other object's appended and operation contents are read as the
+   * read of an unknown position always read them.
+   */
+  public final class ConstantIndexContentsReadOperator extends UnaryOperator<PointsToSetVariable> {
+    private final PointerKey resultKey;
+    private final int index;
+    private final Set<InstanceKey> read = HashSetFactory.make();
+
+    private ConstantIndexContentsReadOperator(PointerKey resultKey, int index) {
+      this.resultKey = resultKey;
+      this.index = index;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds the constraints reading the given key's order-free contents into the result, unless the
+     * key's exact prefix covers the index.
+     *
+     * @param key A key the subscripted object may be.
+     */
+    private void read(InstanceKey key) {
+      if (!read.add(key)) return;
+      if (key instanceof AllocationSiteInNode asin) {
+        Integer prefix =
+            exactListOperationPrefixes.get(
+                Pair.make(asin.getNode(), asin.getSite().getProgramCounter()));
+        if (prefix != null && index < prefix) return;
+      }
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      for (String name : List.of(LIST_APPEND_CONTENTS_FIELD, LIST_OPERATION_CONTENTS_FIELD)) {
+        IField field = resolveRootField(cha, name);
+        if (field == null) continue;
+        getSystem()
+            .newConstraint(
+                resultKey, assignOperator, factory.getPointerKeyForInstanceField(key, field));
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return resultKey.hashCode() * 31 + index;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ConstantIndexContentsReadOperator other
+          && resultKey.equals(other.resultKey)
+          && index == other.index;
+    }
+
+    @Override
+    public String toString() {
+      return "constant index " + index + " contents read into " + resultKey;
+    }
+  }
+
+  /**
    * Reads every element of each list or tuple a subscripted object may be into the result of a read
    * whose index is a loop variable (wala/ML#993). The elements are read through the collection's
    * catalog of field names as the names arrive, the way iteration and the list operations read
@@ -2248,10 +2355,37 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     if (!allocatedHere) return -1;
     SSANewInstruction alloc = ir.getNew(asin.getSite());
     if (alloc == null) return -1;
-    int tupleVn = alloc.getDef();
-    SymbolTable symtab = ir.getSymbolTable();
+    return tupleElementCount(ir.getSymbolTable(), node.getDU(), alloc.getDef());
+  }
+
+  /**
+   * The length of a tuple literal, a value a {@code new} of a tuple in the same IR defines, read
+   * off its constant-index writes as {@link #tupleLength(AllocationSiteInNode)} reads them.
+   *
+   * @param symtab The symbol table of the IR that may define the value.
+   * @param du The IR's def-use information.
+   * @param vn The value number.
+   * @return The length, or {@code -1} when the value is no tuple literal of a known length.
+   */
+  private static int literalTupleLength(SymbolTable symtab, DefUse du, int vn) {
+    if (vn <= 0 || du == null) return -1;
+    if (!(du.getDef(vn) instanceof SSANewInstruction alloc)
+        || !alloc.getNewSite().getDeclaredType().equals(PythonTypes.tuple)) return -1;
+    return tupleElementCount(symtab, du, vn);
+  }
+
+  /**
+   * Counts a fresh tuple's elements by its constant-index property writes, which must be exactly
+   * {@code 0} through {@code n - 1} (wala/ML#988).
+   *
+   * @param symtab The symbol table of the IR allocating the tuple.
+   * @param du The IR's def-use information.
+   * @param tupleVn The tuple's value number.
+   * @return The length, or {@code -1} when the writes do not determine it.
+   */
+  private static int tupleElementCount(SymbolTable symtab, DefUse du, int tupleVn) {
     Set<Integer> indices = HashSetFactory.make();
-    for (Iterator<SSAInstruction> uses = node.getDU().getUses(tupleVn); uses.hasNext(); ) {
+    for (Iterator<SSAInstruction> uses = du.getUses(tupleVn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != tupleVn) continue;
       if (!symtab.isConstant(write.getMemberRef())) return -1;
@@ -2416,6 +2550,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (fresh == null) return;
       getSystem().newConstraint(resultKey, fresh);
       copyElements(key, fresh);
+      // The left literal's elements keep their positions in the result as well.
+      Integer prefix = exactListOperationPrefixes.get(Pair.make(node, pc));
+      if (prefix != null && operandIndex == 0) copyPrefix(key, fresh, prefix);
+    }
+
+    /**
+     * Flows element {@code i} of {@code from} into element {@code i} of {@code to} for each {@code
+     * i} below {@code length}.
+     */
+    private void copyPrefix(InstanceKey from, InstanceKey to, int length) {
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      for (int i = 0; i < length; i++) {
+        IField field = resolveRootField(cha, Integer.toString(i));
+        if (field == null) continue;
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForInstanceField(to, field),
+                assignOperator,
+                factory.getPointerKeyForInstanceField(from, field));
+      }
     }
 
     /** Whether the operation's rule holds against the other operand's current contents. */
