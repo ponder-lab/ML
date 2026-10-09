@@ -1151,6 +1151,9 @@
         <!-- `tf.keras.backend.set_floatx(value)` changes the backend default float dtype program-wide. Modeled only so a call to it is resolved and appears in the call graph; the `floatx()` resolver arm reads its reachability and declines to the unknown dtype rather than assuming the `float32` default (wala/ML#871). -->
         <new def="set_floatx" class="Ltensorflow/functions/set_floatx"/>
         <putfield class="LRoot" field="set_floatx" fieldType="LRoot" ref="backend" value="set_floatx"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/repeat -->
+        <new def="repeat" class="Ltensorflow/functions/repeat"/>
+        <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="repeat"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
         <new def="expand_dims" class="Ltensorflow/functions/expand_dims"/>
         <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="expand_dims"/>
@@ -2783,6 +2786,13 @@
       <class name="decode_jpeg" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/io/decode_jpeg. Direct `<new>+<return>` paired with the dedicated `DecodeJpeg` generator: rank 3 with every extent dynamic by the API contract (the decoded static shape is (None, None, None)); a literal nonzero `channels` pins the channel axis; dtype uint8 (wala/ML#853). -->
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self contents channels ratio fancy_upscaling try_recover_truncated acceptable_fraction dct_method name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="repeat" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/repeat. `<new>+<return>` paired with the dedicated `Repeat` generator: dtype inherits from `input`; the extent along `axis` is the total of `repeats`, and the input is flattened without an `axis`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input repeats axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
