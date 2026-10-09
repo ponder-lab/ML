@@ -10777,6 +10777,8 @@ public abstract class TensorGenerator {
       return new DecodeJpeg(node);
     } else if (type.equals(TensorFlowTypes.RELU.getDeclaringClass())) {
       return new Relu(node);
+    } else if (type.equals(TensorFlowTypes.REPEAT.getDeclaringClass())) {
+      return new Repeat(node);
     } else if (type.equals(TensorFlowTypes.EXPAND_DIMS.getDeclaringClass())) {
       return new ExpandDims(node);
     } else if (type.equals(TensorFlowTypes.CLIP_BY_VALUE.getDeclaringClass())) {
