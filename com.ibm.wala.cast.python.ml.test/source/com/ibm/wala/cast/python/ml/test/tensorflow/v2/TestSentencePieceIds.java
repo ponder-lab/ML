@@ -40,18 +40,16 @@ public class TestSentencePieceIds extends AbstractTensorTest {
                 TensorType.of(INT_32, 1, 1))));
   }
 
-  /** A tensor converted from {@code encode}'s ids. */
+  /**
+   * A tensor converted from {@code encode}'s ids: {@code int32}. Its rank is unknown, since {@code
+   * tf.constant} reads no rank from a list whose elements have no known positions.
+   */
   @Test
   public void testEncode() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FIXTURE,
-        "consume_encode",
-        1,
-        1,
-        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
+    test(FIXTURE, "consume_encode", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
-  /** A tensor converted from {@code EncodeAsIds}'s ids. */
+  /** A tensor converted from {@code EncodeAsIds}'s ids: {@code int32}, of an unknown rank. */
   @Test
   public void testEncodeAsIdsCapitalized()
       throws ClassHierarchyException, CancelException, IOException {
@@ -60,7 +58,7 @@ public class TestSentencePieceIds extends AbstractTensorTest {
         "consume_encode_as_ids_capitalized",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   /** A concatenation of two int literals' lists, converted. */

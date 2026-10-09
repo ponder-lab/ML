@@ -6776,6 +6776,21 @@ public abstract class TensorGenerator {
                 this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
+
+          // A list operation's result (`[bos] + ids`) keeps the elements it carries in an
+          // order-free field rather than numbered ones (wala/ML#960). A dtype does not depend on
+          // position, so they are elements here as the numbered ones are, as `NpArray` reads them;
+          // skipping the field left a concatenation with no element, and a tensor converted from
+          // it an unknown dtype.
+          OrdinalSet<InstanceKey> operationContents =
+              getInstanceFieldPointsToSet(
+                  builder,
+                  asin,
+                  PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD);
+          if (operationContents != null && !operationContents.isEmpty()) {
+            Set<DType> contentsDTypes = this.getDTypesOfValue(builder, operationContents, visited);
+            if (contentsDTypes != null) ret.addAll(contentsDTypes);
+          }
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
           LOGGER.fine("Ignoring feature: " + describe(asin));

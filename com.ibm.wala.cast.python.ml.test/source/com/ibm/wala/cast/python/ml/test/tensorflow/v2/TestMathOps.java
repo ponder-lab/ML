@@ -846,8 +846,9 @@ public class TestMathOps extends AbstractTensorTest {
   /**
    * Companion to {@link #testExpandDimsOfListConcatenation()}: both operands of the concatenation
    * are scalar literals, {@code [bos] + [1, 2]} with {@code bos} defaulted, so the length is the
-   * sum of theirs and the result is {@code (1, 3)} (wala/ML#907). The dtype stays unknown, as on
-   * the opaque-operand form.
+   * sum of theirs and the result is {@code (1, 3)} (wala/ML#907). The dtype is the elements' {@code
+   * int32}, read from the order-free contents a concatenation keeps them in; on the opaque-operand
+   * form the elements are unknown, and so is the dtype.
    */
   @Test
   public void testExpandDimsOfLiteralListConcatenation()
@@ -857,7 +858,7 @@ public class TestMathOps extends AbstractTensorTest {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_3_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(TensorType.of(INT_32, 1, 3))));
   }
 
   /**
