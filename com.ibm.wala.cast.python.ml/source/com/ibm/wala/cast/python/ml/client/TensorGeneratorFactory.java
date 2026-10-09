@@ -2438,8 +2438,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, MODEL.getDeclaringClass())) return new Model(source);
     else if (isType(calledFunction, TENSOR.getDeclaringClass())
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
-    else if (isType(calledFunction, NumpyTypes.ARRAY.getDeclaringClass()))
-      return new NpArray(source);
+    else if (isType(calledFunction, NumpyTypes.ARRAY.getDeclaringClass())
+        || isType(calledFunction, NumpyTypes.COPY.getDeclaringClass())) return new NpArray(source);
     else if (isType(calledFunction, NumpyTypes.ONES.getDeclaringClass())) return new NpOnes(source);
     else if (isType(calledFunction, NumpyTypes.CONCATENATE.getDeclaringClass()))
       return new NpConcatenate(source);
