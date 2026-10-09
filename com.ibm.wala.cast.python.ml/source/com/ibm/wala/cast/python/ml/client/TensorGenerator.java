@@ -393,6 +393,7 @@ public abstract class TensorGenerator {
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
+    METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -2045,13 +2046,7 @@ public abstract class TensorGenerator {
       String classPrefix =
           asin.getNode().getMethod().getDeclaringClass().getReference().getName().toString() + "/";
       Integer perInstance = null;
-      for (CGNode candidate : builder.getCallGraph()) {
-        if (candidate.getIR() == null || candidate.getDU() == null) continue;
-        IMethod method = candidate.getMethod();
-        if (!(method instanceof AstMethod)) continue;
-        if (!method.getDeclaringClass().getReference().getName().toString().startsWith(classPrefix))
-          continue;
-        if (method.getNumberOfParameters() < 2) continue;
+      for (CGNode candidate : methodBodiesUnder(builder, classPrefix)) {
         int selfVn = candidate.getIR().getParameter(1);
         // Receiver matching: only bodies whose `self` may alias the read's instance write it.
         boolean aliases = false;
@@ -2089,6 +2084,51 @@ public abstract class TensorGenerator {
       any = true;
     }
     return any ? agreed : null;
+  }
+
+  /**
+   * Per builder, the method-body nodes of the final call graph whose declaring class's name starts
+   * with a class prefix and that take a receiver, by prefix; see {@link
+   * #resolveSelfAttributeIntFlowSensitively}. Each query of an attribute's writes walked every node
+   * of the call graph, building the IR and def-use information of each before checking its class,
+   * so a whole program with many synthesized nodes spent its time rebuilding bodies no query could
+   * use.
+   */
+  private static final Map<PropagationCallGraphBuilder, Map<String, List<CGNode>>>
+      METHOD_BODIES_BY_CLASS_PREFIX = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The method-body nodes whose declaring class's name starts with the given prefix and that take a
+   * receiver, computed once per builder and prefix.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph to read.
+   * @param classPrefix The class-name prefix, ending in {@code /}.
+   * @return The nodes, in call-graph order.
+   */
+  private static List<CGNode> methodBodiesUnder(
+      PropagationCallGraphBuilder builder, String classPrefix) {
+    Map<String, List<CGNode>> byPrefix =
+        METHOD_BODIES_BY_CLASS_PREFIX.computeIfAbsent(builder, b -> new HashMap<>());
+    synchronized (byPrefix) {
+      return byPrefix.computeIfAbsent(
+          classPrefix,
+          prefix -> {
+            List<CGNode> ret = new ArrayList<>();
+            for (CGNode candidate : builder.getCallGraph()) {
+              IMethod method = candidate.getMethod();
+              if (!(method instanceof AstMethod) || method.getNumberOfParameters() < 2) continue;
+              if (!method
+                  .getDeclaringClass()
+                  .getReference()
+                  .getName()
+                  .toString()
+                  .startsWith(prefix)) continue;
+              if (candidate.getIR() == null || candidate.getDU() == null) continue;
+              ret.add(candidate);
+            }
+            return ret;
+          });
+    }
   }
 
   /**

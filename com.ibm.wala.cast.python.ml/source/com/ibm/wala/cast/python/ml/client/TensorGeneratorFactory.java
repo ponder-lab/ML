@@ -285,6 +285,7 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
@@ -301,6 +302,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -470,7 +472,19 @@ public class TensorGeneratorFactory {
    */
   private static boolean isType(TypeReference tr, TypeReference expected) {
     if (tr == null || expected == null) return false;
-    return tr.getName().toString().equals(expected.getName().toString());
+    if (tr.getName() == expected.getName()) return true;
+    return spelling(tr.getName()).equals(spelling(expected.getName()));
+  }
+
+  /**
+   * Each type name's spelled-out string, built once. The dispatch chain compares a call's type
+   * against well over a hundred arms by name, and {@link TypeName#toString} assembles a fresh
+   * string from the name's atoms on every call, so a dispatch built hundreds of strings.
+   */
+  private static final Map<TypeName, String> SPELLINGS = new ConcurrentHashMap<>();
+
+  private static String spelling(TypeName name) {
+    return SPELLINGS.computeIfAbsent(name, TypeName::toString);
   }
 
   /**
