@@ -27,7 +27,12 @@ import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
+import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.util.intset.IntSet;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -226,8 +231,52 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
         return new AnchoredCallerSiteContext(caller, caller.getMethod(), site, null);
       return new AnchoredCallerSiteContext(receiverAnchor(caller), caller.getMethod(), site, null);
     }
+    // A library summary handed a function object is keyed on the calling node and site. Keyed on
+    // the site alone, one summary node serves every caller context of that site, and the function
+    // values those callers pass merge in it: a decorator built on `functools.wraps` applies the
+    // library's pass-through decorator once per decorated function from one site, so the wrappers
+    // of every application bound to every decorated name, each wrapper dispatched to every
+    // decorated function, and a function received its siblings' positional arguments. The same
+    // merge reaches the branches a conditional's summary calls. The function object is recognized
+    // at the site, as an argument allocated by a function definition, so no parameter becomes
+    // relevant to dispatch. A recursive chain keeps the base key, as the caller-pair rule does.
+    if (isSummaryBody(callee)
+        && passesFunctionObject(caller, site, callee.getClassHierarchy())
+        && !chainsThroughMethod(caller, callee)) {
+      LOGGER.fine(
+          () -> "Keying summary " + callee + " handed a function object on caller: " + caller);
+      return new CallerSiteContext(caller, site);
+    }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Whether a call site passes a function object: an argument, positional or keyword, defined by
+   * the allocation of a code body, which is how a function definition or a lambda reaches the site
+   * in this front end. A function reaching the site through a variable is not recognized here; it
+   * keeps the base key.
+   *
+   * @param caller The calling node.
+   * @param site The call site.
+   * @param cha The class hierarchy.
+   * @return {@code true} iff some argument at the site is a code-body allocation.
+   */
+  private static boolean passesFunctionObject(
+      CGNode caller, CallSiteReference site, IClassHierarchy cha) {
+    IR ir = caller.getIR();
+    if (ir == null || caller.getDU() == null) return false;
+    IClass codeBody = cha.lookupClass(PythonTypes.CodeBody);
+    if (codeBody == null) return false;
+    for (SSAAbstractInvokeInstruction call : ir.getCalls(site))
+      for (int i = 1; i < call.getNumberOfUses(); i++) {
+        SSAInstruction def = caller.getDU().getDef(call.getUse(i));
+        if (def instanceof SSANewInstruction allocation) {
+          IClass allocated = cha.lookupClass(allocation.getConcreteType());
+          if (allocated != null && cha.isSubclassOf(allocated, codeBody)) return true;
+        }
+      }
+    return false;
   }
 
   /**
