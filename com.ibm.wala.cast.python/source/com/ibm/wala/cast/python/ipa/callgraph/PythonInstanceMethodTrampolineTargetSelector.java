@@ -51,7 +51,11 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 public class PythonInstanceMethodTrampolineTargetSelector<T>
@@ -266,22 +270,139 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    */
   private static IClass inheritedDunderCall(
       IClassHierarchy cha, ClassLoaderReference loader, IClass type) {
-    for (IClass base = type.getSuperclass();
-        base instanceof PythonClass && !(base instanceof PythonSummaryShellClass);
-        base = base.getSuperclass()) {
-      IClass callable =
+    return inheritedMethod(cha, loader, type, CALLABLE_METHOD_NAME);
+  }
+
+  /**
+   * The method class of the given name the nearest program-defined base class of the given class
+   * declares, in Python's method resolution order over every declared base. The walk stops at the
+   * first class in that order the program does not define, so a library summary's method, which
+   * Python would find there first, is never outranked by a later program base's.
+   *
+   * @param cha The class hierarchy.
+   * @param loader The program's class loader.
+   * @param type The instance's class.
+   * @param name The method's name.
+   * @return The inherited method class, or {@code null} when no program-defined base before the
+   *     first library class declares one.
+   */
+  private static IClass inheritedMethod(
+      IClassHierarchy cha, ClassLoaderReference loader, IClass type, String name) {
+    List<IClass> order = methodResolutionOrder(cha, type, new HashSet<>());
+    for (IClass base : order.subList(1, order.size())) {
+      if (!isProgramClass(base)) return null;
+      IClass method =
           cha.lookupClass(
               TypeReference.findOrCreateClass(
-                  loader, "$" + base.getName().toString().substring(1), CALLABLE_METHOD_NAME));
-      if (callable != null) return callable;
+                  loader, "$" + base.getName().toString().substring(1), name));
+      if (method != null) return method;
     }
     return null;
   }
 
+  private static boolean isProgramClass(IClass c) {
+    return c instanceof PythonClass && !(c instanceof PythonSummaryShellClass);
+  }
+
+  /**
+   * The C3 linearization of a class over its declared bases, the class first. A base name that
+   * resolves to no class is left out, as the superclass is the first base that resolves; a class
+   * the program does not define ends its branch, since only its own position matters to the walk.
+   * An inconsistent hierarchy, or a cycle, falls back to a left-to-right depth-first order without
+   * repeats.
+   *
+   * @param cha The class hierarchy.
+   * @param type The class.
+   * @param onStack The classes being linearized on this path, for the cycle guard.
+   * @return The linearization, starting with the class.
+   */
+  private static List<IClass> methodResolutionOrder(
+      IClassHierarchy cha, IClass type, Set<IClass> onStack) {
+    List<IClass> bases = declaredBases(cha, type);
+    if (!isProgramClass(type) || bases.isEmpty() || !onStack.add(type))
+      return new ArrayList<>(List.of(type));
+    try {
+      List<List<IClass>> sequences = new ArrayList<>();
+      for (IClass base : bases) sequences.add(methodResolutionOrder(cha, base, onStack));
+      sequences.add(new ArrayList<>(bases));
+      // The merge consumes its sequences, so it gets copies: the fallback needs them whole.
+      List<List<IClass>> consumed = new ArrayList<>();
+      for (List<IClass> sequence : sequences) consumed.add(new ArrayList<>(sequence));
+      List<IClass> merged = c3Merge(consumed);
+      List<IClass> order = new ArrayList<>();
+      order.add(type);
+      if (merged != null) order.addAll(merged);
+      else
+        for (List<IClass> sequence : sequences)
+          for (IClass c : sequence) if (!order.contains(c)) order.add(c);
+      return order;
+    } finally {
+      onStack.remove(type);
+    }
+  }
+
+  /**
+   * The classes a class's declared base names resolve to, in declaration order.
+   *
+   * @param cha The class hierarchy.
+   * @param type The class.
+   * @return The resolved bases.
+   */
+  private static List<IClass> declaredBases(IClassHierarchy cha, IClass type) {
+    List<IClass> bases = new ArrayList<>();
+    if (type instanceof IPythonClass python)
+      for (TypeName baseName : python.getBaseTypeNames()) {
+        IClass base =
+            cha.lookupClass(
+                TypeReference.findOrCreate(type.getClassLoader().getReference(), baseName));
+        if (base != null && !bases.contains(base)) bases.add(base);
+      }
+    if (bases.isEmpty() && type.getSuperclass() != null) bases.add(type.getSuperclass());
+    // `object` ends every class's order in Python, after every other base; a library class's own
+    // bases are not expanded here, so keeping it would place it before a later base's branch.
+    bases.removeIf(
+        base ->
+            base.getReference().equals(PythonTypes.object)
+                || base.getReference().equals(PythonTypes.Root));
+    return bases;
+  }
+
+  /**
+   * The C3 merge of the given sequences.
+   *
+   * @param sequences The bases' linearizations followed by the bases themselves; consumed.
+   * @return The merge, or {@code null} when no consistent order exists.
+   */
+  private static List<IClass> c3Merge(List<List<IClass>> sequences) {
+    List<IClass> result = new ArrayList<>();
+    while (true) {
+      sequences.removeIf(List::isEmpty);
+      if (sequences.isEmpty()) return result;
+      IClass head = null;
+      for (List<IClass> sequence : sequences) {
+        IClass candidate = sequence.get(0);
+        boolean inTail = false;
+        for (List<IClass> other : sequences)
+          if (other.indexOf(candidate) > 0) {
+            inTail = true;
+            break;
+          }
+        if (!inTail) {
+          head = candidate;
+          break;
+        }
+      }
+      if (head == null) return null;
+      result.add(head);
+      for (List<IClass> sequence : sequences) if (sequence.get(0).equals(head)) sequence.remove(0);
+    }
+  }
+
   /**
    * The callable an instance is called through: its class's {@code __call__}, one a program-defined
-   * base declares (wala/ML#994), the Keras {@code call} convention, or {@code do}, in Python's
-   * lookup order. The class is the instance's concrete type when that names a callable, and
+   * base declares (wala/ML#994), its class's {@code do} or Keras {@code call}, or a {@code call} or
+   * {@code do} a program-defined base declares, in Python's lookup order, the bases in method
+   * resolution order. The class is the instance's concrete type when that names a callable, and
    * otherwise the class whose method allocated the instance, since a program class's instance is
    * allocated in its synthesized constructor.
    *
@@ -400,6 +521,16 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
               "Applying the Keras `call` convention for"
                   + " https://github.com/wala/ML/issues/106.");
       }
+
+      // `Layer.__call__` finds `call` along the method resolution order, so a subclass that
+      // inherits its `call` (or `do`) from a program-defined base is called through the base's.
+      // The lookups above name the instance's own class only.
+      if (callable == null)
+        callable =
+            inheritedMethod(
+                cha, classLoaderReference, declaringClass, CALLABLE_METHOD_NAME_FOR_KERAS_MODELS);
+      if (callable == null)
+        callable = inheritedMethod(cha, classLoaderReference, declaringClass, DO_METHOD_NAME);
 
       return callable;
     }
