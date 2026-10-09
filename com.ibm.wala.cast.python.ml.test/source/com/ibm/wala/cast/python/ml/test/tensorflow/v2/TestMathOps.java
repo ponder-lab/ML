@@ -2100,4 +2100,28 @@ public class TestMathOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 10))));
   }
+
+  /** A {@code tf.abs} of a {@code complex64} tensor is a real {@code float32} one of its shape. */
+  @Test
+  public void testAbsComplexIsReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_abs_complex.py",
+        "consume_complex",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
+
+  /** Control: a {@code tf.abs} of a real tensor keeps its dtype. */
+  @Test
+  public void testAbsRealKeepsDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_abs_complex.py",
+        "consume_real",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
 }

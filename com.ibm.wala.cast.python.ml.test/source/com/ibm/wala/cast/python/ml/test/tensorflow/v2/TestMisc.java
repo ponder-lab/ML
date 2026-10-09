@@ -1413,16 +1413,16 @@ public class TestMisc extends AbstractTensorTest {
    * member sits on the skip arm that does leave directly from the branch block, is pruned and is
    * covered by {@link #testNdimsFold()}.
    *
-   * <p>TODO: Flip to a plain {@code @Test} asserting {@code (8, 10, 1)} alone once the phi-arm walk
-   * reaches a governing branch behind an invoke-split arm, tracked by <a
-   * href="https://github.com/wala/ML/issues/885">wala/ML#885</a>.
+   * <p>The arm is now left out: the return value's dispatch reads every creator of the returned φ
+   * and omits the arms the guard's fold proves untaken (wala/ML#962), so the result is {@code (8,
+   * 10, 1)} alone, the reading wala/ML#885 asked for.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testNdimsFoldRank3Control()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_ndims_fold_rank3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_8_10_1_FLOAT32)));

@@ -1971,6 +1971,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String STACK_SIGNATURE = "tf.stack()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/abs. */
+  public static final MethodReference ABS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/abs")),
+          AstMethodReference.fnSelector);
+
+  private static final String ABS_SIGNATURE = "tf.math.abs()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/sqrt. */
   public static final MethodReference SQRT =
       MethodReference.findOrCreate(
@@ -2743,6 +2752,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(POW.getDeclaringClass(), POW_SIGNATURE),
           Map.entry(CONCAT.getDeclaringClass(), CONCAT_SIGNATURE),
           Map.entry(STACK.getDeclaringClass(), STACK_SIGNATURE),
+          Map.entry(ABS.getDeclaringClass(), ABS_SIGNATURE),
           Map.entry(SQRT.getDeclaringClass(), SQRT_SIGNATURE),
           Map.entry(NEGATIVE.getDeclaringClass(), NEGATIVE_SIGNATURE),
           Map.entry(SIN.getDeclaringClass(), SIN_SIGNATURE),

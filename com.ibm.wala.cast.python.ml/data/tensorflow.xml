@@ -1641,11 +1641,10 @@
         </method>
       </class>
       <class name="abs" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/abs -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/abs. `<new>+<return>` paired with the dedicated `Abs` generator: the shape is `x`'s, and so is the dtype for a real `x`, while a complex `x`'s magnitude is real (`complex64` gives `float32`). It was a `convert_to_tensor` pass-through, which kept a complex dtype. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor"/>
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y"/>
-          <return value="y"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="reduce_all" allocatable="true">

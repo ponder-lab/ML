@@ -10814,6 +10814,8 @@ public abstract class TensorGenerator {
       return new Rsqrt(node);
     } else if (type.equals(TensorFlowTypes.SQUARE.getDeclaringClass())) {
       return new Square(node);
+    } else if (type.equals(TensorFlowTypes.ABS.getDeclaringClass())) {
+      return new Abs(node);
     } else if (type.equals(TensorFlowTypes.SQRT.getDeclaringClass())) {
       return new Sqrt(node);
     } else if (type.equals(TensorFlowTypes.SIN.getDeclaringClass())) {

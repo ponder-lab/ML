@@ -6,6 +6,9 @@
       <method name="import" static="true" descriptor="()Lnumpy;">
         <!-- The `Lnumpy` module object must stay this method's FIRST allocation: the dtype-argument resolver reaches it as `NewSiteReference.make(0, NUMPY_TYPE)` in this node to test whether a candidate token is one of the fields below. -->
         <new def="x" class="Lnumpy"/>
+        <!-- https://numpy.org/doc/stable/reference/constants.html#numpy.newaxis — at runtime this is `None`, as `tf.newaxis` is, and used the same way in a subscript to insert a size-1 axis. It is allocated as the same sentinel class, `Ltensorflow/newaxis`, so `NdarraySubscriptOperation.classifyField` recognizes either spelling as NEWAXIS. -->
+        <new def="newaxis" class="Ltensorflow/newaxis"/>
+        <putfield class="LRoot" field="newaxis" fieldType="LRoot" ref="x" value="newaxis"/>
         <!-- https://numpy.org/doc/stable/reference/arrays.scalars.html -->
         <!-- The scalar types are type objects, so each name has two roles: passed as `dtype=`, it names a dtype; called, it constructs a rank-0 array of that dtype (`np.float64(2.0)`). Both roles are served by a single allocation per name, whose class is the constructor's (dispatching `NpScalarType`) rather than `Ltensorflow/dtypes/DType`. The dtype role survives the class change because the dtype-argument resolver matches a token by its identity in the module field's points-to set, not by its allocated class; the class-keyed arms that back that resolution up read `NumpyTypes.SCALAR_TYPE_TO_DTYPE`. wala/ML#827. -->
         <new def="float32" class="Lnumpy/float32"/>
