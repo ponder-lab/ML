@@ -2665,7 +2665,7 @@
       <class name="while_loop" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/while_loop -->
         <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self cond body loop_vars shape_invariants parallel_iterations back_prop swap_memory maximum_iterations name">
-          <!-- `cond` and `body` are called with the loop variables unpacked positionally, `body(*loop_vars)`, so a function reached only through a loop gets a call-graph node and its parameters read the loop variables (wala/ML#942). A summary cannot unpack a sequence of unknown length, so the first 8 positions are read; a position past the sequence's end reads nothing. The result stays the loop variables: the body's result is not joined into it. -->
+          <!-- `cond` and `body` are called with the loop variables unpacked positionally, `body(*loop_vars)`, so a function reached only through a loop gets a call-graph node and its parameters read the loop variables (wala/ML#942). A summary cannot unpack a sequence of unknown length, so the first 8 positions are read; a position past the sequence's end reads nothing, so a body parameter with a default past the loop variables receives that empty position rather than its default, as under `strategy.run`'s padded call. The result stays the loop variables: the body's result is not joined into it. -->
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="loop_vars" def="v0"/>
           <getfield class="LRoot" field="1" fieldType="LRoot" ref="loop_vars" def="v1"/>
           <getfield class="LRoot" field="2" fieldType="LRoot" ref="loop_vars" def="v2"/>

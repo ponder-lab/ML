@@ -21,13 +21,23 @@ public class TestWhileLoopBody extends AbstractTensorTest {
   /**
    * A function called from a lambda body, the loop variable at the body's second position: its
    * parameter reads the image the loop was handed.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
    */
   @Test
   public void testLambdaBodyCallee() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_image", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 4, 3))));
   }
 
-  /** A named body passed through a variable: its first parameter reads the int32 loop counter. */
+  /**
+   * A named body passed through a variable: its first parameter reads the int32 loop counter.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
   @Test
   public void testNamedBodyFirstVariable()
       throws ClassHierarchyException, CancelException, IOException {
@@ -37,6 +47,10 @@ public class TestWhileLoopBody extends AbstractTensorTest {
   /**
    * The named body's third parameter reads the third loop variable, and nothing at another
    * position.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
    */
   @Test
   public void testNamedBodyThirdVariable()
