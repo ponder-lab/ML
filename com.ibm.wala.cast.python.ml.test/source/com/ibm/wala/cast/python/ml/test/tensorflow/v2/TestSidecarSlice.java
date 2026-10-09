@@ -6,6 +6,7 @@ import static java.util.Arrays.asList;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -32,7 +33,14 @@ public class TestSidecarSlice extends AbstractTensorTest {
 
   private static final String PROJECT = "musictx_sidecar_proj";
 
-  /** The anchored local transits {@code _get_seq}'s return: {@code (n,)} int64. */
+  /**
+   * The anchored local transits {@code _get_seq}'s return: {@code (n,)} int64, beside the {@code
+   * int64} of unresolved extent that the {@code max_length} arm's slice returns. The return value's
+   * dispatch reads every creator of the returned value; that arm is dead at the one call, which
+   * passes no {@code max_length}, but its guard tests the parameter's default and the φ-arm walk
+   * does not fold it, so the arm stands. The sidecar's dtype carries alone on both members
+   * (wala/ML#957).
+   */
   @Test
   public void testSidecarSequence()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -43,7 +51,11 @@ public class TestSidecarSlice extends AbstractTensorTest {
         PROJECT,
         1,
         1,
-        Map.of(2, Set.of(new TensorType(INT_64, asList(new SymbolicDim("n"))))));
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(INT_64, asList(new SymbolicDim("n"))),
+                new TensorType(INT_64, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /** {@code np.array} over the comprehension of anchored results: {@code (2, 4)} int64. */

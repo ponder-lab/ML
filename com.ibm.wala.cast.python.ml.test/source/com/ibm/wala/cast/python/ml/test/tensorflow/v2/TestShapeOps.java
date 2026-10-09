@@ -2813,12 +2813,19 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * Control: the element at a declared axis is the Python integer of the other arm, no tensor; the
-   * sink is reached with none.
+   * The element at a declared axis is the Python integer of the other arm at run time. The
+   * comprehension's list keeps every element under one key, so the element reads as the union of
+   * the arms over every position, which is the tensor arm's type: the integer arm is no tensor and
+   * adds nothing. The read was no tensor when nothing in the list was typed.
    */
   @Test
   public void testShapeListConditionalComprehensionStaticAxis()
       throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_shape_list_conditional_comprehension.py", "consume_static", 0, 0, Map.of());
+    test(
+        "tf2_test_shape_list_conditional_comprehension.py",
+        "consume_static",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 }
