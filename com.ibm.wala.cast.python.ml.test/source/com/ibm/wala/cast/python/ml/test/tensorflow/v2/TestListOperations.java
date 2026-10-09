@@ -51,8 +51,9 @@ public class TestListOperations extends AbstractTensorTest {
   }
 
   /**
-   * {@code tf.constant([0] + sizes)}: the synthesized list has no length, so the constant stays ⊤
-   * rather than reading the two-element miscount.
+   * {@code tf.constant([0] + sizes)}: the synthesized list has no length, so the constant's shape
+   * stays ⊤ rather than reading the two-element miscount. Its dtype is its elements' {@code int32},
+   * read from the order-free contents a concatenation keeps them in.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -62,7 +63,7 @@ public class TestListOperations extends AbstractTensorTest {
   @Test
   public void testConcatenatedOffsetsDecline()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FILE, "consume_offsets", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(FILE, "consume_offsets", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   /**
@@ -98,7 +99,8 @@ public class TestListOperations extends AbstractTensorTest {
   }
 
   /**
-   * {@code tf.constant([1, 2] + [3])}: no reader derives the two-element miscount.
+   * {@code tf.constant([1, 2] + [3])}: no reader derives the two-element miscount; the dtype is the
+   * elements' {@code int32}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -108,12 +110,7 @@ public class TestListOperations extends AbstractTensorTest {
   @Test
   public void testConcatenatedConstantDecline()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        FILE,
-        "decline_tf_concatenated",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(FILE, "decline_tf_concatenated", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   /**

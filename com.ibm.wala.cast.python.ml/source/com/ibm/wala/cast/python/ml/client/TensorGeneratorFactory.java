@@ -277,11 +277,13 @@ import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -1322,6 +1324,54 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The generator of the value a tuple literal holds at a constant index, read off the literal's
+   * own element write in the allocating node (wala/ML#1027); see the property-read arm. A tuple has
+   * exactly one write per index, its literal's, and cannot be mutated, so that write is the
+   * element. A list literal declines: an item assignment after construction, in this node or in a
+   * callee the list escapes to, is a further write to the same index, so the literal's write alone
+   * is a first member picked over the set of writes, and a callee's write is not visible here.
+   *
+   * @param node The node allocating the literal and reading it.
+   * @param objRef The literal's value number.
+   * @param index The constant index read.
+   * @param builder The propagation call graph builder.
+   * @param visited The sources already being dispatched.
+   * @return The written value's generator, or {@code null} when the object is no tuple literal of
+   *     this node, writes no such index, or the value has no generator.
+   */
+  private static TensorGenerator literalElementGenerator(
+      CGNode node,
+      int objRef,
+      int index,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    IR ir = node.getIR();
+    DefUse du = node.getDU();
+    if (ir == null || du == null) return null;
+    if (!(du.getDef(objRef) instanceof SSANewInstruction alloc)) return null;
+    TypeReference type = alloc.getConcreteType();
+    if (!type.equals(PythonTypes.tuple)) return null;
+    SymbolTable symtab = ir.getSymbolTable();
+    for (Iterator<SSAInstruction> uses = du.getUses(objRef); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != objRef) continue;
+      if (!symtab.isConstant(write.getMemberRef())) continue;
+      Object member = symtab.getConstantValue(write.getMemberRef());
+      long written = member instanceof Integer i ? i : member instanceof Long l ? l : -1;
+      if (written != index) continue;
+      PointsToSetVariable value =
+          getPointsToSetVariable(
+              builder
+                  .getPointerAnalysis()
+                  .getHeapModel()
+                  .getPointerKeyForLocal(node, write.getValue()),
+              builder);
+      return value == null ? null : tryGetGenerator(value, builder, visited);
+    }
+    return null;
+  }
+
+  /**
    * Returns the constant integer the member reference of a property access resolves to, or {@code
    * null} if it is not a single constant index.
    *
@@ -2023,6 +2073,11 @@ public class TensorGeneratorFactory {
                 ? containerGenerator
                 : new TensorElementGenerator(source, containerGenerator);
           }
+          // The `slice` builtin's body returns nothing: its result is supplied at the call
+          // (wala/ML#916), so its return value creates nothing, and a generator built on that
+          // return has no call site of its own once the builtin's node serves several sites of one
+          // caller. The call's own result dispatches to the slice generator below.
+          if (callee.getMethod().getReference().getDeclaringClass().equals(SLICE_BUILTIN)) continue;
           PointerKey retKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
           PointsToSetVariable retSrc = getPointsToSetVariable(retKey, builder);
@@ -2073,6 +2128,18 @@ public class TensorGeneratorFactory {
           TensorGenerator elementDataset =
               containerElementDatasetGenerator(node, objRef, listIndex, builder, visited);
           if (elementDataset != null) return elementDataset;
+          // A constant index into a tuple literal allocated in this node names the value written
+          // at that index, and that value's own generator types the read: a shape element
+          // unpacked through a tuple (`h, w = tf.shape(x)[-3], tf.shape(x)[-2]`) has an empty
+          // points-to set, so the literal's field holds nothing to read through the heap, the
+          // literal itself has no generator, and its points-to set is implicit, which the guard
+          // below would decline (wala/ML#1027). A list literal is left to the guard, since a later
+          // item assignment may rebind the index.
+          if (listIndex >= 0) {
+            TensorGenerator literal =
+                literalElementGenerator(node, objRef, listIndex, builder, visited);
+            if (literal != null) return literal;
+          }
         }
 
         PointerKey objKey =

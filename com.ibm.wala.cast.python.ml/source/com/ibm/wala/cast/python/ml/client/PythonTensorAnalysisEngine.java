@@ -683,6 +683,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       binaryOpResults.put(array, NumpyTypes.NDARRAY_TYPE);
     builder.setFreshBinaryOpResultTypes(binaryOpResults);
+    // The element of an array, bound by iterating it or by subscripting it with an index, is an
+    // array of the receiver's kind one rank down (wala/ML#1009): the slices of the element and the
+    // arithmetic over them then allocate as they do over the receiver, and the operators read
+    // their operands where before every value downstream of the element was empty.
+    Map<TypeReference, TypeReference> elementTypes = new HashMap<>();
+    elementTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
+      elementTypes.put(array, NumpyTypes.NDARRAY_TYPE);
+    builder.setFreshElementTypes(elementTypes);
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     builder.setFreshArrayAttributes(Map.of(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_ATTRIBUTES));
@@ -3480,6 +3489,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     addSummaryBypassLogic(options, "numpy.xml");
     addSummaryBypassLogic(options, "scipy.xml");
     addSummaryBypassLogic(options, "tensorflow.xml");
+    // SentencePiece's id encodings are lists of Python ints a text model's prompt is built from.
+    addSummaryBypassLogic(options, "sentencepiece.xml");
   }
 
   /**
