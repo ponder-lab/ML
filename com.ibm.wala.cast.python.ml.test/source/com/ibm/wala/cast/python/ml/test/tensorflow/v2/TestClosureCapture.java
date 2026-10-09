@@ -18,7 +18,7 @@ public class TestClosureCapture extends AbstractTensorTest {
 
   /**
    * The lambda is created after the parameter's rebinding to the int32 cast and no write follows,
-   * so its callee reads the cast alone: int32, not the float32 the parameter arrived as.
+   * so its callee reads the cast alone: an int32 scalar, not the float32 the parameter arrived as.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
@@ -32,7 +32,7 @@ public class TestClosureCapture extends AbstractTensorTest {
         "consume_captured",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(INT_32, null))));
+        Map.of(2, Set.of(TensorType.of(INT_32))));
   }
 
   /**
@@ -70,7 +70,7 @@ public class TestClosureCapture extends AbstractTensorTest {
         "tf2_test_closure_rebound_capture.py",
         "erase",
         2,
-        14,
+        15,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 8, 3)), 3, Set.of(TensorType.of(FLOAT_32))));
   }
 }
