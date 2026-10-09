@@ -29,9 +29,11 @@ import java.util.logging.Logger;
  * from {@code input}. With an {@code axis}, the output keeps the input's rank and the extent along
  * {@code axis} becomes the total of the repeats; without one, the input is flattened and the output
  * is rank 1. A scalar {@code repeats} multiplies the extent, and a constant list of repeats sums to
- * it. A tensor {@code repeats} gives a {@link DynamicDim}, since TensorFlow's static shape reports
- * {@code None} for a length a runtime tensor determines. Any other {@code repeats} gives an {@link
- * UnresolvedDim}. A non-constant {@code axis}, or one out of the input's range, is ⊤.
+ * it. A tensor {@code repeats}, or a list holding one, gives a {@link DynamicDim}, since
+ * TensorFlow's static shape reports {@code None} for a length a runtime tensor determines. Any
+ * other {@code repeats} gives an {@link UnresolvedDim}. A supplied {@code axis} not read as a
+ * constant may be any of the input's axes, and gives one member per axis; an axis out of the
+ * input's range is ⊤.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/repeat">tf.repeat</a>
  */
@@ -117,21 +119,31 @@ public class Repeat extends PassThroughUnaryTensorGenerator {
     if (inputShapes == null) return null;
 
     Set<Optional<Integer>> axes = this.resolveAxes(builder);
-    if (axes == null) {
-      LOGGER.fine(() -> "Non-constant axis for " + describe(this.getSource()) + "; returning ⊤.");
-      return null;
-    }
     Set<Repeats> repeats = this.resolveRepeats(builder);
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> input : inputShapes)
+    for (List<Dimension<?>> input : inputShapes) {
+      // An axis not read as a constant is each of the input's axes in turn.
+      Set<Optional<Integer>> inputAxes = HashSetFactory.make();
       for (Optional<Integer> axis : axes)
+        if (axis.equals(ANY_AXIS)) {
+          LOGGER.fine(
+              () ->
+                  "Axis of "
+                      + describe(this.getSource())
+                      + " not read as a constant; reading each axis of "
+                      + input
+                      + ".");
+          for (int i = 0; i < input.size(); i++) inputAxes.add(Optional.of(i));
+        } else inputAxes.add(axis);
+      for (Optional<Integer> axis : inputAxes)
         for (Repeats r : repeats) {
           List<Dimension<?>> out = repeatShape(input, axis, r);
           // A ⊤ (null) for any alternative joins to ⊤ for the whole result.
           if (out == null) return null;
           ret.add(out);
         }
+    }
     return ret.isEmpty() ? null : ret;
   }
 
@@ -172,27 +184,39 @@ public class Repeat extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Resolves the {@code axis} argument.
+   * Resolves the {@code axis} argument. An omitted argument and a supplied one whose value the
+   * analysis cannot read leave the same empty points-to set behind (wala/ML#896); only the omitted
+   * one is the default, {@code None}. A supplied axis that is not read as a constant may be any of
+   * the input's axes, so it reads as {@link #ANY_AXIS}, and the output keeps the input's rank.
    *
    * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
-   * @return The possible axes, empty meaning {@code None}, as when the argument is absent; or
-   *     {@code null} when an axis is not a constant.
+   * @return The possible axes: empty meaning {@code None}, {@link #ANY_AXIS} meaning an axis not
+   *     read as a constant.
    */
   private Set<Optional<Integer>> resolveAxes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
-    // An absent axis is the default, `None`, as the reductions read theirs.
-    if (pts == null || pts.isEmpty()) return Set.of(Optional.empty());
+    if (pts == null || pts.isEmpty())
+      return Boolean.FALSE.equals(
+              this.isArgumentSyntacticallySupplied(
+                  builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName()))
+          ? Set.of(Optional.empty())
+          : Set.of(ANY_AXIS);
     Set<Optional<Integer>> axes = HashSetFactory.make();
     for (InstanceKey ik : pts) {
-      if (!(ik instanceof ConstantKey<?> constant)) return null;
-      Object value = constant.getValue();
+      Object value = ik instanceof ConstantKey<?> constant ? constant.getValue() : ANY_AXIS;
       if (value == null) axes.add(Optional.empty());
       else if (value instanceof Number number) axes.add(Optional.of(number.intValue()));
-      else return null;
+      else axes.add(ANY_AXIS);
     }
     return axes;
   }
+
+  /**
+   * The axis an {@code axis} argument stands for when it is supplied but not read as a constant:
+   * any of the input's axes. No real axis is this far out of range.
+   */
+  private static final Optional<Integer> ANY_AXIS = Optional.of(Integer.MIN_VALUE);
 
   /**
    * Resolves the {@code repeats} argument into one alternative per form its points-to set holds.
@@ -220,36 +244,38 @@ public class Repeat extends PassThroughUnaryTensorGenerator {
         ret.add(new Repeats(null, null, true));
         continue;
       }
-      ret.add(
-          this.constantCounts(builder, ik)
-              .map(c -> new Repeats(null, c, false))
-              .orElse(unreadable));
+      ret.add(this.countsList(builder, ik).orElse(unreadable));
     }
     return ret;
   }
 
   /**
-   * Reads a constant list of counts.
+   * Reads a list of counts.
    *
    * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
    * @param ik The {@code repeats} member.
-   * @return The counts, or empty when the member is not a list of constant integers.
+   * @return Constant counts for a list of constant integers, tensor counts for a list one of whose
+   *     elements may be a tensor (read as a {@link DynamicDim}), or empty when the member is
+   *     neither.
    */
-  private Optional<List<Integer>> constantCounts(
-      PropagationCallGraphBuilder builder, InstanceKey ik) {
+  private Optional<Repeats> countsList(PropagationCallGraphBuilder builder, InstanceKey ik) {
     Set<List<Dimension<?>>> lists;
     try {
       lists = this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
     } catch (IllegalArgumentException | IllegalStateException e) {
       return Optional.empty();
     }
-    if (lists == null || lists.size() != 1) return Optional.empty();
+    if (lists == null || lists.isEmpty()) return Optional.empty();
+    for (List<Dimension<?>> list : lists)
+      for (Dimension<?> d : list)
+        if (d instanceof DynamicDim) return Optional.of(new Repeats(null, null, true));
+    if (lists.size() != 1) return Optional.empty();
     List<Integer> counts = new ArrayList<>();
     for (Dimension<?> d : lists.iterator().next()) {
       if (!(d instanceof NumericDim numeric)) return Optional.empty();
       counts.add(numeric.value());
     }
-    return Optional.of(counts);
+    return Optional.of(new Repeats(null, counts, false));
   }
 
   /**
