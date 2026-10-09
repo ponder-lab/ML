@@ -111,6 +111,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -342,6 +343,23 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * @return The value numbers written by the reaching writes, or {@code null} to keep the slot.
    */
   Set<Integer> reachingLexicalWrites(
+      CGNode definer, String name, String definerName, int allocation) {
+    // The solution depends only on the definer's IR, while a closure's every access asks for it
+    // once per creation and again on each growth of the closure's function value.
+    return reachingLexicalWritesCache
+        .computeIfAbsent(
+            Pair.make(Pair.make(definer, allocation), Pair.make(name, definerName)),
+            key ->
+                Optional.ofNullable(
+                    computeReachingLexicalWrites(definer, name, definerName, allocation)))
+        .orElse(null);
+  }
+
+  /** The solutions {@link #reachingLexicalWrites} has computed, a declined one as empty. */
+  private final Map<Pair<Pair<CGNode, Integer>, Pair<String, String>>, Optional<Set<Integer>>>
+      reachingLexicalWritesCache = HashMapFactory.make();
+
+  private Set<Integer> computeReachingLexicalWrites(
       CGNode definer, String name, String definerName, int allocation) {
     IR ir = definer.getIR();
     if (ir == null) return null;
