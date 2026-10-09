@@ -22,8 +22,10 @@ import com.google.common.collect.Maps;
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
+import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalAccess;
+import com.ibm.wala.cast.ir.ssa.AstLexicalAccess.Access;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
@@ -72,10 +74,12 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInvokeInstruction;
@@ -96,14 +100,18 @@ import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -341,6 +349,153 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         });
   }
 
+  /** The definer methods and names already scanned for a nested function that writes them. */
+  private final Map<Pair<IMethod, String>, Boolean> closureWriters = HashMapFactory.make();
+
+  /**
+   * The values of the lexical writes of a variable that reach a closure's allocation in the
+   * variable's defining node, when no write can run after the allocation (wala/ML#1026); see {@code
+   * PythonConstraintVisitor#visitLexicalReadResolvingCaptures}.
+   *
+   * <p>The writes are the node's own {@link AstLexicalWrite}s of the name; a write from another
+   * nested function (a {@code nonlocal} assignment) is found in that function's own instructions,
+   * and its presence declines the whole name. A write is reachable after the allocation when it
+   * sits later in the allocation's block or in any block reachable from that block, the
+   * allocation's own block included through a back edge, so a rebinding later in a loop body
+   * declines. The reaching writes are the standard forward solution over the control-flow graph,
+   * with the last write of a block killing the earlier ones; a path from the entry carrying no
+   * write at all declines, since the variable may then be unassigned.
+   *
+   * @param definer The node defining the variable, which created the closure.
+   * @param name The variable's name.
+   * @param definerName The defining method's name, as the lexical access spells it.
+   * @param allocation The instruction index of the closure's allocation in {@code definer}.
+   * @return The value numbers written by the reaching writes, or {@code null} to keep the slot.
+   */
+  Set<Integer> reachingLexicalWrites(
+      CGNode definer, String name, String definerName, int allocation) {
+    // The solution depends only on the definer's IR, while a closure's every access asks for it
+    // once per creation and again on each growth of the closure's function value.
+    return reachingLexicalWritesCache
+        .computeIfAbsent(
+            Pair.make(Pair.make(definer, allocation), Pair.make(name, definerName)),
+            key ->
+                Optional.ofNullable(
+                    computeReachingLexicalWrites(definer, name, definerName, allocation)))
+        .orElse(null);
+  }
+
+  /** The solutions {@link #reachingLexicalWrites} has computed, a declined one as empty. */
+  private final Map<Pair<Pair<CGNode, Integer>, Pair<String, String>>, Optional<Set<Integer>>>
+      reachingLexicalWritesCache = HashMapFactory.make();
+
+  private Set<Integer> computeReachingLexicalWrites(
+      CGNode definer, String name, String definerName, int allocation) {
+    IR ir = definer.getIR();
+    if (ir == null) return null;
+    if (hasClosureWriter(definer.getMethod(), name, definerName)) return null;
+    SSAInstruction[] instructions = ir.getInstructions();
+    Map<Integer, Integer> writes = new HashMap<>(); // instruction index -> written value number.
+    for (int pc = 0; pc < instructions.length; pc++)
+      if (instructions[pc] instanceof AstLexicalWrite write)
+        for (Access access : write.getAccesses())
+          if (name.equals(access.variableName()) && definerName.equals(access.variableDefiner()))
+            writes.put(pc, access.valueNumber());
+    if (writes.isEmpty()) return null;
+    SSACFG cfg = ir.getControlFlowGraph();
+    ISSABasicBlock home = cfg.getBlockForInstruction(allocation);
+    if (home == null) return null;
+    // No write may run after the allocation: none later in its block, none in a block reachable
+    // from it (its own block included, through a back edge).
+    for (int pc : writes.keySet())
+      if (pc > allocation && cfg.getBlockForInstruction(pc).equals(home)) return null;
+    Set<ISSABasicBlock> reachable = new HashSet<>();
+    List<ISSABasicBlock> work = new ArrayList<>();
+    for (Iterator<ISSABasicBlock> it = cfg.getSuccNodes(home); it.hasNext(); ) work.add(it.next());
+    while (!work.isEmpty()) {
+      ISSABasicBlock b = work.remove(work.size() - 1);
+      if (!reachable.add(b)) continue;
+      for (Iterator<ISSABasicBlock> it = cfg.getSuccNodes(b); it.hasNext(); ) work.add(it.next());
+    }
+    for (int pc : writes.keySet())
+      if (reachable.contains(cfg.getBlockForInstruction(pc))) return null;
+    // The reaching writes: a block's last write kills the rest; the entry carries the "no write"
+    // marker, which declines when it reaches the allocation.
+    Map<ISSABasicBlock, Integer> lastWrite = new HashMap<>();
+    for (int pc : writes.keySet()) {
+      ISSABasicBlock b = cfg.getBlockForInstruction(pc);
+      if (b.equals(home) && pc > allocation) continue;
+      lastWrite.merge(b, pc, Math::max);
+    }
+    final int unassigned = -1;
+    Map<ISSABasicBlock, Set<Integer>> out = new HashMap<>();
+    boolean changed = true;
+    while (changed) {
+      changed = false;
+      for (ISSABasicBlock b : cfg) {
+        Set<Integer> in = new HashSet<>();
+        if (b.isEntryBlock()) in.add(unassigned);
+        for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(b); it.hasNext(); ) {
+          Set<Integer> o = out.get(it.next());
+          if (o != null) in.addAll(o);
+        }
+        Set<Integer> o =
+            lastWrite.containsKey(b) && !b.equals(home) ? Set.of(lastWrite.get(b)) : in;
+        if (!o.equals(out.get(b))) {
+          out.put(b, o);
+          changed = true;
+        }
+      }
+    }
+    Set<Integer> reaching;
+    if (lastWrite.containsKey(home)) reaching = Set.of(lastWrite.get(home));
+    else {
+      reaching = new HashSet<>();
+      if (home.isEntryBlock()) reaching.add(unassigned);
+      for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(home); it.hasNext(); ) {
+        Set<Integer> o = out.get(it.next());
+        if (o != null) reaching.addAll(o);
+      }
+    }
+    if (reaching.isEmpty() || reaching.contains(unassigned)) return null;
+    Set<Integer> values = new HashSet<>();
+    for (int pc : reaching) values.add(writes.get(pc));
+    return values;
+  }
+
+  /**
+   * Whether a function nested in the given method writes the variable: a nested code body with a
+   * lexical write of the name under this definer. Decided once per method and name.
+   *
+   * @param definer The defining method.
+   * @param name The variable's name.
+   * @param definerName The defining method's name, as a lexical access spells it.
+   * @return {@code true} iff a nested function may write the variable.
+   */
+  private boolean hasClosureWriter(IMethod definer, String name, String definerName) {
+    return closureWriters.computeIfAbsent(
+        Pair.make(definer, name),
+        key -> {
+          String prefix = definer.getDeclaringClass().getName().toString() + "/";
+          for (IClass c : getClassHierarchy()) {
+            if (!c.getName().toString().startsWith(prefix)) continue;
+            for (IMethod m : c.getDeclaredMethods()) {
+              if (!(m instanceof AstMethod)) continue;
+              // The lexical information's read-only set covers only the names an entity itself
+              // defines, so a nested function's writes are read off its own instructions.
+              IR nested = getAnalysisCache().getIR(m);
+              if (nested == null) continue;
+              for (SSAInstruction instruction : nested.getInstructions())
+                if (instruction instanceof AstLexicalWrite write)
+                  for (Access access : write.getAccesses())
+                    if (name.equals(access.variableName())
+                        && definerName.equals(access.variableDefiner())) return true;
+            }
+          }
+          return false;
+        });
+  }
+
   public static class PythonConstraintVisitor extends AstConstraintVisitor
       implements PythonInstructionVisitor {
 
@@ -487,8 +642,137 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public void visitAstLexicalRead(AstLexicalRead instruction) {
-      super.visitAstLexicalRead(instruction);
-      refreshLexicalOnClosureGrowth(instruction, () -> super.visitAstLexicalRead(instruction));
+      visitLexicalReadResolvingCaptures(instruction);
+      refreshLexicalOnClosureGrowth(
+          instruction, () -> visitLexicalReadResolvingCaptures(instruction));
+    }
+
+    /**
+     * Visits a lexical read, resolving each access that a closure makes of a variable its creator
+     * had finished writing before the closure was made, and leaving the rest to the superclass's
+     * scope slot (wala/ML#1026). The slot per (name, definer node) receives every write the definer
+     * makes, so a closure created after a variable's last assignment read the earlier bindings too:
+     * a parameter rebound by a cast before a lambda captured it reached the lambda's callee as both
+     * the parameter and the cast. Python binds the variable, not its value, so the closure reads
+     * whatever the variable holds when the closure runs; when no write of the name can run after
+     * the closure's allocation, that is exactly the set of writes reaching the allocation, and the
+     * access is constrained from those writes' values in the creating node.
+     *
+     * @param instruction The lexical read.
+     */
+    private void visitLexicalReadResolvingCaptures(AstLexicalRead instruction) {
+      List<Access> slot = new ArrayList<>();
+      for (Access access : instruction.getAccesses())
+        if (!resolveCapturedRead(access)) slot.add(access);
+      if (slot.size() == instruction.getAccesses().length) super.visitAstLexicalRead(instruction);
+      else if (!slot.isEmpty())
+        super.visitAstLexicalRead(
+            new AstLexicalRead(instruction.iIndex(), slot.toArray(new Access[0])));
+    }
+
+    /**
+     * Resolves one lexical access from the writes reaching the closure's allocation in its creating
+     * node, when that is sound; see {@link #visitLexicalReadResolvingCaptures}.
+     *
+     * @param access The access.
+     * @return {@code true} iff the access was handled here (constrained, or awaiting the function
+     *     value's growth), so the scope slot is not read for it.
+     */
+    private boolean resolveCapturedRead(Access access) {
+      String name = access.variableName();
+      String definer = access.variableDefiner();
+      if (definer == null || getBuilder().sameMethod(node, definer)) return false;
+      List<Pair<CGNode, Integer>> creations = closureCreations(definer);
+      if (creations == null) return false; // A function value this rule cannot place: the slot.
+      if (creations.isEmpty()) return true; // Nothing has reached the function value yet.
+      PointerKey lval = getPointerKeyForLocal(access.valueNumber());
+      List<Pair<CGNode, Set<Integer>>> resolved = new ArrayList<>();
+      for (Pair<CGNode, Integer> creation : creations) {
+        Set<Integer> reaching =
+            getBuilder().reachingLexicalWrites(creation.fst, name, definer, creation.snd);
+        if (reaching == null) {
+          logger.fine(
+              () ->
+                  "Closure read of "
+                      + name
+                      + " keeps the slot: a write may follow its creation at "
+                      + creation
+                      + ".");
+          return false;
+        }
+        resolved.add(Pair.make(creation.fst, reaching));
+      }
+      for (Pair<CGNode, Set<Integer>> entry : resolved) {
+        CGNode creator = entry.fst;
+        SymbolTable creatorSymtab =
+            getBuilder().getCFAContextInterpreter().getIRView(creator).getSymbolTable();
+        DefUse creatorDu = getBuilder().getCFAContextInterpreter().getDU(creator);
+        for (int vn : entry.snd) {
+          PointerKey rval = getBuilder().getPointerKeyForLocal(creator, vn);
+          // An invariant value is represented implicitly, so its contents are added directly, as
+          // the superclass's lexical read adds them (the wala/ML#668 trap otherwise).
+          if (contentsAreInvariant(creatorSymtab, creatorDu, vn)) {
+            system.recordImplicitPointsToSet(rval);
+            for (InstanceKey ik : getInvariantContents(creatorSymtab, creatorDu, creator, vn)) {
+              system.findOrCreateIndexForInstanceKey(ik);
+              system.newConstraint(lval, ik);
+            }
+          } else system.newConstraint(lval, assignOperator, rval);
+        }
+      }
+      return true;
+    }
+
+    /**
+     * Whether a method is a module's body: a script's code body, whose class is the script itself
+     * rather than a function nested under it. The script's class is named after the script's path,
+     * so a module under a directory carries a slash in its name as a nested function does; the path
+     * alone ends in the script's {@code .py} suffix, since a function, class or method body nested
+     * in the script appends {@code /name} to it.
+     *
+     * @param method The method.
+     * @return {@code true} iff the method is a script body.
+     */
+    private static boolean isModuleBody(IMethod method) {
+      String name = method.getDeclaringClass().getName().toString();
+      return name.startsWith("Lscript ") && name.endsWith(".py");
+    }
+
+    /**
+     * The closures this node runs as, each as its creating node and the allocation's instruction
+     * index, when every function value is a closure the given definer created directly.
+     *
+     * @param definer The name of the method defining the variable read.
+     * @return The creations; empty when the function value holds nothing yet; {@code null} when a
+     *     function value is not a closure the definer itself created.
+     */
+    private List<Pair<CGNode, Integer>> closureCreations(String definer) {
+      List<Pair<CGNode, Integer>> ret = new ArrayList<>();
+      SymbolTable symtab = ir.getSymbolTable();
+      List<InstanceKey> functions = new ArrayList<>();
+      if (contentsAreInvariant(symtab, du, 1)) {
+        for (InstanceKey ik : getInvariantContents(symtab, du, node, 1)) functions.add(ik);
+      } else {
+        PointsToSetVariable value = system.findOrCreatePointsToSet(getPointerKeyForLocal(1));
+        if (value.getValue() != null)
+          value.getValue().foreach(i -> functions.add(system.getInstanceKey(i)));
+      }
+      for (InstanceKey function : functions) {
+        if (!(function instanceof ScopeMappingInstanceKey closure)) return null;
+        AllocationSiteInNode site;
+        try {
+          site = com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode(closure.getBase());
+        } catch (IllegalArgumentException e) {
+          return null;
+        }
+        if (site == null || !getBuilder().sameMethod(site.getNode(), definer)) return null;
+        // A module's variables have feeders beyond the module's own writes: the builtins and the
+        // imports bound into its scope, and `global` statements elsewhere. The module keeps the
+        // slot; the rule serves a function's locals.
+        if (isModuleBody(site.getNode().getMethod())) return null;
+        ret.add(Pair.make(site.getNode(), site.getSite().getProgramCounter()));
+      }
+      return ret;
     }
 
     @Override
