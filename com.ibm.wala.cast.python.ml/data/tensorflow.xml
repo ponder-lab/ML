@@ -2665,6 +2665,17 @@
       <class name="while_loop" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/while_loop -->
         <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self cond body loop_vars shape_invariants parallel_iterations back_prop swap_memory maximum_iterations name">
+          <!-- `cond` and `body` are called with the loop variables unpacked positionally, `body(*loop_vars)`, so a function reached only through a loop gets a call-graph node and its parameters read the loop variables (wala/ML#942). A summary cannot unpack a sequence of unknown length, so the first 8 positions are read; a position past the sequence's end reads nothing. The result stays the loop variables: the body's result is not joined into it. -->
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="loop_vars" def="v0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="loop_vars" def="v1"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="loop_vars" def="v2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="loop_vars" def="v3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="loop_vars" def="v4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="loop_vars" def="v5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="loop_vars" def="v6"/>
+          <getfield class="LRoot" field="7" fieldType="LRoot" ref="loop_vars" def="v7"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="cond" arg1="v0" arg2="v1" arg3="v2" arg4="v3" arg5="v4" arg6="v5" arg7="v6" arg8="v7" numArgs="9" def="c"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="body" arg1="v0" arg2="v1" arg3="v2" arg4="v3" arg5="v4" arg6="v5" arg7="v6" arg8="v7" numArgs="9" def="b"/>
           <return value="loop_vars"/>
         </method>
       </class>

@@ -343,7 +343,9 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * {@code model} wiring (WALA's one-shot {@code visitLexical} snapshot), so its {@code
    * predict}/{@code call} never dispatched and its method nodes vanished at whole-project scale.
    * This pins the generation sibling's {@code predict} node and its parameter type, which must be
-   * symmetric with {@link #testNlpgnnFullInteractive()}.
+   * symmetric with {@link #testNlpgnnFullInteractive()}. The sampler's loop body calls {@code
+   * predict} with its loop variables, so {@code past} reads the rank-6 float32 cache the body
+   * reshapes and {@code inputs} the int32 samples beside the context (wala/ML#942).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -373,10 +375,24 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "tests/TG/EN/generation.py",
         "GenGPT2.predict",
         "nlpgnn_full_proj",
-        1,
-        1,
+        2,
+        2,
         Map.of(
-            3, Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))))));
+            3,
+            Set.of(
+                new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))),
+                new TensorType(INT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(1)))),
+            4,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(2),
+                        UnresolvedDim.INSTANCE,
+                        new SymbolicDim("?"),
+                        UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -816,10 +832,24 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "tests/TG/EN/interactive.py",
         "GenGPT2.predict",
         "nlpgnn_full_proj",
-        1,
-        1,
+        2,
+        2,
         Map.of(
-            3, Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))))));
+            3,
+            Set.of(
+                new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))),
+                new TensorType(INT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(1)))),
+            4,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(2),
+                        UnresolvedDim.INSTANCE,
+                        new SymbolicDim("?"),
+                        UnresolvedDim.INSTANCE)))));
   }
 
   /**
