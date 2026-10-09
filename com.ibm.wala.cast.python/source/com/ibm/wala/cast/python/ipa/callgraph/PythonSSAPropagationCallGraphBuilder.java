@@ -265,6 +265,26 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The element types whose element reads get an allocation of their own (wala/ML#1009): an element
+   * bound by iterating an array, as the {@code next} a loop is lowered to reads it, or by
+   * subscripting an array with an index, is an array of the receiver's kind one rank down. Each
+   * concrete receiver type maps to the type of its element. Empty by default; see {@link
+   * #setFreshElementTypes}.
+   */
+  private Map<TypeReference, TypeReference> freshElementTypes = Collections.emptyMap();
+
+  /**
+   * Names the element types whose element reads allocate (wala/ML#1009); see {@link
+   * #freshElementTypes}.
+   *
+   * @param types Each concrete receiver type whose element reads allocate, mapped to the type of
+   *     the element.
+   */
+  public void setFreshElementTypes(Map<TypeReference, TypeReference> types) {
+    this.freshElementTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
+  }
+
+  /**
    * The attributes the model attaches to each instance of an array type, per attribute name the
    * summary class of the attached method (wala/ML#1009). A fresh array the builder allocates (a
    * slice's or an arithmetic result's) receives them, so it dispatches as an array a summary
@@ -690,7 +710,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
         @Override
         public void action(AbstractFieldPointerKey fieldKey) {
-          if (!getBuilder().declaresIterationProtocol(fieldKey.getInstanceKey().concreteType()))
+          // An array's properties are the methods its model attaches per instance, not its
+          // elements: its element is the allocation the read makes (wala/ML#1009), and reading the
+          // methods as elements made the loop variable the array's methods.
+          IClass type = fieldKey.getInstanceKey().concreteType();
+          if (!getBuilder().declaresIterationProtocol(type)
+              && !getBuilder().freshElementTypes.containsKey(type.getReference()))
             read.action(fieldKey);
         }
       };
@@ -1037,6 +1062,44 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       }
     }
 
+    /**
+     * Allocates the element read off an array (wala/ML#1009): for each receiver key of a type
+     * {@link #freshElementTypes} names, a fresh key of the mapped type at the read's instruction
+     * index joins the result, with the receiver's per-instance methods, so a slice of the element
+     * and arithmetic over it allocate as they do over the receiver. Without a key, every read
+     * downstream of the element was empty, and the operators over it read nothing. The element's
+     * shape and dtype are the read's own generator's, which peels the receiver's leading axis. The
+     * read is an element read when its member is drawn by iteration (a loop variable, or the
+     * element a summary reads for one) or is an index: a constant integer, or a value that is not a
+     * literal tuple (the ellipsis and newaxis forms, which add axes and keep their own modeling). A
+     * string member is an attribute and {@code None} alone adds an axis; neither is an element.
+     *
+     * @param read The property read.
+     */
+    private void processElementRead(AstPropertyRead read) {
+      Map<TypeReference, TypeReference> types = getBuilder().freshElementTypes;
+      if (types.isEmpty() || !read.hasDef()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int member = read.getMemberRef();
+      if (!isLoopVariable(read.getDef())) {
+        if (symtab.isConstant(member)) {
+          // An integer literal is a `Long` constant in this front end; a string is an attribute.
+          Object index = symtab.getConstantValue(member);
+          if (!(index instanceof Long) && !(index instanceof Integer)) return;
+        } else if (du.getDef(member) instanceof SSANewInstruction) return;
+      }
+      int object = read.getObjectRef();
+      if (object <= 0 || symtab.isConstant(object)) return;
+      PointerKey resultKey = getPointerKeyForLocal(read.getDef());
+      ArrayOperationOperator operator =
+          getBuilder().new ArrayOperationOperator(node, read.iIndex(), resultKey, types);
+      PointerKey key = getPointerKeyForLocal(object);
+      if (contentsAreInvariant(symtab, du, object) || system.isImplicit(key))
+        for (InstanceKey ik : getInvariantContents(symtab, du, node, object))
+          operator.contribute(ik);
+      else system.newSideEffect(operator, key);
+    }
+
     @Override
     public void visitArrayLoad(SSAArrayLoadInstruction inst) {
       newFieldRead(node, inst.getArrayRef(), inst.getIndex(), inst.getDef());
@@ -1105,6 +1168,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processListContentsRead(instruction);
       processNegativeSubscript(instruction);
       processUnknownIndexRead(instruction);
+      processElementRead(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
