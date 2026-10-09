@@ -2500,6 +2500,22 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String EMBEDDING_LAYER_CALL_SIGNATURE =
       "tf.keras.layers.Embedding." + CALLABLE_METHOD_NAME + "()";
 
+  /**
+   * The function a {@code tf.keras.layers.Embedding}'s {@code __init__} calls to allocate the
+   * layer's {@code embeddings} weight, reached from a subclass's {@code super().__init__(...)}.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding">tf.keras.layers.Embedding</a>
+   */
+  public static final MethodReference EMBEDDING_WEIGHT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/layers/Embedding/weight")),
+          AstMethodReference.fnSelector);
+
+  private static final String EMBEDDING_WEIGHT_SIGNATURE = "tf.keras.layers.Embedding.embeddings";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/max_pool. */
   public static final MethodReference MAX_POOL =
       MethodReference.findOrCreate(
@@ -2795,6 +2811,7 @@ public class TensorFlowTypes extends PythonTypes {
               GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass(),
               GLOBAL_AVERAGE_POOLING_1D_CALL_SIGNATURE),
           Map.entry(EMBEDDING_LAYER_CALL.getDeclaringClass(), EMBEDDING_LAYER_CALL_SIGNATURE),
+          Map.entry(EMBEDDING_WEIGHT.getDeclaringClass(), EMBEDDING_WEIGHT_SIGNATURE),
           Map.entry(ADD_WEIGHT.getDeclaringClass(), ADD_WEIGHT_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
           Map.entry(MAX_POOL.getDeclaringClass(), MAX_POOL_SIGNATURE),

@@ -70,15 +70,13 @@ public abstract class EyeBase extends TensorTypeAllocator {
 
     for (Optional<Integer> nRow : numRows) {
       if (numColumns.isEmpty())
-        // If numColumns is not provided, it defaults to numRows.
-        for (Optional<Integer> nCol : numRows)
-          // Build the shape using nRow and nCol.
-          numColumns.add(nCol);
+        // If numColumns is not provided, it takes its default.
+        numColumns.addAll(this.getDefaultNumberOfColumns(numRows));
 
       for (Optional<Integer> nCol : numColumns)
         if (nCol.isEmpty()) {
-          // If numColumns is not provided, it defaults to numRows.
-          for (Optional<Integer> nCol2 : numRows) {
+          // If numColumns is not resolved, it takes its default.
+          for (Optional<Integer> nCol2 : this.getDefaultNumberOfColumns(numRows)) {
             // Build the shape using nRow and nCol.
             List<Dimension<?>> shape = new ArrayList<>();
 
@@ -98,6 +96,17 @@ public abstract class EyeBase extends TensorTypeAllocator {
     }
 
     return ret;
+  }
+
+  /**
+   * The column counts to take when the column argument is absent or unresolved: an identity
+   * matrix's column count defaults to its row count.
+   *
+   * @param numRows The possible row counts.
+   * @return The possible column counts, here {@code numRows}.
+   */
+  protected Set<Optional<Integer>> getDefaultNumberOfColumns(Set<Optional<Integer>> numRows) {
+    return numRows;
   }
 
   /**

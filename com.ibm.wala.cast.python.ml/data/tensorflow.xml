@@ -4029,8 +4029,16 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Embedding" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding#__call__. The output type is computed by `EmbeddingCall`: the input shape with `output_dim` appended, float32 (wala/ML#676). -->
+      <class name="Embedding" allocatable="true" super="Ltensorflow/keras/layers/Layer">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding#__call__. The output type is computed by `EmbeddingCall`: the input shape with `output_dim` appended, float32 (wala/ML#676). Declaring a `super` materializes the class as a shell (as `Model` does), so a source subclass resolves its base to this type and its `super().__init__(...)` reaches the `__init__` below; the shell carries this class's own method references, so it does not shadow the bypass-served bodies. -->
+        <!-- The constructor a subclass's `super().__init__(...)` reaches: it stores the layer's `embeddings` weight, the `(input_dim, output_dim)` float32 matrix a subclass overriding `call` gathers from, allocated by `weight` (below) and typed by `EmbeddingWeight`. The dimensions are passed to `weight` as plain arguments, so they resolve even when a subclass forwards its own as `*args`. Keras creates the weight in `build`; the analysis is flow-insensitive, so creating it here reaches the same attribute. -->
+        <method name="__init__" descriptor="()LRoot;" numArgs="10" paramNames="func self input_dim output_dim embeddings_initializer embeddings_regularizer activity_regularizer embeddings_constraint mask_zero input_length">
+          <new def="weight_fn" class="Ltensorflow/keras/layers/Embedding/weight"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="weight_fn" arg1="input_dim" arg2="output_dim" numArgs="3" def="w"/>
+          <putfield class="LRoot" field="embeddings" fieldType="LRoot" ref="self" value="w"/>
+          <putfield class="LRoot" field="output_dim" fieldType="LRoot" ref="self" value="output_dim"/>
+          <return value="self"/>
+        </method>
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
@@ -4055,6 +4063,15 @@
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <return value="inputs"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/layers/Embedding">
+      <!-- The `embeddings` weight of a `tf.keras.layers.Embedding`, allocated by the layer's `__init__` with its `input_dim` and `output_dim` as plain arguments; typed by `EmbeddingWeight`. -->
+      <class name="weight" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input_dim output_dim">
+          <new def="w" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="w"/>
         </method>
       </class>
     </package>
