@@ -10634,6 +10634,8 @@ public abstract class TensorGenerator {
       return new Zeros(node);
     } else if (type.equals(NumpyTypes.ONES.getDeclaringClass())) {
       return new NpOnes(node);
+    } else if (type.equals(NumpyTypes.CONCATENATE.getDeclaringClass())) {
+      return new NpConcatenate(node);
     } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
       return new NpZeros(node);
     } else if (type.equals(NumpyTypes.NDARRAY_CONSTRUCTOR.getDeclaringClass())) {

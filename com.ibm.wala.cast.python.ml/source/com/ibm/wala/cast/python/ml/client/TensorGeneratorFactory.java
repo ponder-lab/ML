@@ -2358,6 +2358,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, NumpyTypes.ARRAY.getDeclaringClass()))
       return new NpArray(source);
     else if (isType(calledFunction, NumpyTypes.ONES.getDeclaringClass())) return new NpOnes(source);
+    else if (isType(calledFunction, NumpyTypes.CONCATENATE.getDeclaringClass()))
+      return new NpConcatenate(source);
     else if (isType(calledFunction, NumpyTypes.ZEROS.getDeclaringClass()))
       return new NpZeros(source);
     // `np.ndarray(shape, dtype, ...)` is an uninitialized allocation with the `zeros` typing
