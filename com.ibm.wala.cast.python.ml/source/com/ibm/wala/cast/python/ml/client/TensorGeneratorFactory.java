@@ -176,6 +176,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RELU;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REPEAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
@@ -2481,6 +2482,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, TensorFlowTypes.DECODE_JPEG.getDeclaringClass()))
       return new DecodeJpeg(source);
     else if (isType(calledFunction, EXPAND_DIMS.getDeclaringClass())) return new ExpandDims(source);
+    else if (isType(calledFunction, REPEAT.getDeclaringClass())) return new Repeat(source);
     else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
       return new ClipByValue(source);
     else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);

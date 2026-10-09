@@ -1850,6 +1850,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RELU_SIGNATURE = "tf.nn.relu()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/repeat. */
+  public static final MethodReference REPEAT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/repeat")),
+          AstMethodReference.fnSelector);
+
+  private static final String REPEAT_SIGNATURE = "tf.repeat()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/expand_dims. */
   public static final MethodReference EXPAND_DIMS =
       MethodReference.findOrCreate(
@@ -2722,6 +2731,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EINSUM.getDeclaringClass(), EINSUM_SIGNATURE),
           Map.entry(RELU.getDeclaringClass(), RELU_SIGNATURE),
           Map.entry(EXPAND_DIMS.getDeclaringClass(), EXPAND_DIMS_SIGNATURE),
+          Map.entry(REPEAT.getDeclaringClass(), REPEAT_SIGNATURE),
           Map.entry(CLIP_BY_VALUE.getDeclaringClass(), CLIP_BY_VALUE_SIGNATURE),
           Map.entry(AS_STRING.getDeclaringClass(), AS_STRING_SIGNATURE),
           Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
