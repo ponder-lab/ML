@@ -2538,6 +2538,14 @@ public class TensorGeneratorFactory {
                 builder, calleeOfReturn, Collections.emptyMap());
         Graph<PointsToSetVariable> assignmentGraph =
             builder.getPropagationSystem().getAssignmentGraph();
+        // A return value is any of its feasible returns at run time, and a returned local the arms
+        // of a conditional define is any of its creators, so the generator is the join of every
+        // creator's (wala/ML#1009). Returning the first predecessor with a generator, resolved from
+        // the first creator the walk reached, typed a function with several `return`s as whichever
+        // the walk reached first, and a returned φ as whichever arm it visited first: for the
+        // comprehension element `dynamic[i] if s is None else s` that was the Python integer arm,
+        // which has no generator, so the value read nothing.
+        List<TensorGenerator> returned = new ArrayList<>();
         for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(source);
             it.hasNext(); ) {
           PointsToSetVariable pred = it.next();
@@ -2546,15 +2554,39 @@ public class TensorGeneratorFactory {
               && ((LocalPointerKey) pred.getPointerKey()).getNode().equals(calleeOfReturn)
               && !feasibleReturns.contains(
                   ((LocalPointerKey) pred.getPointerKey()).getValueNumber())) continue;
-          try {
-            TensorGenerator gen = getGenerator(pred, builder, visited);
-            if (gen != null) {
-              return gen;
+          Set<PointsToSetVariable> creators = findCreators(pred, builder);
+          LOGGER.fine(
+              () ->
+                  "Returned value "
+                      + describe(pred)
+                      + " of "
+                      + describe(calleeOfReturn)
+                      + " has "
+                      + creators.size()
+                      + " creator(s).");
+          for (PointsToSetVariable creator : creators) {
+            String outcome;
+            try {
+              TensorGenerator gen = getGenerator(creator, builder, visited);
+              if (gen != null) returned.add(gen);
+              outcome = gen == null ? "no generator" : gen.getClass().getSimpleName();
+            } catch (IllegalArgumentException ex) {
+              // A creator with no generator contributes nothing; the others still decide.
+              outcome = "unknown call";
             }
-          } catch (IllegalArgumentException ex) {
-            // Ignore and continue searching other predecessors.
+            String outcomeF = outcome;
+            LOGGER.fine(() -> "  creator " + describe(creator) + ": " + outcomeF + ".");
           }
         }
+        LOGGER.fine(
+            () ->
+                "Return value of "
+                    + describe(calleeOfReturn)
+                    + ": "
+                    + returned.size()
+                    + " creator generator(s).");
+        if (returned.size() == 1) return returned.get(0);
+        if (returned.size() > 1) return new CreatorJoin(source, returned);
       }
       // Fallback for `read_data`-pattern XML classes (#437, #380): when the
       // dispatch chain above has no entry, check whether the call's
