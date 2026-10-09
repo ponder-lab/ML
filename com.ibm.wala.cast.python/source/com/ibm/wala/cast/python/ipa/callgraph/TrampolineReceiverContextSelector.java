@@ -13,6 +13,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -26,6 +27,7 @@ import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
+import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
 import com.ibm.wala.util.intset.IntSet;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -209,10 +211,29 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
+      // A summary body is keyed on the calling node: keyed on the receiver anchor, the calling
+      // method and the site, one summary node served every node of a helper under one anchor, so
+      // a `tf.math.log` reached from a `log10` helper's three call sites in one method merged the
+      // three arguments, and each site's result carried the others' shapes (wala/ML#716).
+      if (isSummaryBody(callee))
+        return new AnchoredCallerSiteContext(caller, caller.getMethod(), site, null);
       return new AnchoredCallerSiteContext(receiverAnchor(caller), caller.getMethod(), site, null);
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Whether a callee is a library summary body, a method read from a summary file, as opposed to a
+   * program method or one of the Python front end's own synthesized functions (trampolines, super
+   * stubs, constructors), which are {@link PythonSummarizedFunction}s.
+   *
+   * @param callee The method being called.
+   * @return {@code true} iff the callee is a summary body.
+   */
+  private static boolean isSummaryBody(IMethod callee) {
+    return callee instanceof SummarizedMethodWithNames
+        && !(callee instanceof PythonSummarizedFunction);
   }
 
   /**
