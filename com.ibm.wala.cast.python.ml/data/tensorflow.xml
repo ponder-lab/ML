@@ -2659,6 +2659,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cond -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self pred true_fn false_fn name">
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="true_fn" def="v"/>
+          <!-- Both branches are traced, so `false_fn` is called as well: a function reached only through a false branch gets a call-graph node and typed parameters (wala/ML#1029). The result stays `true_fn`'s; joining the branches' results is a separate change. -->
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="false_fn" def="w"/>
           <return value="v"/>
         </method>
       </class>
