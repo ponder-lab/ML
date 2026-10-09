@@ -720,8 +720,11 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   }
 
   /**
-   * The control for {@link #testWrapsDecoratorOverTwoFunctions()}: the first decorated function's
-   * bounding boxes, cast by the wrapper, are the {@code (1, 4)} float32 the fixture asserts.
+   * The first decorated function's side of {@link #testWrapsDecoratorOverTwoFunctions()}: its
+   * bounding boxes, cast by the wrapper, are the {@code (1, 4)} float32 the fixture asserts and
+   * nothing else. Under the site-keyed decorator the second function's wrapper also dispatched to
+   * it, with the cast of a missing {@code args[0]} as the boxes, so the parameter read a
+   * shape-unknown float32 twin as well.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
