@@ -695,14 +695,17 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     /**
      * Whether a method is a module's body: a script's code body, whose class is the script itself
-     * rather than a function nested under it.
+     * rather than a function nested under it. The script's class is named after the script's path,
+     * so a module under a directory carries a slash in its name as a nested function does; the path
+     * alone ends in the script's {@code .py} suffix, since a function, class or method body nested
+     * in the script appends {@code /name} to it.
      *
      * @param method The method.
      * @return {@code true} iff the method is a script body.
      */
     private static boolean isModuleBody(IMethod method) {
       String name = method.getDeclaringClass().getName().toString();
-      return name.startsWith("Lscript ") && !name.contains("/");
+      return name.startsWith("Lscript ") && name.endsWith(".py");
     }
 
     /**
