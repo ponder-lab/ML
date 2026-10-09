@@ -66,6 +66,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String ARRAY_SIGNATURE = "numpy.array()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.concatenate.html. */
+  public static final MethodReference CONCATENATE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/concatenate")),
+          AstMethodReference.fnSelector);
+
+  private static final String CONCATENATE_SIGNATURE = "np.concatenate()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.zeros.html */
   public static final MethodReference ZEROS =
       MethodReference.findOrCreate(
@@ -418,6 +427,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(RANDOM_PERMUTATION.getDeclaringClass(), RANDOM_PERMUTATION_SIGNATURE),
           Map.entry(ARRAY.getDeclaringClass(), ARRAY_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
+          Map.entry(CONCATENATE.getDeclaringClass(), CONCATENATE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(NDARRAY_CONSTRUCTOR.getDeclaringClass(), NDARRAY_CONSTRUCTOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),

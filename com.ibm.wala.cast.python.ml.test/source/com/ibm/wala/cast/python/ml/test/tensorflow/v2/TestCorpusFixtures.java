@@ -1448,14 +1448,17 @@ public class TestCorpusFixtures extends AbstractTensorTest {
 
   /**
    * Pins the negative fact wala/ML#867's disposition rests on: the engine's per-function census for
-   * {@code TUDataset.cat} is empty: no tensor parameters and no function-local tensor variables in
-   * {@code cat}'s own frame. The tensor may-evidence for {@code cat}'s container argument rides on
-   * the argument list's element {@link com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey}s
-   * (see {@link TestNoneContainerElement}), never on the parameter's local, so a client that reads
-   * {@code cat}'s frame sees nothing while a client that sweeps field keys sees element evidence
-   * beside a {@code None} constant on the same key. If this census ever becomes non-empty, the
-   * engine has started classifying the parameter itself and wala/ML#867's seat analysis must be
-   * revisited.
+   * {@code TUDataset.cat} has no tensor parameter. The tensor may-evidence for {@code cat}'s
+   * container argument rides on the argument list's element {@link
+   * com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey}s (see {@link
+   * TestNoneContainerElement}), never on the parameter's local, so a client that reads {@code
+   * cat}'s frame sees nothing while a client that sweeps field keys sees element evidence beside a
+   * {@code None} constant on the same key. If this census ever becomes non-empty, the engine has
+   * started classifying the parameter itself and wala/ML#867's seat analysis must be revisited.
+   *
+   * <p>The frame does hold two function-local tensor variables since {@code np.concatenate} is
+   * modeled, as {@code cat} returns {@code np.concatenate(seq, axis=-1)} under a conditional. They
+   * are values {@code cat} computes, not its parameter, so the fact above is unchanged.
    */
   @Test
   public void testNlpgnnCatCensusEmpty()
@@ -1466,7 +1469,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "TUDataset.cat",
         "nlpgnn_full_proj",
         0,
-        0,
+        2,
         Map.of());
   }
 

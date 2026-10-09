@@ -2772,6 +2772,64 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * An {@code np.concatenate} of a {@code float64} and an integral array, each of two elements: an
+   * array of NumPy's promoted dtype, {@code float64}. Its extent, 4 at run time, reads as
+   * unresolved, since the slices of the array that it joins do not resolve their extents.
+   */
+  @Test
+  public void testNpConcatenatePromotes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_concatenate.py",
+        "consume_concat",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /** The same arrays with the integral one first: the promotion does not depend on the order. */
+  @Test
+  public void testNpConcatenatePromotesIntegralFirst()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_concatenate.py",
+        "consume_int_first",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A {@code float64} concatenation scaled by a Python float keeps {@code float64}; with the
+   * concatenation unmodeled, the float literal alone decided the dtype as {@code float32}.
+   */
+  @Test
+  public void testNpConcatenateScaledByFloat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_concatenate.py",
+        "consume_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * An {@code np.concatenate} of a {@code float32} and an {@code int64} array: NumPy promotes the
+   * pair to {@code float64}, the dtype of neither element.
+   */
+  @Test
+  public void testNpConcatenatePromotesToNeitherElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_concatenate.py",
+        "consume_mixed_widths",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 4))));
+  }
+
+  /**
    * A tensor subscript with {@code np.newaxis} between slices, {@code b[:, np.newaxis, np.newaxis,
    * np.newaxis, :, :]} on a {@code (2, 150, 4)} input: each inserts a size-1 axis, as {@code
    * tf.newaxis} does.

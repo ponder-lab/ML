@@ -588,7 +588,7 @@ public class Concat extends TensorGenerator {
    * Resolves the points-to set of the element at {@code fieldIndex} on the given list/tuple alloc,
    * or {@code null} if the field can't be resolved.
    */
-  private OrdinalSet<InstanceKey> getElementPts(
+  protected OrdinalSet<InstanceKey> getElementPts(
       PropagationCallGraphBuilder builder,
       AllocationSiteInNode listAsin,
       OrdinalSet<InstanceKey> catalog,
@@ -641,7 +641,7 @@ public class Concat extends TensorGenerator {
    * @param firstElemPts The first element's points-to set, already resolved.
    * @return {@code true} iff some element of the list yields no tensor.
    */
-  private boolean hasDeadElement(
+  protected boolean hasDeadElement(
       PropagationCallGraphBuilder builder,
       AllocationSiteInNode listAsin,
       OrdinalSet<InstanceKey> catalog,

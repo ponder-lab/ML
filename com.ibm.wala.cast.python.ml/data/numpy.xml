@@ -91,6 +91,8 @@
         <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn"/>
         <new def="ones_fn" class="Lnumpy/ones"/>
         <putfield class="LRoot" field="ones" fieldType="LRoot" ref="x" value="ones_fn"/>
+        <new def="concatenate_fn" class="Lnumpy/concatenate"/>
+        <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="concatenate_fn"/>
         <new def="zeros_fn" class="Lnumpy/zeros"/>
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros_fn"/>
         <new def="arange_fn" class="Lnumpy/arange"/>
@@ -250,6 +252,22 @@
       <!-- Modeled as a class-per-function (same pattern as `array`) so that `np.ones` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray takes its shape from arg 0 (a shape tuple) and its dtype from the `dtype` argument; see `NpOnes`. -->
       <class name="ones" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self shape dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.concatenate.html -->
+      <!-- A fresh ndarray whose shape joins the `arrays` along `axis` and whose dtype is NumPy's promotion of theirs; see `NpConcatenate`. -->
+      <class name="concatenate" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self arrays axis">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
