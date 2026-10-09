@@ -2770,4 +2770,20 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 7), TensorType.of(FLOAT_32, 5, 7))));
   }
+
+  /**
+   * A tensor subscript with {@code np.newaxis} between slices, {@code b[:, np.newaxis, np.newaxis,
+   * np.newaxis, :, :]} on a {@code (2, 150, 4)} input: each inserts a size-1 axis, as {@code
+   * tf.newaxis} does.
+   */
+  @Test
+  public void testSubscriptNumpyNewaxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_newaxis.py",
+        "consume_inner",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1, 1, 1, 150, 4))));
+  }
 }
