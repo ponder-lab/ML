@@ -37,3 +37,20 @@ y = tf.random.uniform([], 1, image_height - 2, dtype=tf.int32)
 x = tf.random.uniform([], 1, image_width - 2, dtype=tf.int32)
 max_area = tf.constant(12, dtype=tf.int32)
 get_size(y, x, image_height, image_width, max_area)
+
+
+# Control: a list literal item-assigned before the read, both elements shape elements with no
+# points-to set, so the read through the parameter resolves by the list's writes alone. The list's
+# first write is the int32 height; the element at run time is the int64 depth the assignment stored.
+def consume_reassigned(t):
+    assert t.shape == ()
+    assert t.dtype == tf.int64
+
+
+def shift(v):
+    consume_reassigned(v - 1)
+
+
+sizes = [image_height]
+sizes[0] = tf.shape(image, out_type=tf.int64)[-1]
+shift(sizes[0])
