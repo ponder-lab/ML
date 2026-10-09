@@ -3,6 +3,8 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * A generator for the {@code embeddings} weight of a {@code tf.keras.layers.Embedding}: a float32
@@ -57,6 +59,19 @@ public class EmbeddingWeight extends EyeBase {
   @Override
   protected String getNumColumnsParameterName() {
     return Parameters.OUTPUT_DIM.getName();
+  }
+
+  /**
+   * An embedding weight's column count is the mandatory {@code output_dim}, with no default: when
+   * the argument does not resolve, the column count is unknown, never the row count an identity
+   * matrix would take.
+   *
+   * @param numRows The possible row counts, unused.
+   * @return An unknown column count.
+   */
+  @Override
+  protected Set<Optional<Integer>> getDefaultNumberOfColumns(Set<Optional<Integer>> numRows) {
+    return Set.of(Optional.empty());
   }
 
   /**
