@@ -71,6 +71,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
@@ -251,6 +252,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * change; the tensor analysis names its tensor and array types.
    */
   private Map<TypeReference, TypeReference> freshBinaryOpResultTypes = Collections.emptyMap();
+
+  /**
+   * The length of each {@code *args} pack whose call fixes it: the positional arguments from the
+   * {@code *args} formal's index on, when no starred argument can add to them. A pack is allocated
+   * at its call rather than by a {@code new} of the caller's IR, so its length is not read off a
+   * literal; recorded when the pack is allocated, before its key can reach a reader. A pack a
+   * library summary's call allocates is recorded as unknown, {@code -1}, since such a call pads its
+   * arguments. Two targets of one call with different {@code *args} indices share one pack, and a
+   * length they disagree on is recorded as unknown, {@code -1}; a reader that already read the
+   * first target's length keeps it, so the two targets' slices may then miss an element (rare: a
+   * polymorphic call whose targets declare {@code *args} at different positions).
+   */
+  private final Map<InstanceKey, Integer> packLengths = HashMapFactory.make();
 
   /**
    * The exact leading elements of each tuple concatenation whose left operand is a tuple literal,
@@ -2459,7 +2473,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IClassHierarchy cha = getClassHierarchy();
       IClass tupleClass = cha.lookupClass(PythonTypes.tuple);
       if (tupleClass == null || !key.concreteType().equals(tupleClass)) return;
-      int length = tupleLength(asin);
+      int length = knownTupleLength(asin);
       int element = length + index;
       if (length < 0 || element < 0) return;
       IField field = resolveRootField(cha, Integer.toString(element));
@@ -2617,6 +2631,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public String toString() {
       return "unknown-index read at " + pc + " into " + resultKey;
     }
+  }
+
+  /**
+   * The length of a tuple: an {@code *args} pack's recorded length, else the length read off its
+   * allocation by {@link #tupleLength(AllocationSiteInNode)}.
+   *
+   * @param asin The tuple's allocation.
+   * @return The length, or {@code -1} when neither determines it.
+   */
+  private int knownTupleLength(AllocationSiteInNode asin) {
+    Integer packed = packLengths.get(asin);
+    return packed != null ? packed : tupleLength(asin);
   }
 
   /**
@@ -3030,15 +3056,41 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return false;
     }
 
+    /**
+     * Whether a method is a library summary body as the bypass selector presents one, a method read
+     * from a summary file, as opposed to a program method or a trampoline or constructor the front
+     * end synthesizes, which forward the program's arguments as the program passed them. A summary
+     * body wrapped another way (a synthesized constructor copying a summary's statements) is not
+     * recognized, and its pack keeps the call's padded length.
+     *
+     * @param method The method.
+     * @return {@code true} iff the method is a library summary body.
+     */
+    private boolean isLibrarySummaryBody(IMethod method) {
+      return method instanceof SummarizedMethodWithNames
+          && !(method instanceof PythonSummarizedFunction);
+    }
+
     /** The positional pack, allocated and bound to the {@code *args} formal on first use. */
     private InstanceKey pack() {
       if (this.pack == null) {
         this.pack =
             getInstanceKeyForAllocation(
                 this.caller, TypedSiteReference.at(this.call.iIndex(), PythonTypes.tuple));
-        if (this.pack != null)
+        if (this.pack != null) {
+          // Without a starred argument, the pack holds exactly the positional arguments from the
+          // `*args` formal's index on. A library summary's call is the exception: it pads its
+          // arguments to a fixed count (`strategy.run`, `tf.while_loop`), so its positions are not
+          // the program's.
+          int length =
+              this.call.firstStarredPosition() < 0 && !isLibrarySummaryBody(this.caller.getMethod())
+                  ? Math.max(
+                      0, this.call.getNumberOfPositionalParameters() - Math.max(1, this.varargs))
+                  : -1;
+          packLengths.merge(this.pack, length, (a, b) -> a.equals(b) ? a : -1);
           getSystem()
               .newConstraint(getPointerKeyForLocal(this.target, this.varargs + 1), this.pack);
+        }
       }
       return this.pack;
     }
@@ -3611,7 +3663,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (list != null
           && cha.isSubclassOf(type, list)
           && asin.getNode().getMethod().isWalaSynthetic()) return null;
-      int length = tupleLength(asin);
+      int length = knownTupleLength(asin);
       if (length < 0) return null;
       SSAInstruction inst = caller.getIR().getInstructions()[pc];
       if (!(inst instanceof PythonInvokeInstruction call)

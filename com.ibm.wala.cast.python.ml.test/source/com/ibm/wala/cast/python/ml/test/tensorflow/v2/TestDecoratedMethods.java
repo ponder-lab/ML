@@ -740,4 +740,61 @@ public class TestDecoratedMethods extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 4))));
   }
+
+  /**
+   * A wrapper forwarding the rest of its {@code *args} past the first, {@code function(image,
+   * bboxes, *args[1:])}, with only the bounding boxes packed: the slice of the pack is empty, so
+   * the decorated function's {@code min_shape} keeps its default, a tuple of ints, and no tensor.
+   * Aliasing the whole pack, the slice unpacked the boxes into {@code min_shape}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testVarargsSliceForwardsNothing()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_varargs_slice_forward.py", "consume_min_shape", 0, 0, Map.of());
+  }
+
+  /**
+   * The forwarding wrapper of {@link #testVarargsSliceForwardsNothing()} with a second packed
+   * argument: the slice of the pack holds it alone, so the parameter it binds reads its float32
+   * scalar and not the bounding boxes at the pack's first position.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testVarargsSliceForwardsRest()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_varargs_slice_forward.py",
+        "consume_scale",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+  }
+
+  /**
+   * A step function taking {@code *args} from {@code strategy.run} and forwarding its last two,
+   * {@code last(*args[-2:])}: the library's summary calls the function with its argument tuple's
+   * positions padded to a fixed count, so the pack's length is not the program's, and the slice
+   * must not read it as such. Counted from the padded end, the slice would hold neither argument.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testVarargsSliceOfSummaryCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_strategy_run_varargs_slice.py",
+        "consume_last",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
 }
