@@ -732,4 +732,47 @@ public class TestReductions extends AbstractTensorTest {
         Map.of(
             2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
   }
+
+  /**
+   * A reduction whose supplied {@code axis} holds a value the analysis cannot read: it is not the
+   * omitted default, so the reduction does not collapse to a scalar. The axis may be a scalar or a
+   * list, so the shape is unknown.
+   */
+  @Test
+  public void testReduceSumComputedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_computed_axis.py",
+        "consume_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A reduction whose supplied {@code keepdims} holds a value the analysis cannot read: either
+   * value is possible, so the reduced axis is both kept and dropped.
+   */
+  @Test
+  public void testReduceSumComputedKeepDims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_computed_axis.py",
+        "consume_keep",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_1_FLOAT32)));
+  }
+
+  /** Control: a reduction with neither argument reduces every axis to a scalar. */
+  @Test
+  public void testReduceSumOmittedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_computed_axis.py",
+        "consume_default",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
 }
