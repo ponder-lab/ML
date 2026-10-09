@@ -197,6 +197,13 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     // call.
     if (caller.getContext().get(ContextKey.RECEIVER) != null
         || caller.getContext() instanceof AnchoredCallerSiteContext) {
+      // The `super()` stub is keyed on the super object it is called on, by the selector `super()`
+      // installs, so its `$self` read is the one instance that evaluated `super()`. Keyed here on
+      // the receiver anchor, the calling method and the site, one stub node served the subclass
+      // constructors of every instance built under one anchor, its `$self` read was their union,
+      // and the base constructor it reached wrote every instance's arguments to every instance:
+      // each wrapper's wrapped-layer field held the other wrappers (wala/ML#1023).
+      if (isSuperStub(callee)) return base.getCalleeTarget(caller, site, callee, actualParameters);
       // The guard is recursion, not depth: a deep-but-acyclic layer stack (a BERT encoder tower)
       // legitimately chains many pairs, while a callee already on the caller chain would grow one
       // pair per recursive call. Degrade to the base selector on a method repeat, with an
@@ -294,6 +301,17 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
             .getReference()
             .getDeclaringClass()
             .equals(PythonTypes.superfun);
+  }
+
+  /**
+   * Whether a callee is the {@code super()} stub, the method declared on the {@code superfun}
+   * class.
+   *
+   * @param callee The method being called.
+   * @return {@code true} iff the callee is the super stub.
+   */
+  private static boolean isSuperStub(IMethod callee) {
+    return callee.getReference().getDeclaringClass().equals(PythonTypes.superfun);
   }
 
   @Override

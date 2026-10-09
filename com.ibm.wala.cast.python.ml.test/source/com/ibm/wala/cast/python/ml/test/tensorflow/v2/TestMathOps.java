@@ -46,6 +46,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -1803,6 +1804,65 @@ public class TestMathOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 5))));
+  }
+
+  /**
+   * A batched element of a dataset whose size the analysis cannot know carries two batch extents,
+   * the declared batch and the final, shorter one, as the members {@code (2, 3, 3)} and {@code (?,
+   * 3, 3)}. {@code tf.matmul} of the element with itself composes every member pair, and the pair
+   * of the declared extent with the shorter one is still one of this value's two batches: it reads
+   * as the placeholder, as the broadcast rule reads a numeric extent against a placeholder, not as
+   * a third, unresolved extent the value never has. The fixture's own assertions hold the runtime
+   * to the two batches.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBatchedMatMulBatchSiblings()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_batch_sibling.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 3),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new NumericDim(3), new NumericDim(3))))));
+  }
+
+  /**
+   * The residual twin of {@link #testBatchedMatMulBatchSiblings()}: the matmul's result is added to
+   * its operand and carried through a loop, and the sum, allocated at its operator, is what the
+   * consumer reads. The two batches of the operand are the two batches of the sum; a third extent
+   * minted at the matmul would ride the residual to the consumer.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBatchedMatMulBatchSiblingsResidual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_batch_sibling.py",
+        "consume_residual",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 3),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new NumericDim(3), new NumericDim(3))))));
   }
 
   /**
