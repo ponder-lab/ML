@@ -13,6 +13,11 @@ def consume_int_first(t):
     assert t.dtype == np.float64
 
 
+def consume_mixed_widths(t):
+    assert t.shape == (4,)
+    assert t.dtype == np.float64
+
+
 def consume_scaled(t):
     assert t.shape == (4,)
     assert t.dtype == np.float64
@@ -23,3 +28,8 @@ bbox_xywh = np.concatenate([(bbox[2:] + bbox[:2]) * 0.5, bbox[2:] - bbox[:2]], a
 consume_concat(bbox_xywh)
 consume_int_first(np.concatenate([bbox[2:] - bbox[:2], (bbox[2:] + bbox[:2]) * 0.5]))
 consume_scaled(1.0 * bbox_xywh)
+consume_mixed_widths(
+    np.concatenate(
+        [np.array([1.0, 2.0], dtype=np.float32), np.array([3, 4], dtype=np.int64)]
+    )
+)

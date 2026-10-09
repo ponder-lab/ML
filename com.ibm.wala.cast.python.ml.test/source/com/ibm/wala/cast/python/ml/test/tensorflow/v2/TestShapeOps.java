@@ -2813,4 +2813,19 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
   }
+
+  /**
+   * An {@code np.concatenate} of a {@code float32} and an {@code int64} array: NumPy promotes the
+   * pair to {@code float64}, the dtype of neither element.
+   */
+  @Test
+  public void testNpConcatenatePromotesToNeitherElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_concatenate.py",
+        "consume_mixed_widths",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 4))));
+  }
 }
