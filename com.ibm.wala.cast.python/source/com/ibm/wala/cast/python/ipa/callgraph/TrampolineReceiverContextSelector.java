@@ -15,6 +15,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
@@ -131,6 +132,27 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // site ran it.
       if (isBuildTrampoline(callee)) {
         LOGGER.fine(() -> "Keying build trampoline: " + callee + " on receiver: " + receiver + ".");
+        return new ReceiverInstanceContext(receiver);
+      }
+
+      // A dispatch to a method already on the caller's chain re-enters it on another receiver: a
+      // wrapper layer whose wrapped layer may be a wrapper of its class, as when a field is rebound
+      // to a wrapper of its old value (`self.ffn = Wrapper(self.ffn)`) and so holds both. Each
+      // re-entry keyed on its caller copied everything beneath it once per level, up to the depth
+      // cap, so a stack of such layers multiplied its nodes by the branching at every level. The
+      // re-entered method is keyed on the dispatched receiver alone, the per-instance separation
+      // the cap below falls back to, as rule 4's recursion guard does for helper chains.
+      if (callee.getDeclaringClass() instanceof PythonInstanceMethodTrampoline trampoline
+          && dispatchesThroughChain(caller, trampoline.getRealClass())) {
+        LOGGER.fine(
+            () ->
+                "Trampoline re-enters "
+                    + trampoline.getRealClass()
+                    + " on the chain of caller: "
+                    + caller
+                    + "; keying on the receiver alone: "
+                    + receiver
+                    + ".");
         return new ReceiverInstanceContext(receiver);
       }
 
@@ -304,6 +326,32 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       c = up.getContext();
     }
     return allocatesThroughMethod(caller, callee);
+  }
+
+  /**
+   * Returns whether a trampoline dispatching to the given method class re-enters a method already
+   * on the caller's chain: the caller's own method, or a calling method or an anchor's method of
+   * the caller's anchored contexts. The class compared is the method's own, the class whose {@code
+   * do} body runs it, so distinct layers' {@code call} bodies along a tower never match.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @param methodClass The class of the method the trampoline dispatches to.
+   * @return {@code true} iff that method is already on the chain, or the chain reaches {@link
+   *     #MAX_CALLER_PAIR_DEPTH}.
+   */
+  private static boolean dispatchesThroughChain(CGNode caller, IClass methodClass) {
+    if (methodClass == null) return false;
+    if (caller.getMethod().getDeclaringClass().equals(methodClass)) return true;
+    int depth = 0;
+    Context c = caller.getContext();
+    while (c instanceof AnchoredCallerSiteContext anchored) {
+      if (++depth >= MAX_CALLER_PAIR_DEPTH) return true; // Fail closed at the backstop.
+      if (anchored.getCallerMethod().getDeclaringClass().equals(methodClass)) return true;
+      CGNode up = anchored.getAnchor();
+      if (up.getMethod().getDeclaringClass().equals(methodClass)) return true;
+      c = up.getContext();
+    }
+    return false;
   }
 
   /**
