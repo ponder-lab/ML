@@ -12,23 +12,22 @@
       </method>
     </class>
     <package name="sentencepiece">
-      <!-- `spm.SentencePieceProcessor(...)`: a processor whose id encodings are fields of the instance, so a method of that name is SentencePiece's only on a processor this constructor allocated, never on another object by its name. Loading a model (`load`, `Load`, the `model_file` keyword) is not modeled; it changes no type. -->
+      <!-- `spm.SentencePieceProcessor(...)`: a processor whose id encodings are fields of the instance (`encode` is not one: what it returns depends on its `out_type`, ids or pieces), so a method of that name is SentencePiece's only on a processor this constructor allocated, never on another object by its name. Loading a model (`load`, `Load`, the `model_file` keyword) is not modeled; it changes no type. -->
       <class name="SentencePieceProcessor" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self model_file">
           <new def="sp" class="Lsentencepiece/processor"/>
           <new def="encode_as_ids_fn" class="Lsentencepiece/processor/encode_as_ids"/>
           <putfield class="LRoot" field="encode_as_ids" fieldType="LRoot" ref="sp" value="encode_as_ids_fn"/>
           <putfield class="LRoot" field="EncodeAsIds" fieldType="LRoot" ref="sp" value="encode_as_ids_fn"/>
-          <putfield class="LRoot" field="encode" fieldType="LRoot" ref="sp" value="encode_as_ids_fn"/>
           <return value="sp"/>
         </method>
       </class>
       <class name="processor" allocatable="true"></class>
     </package>
     <package name="sentencepiece/processor">
-      <!-- `encode_as_ids(input)`, its `EncodeAsIds` spelling, and `encode(input)` with the default `out_type=int`: a fresh list of Python ints, as many as the text has pieces. The count is unknown, so the int sits in the list's order-free contents, never a numbered element: a reader counting numbered elements must not read the list as a literal of some length. -->
+      <!-- `encode_as_ids(input)` and its `EncodeAsIds` spelling: a fresh list of Python ints, as many as the text has pieces. The count is unknown, so the int sits in the list's order-free contents, never a numbered element: a reader counting numbered elements must not read the list as a literal of some length. -->
       <class name="encode_as_ids" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input out_type">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self input">
           <new def="ids" class="Llist"/>
           <constant name="id" type="int" value="0"/>
           <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="ids" value="id"/>

@@ -1,8 +1,9 @@
 # Test SentencePiece's id encoding feeding a text generator's model: `encode_as_ids` (and its
-# `EncodeAsIds` and `encode` spellings) returns a list of Python ints, so the prompt
+# `EncodeAsIds` spelling) returns a list of Python ints, so the prompt
 # `tf.expand_dims([bos] + sp.encode_as_ids(text), 0)` is an int32 `(1, n)` tensor, and the model's
 # input is that prompt or the int32 `tf.random.categorical` draw fed back. A concatenation of two
-# int literals' lists converts to int32 as well.
+# int literals' lists converts to int32 as well. `encode` returns ids or pieces by its `out_type`, so
+# it is left unmodeled.
 import os
 import tempfile
 

@@ -13,13 +13,13 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * Tests SentencePiece's id encodings: {@code SentencePieceProcessor.encode_as_ids}, {@code
- * EncodeAsIds} and {@code encode} return a list of Python ints, so a tensor converted from one, or
- * from a list concatenation holding one, is {@code int32} of an unresolved length. Unmodeled, the
- * encoding had no elements the analysis could read, and the text generator's prompt {@code
- * tf.expand_dims([bos] + sp.encode_as_ids(text), 0)} read as an unknown dtype beside the {@code
- * int32} draws its sampling loop feeds back. A concatenation's elements sit in an order-free field,
- * which the dtype read now reads as it reads a literal's numbered elements.
+ * Tests SentencePiece's id encodings: {@code SentencePieceProcessor.encode_as_ids} and {@code
+ * EncodeAsIds} return a list of Python ints, so a tensor converted from one, or from a list
+ * concatenation holding one, is {@code int32} of an unresolved length. Unmodeled, the encoding had
+ * no elements the analysis could read, and the text generator's prompt {@code tf.expand_dims([bos]
+ * + sp.encode_as_ids(text), 0)} read as an unknown dtype beside the {@code int32} draws its
+ * sampling loop feeds back. A concatenation's elements sit in an order-free field, which the dtype
+ * read now reads as it reads a literal's numbered elements.
  */
 public class TestSentencePieceIds extends AbstractTensorTest {
 
@@ -41,15 +41,18 @@ public class TestSentencePieceIds extends AbstractTensorTest {
   }
 
   /**
-   * A tensor converted from {@code encode}'s ids: {@code int32}. Its rank is unknown, since {@code
-   * tf.constant} reads no rank from a list whose elements have no known positions.
+   * A tensor converted from {@code encode}'s result. It is not modeled: whether it returns ids or
+   * pieces depends on its {@code out_type}, so the result stays unknown.
    */
   @Test
   public void testEncode() throws ClassHierarchyException, CancelException, IOException {
-    test(FIXTURE, "consume_encode", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+    test(FIXTURE, "consume_encode", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
-  /** A tensor converted from {@code EncodeAsIds}'s ids: {@code int32}, of an unknown rank. */
+  /**
+   * A tensor converted from {@code EncodeAsIds}'s ids: {@code int32}. Its rank is unknown, since
+   * {@code tf.constant} reads no rank from a list whose elements have no known positions.
+   */
   @Test
   public void testEncodeAsIdsCapitalized()
       throws ClassHierarchyException, CancelException, IOException {
