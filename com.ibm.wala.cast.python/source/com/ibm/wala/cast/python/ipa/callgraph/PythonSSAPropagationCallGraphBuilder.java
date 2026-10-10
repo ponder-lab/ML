@@ -937,14 +937,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     /**
      * Constructs a {@code collections.namedtuple} instance where a call's callee may be a
      * namedtuple type, by a side effect on the callee's points-to set; see {@link
-     * NamedTupleOperator}.
+     * NamedTupleOperator}. A callee whose keys are invariant or implicitly represented is read
+     * directly, since a side effect must not materialize its key (the wala/ML#668 trap).
      *
      * @param inst The call.
      */
     private void processNamedTupleConstruction(PythonInvokeInstruction inst) {
       if (!inst.hasDef()) return;
       SymbolTable symtab = ir.getSymbolTable();
-      int positional = inst.getNumberOfPositionalParameters();
+      // A starred argument spreads elements whose positions this binding does not read, so the
+      // positions from it on are left unbound rather than bound to the iterable itself.
+      int starred = inst.firstStarredPosition();
+      int positional =
+          starred >= 1
+              ? Math.min(starred, inst.getNumberOfPositionalParameters())
+              : inst.getNumberOfPositionalParameters();
       Object[] positionalArguments = new Object[Math.max(0, positional - 1)];
       for (int i = 1; i < positional; i++)
         positionalArguments[i - 1] = argumentValue(symtab, inst.getUse(i));
@@ -979,9 +986,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @return An {@code InstanceKey[]} or a {@link PointerKey}.
      */
     private Object argumentValue(SymbolTable symtab, int vn) {
-      return contentsAreInvariant(symtab, du, vn)
+      PointerKey key = getPointerKeyForLocal(vn);
+      return contentsAreInvariant(symtab, du, vn) || system.isImplicit(key)
           ? getInvariantContents(symtab, du, node, vn)
-          : getPointerKeyForLocal(vn);
+          : key;
     }
 
     /**
@@ -2143,14 +2151,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           PythonTypes.pythonLoader, TypeName.findOrCreate("Lcollections/namedtuple/instance"));
 
   /**
-   * Constructs a {@code collections.namedtuple} instance at a call whose callee is a namedtuple
-   * type: an instance allocated at the call, each positional argument bound to the field the type
-   * names at its position and to that position, and each keyword argument to its own field and to
-   * its name's position. The type keeps its field names on {@code _fields}, as the {@code
+   * Constructs a {@code collections.namedtuple} instance (<a
+   * href="https://github.com/wala/ML/issues/1031">wala/ML#1031</a>) at a call whose callee is a
+   * namedtuple type: an instance allocated at the call, each positional argument bound to the field
+   * the type names at its position and to that position, and each keyword argument to its own field
+   * and to its name's position. The type keeps its field names on {@code _fields}, as the {@code
    * namedtuple} summary stores them: a sequence of name strings, or one string of names separated
-   * by commas or spaces. Names that have not reached that field yet bind when they arrive. Before,
-   * a namedtuple type was unmodeled, so its instances were nothing and every field read off one was
-   * empty. Equal for the same call, so the propagation system keeps one per call site.
+   * by commas or spaces. Names that have not reached that field yet bind when they arrive.
+   * Positions from a starred argument on are not bound, since the elements it spreads are not read
+   * here. Equal for the same call, so the propagation system keeps one per call site.
    */
   public final class NamedTupleOperator extends UnaryOperator<PointsToSetVariable> {
     private final CGNode node;
