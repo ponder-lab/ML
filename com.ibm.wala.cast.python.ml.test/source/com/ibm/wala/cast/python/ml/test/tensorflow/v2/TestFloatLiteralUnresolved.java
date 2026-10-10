@@ -22,15 +22,11 @@ public class TestFloatLiteralUnresolved extends AbstractTensorTest {
    * An array of a value the analysis does not model, {@code np.array(json.loads(...))}, times a
    * float literal.
    *
-   * <p>TODO: The analysis reads {@code float32} here, guessing the result's dtype beside an operand
-   * whose dtype does not resolve. Flip to a plain {@code @Test} when <a
-   * href="https://github.com/wala/ML/issues/1033">wala/ML#1033</a> is fixed.
-   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testLoaded() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_loaded", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
@@ -39,15 +35,11 @@ public class TestFloatLiteralUnresolved extends AbstractTensorTest {
    * An array of {@code list(map(int, ...))} rows times a float literal, the shape of an array built
    * from parsed annotation fields.
    *
-   * <p>TODO: The analysis reads {@code float32} here, guessing the result's dtype beside an operand
-   * whose dtype does not resolve. Flip to a plain {@code @Test} when <a
-   * href="https://github.com/wala/ML/issues/1033">wala/ML#1033</a> is fixed.
-   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testMapped() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_mapped", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
@@ -58,15 +50,11 @@ public class TestFloatLiteralUnresolved extends AbstractTensorTest {
    * gives an unknown dtype, never a guessed {@code float32}, which would be a wrong member beside
    * the right one.
    *
-   * <p>TODO: The analysis reads a {@code float32} member here, guessing the result's dtype beside
-   * the unresolved operand. Flip to a plain {@code @Test} when <a
-   * href="https://github.com/wala/ML/issues/1033">wala/ML#1033</a> is fixed.
-   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testMixed() throws ClassHierarchyException, CancelException, IOException {
     test(
         FILE,

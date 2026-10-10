@@ -709,9 +709,10 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * float64} (wala/ML#814).
    *
    * <p>A floating-point or complex operand keeps its own dtype, which is correct for both
-   * libraries. An operand that does not resolve, or that is neither numeric nor floating-point,
-   * keeps the previous {@code float32} answer rather than degrading, so this narrows a wrong result
-   * without widening an unknown one.
+   * libraries. An operand whose dtype does not resolve, or that is neither numeric nor
+   * floating-point, gives an unknown dtype: the result's dtype follows the operand's, so it is as
+   * unknown as the operand's, and a guessed {@code float32} would be wrong for the integral NumPy
+   * operand that is the common case.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param operandVn The value number of the operand that is not the float literal.
@@ -725,17 +726,17 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
                 + operandVn
                 + " dtypes="
                 + operandDTypes);
-    if (operandDTypes == null || operandDTypes.isEmpty()) return EnumSet.of(DType.FLOAT32);
+    if (operandDTypes == null || operandDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
 
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (DType operandDType : operandDTypes)
       if (operandDType.isIntegral()) ret.add(DType.FLOAT64);
       // Numeric but not integral means floating-point or complex, and both keep their own
       // dtype: `complex64 / 255.0` is `complex64`, verified alongside the cases above. Testing
-      // `isFloatingPoint` here instead would send complex operands to the `float32` fallback,
-      // which contradicts this method's own contract and loses the imaginary part.
+      // `isFloatingPoint` here instead would send complex operands to the unknown answer below,
+      // which contradicts this method's own contract and loses their known dtype.
       else if (operandDType.isNumeric()) ret.add(operandDType);
-      else ret.add(DType.FLOAT32);
+      else ret.add(DType.UNKNOWN);
     return ret;
   }
 
