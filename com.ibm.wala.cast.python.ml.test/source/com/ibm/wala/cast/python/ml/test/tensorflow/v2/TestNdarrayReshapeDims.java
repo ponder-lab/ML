@@ -271,4 +271,41 @@ public class TestNdarrayReshapeDims extends AbstractTensorTest {
   public void testPairedThreeByTwo() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_paired_three_by_two", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 3, 2))));
   }
+
+  /**
+   * A separate dimension that is an array rather than an integer constant, {@code
+   * reshape(np.array(2), 3)}: NumPy accepts a 0-d array as an index, but the analysis cannot read
+   * it as an integer, so the shape declines to unknown rather than guessing an axis.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArrayDimension() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_array_dimension", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
+  }
+
+  /**
+   * A separate dimension that may be either of two integers, {@code reshape(n, 6 // n)} with {@code
+   * n} two or three: the first axis is unresolved, the join of the two, not either one, and the
+   * second, a quotient the analysis does not fold, is unresolved too.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEitherDimension() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_either_dimension",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_64, List.of(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
 }

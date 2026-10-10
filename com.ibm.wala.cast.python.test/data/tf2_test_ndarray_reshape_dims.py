@@ -296,3 +296,21 @@ first, _ = paired(2, 3)
 consume_paired_two_by_three(first)
 second, _ = paired(3, 2)
 consume_paired_three_by_two(second)
+
+
+# A separate dimension that is an array rather than an integer constant: NumPy accepts a 0-d array
+# as an index, but the analysis cannot read it as an integer, so the shape is unknown.
+def consume_array_dimension(t):
+    assert t.shape == (2, 3) and t.dtype == np.int64, (t.shape, t.dtype)
+
+
+consume_array_dimension(np.arange(6).reshape(np.array(2), 3))
+
+
+# A separate dimension that may be either of two integers: the axis is unresolved, not either one.
+def consume_either_dimension(t):
+    assert t.shape in ((2, 3), (3, 2)) and t.dtype == np.float64, (t.shape, t.dtype)
+
+
+rows_or_cols = 2 if len(json.loads("[1]")) > 0 else 3
+consume_either_dimension(np.zeros(6).reshape(rows_or_cols, 6 // rows_or_cols))
