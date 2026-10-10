@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOATX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_ARRAY_READS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
@@ -10926,6 +10927,9 @@ public abstract class TensorGenerator {
       };
     } else if (type.equals(PythonTypes.SLICE_BUILTIN)) {
       return new SliceBuiltinOperation(node);
+    } else if (TENSOR_ARRAY_READS.contains(type)) {
+      // Producer delegation for the tensor a `tf.TensorArray` read allocates.
+      return new TensorArrayRead(node);
     } else if (type.equals(PLACEHOLDER.getDeclaringClass())) {
       return new Placeholder(node);
     } else if (type.equals(TensorFlowTypes.CONV2D_CALL.getDeclaringClass())) {

@@ -321,6 +321,9 @@
         <putfield class="LRoot" field="equal" fieldType="LRoot" ref="math_ops" value="equal"/>
         <new def="placeholder" class="Ltensorflow/functions/placeholder"/>
         <putfield class="LRoot" field="placeholder" fieldType="LRoot" ref="x" value="placeholder"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/TensorArray -->
+        <new def="TensorArray" class="Ltensorflow/functions/TensorArray"/>
+        <putfield class="LRoot" field="TensorArray" fieldType="LRoot" ref="x" value="TensorArray"/>
         <new def="examples" class="Lobject"/>
         <putfield class="LRoot" field="examples" fieldType="LRoot" ref="x" value="examples"/>
         <new def="tutorials" class="Lobject"/>
@@ -2006,6 +2009,93 @@
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="x"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/functions">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/TensorArray. The array keeps the `dtype` it is built with, and each of its methods is an object holding the array as its `receiver`, the class-per-function shape `numpy/ndarray`'s methods use. The methods that read tensors back (`stack`, `read`, `gather`, `concat`) read the array's `dtype` into a local and allocate a tensor, which `TensorArrayRead` types with that dtype: their static shape depends on the array's size and element shape, which are not read, so the shape is unknown. The methods that fill the array (`write`, `unstack`, `scatter`) return the array itself. TensorFlow returns a new array sharing the same storage and dtype, so for the dtype the two are the same. -->
+      <class name="TensorArray" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="12" paramNames="self dtype size dynamic_size clear_after_read tensor_array_name handle flow infer_shape element_shape colocate_with_first_write_call name">
+          <new def="ret" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray"/>
+          <putfield class="LRoot" field="dtype" fieldType="LRoot" ref="ret" value="dtype"/>
+          <new def="stack_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/stack"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="stack_fn" value="ret"/>
+          <putfield class="LRoot" field="stack" fieldType="LRoot" ref="ret" value="stack_fn"/>
+          <new def="read_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/read"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="read_fn" value="ret"/>
+          <putfield class="LRoot" field="read" fieldType="LRoot" ref="ret" value="read_fn"/>
+          <new def="gather_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/gather"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="gather_fn" value="ret"/>
+          <putfield class="LRoot" field="gather" fieldType="LRoot" ref="ret" value="gather_fn"/>
+          <new def="concat_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/concat"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="concat_fn" value="ret"/>
+          <putfield class="LRoot" field="concat" fieldType="LRoot" ref="ret" value="concat_fn"/>
+          <new def="write_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/write"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="write_fn" value="ret"/>
+          <putfield class="LRoot" field="write" fieldType="LRoot" ref="ret" value="write_fn"/>
+          <new def="unstack_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/unstack"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="unstack_fn" value="ret"/>
+          <putfield class="LRoot" field="unstack" fieldType="LRoot" ref="ret" value="unstack_fn"/>
+          <new def="scatter_fn" class="Ltensorflow/python/ops/tensor_array_ops/TensorArray/scatter"/>
+          <putfield class="LRoot" field="receiver" fieldType="LRoot" ref="scatter_fn" value="ret"/>
+          <putfield class="LRoot" field="scatter" fieldType="LRoot" ref="ret" value="scatter_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/tensor_array_ops">
+      <!-- Allocation-only class for a `tf.TensorArray` instance; its methods are in the package below. -->
+      <class name="TensorArray" allocatable="true"></class>
+    </package>
+    <package name="tensorflow/python/ops/tensor_array_ops/TensorArray">
+      <class name="stack" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <getfield class="LRoot" field="dtype" fieldType="LRoot" ref="array" def="dtype"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="read" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self index name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <getfield class="LRoot" field="dtype" fieldType="LRoot" ref="array" def="dtype"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="gather" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices element_shape name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <getfield class="LRoot" field="dtype" fieldType="LRoot" ref="array" def="dtype"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="concat" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <getfield class="LRoot" field="dtype" fieldType="LRoot" ref="array" def="dtype"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="write" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self index value name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <return value="array"/>
+        </method>
+      </class>
+      <class name="unstack" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self value name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <return value="array"/>
+        </method>
+      </class>
+      <class name="scatter" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices value name">
+          <getfield class="LRoot" field="receiver" fieldType="LRoot" ref="self" def="array"/>
+          <return value="array"/>
         </method>
       </class>
     </package>

@@ -1360,6 +1360,27 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String BOSTON_HOUSING_Y_TEST_SIGNATURE =
       "tf.keras.datasets.boston_housing.load_data/y_test";
 
+  /**
+   * The methods of a {@code tf.TensorArray} that read tensors back from it, by the classes {@code
+   * tensorflow.xml} models them as. Each body reads the array's {@code dtype} into a local, which
+   * {@link com.ibm.wala.cast.python.ml.client.TensorArrayRead} reads.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/TensorArray">tf.TensorArray</a>
+   */
+  public static final Set<TypeReference> TENSOR_ARRAY_READS =
+      Set.of(
+          tensorArrayMethod("stack"),
+          tensorArrayMethod("read"),
+          tensorArrayMethod("gather"),
+          tensorArrayMethod("concat"));
+
+  private static TypeReference tensorArrayMethod(String name) {
+    return TypeReference.findOrCreate(
+        PythonTypes.pythonLoader,
+        TypeName.string2TypeName("Ltensorflow/python/ops/tensor_array_ops/TensorArray/" + name));
+  }
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
