@@ -176,9 +176,12 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Each re-export binds the module of its own package under every directory name: the layer's
-   * constructor is a node, and the two consumers read the layer's {@code (2, 3)} product and the
-   * sibling package's {@code (5,)} tensor.
+   * Each relative import binds the module of its own package under every directory name: the
+   * layer's constructor is a node, and the consumers read the layer's {@code (2, 3)} product
+   * through a one-dot and a two-dot import ({@code from ..conv.dense import Layer} in a
+   * subpackage), the sibling package's {@code (5,)} tensor through a re-export and through {@code
+   * from . import dense}, and a three-level import's {@code (7,)} ({@code from .a.b.c import deep})
+   * beside a same-named {@code pkg/other/a/b/c.py}'s {@code (9, 9)}.
    */
   @Test
   public void testRelativeImportBindsImportersPackage() throws Exception {
@@ -192,11 +195,34 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
                 .anyMatch(s -> s.contains("pkg.layers.conv.dense.py.Layer.__init__."));
         Set<TensorType> scaled = parameterTypes(a, "consume_scaled");
         Set<TensorType> dense = parameterTypes(a, "consume_dense");
+        Set<TensorType> twoDot = parameterTypes(a, "consume_two_dot");
+        Set<TensorType> sibling = parameterTypes(a, "consume_sibling");
+        Set<TensorType> three = parameterTypes(a, "consume_three");
+        Set<TensorType> otherThree = parameterTypes(a, "consume_other_three");
         if (!layer
             || !scaled.equals(Set.of(TensorType.of(DType.FLOAT32, 2, 3)))
-            || !dense.equals(Set.of(TensorType.of(DType.FLOAT32, 5))))
+            || !dense.equals(Set.of(TensorType.of(DType.FLOAT32, 5)))
+            || !twoDot.equals(Set.of(TensorType.of(DType.FLOAT32, 2, 3)))
+            || !sibling.equals(Set.of(TensorType.of(DType.FLOAT32, 5)))
+            || !three.equals(Set.of(TensorType.of(DType.FLOAT32, 7)))
+            || !otherThree.equals(Set.of(TensorType.of(DType.FLOAT32, 9, 9))))
           wrong.add(
-              name + " (Layer.__init__ " + layer + ", scaled " + scaled + ", dense " + dense + ")");
+              name
+                  + " (Layer.__init__ "
+                  + layer
+                  + ", scaled "
+                  + scaled
+                  + ", dense "
+                  + dense
+                  + ", two-dot "
+                  + twoDot
+                  + ", sibling "
+                  + sibling
+                  + ", three-level "
+                  + three
+                  + ", other three-level "
+                  + otherThree
+                  + ")");
       }
       assertEquals("Checkouts binding a re-export to the wrong module", List.of(), wrong);
     } finally {
