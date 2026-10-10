@@ -1,4 +1,7 @@
 # `tf.cast` of a list literal of shape elements: a vector as long as the list.
+import json
+
+import numpy as np
 import tensorflow as tf
 
 
@@ -31,3 +34,27 @@ def consume_nested(x):
 
 
 consume_nested(tf.constant([[image.shape[0], image.shape[1]]]))
+
+
+def consume_numpy(x):
+    assert x.dtype == np.int64
+    assert x.shape == (2,)
+
+
+consume_numpy(np.array([image.shape[0], image.shape[1]]))
+
+
+class Config:
+    pass
+
+
+config = Config()
+config.shape = json.loads("[[1, 2]]")
+
+
+def consume_config(x):
+    assert x.dtype == tf.int32
+    assert x.shape == (1, 2)
+
+
+consume_config(tf.constant([config.shape[0]]))

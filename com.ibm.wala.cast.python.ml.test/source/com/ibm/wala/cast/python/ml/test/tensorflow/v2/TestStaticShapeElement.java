@@ -70,4 +70,32 @@ public class TestStaticShapeElement extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_nested", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 1, 2))));
   }
+
+  /**
+   * A NumPy array of two static shape elements: an int64 vector of two, as NumPy converts a Python
+   * int to int64, where TensorFlow converts it to int32.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testNumpyOfShapeElements()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_numpy", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 2))));
+  }
+
+  /**
+   * A constant from a list holding a {@code shape} attribute's element of an object that is no
+   * tensor, here a list of lists read from a string: the element is a row, not a scalar, so the
+   * result is not a vector, and neither its shape nor its dtype is read.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeOfNonTensor() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_config", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
