@@ -865,75 +865,75 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 Path path = Path.of(m.getURL().getFile());
                 LOGGER.finer("Found module path: " + path + ".");
 
-                for (File pathEntry : pythonPath) {
-                  LOGGER.finest("Path entry is:" + pathEntry);
+                // The most specific entry containing the module names it (wala/ML#984).
+                Optional<Path> namingEntry =
+                    Util.getNamingPathEntry(
+                        pythonPath.stream().map(File::toPath).collect(Collectors.toList()), path);
+                if (namingEntry.isPresent()) {
+                  Path pathEntryPath = namingEntry.get();
+                  LOGGER.finest("Path entry is:" + pathEntryPath);
+                  Path scriptRelativePath = pathEntryPath.relativize(path);
+                  LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
 
-                  if (path.startsWith(pathEntry.toPath())) {
-                    // Found it.
-                    Path scriptRelativePath = pathEntry.toPath().relativize(path);
-                    LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
+                  // Get the package name.
+                  Path packagePath = scriptRelativePath.getParent();
+                  List<SSAInstruction> instructions = new ArrayList<SSAInstruction>(2);
 
-                    // Get the package name.
-                    Path packagePath = scriptRelativePath.getParent();
-                    List<SSAInstruction> instructions = new ArrayList<SSAInstruction>(2);
-
-                    if (packagePath == null) {
-                      // it must be a top-level module. I don't think we need the extra instructions
-                      // in this case.
-                      LOGGER.finer("Found top-level module; no extra instructions needed.");
-                      return instructions;
-                    }
-
-                    LOGGER.fine("Package path is: " + packagePath + ".");
-                    LOGGER.finer("Mapping fields for package: " + packagePath + ".");
-
-                    int res = 0;
-
-                    // Don't add a redundant global read for `__init__.py` for `moduleName`.
-                    boolean moduleInitializationFile = isModuleInitializationFile(path);
-
-                    if (!moduleInitializationFile || !packagePath.toString().equals(moduleName)) {
-                      FieldReference global =
-                          makeGlobalRef("script " + packagePath + "/" + path.getFileName());
-
-                      LOGGER.finer("Creating global field reference: " + global + ".");
-
-                      int idx = codeContext.cfg().getCurrentInstruction();
-                      res = codeContext.currentScope().allocateTempValue();
-
-                      AstGlobalRead globalRead = new AstGlobalRead(idx, res, global);
-                      instructions.add(globalRead);
-                      LOGGER.finer("Adding global read: " + globalRead + ".");
-                    }
-
-                    FieldReference moduleField =
-                        FieldReference.findOrCreate(
-                            PythonTypes.Root,
-                            // If it's the package, use the package name. Otherwise, use the
-                            // filename.
-                            Atom.findOrCreateUnicodeAtom(
-                                getNameWithoutExtension(
-                                    (moduleInitializationFile ? path.getParent() : path)
-                                        .toString())),
-                            PythonTypes.Root);
-
-                    LOGGER.finer("Creating module field reference: " + moduleField + ".");
-
-                    // If we are looking at the package for `moduleName`.
-                    if (moduleInitializationFile && packagePath.toString().equals(moduleName))
-                      // use the existing global read for the script.
-                      res = 1;
-
-                    SSAPutInstruction putInstruction =
-                        Python.instructionFactory()
-                            .PutInstruction(
-                                codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
-
-                    instructions.add(putInstruction);
-                    LOGGER.finer("Adding field write: " + putInstruction + ".");
-
+                  if (packagePath == null) {
+                    // it must be a top-level module. I don't think we need the extra instructions
+                    // in this case.
+                    LOGGER.finer("Found top-level module; no extra instructions needed.");
                     return instructions;
                   }
+
+                  LOGGER.fine("Package path is: " + packagePath + ".");
+                  LOGGER.finer("Mapping fields for package: " + packagePath + ".");
+
+                  int res = 0;
+
+                  // Don't add a redundant global read for `__init__.py` for `moduleName`.
+                  boolean moduleInitializationFile = isModuleInitializationFile(path);
+
+                  if (!moduleInitializationFile || !packagePath.toString().equals(moduleName)) {
+                    FieldReference global =
+                        makeGlobalRef("script " + packagePath + "/" + path.getFileName());
+
+                    LOGGER.finer("Creating global field reference: " + global + ".");
+
+                    int idx = codeContext.cfg().getCurrentInstruction();
+                    res = codeContext.currentScope().allocateTempValue();
+
+                    AstGlobalRead globalRead = new AstGlobalRead(idx, res, global);
+                    instructions.add(globalRead);
+                    LOGGER.finer("Adding global read: " + globalRead + ".");
+                  }
+
+                  FieldReference moduleField =
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root,
+                          // If it's the package, use the package name. Otherwise, use the
+                          // filename.
+                          Atom.findOrCreateUnicodeAtom(
+                              getNameWithoutExtension(
+                                  (moduleInitializationFile ? path.getParent() : path).toString())),
+                          PythonTypes.Root);
+
+                  LOGGER.finer("Creating module field reference: " + moduleField + ".");
+
+                  // If we are looking at the package for `moduleName`.
+                  if (moduleInitializationFile && packagePath.toString().equals(moduleName))
+                    // use the existing global read for the script.
+                    res = 1;
+
+                  SSAPutInstruction putInstruction =
+                      Python.instructionFactory()
+                          .PutInstruction(
+                              codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
+
+                  instructions.add(putInstruction);
+                  LOGGER.finer("Adding field write: " + putInstruction + ".");
+
+                  return instructions;
                 }
                 //  Not found (wala/ML#977).
                 throw new ScriptOutsidePythonPathException(

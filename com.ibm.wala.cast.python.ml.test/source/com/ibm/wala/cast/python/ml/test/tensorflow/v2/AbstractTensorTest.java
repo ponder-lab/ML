@@ -1292,7 +1292,7 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
                 return new File(new FileProvider().filePathFromURL(url));
               } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
                 try {
-                  URL resource = this.getClass().getResource("/" + string);
+                  URL resource = this.getClass().getResource("/" + s);
                   String path = resource.getPath();
                   return new File(path);
                 } catch (Exception e1) {

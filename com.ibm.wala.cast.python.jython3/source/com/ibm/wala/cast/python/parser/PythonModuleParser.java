@@ -241,25 +241,25 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           // Adjust the module name per the PYTHONPATH.
           Optional<SourceModule> localModule = getLocalModule(moduleName);
 
-          for (File pathEntry : pythonPath) {
-            Path modulePath = getPath(localModule);
-            LOGGER.finer("Found path: " + modulePath);
+          Path modulePath = getPath(localModule);
+          LOGGER.finer("Found path: " + modulePath);
 
-            if (modulePath.startsWith(pathEntry.toPath())) {
-              // Found it.
-              Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
-              LOGGER.finer("Relativized path is: " + scriptRelativePath);
+          // The most specific entry containing the module names it (wala/ML#984).
+          Optional<Path> namingEntry =
+              Util.getNamingPathEntry(
+                  pythonPath.stream().map(File::toPath).collect(Collectors.toList()), modulePath);
+          if (namingEntry.isPresent()) {
+            Path scriptRelativePath = namingEntry.get().relativize(modulePath);
+            LOGGER.finer("Relativized path is: " + scriptRelativePath);
 
-              // Remove the file extension if it exists.
-              moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
+            // Remove the file extension if it exists.
+            moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
 
-              if (useInitializationFile)
-                // Use the beginning segment initialization file.
-                moduleName = moduleName.split("/")[0] + "/" + MODULE_INITIALIZATION_ENTITY_NAME;
+            if (useInitializationFile)
+              // Use the beginning segment initialization file.
+              moduleName = moduleName.split("/")[0] + "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
-              LOGGER.fine("Using module name: " + moduleName);
-              break;
-            }
+            LOGGER.fine("Using module name: " + moduleName);
           }
         }
 
