@@ -43,3 +43,13 @@ consume_gathered(tf.gather_nd(unstacked.stack(), [[0]]))
 floats = tf.TensorArray(dtype=tf.float32, size=1)
 floats = floats.write(0, 0.5)
 consume_keyword(floats.stack())
+
+
+def consume_unread(x):
+    assert x.dtype == tf.int8
+    assert x.shape == (1,)
+
+
+unread = tf.TensorArray(tf.int8, size=1)
+unread = unread.write(0, 3)
+consume_unread(unread.stack())

@@ -75,4 +75,17 @@ public class TestTensorArray extends AbstractTensorTest {
   public void testKeywordDType() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_keyword", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
+
+  /**
+   * An array built with a dtype the analysis does not model, {@code tf.int8}: the stacked tensor's
+   * dtype is unknown, never a guessed one.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testUnreadDType() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_unread", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
