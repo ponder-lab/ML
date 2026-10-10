@@ -14,6 +14,7 @@ import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -83,10 +84,23 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * @return The copy's project root.
    */
   private static Path checkOut(Path parent, String name) throws IOException, URISyntaxException {
-    URL resource = TestRelativeImportResolution.class.getResource("/" + FIXTURE);
+    return checkOut(parent, name, FIXTURE);
+  }
+
+  /**
+   * Copies a fixture under a directory of the given name.
+   *
+   * @param parent The directory to copy under.
+   * @param name The checkout's directory name.
+   * @param fixture The fixture's resource name.
+   * @return The copy's project root.
+   */
+  private static Path checkOut(Path parent, String name, String fixture)
+      throws IOException, URISyntaxException {
+    URL resource = TestRelativeImportResolution.class.getResource("/" + fixture);
     assertTrue("The fixture is on the test class path", resource != null);
     URI uri = resource.toURI();
-    Path target = parent.resolve(name).resolve(FIXTURE);
+    Path target = parent.resolve(name).resolve(fixture);
     // The fixture is a directory when the test module's classes are, and an entry of its jar when
     // the reactor resolves the module as a packaged artifact, as a full build does.
     if ("jar".equals(uri.getScheme())) {
@@ -96,7 +110,7 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
       } catch (FileSystemAlreadyExistsException e) {
         jar = FileSystems.getFileSystem(uri);
       }
-      copyTree(jar.getPath("/" + FIXTURE), target);
+      copyTree(jar.getPath("/" + fixture), target);
     } else copyTree(Path.of(uri), target);
     return target;
   }
@@ -126,6 +140,20 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    */
   private Analysis analyze(Path root, boolean reversed)
       throws IOException, ClassHierarchyException, CancelException {
+    return analyze(root, reversed, List.of(root.toFile()));
+  }
+
+  /**
+   * Analyzes a checkout under the given PYTHONPATH, handing the engine its modules in the given
+   * order.
+   *
+   * @param root The checkout's project root.
+   * @param reversed Whether to give the modules in reverse path order.
+   * @param pythonPath The PYTHONPATH entries, in order.
+   * @return The call graph's nodes and edges and the tensor types, by method signature.
+   */
+  private Analysis analyze(Path root, boolean reversed, List<File> pythonPath)
+      throws IOException, ClassHierarchyException, CancelException {
     List<Path> files;
     try (Stream<Path> walk = Files.walk(root)) {
       files = walk.filter(p -> p.toString().endsWith(".py")).sorted().collect(Collectors.toList());
@@ -136,7 +164,7 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
     for (Path f : files) modules.add(getScript(f.toString()));
     PythonTensorAnalysisEngine engine =
         new PythonTensorAnalysisEngine(
-            List.of(root.toFile()),
+            pythonPath,
             PythonTensorAnalysisEngine.TENSORFLOW,
             PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH);
     engine.setModuleFiles(modules);
@@ -253,6 +281,31 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
           assertEquals(label + " edges vs " + firstLabel, first.edges(), a.edges());
           assertEquals(label + " tensor types vs " + firstLabel, first.types(), a.types());
         }
+    } finally {
+      delete(parent);
+    }
+  }
+
+  /**
+   * An absolute import that two in-scope modules end with binds the one Python binds under every
+   * directory name: with the PYTHONPATH {@code b} then the project root, {@code from conv.dense
+   * import make} names {@code b/conv/dense.py}'s {@code (4, 4)}, which {@code b} holds at the name
+   * {@code conv/dense.py}, and not {@code a/conv/dense.py}'s {@code (3,)}, which comes first in
+   * sorted order.
+   */
+  @Test
+  public void testSameSuffixModulesFollowPythonPathOrder() throws Exception {
+    Path parent = Files.createTempDirectory("tiebreak");
+    try {
+      List<String> wrong = new ArrayList<>();
+      for (String name : NAMES) {
+        Path root = checkOut(parent, name, "tiebreak_proj");
+        Analysis a = analyze(root, false, List.of(root.resolve("b").toFile(), root.toFile()));
+        Set<TensorType> made = parameterTypes(a, "consume");
+        if (!made.equals(Set.of(TensorType.of(DType.FLOAT32, 4, 4))))
+          wrong.add(name + " (consume " + made + ")");
+      }
+      assertEquals("Checkouts binding the import to another module than Python", List.of(), wrong);
     } finally {
       delete(parent);
     }

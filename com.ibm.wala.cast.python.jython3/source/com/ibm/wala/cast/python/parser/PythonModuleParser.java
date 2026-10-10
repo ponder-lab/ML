@@ -34,6 +34,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -458,6 +459,29 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
     return getPath(Optional.of(this.fileName));
   }
 
+  /**
+   * Ranks a local module by the PYTHONPATH entry that holds it at the given name, as Python finds a
+   * module by searching the entries in order.
+   *
+   * @param module The local module.
+   * @param moduleFileName The module's name as a relative file path, e.g. {@code conv/dense.py}.
+   * @param pythonPath The PYTHONPATH entries, in order, or {@code null}.
+   * @return The index of the first entry {@code E} such that the module is {@code
+   *     E/moduleFileName}, or the number of entries if there is none.
+   */
+  private static int entryRank(SourceModule module, String moduleFileName, List<File> pythonPath) {
+    if (pythonPath == null) return 0;
+    URL url = module.getURL();
+    if (url != null) {
+      Path path = Path.of(url.getFile()).toAbsolutePath().normalize();
+      for (int i = 0; i < pythonPath.size(); i++) {
+        Path entry = pythonPath.get(i).toPath().toAbsolutePath().normalize();
+        if (path.equals(entry.resolve(moduleFileName).normalize())) return i;
+      }
+    }
+    return pythonPath.size();
+  }
+
   private boolean isLocalModule(String moduleName) {
     boolean ret = this.getLocalModule(moduleName).isPresent();
     LOGGER.finer("Module: " + moduleName + (ret ? " is" : " isn't") + " local.");
@@ -494,15 +518,23 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
     // not be on disk. As such, this is our best approximation.
     //
     // A candidate matches at a path-component boundary, so `dense.py` does not name
-    // `superdense.py`, and among several the choice is the first in sorted order rather than the
-    // first a hash map yields, so it does not depend on the absolute paths the project is checked
+    // `superdense.py`. Among several, the choice is Python's: the candidate an earlier PYTHONPATH
+    // entry holds at the module's own name, as `E/conv/dense.py` for `conv.dense` and entry `E`.
+    // Candidates no entry holds that way are ranked after, in sorted order rather than the order a
+    // hash map yields, so the choice does not depend on the absolute paths the project is checked
     // out under (wala/ML#168). A relative import never reaches this choice: it is resolved against
     // the importer's package to a path no other script ends with.
     String suffix = "/" + moduleFileName;
+    List<File> pythonPath = this.getPythonPath();
+    Map<String, Integer> entryRank = new HashMap<>();
+    for (String p : pathToLocalModule.keySet())
+      if (p.equals(moduleFileName) || p.endsWith(suffix))
+        entryRank.put(p, entryRank(pathToLocalModule.get(p), moduleFileName, pythonPath));
     List<String> candidates =
-        pathToLocalModule.keySet().stream()
-            .filter(p -> p.equals(moduleFileName) || p.endsWith(suffix))
-            .sorted()
+        entryRank.keySet().stream()
+            .sorted(
+                Comparator.comparing((String p) -> entryRank.get(p))
+                    .thenComparing(Comparator.naturalOrder()))
             .collect(Collectors.toList());
     if (candidates.size() > 1)
       LOGGER.fine(
