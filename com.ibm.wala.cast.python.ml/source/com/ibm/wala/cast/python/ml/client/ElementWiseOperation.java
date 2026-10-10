@@ -725,7 +725,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
                 + operandVn
                 + " dtypes="
                 + operandDTypes);
-    if (operandDTypes == null || operandDTypes.isEmpty()) return EnumSet.of(DType.FLOAT32);
+    if (operandDTypes == null || operandDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
 
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (DType operandDType : operandDTypes)
@@ -735,7 +735,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
       // `isFloatingPoint` here instead would send complex operands to the `float32` fallback,
       // which contradicts this method's own contract and loses the imaginary part.
       else if (operandDType.isNumeric()) ret.add(operandDType);
-      else ret.add(DType.FLOAT32);
+      else ret.add(DType.UNKNOWN);
     return ret;
   }
 
