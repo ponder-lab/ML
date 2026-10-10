@@ -1,5 +1,7 @@
 # `tf.cast` of a list literal of shape elements: a vector as long as the list.
 import json
+import pickle
+import types
 
 import numpy as np
 import tensorflow as tf
@@ -58,3 +60,14 @@ def consume_config(x):
 
 
 consume_config(tf.constant([config.shape[0]]))
+
+
+pickled_config = pickle.loads(pickle.dumps(types.SimpleNamespace(shape=[[1, 2]])))
+
+
+def consume_pickled_config(x):
+    assert x.dtype == tf.int32
+    assert x.shape == (1, 2)
+
+
+consume_pickled_config(tf.constant([pickled_config.shape[0]]))

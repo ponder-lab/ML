@@ -98,4 +98,24 @@ public class TestStaticShapeElement extends AbstractTensorTest {
   public void testShapeOfNonTensor() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_config", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /**
+   * A constant from a list holding a {@code shape} attribute's element of a value with no points-to
+   * set, here an object read back from {@code pickle}: what the attribute holds is not known, so
+   * neither the result's shape nor its dtype is read.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeOfUnknownValue()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_pickled_config",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
