@@ -5,9 +5,11 @@ import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -44,6 +46,9 @@ import java.util.logging.Logger;
 public class NdarrayReshape extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(NdarrayReshape.class.getName());
+
+  /** The most separate integers a {@code reshape} call's dimensions are read from. */
+  private static final int MAX_SEPARATE_DIMENSIONS = 32;
 
   /**
    * Positional parameters of the {@code ndarray.reshape(shape)} invocation. The receiver (the
@@ -110,18 +115,28 @@ public class NdarrayReshape extends TensorGenerator {
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     // Resolve the target shape from the `shape` argument, applying the `-1` inference rule by
     // dividing the receiver's known total size by the product of the explicit dims.
-    OrdinalSet<InstanceKey> shapePts =
-        this.getArgumentPointsToSet(
-            builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
-    if (shapePts == null || shapePts.isEmpty()) return getDefaultShapes(builder);
+    Set<List<Dimension<?>>> rawShapes;
+    // The dimensions may also be separate integers, `x.reshape(2, 3)` (wala/ML#1034): a second
+    // positional argument makes every positional argument one axis. Only a site that visibly
+    // supplies one takes this form; a starred spread, whose alignment is unknown, keeps the
+    // one-argument reading it had.
+    if (Boolean.TRUE.equals(this.isArgumentSyntacticallySupplied(builder, 1, null))) {
+      rawShapes = this.getSeparateDimensions(builder);
+      if (rawShapes == null) return null;
+    } else {
+      OrdinalSet<InstanceKey> shapePts =
+          this.getArgumentPointsToSet(
+              builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
+      if (shapePts == null || shapePts.isEmpty()) return getDefaultShapes(builder);
 
-    Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
-    // Soundness: when the `shape` argument is present but unparseable (helper returns null),
-    // the output shape is ⊤ — falling back to receiver-shape inference would be unsound since
-    // `ndarray.reshape(...)` is determined by the argument. Empty result distinct: no signature
-    // recoverable, fall back to receiver shape.
-    if (rawShapes == null) return null;
-    if (rawShapes.isEmpty()) return getDefaultShapes(builder);
+      rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+      // Soundness: when the `shape` argument is present but unparseable (helper returns null),
+      // the output shape is ⊤ — falling back to receiver-shape inference would be unsound since
+      // `ndarray.reshape(...)` is determined by the argument. Empty result distinct: no signature
+      // recoverable, fall back to receiver shape.
+      if (rawShapes == null) return null;
+      if (rawShapes.isEmpty()) return getDefaultShapes(builder);
+    }
 
     Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
 
@@ -190,6 +205,48 @@ public class NdarrayReshape extends TensorGenerator {
     final Set<List<Dimension<?>>> finalShapes = refinedShapes;
     LOGGER.fine(() -> "NdarrayReshape.getShapes: final refined=" + finalShapes);
     return refinedShapes;
+  }
+
+  /**
+   * The target shape spelled as separate integers, {@code x.reshape(d0, d1, ...)} (wala/ML#1034):
+   * one axis per positional argument, in order, until a position no site supplies. An argument that
+   * folds to one integer sizes its axis, a {@code -1} included, which the caller infers; an
+   * argument whose value does not resolve is a fixed Python integer the analysis could not compute,
+   * so its axis is {@link UnresolvedDim} (wala/ML#721).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The singleton target shape, or {@code null} (⊤) when a position's presence cannot be
+   *     told or an argument may be other than an integer.
+   */
+  private Set<List<Dimension<?>>> getSeparateDimensions(PropagationCallGraphBuilder builder) {
+    List<Dimension<?>> shape = new ArrayList<>();
+    for (int axis = 0; axis < MAX_SEPARATE_DIMENSIONS; axis++) {
+      Boolean supplied = this.isArgumentSyntacticallySupplied(builder, axis, null);
+      if (supplied == null) return null;
+      if (!supplied) break;
+      OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, axis, null);
+      Integer size = null;
+      boolean unresolved = pts == null || pts.isEmpty();
+      if (!unresolved)
+        for (InstanceKey key : pts) {
+          if (!(key instanceof ConstantKey<?> constant)
+              || !(constant.getValue() instanceof Number number)
+              || constant.getValue() instanceof Double
+              || constant.getValue() instanceof Float) {
+            LOGGER.fine(() -> "NdarrayReshape: non-integer separate dimension " + key + "; ⊤.");
+            return null;
+          }
+          if (size == null) size = number.intValue();
+          else if (size != number.intValue()) unresolved = true;
+        }
+      shape.add(unresolved || size == null ? UnresolvedDim.INSTANCE : new NumericDim(size));
+    }
+    LOGGER.fine(
+        () ->
+            "NdarrayReshape: separate dimensions "
+                + shape
+                + (this.source == null ? " (manual anchor)" : " (source anchor)"));
+    return Set.of(shape);
   }
 
   @Override
