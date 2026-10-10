@@ -123,7 +123,8 @@ public abstract class PythonAnalysisEngine<T>
         "pytest.xml",
         "click.xml",
         "abseil.xml",
-        "copy.xml"
+        "copy.xml",
+        "collections.xml"
       };
 
   protected PythonSSAPropagationCallGraphBuilder builder;
