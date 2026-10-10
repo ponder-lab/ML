@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -41,5 +42,25 @@ public class TestFloatLiteralUnresolved extends AbstractTensorTest {
   @Test
   public void testMapped() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_mapped", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * A parameter fed both an array the analysis resolves, {@code np.arange(4)}, and one it does not,
+   * times a float literal. The resolved operand promotes to {@code float64}; the unresolved one
+   * gives an unknown dtype, never a guessed {@code float32}, which would be a wrong member beside
+   * the right one.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMixed() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_mixed",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 4), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 }
