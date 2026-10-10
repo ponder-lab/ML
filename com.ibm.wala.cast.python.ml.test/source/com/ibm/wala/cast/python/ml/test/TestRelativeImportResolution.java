@@ -15,8 +15,12 @@ import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -80,10 +84,30 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    */
   private static Path checkOut(Path parent, String name) throws IOException, URISyntaxException {
     URL resource = TestRelativeImportResolution.class.getResource("/" + FIXTURE);
-    assertTrue(
-        "The fixture is a directory on disk: " + resource, "file".equals(resource.getProtocol()));
-    Path source = Path.of(resource.toURI());
+    assertTrue("The fixture is on the test class path", resource != null);
+    URI uri = resource.toURI();
     Path target = parent.resolve(name).resolve(FIXTURE);
+    // The fixture is a directory when the test module's classes are, and an entry of its jar when
+    // the reactor resolves the module as a packaged artifact, as a full build does.
+    if ("jar".equals(uri.getScheme())) {
+      FileSystem jar;
+      try {
+        jar = FileSystems.newFileSystem(uri, Map.of());
+      } catch (FileSystemAlreadyExistsException e) {
+        jar = FileSystems.getFileSystem(uri);
+      }
+      copyTree(jar.getPath("/" + FIXTURE), target);
+    } else copyTree(Path.of(uri), target);
+    return target;
+  }
+
+  /**
+   * Copies a tree's Python files, and its directories, under a target directory.
+   *
+   * @param source The tree's root, on any file system.
+   * @param target The directory to copy it under.
+   */
+  private static void copyTree(Path source, Path target) throws IOException {
     try (Stream<Path> walk = Files.walk(source)) {
       for (Path p : walk.sorted().collect(Collectors.toList())) {
         Path to = target.resolve(source.relativize(p).toString());
@@ -91,7 +115,6 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
         else if (p.toString().endsWith(".py")) Files.copy(p, to);
       }
     }
-    return target;
   }
 
   /**
