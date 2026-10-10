@@ -117,4 +117,36 @@ public class TestNamedTupleKeyword extends AbstractTensorTest {
   public void testListLiteral() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_listed", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
   }
+
+  /**
+   * A namedtuple whose field names may be {@code None} where the analysis reads them, as a helper
+   * {@code make(names=None)} that replaces a missing {@code names} gives them: the {@code None}
+   * names bind nothing, and the names the helper supplies still bind the fields.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testNamesMaybeNone() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_namedtuple_none_names.py",
+        "consume_defaulted",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+  }
+
+  /**
+   * The field before a starred argument, {@code Point(x, *[y]).x}: the positions the starred
+   * argument cuts off start after it, so this field is still bound.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBeforeStarred() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_spread_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+  }
 }

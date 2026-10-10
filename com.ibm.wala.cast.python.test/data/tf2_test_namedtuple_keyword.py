@@ -75,3 +75,11 @@ def consume_listed(x):
 
 listed = Point([tf.ones((2,))], y=0)
 consume_listed(listed.x[0])
+
+
+def consume_spread_x(x):
+    assert x.dtype == tf.float32
+    assert x.shape == ()
+
+
+consume_spread_x(spread.x)
