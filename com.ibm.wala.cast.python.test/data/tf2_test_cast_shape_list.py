@@ -23,3 +23,11 @@ scale = tf.cast(
 consume_cast(scale)
 consume_divided(bboxes / scale)
 consume_stacked(tf.stack([image.shape[0], image.shape[1]]))
+
+
+def consume_nested(x):
+    assert x.dtype == tf.int32
+    assert x.shape == (1, 2)
+
+
+consume_nested(tf.constant([[image.shape[0], image.shape[1]]]))

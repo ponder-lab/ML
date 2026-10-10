@@ -56,4 +56,18 @@ public class TestStaticShapeElement extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_stacked", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2))));
   }
+
+  /**
+   * A constant from a nested list of static shape elements, with no dtype given: an int32 matrix of
+   * one row of two, as the elements are Python ints.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConstantOfNestedShapeElements()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_nested", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 1, 2))));
+  }
 }
