@@ -721,6 +721,13 @@ public class NpArray extends TensorGenerator {
 
           OrdinalSet<InstanceKey> fieldPTS =
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
+          // A static shape element, `t.shape[k]`, is a Python int, which NumPy converts to int64
+          // as it does an integer literal.
+          if ((fieldPTS == null || fieldPTS.isEmpty())
+              && isStaticShapeElementWrite(builder, asin, fieldIndex)) {
+            leaves.add(DType.INT64);
+            continue;
+          }
           if (!collectNumpyLeaves(builder, fieldPTS, leaves, visited, sawUnresolvableTensorLeaf))
             return false;
         }

@@ -35,6 +35,7 @@ import static java.util.Collections.emptyList;
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
+import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
@@ -5217,9 +5218,13 @@ public abstract class TensorGenerator {
                   FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(index.toString()), Root));
       if (field == null) return null;
       PointerKey key = builder.getPointerKeyForInstanceField(container, field);
+      OrdinalSet<InstanceKey> elementPts = pointerAnalysis.getPointsToSet(key);
+      // A static shape element, `t.shape[k]`, is a scalar, as the value walk reads it.
       Set<List<Dimension<?>>> shapes =
-          this.readElementShapes(builder, key, pointerAnalysis.getPointsToSet(key), false)
-              .toLegacy();
+          (elementPts == null || elementPts.isEmpty())
+                  && isStaticShapeElementWrite(builder, container, index)
+              ? Set.of(emptyList())
+              : this.readElementShapes(builder, key, elementPts, false).toLegacy();
       // An element whose shapes are unknown constrains nothing: the packed shape is what the known
       // elements share, and the unknown one has that shape at run time or the packing raises.
       if (shapes == null) continue;
@@ -5539,6 +5544,60 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Whether a list or tuple literal's element at an index is written, in the literal's own method,
+   * from an element of a tensor's static shape: a constant-index read of a {@code shape} attribute,
+   * {@code t.shape[k]}, of a value every member of whose points-to set is a TensorFlow or NumPy
+   * value. Such an element is a Python int, or {@code None} for an axis whose size is unknown, and
+   * a scalar either way; only its rank is read, never its value. A {@code shape} attribute of any
+   * other object, such as a configuration's list of lists read from a file, or of a value with an
+   * empty points-to set, may hold anything and is not read.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis holds the {@code
+   *     shape} attribute's receiver.
+   * @param literal The literal's allocation.
+   * @param index The element's index.
+   * @return {@code true} iff every write of that element in the allocating method stores such a
+   *     read, and there is at least one.
+   */
+  protected static boolean isStaticShapeElementWrite(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode literal, int index) {
+    CGNode node = literal.getNode();
+    IR ir = node.getIR();
+    DefUse du = node.getDU();
+    if (ir == null || du == null) return false;
+    SymbolTable symtab = ir.getSymbolTable();
+    SSANewInstruction alloc = newInstructionOrNull(ir, literal.getSite());
+    if (alloc == null) return false;
+    boolean found = false;
+    for (Iterator<SSAInstruction> uses = du.getUses(alloc.getDef()); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != alloc.getDef())
+        continue;
+      int member = write.getMemberRef();
+      if (!symtab.isConstant(member)
+          || !(symtab.getConstantValue(member) instanceof Number number)
+          || number.intValue() != index) continue;
+      if (!(du.getDef(write.getValue()) instanceof AstPropertyRead element)
+          || !symtab.isConstant(element.getMemberRef())
+          || !(symtab.getConstantValue(element.getMemberRef()) instanceof Number)
+          || !(du.getDef(element.getObjectRef()) instanceof AstPropertyRead shape)
+          || !symtab.isStringConstant(shape.getMemberRef())
+          || !"shape".equals(symtab.getStringValue(shape.getMemberRef()))) return false;
+      OrdinalSet<InstanceKey> receiver =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(builder.getPointerKeyForLocal(node, shape.getObjectRef()));
+      if (receiver == null || receiver.isEmpty()) return false;
+      for (InstanceKey value : receiver) {
+        String type = value.concreteType().getName().toString();
+        if (!type.startsWith("Ltensorflow") && !type.startsWith("Lnumpy")) return false;
+      }
+      found = true;
+    }
+    return found;
+  }
+
+  /**
    * Record-carrying core of {@link #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet,
    * boolean)} (wala/ML#718): in exact mode, a member whose shapes do not resolve marks the unknown
    * remainder and the resolvable members keep collecting, so a partially resolvable points-to union
@@ -5619,10 +5678,17 @@ public abstract class TensorGenerator {
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
+            // An element of a tensor's static shape, `t.shape[k]`, is a Python int (or `None`):
+            // a scalar, whose value the points-to set does not carry because `shape` is
+            // unmodeled. A list of such elements, `[t.shape[0], t.shape[1]]`, is then a vector as
+            // long as the list.
             Set<List<Dimension<?>>> shapesOfField =
-                this.readElementShapes(
-                        builder, pointerKeyForInstanceField, instanceFieldPointsToSet, exact)
-                    .toLegacy();
+                (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
+                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
+                    ? Set.of(emptyList())
+                    : this.readElementShapes(
+                            builder, pointerKeyForInstanceField, instanceFieldPointsToSet, exact)
+                        .toLegacy();
 
             if (shapesOfField == null) {
               // An unresolvable element makes the union incomplete: mark the remainder and keep
@@ -6814,8 +6880,12 @@ public abstract class TensorGenerator {
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
+            // A static shape element, `t.shape[k]`, is a Python int, which converts to int32.
             Set<DType> fieldDTypes =
-                this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
+                (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
+                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
+                    ? EnumSet.of(DType.INT32)
+                    : this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
 
