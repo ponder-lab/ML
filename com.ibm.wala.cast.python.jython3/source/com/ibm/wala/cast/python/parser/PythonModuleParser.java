@@ -268,8 +268,17 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
       /**
        * Given a relative import, e.g., ".", "..", ".P", "..P", where "P" represents a package,
-       * subpackage, or module, returns the corresponding actual package, subpackage, or module
-       * name.
+       * subpackage, or module, returns the corresponding package, subpackage, or module's name
+       * relative to the PYTHONPATH entry holding the importer, e.g. {@code pkg/layers/conv/dense}
+       * for {@code from .conv.dense import ...} in {@code pkg/layers/__init__.py}.
+       *
+       * <p>The name is resolved against the importer's own package (<a
+       * href="https://github.com/wala/ML/issues/168">wala/ML#168</a>): the first dot is the
+       * importer's directory and each further dot its parent. Resolving to the trailing components
+       * alone, {@code dense}, left the module to a lookup by file name among every in-scope script
+       * ending in it, so a project with two packages each holding a {@code conv/dense.py} bound the
+       * import by the hash order of the scripts' absolute paths. An importer outside every
+       * PYTHONPATH entry keeps that trailing-components name, which is all it can have.
        *
        * @param importName The relative package, subpackage, or module to resolve.
        * @return The actual corresponding package, subpackage, or module name.
@@ -277,6 +286,51 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
       private String resolveRelativeImport(String importName) {
         assert importName.startsWith(".") : "Relative import must start with a period.";
 
+        // The leading dots, however the module names spelling them were joined, then the rest.
+        int dots = 0;
+        int i = 0;
+        for (; i < importName.length(); i++) {
+          char c = importName.charAt(i);
+          if (c == '.') dots++;
+          else if (c != '/') break;
+        }
+        String rest = importName.substring(i);
+
+        Path importer = Path.of(PythonModuleParser.this.getParsedURL().getFile());
+        Path base = importer.getParent();
+        for (int up = 1; up < dots && base != null; up++) base = base.getParent();
+
+        if (base != null) {
+          Path target = rest.isEmpty() ? base : base.resolve(rest).normalize();
+          List<File> pythonPath = PythonModuleParser.this.getPythonPath();
+          if (pythonPath != null)
+            for (File entry : pythonPath) {
+              Path root = entry.toPath().toAbsolutePath().normalize();
+              if (target.startsWith(root) && !target.equals(root)) {
+                String resolved = root.relativize(target).toString();
+                LOGGER.fine(
+                    () ->
+                        "Resolved relative import: "
+                            + importName
+                            + " against the importer's package to: "
+                            + resolved
+                            + " (wala/ML#168).");
+                return resolved;
+              }
+            }
+        }
+
+        return resolveRelativeImportByTrailingComponents(importName);
+      }
+
+      /**
+       * The trailing-components reading of a relative import, for an importer outside every
+       * PYTHONPATH entry; see {@link #resolveRelativeImport(String)}.
+       *
+       * @param importName The relative package, subpackage, or module to resolve.
+       * @return The trailing components of the resolved name.
+       */
+      private String resolveRelativeImportByTrailingComponents(String importName) {
         // Replace path separators for dots except for the last one. We'll use this to resolve the
         // import.
         importName = importName.replaceAll("\\./\\B", ".");
@@ -438,9 +492,26 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
     // otherwise, go through the local modules. NOTE: Should instead traverse PYTHONPATH here per
     // https://g.co/gemini/share/310ca39fbd43. However, the problem is that the local modules may
     // not be on disk. As such, this is our best approximation.
-    return pathToLocalModule.keySet().stream()
-        .filter(p -> p.endsWith(moduleFileName))
-        .map(p -> pathToLocalModule.get(p))
-        .findFirst();
+    //
+    // A candidate matches at a path-component boundary, so `dense.py` does not name
+    // `superdense.py`, and among several the choice is the first in sorted order rather than the
+    // first a hash map yields, so it does not depend on the absolute paths the project is checked
+    // out under (wala/ML#168). A relative import never reaches this choice: it is resolved against
+    // the importer's package to a path no other script ends with.
+    String suffix = "/" + moduleFileName;
+    List<String> candidates =
+        pathToLocalModule.keySet().stream()
+            .filter(p -> p.equals(moduleFileName) || p.endsWith(suffix))
+            .sorted()
+            .collect(Collectors.toList());
+    if (candidates.size() > 1)
+      LOGGER.fine(
+          () ->
+              "Module: "
+                  + moduleName
+                  + " names several local modules: "
+                  + candidates
+                  + "; using the first (wala/ML#168).");
+    return candidates.stream().findFirst().map(pathToLocalModule::get);
   }
 }
