@@ -34,3 +34,35 @@ def body(t, h):
 
 
 tf.while_loop(lambda t, h: t < 2, body, [tf.constant(0), keyword])
+
+
+Point = collections.namedtuple("Point", "x y")
+
+
+def consume_string_x(x):
+    assert x.dtype == tf.float32
+    assert x.shape == ()
+
+
+def consume_indexed(x):
+    assert x.dtype == tf.int32
+    assert x.shape == ()
+
+
+def consume_unpacked(x):
+    assert x.dtype == tf.float32
+    assert x.shape == ()
+
+
+def consume_starred(x):
+    assert x.dtype == tf.float32
+    assert x.shape == (3,)
+
+
+point = Point(tf.constant(1.0), y=tf.constant(2))
+consume_string_x(point.x)
+consume_indexed(point[1])
+first, _ = point
+consume_unpacked(first)
+spread = Point(tf.constant(1.0), *[tf.zeros((3,))])
+consume_starred(tf.convert_to_tensor(spread.y))

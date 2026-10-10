@@ -52,4 +52,56 @@ public class TestNamedTupleKeyword extends AbstractTensorTest {
   public void testLoopField() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_loop", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 1, 1))));
   }
+
+  /**
+   * A field of a type whose names are one string separated by spaces, its instance built by
+   * position and keyword together.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testStringNames() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_string_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+  }
+
+  /**
+   * A field read by its position, {@code point[1]}, bound by keyword.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testIndexed() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_indexed", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * A field unpacked from an instance, {@code first, _ = point}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testUnpacked() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_unpacked", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+  }
+
+  /**
+   * A field at a position a starred argument spreads, {@code Point(x, *[y])}: the positions from
+   * the starred argument on are not bound, so the field converts to a tensor of unknown type, never
+   * the list the argument spreads, which would convert to a {@code (1, 3)} tensor where the
+   * program's field is the {@code (3,)} element.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testStarred() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_starred", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
