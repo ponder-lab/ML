@@ -189,6 +189,12 @@ public class Stack extends TensorGenerator {
               ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                   .getPointerKeyForObjectCatalog(asin));
       OrdinalSet<InstanceKey> firstElemPts = getFirstElementPts(builder, asin, catalog);
+      // A static shape element, `t.shape[k]`, is a Python int, which converts to int32.
+      if ((firstElemPts == null || firstElemPts.isEmpty())
+          && isStaticShapeElementWrite(builder, asin, 0)) {
+        ret.add(DType.INT32);
+        continue;
+      }
       if (firstElemPts == null) continue;
       Set<DType> firstDTypes = this.getDTypesOfValue(builder, firstElemPts);
       if (firstDTypes != null) ret.addAll(firstDTypes);

@@ -149,7 +149,7 @@ jobs:
       matrix:
         include:
           - shard: nlpgnn
-            tests: 'TestCorpusFixtures#testNlpgnnFull*+testNlpgnnSlice*'
+            tests: 'TestCorpusFixtures#testNlpgnnFull*+testNlpgnnSlice*+testNlpgnnCatCensusEmpty+testMl900EmbeddingGuardCanary'
           - shard: transformer-pin
             tests: 'TestNlpgnnTransformer'
           - shard: subjects
