@@ -42,4 +42,18 @@ public class TestStaticShapeElement extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_divided", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 4))));
   }
+
+  /**
+   * A stack of two static shape elements: an int32 vector of two, as the packed elements are
+   * scalars.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testStackOfShapeElements()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_stacked", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
 }
