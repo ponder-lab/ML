@@ -5221,7 +5221,7 @@ public abstract class TensorGenerator {
       // A static shape element, `t.shape[k]`, is a scalar, as the value walk reads it.
       Set<List<Dimension<?>>> shapes =
           (elementPts == null || elementPts.isEmpty())
-                  && isStaticShapeElementWrite(container, index)
+                  && isStaticShapeElementWrite(builder, container, index)
               ? Set.of(emptyList())
               : this.readElementShapes(builder, key, elementPts, false).toLegacy();
       // An element whose shapes are unknown constrains nothing: the packed shape is what the known
@@ -5545,18 +5545,21 @@ public abstract class TensorGenerator {
   /**
    * Whether a list or tuple literal's element at an index is written, in the literal's own method,
    * from an element of a tensor's static shape: a constant-index read of a {@code shape} attribute,
-   * {@code t.shape[k]}. Such an element is a Python int, or {@code None} for an axis whose size is
-   * unknown, and a scalar either way; only its rank is read, never its value. A {@code shape}
-   * attribute of some other object with an empty points-to set, such as a configuration's list of
-   * lists read from a file, would read as a scalar too; a {@code shape} a literal writes has a
-   * non-empty points-to set and is read as written.
+   * {@code t.shape[k]}, of a value every member of whose points-to set is a TensorFlow or NumPy
+   * value. Such an element is a Python int, or {@code None} for an axis whose size is unknown, and
+   * a scalar either way; only its rank is read, never its value. A {@code shape} attribute of any
+   * other object, such as a configuration's list of lists read from a file, or of a value with an
+   * empty points-to set, may hold anything and is not read.
    *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis holds the {@code
+   *     shape} attribute's receiver.
    * @param literal The literal's allocation.
    * @param index The element's index.
    * @return {@code true} iff every write of that element in the allocating method stores such a
    *     read, and there is at least one.
    */
-  protected static boolean isStaticShapeElementWrite(AllocationSiteInNode literal, int index) {
+  protected static boolean isStaticShapeElementWrite(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode literal, int index) {
     CGNode node = literal.getNode();
     IR ir = node.getIR();
     DefUse du = node.getDU();
@@ -5579,6 +5582,15 @@ public abstract class TensorGenerator {
           || !(du.getDef(element.getObjectRef()) instanceof AstPropertyRead shape)
           || !symtab.isStringConstant(shape.getMemberRef())
           || !"shape".equals(symtab.getStringValue(shape.getMemberRef()))) return false;
+      OrdinalSet<InstanceKey> receiver =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(builder.getPointerKeyForLocal(node, shape.getObjectRef()));
+      if (receiver == null || receiver.isEmpty()) return false;
+      for (InstanceKey value : receiver) {
+        String type = value.concreteType().getName().toString();
+        if (!type.startsWith("Ltensorflow") && !type.startsWith("Lnumpy")) return false;
+      }
       found = true;
     }
     return found;
@@ -5671,7 +5683,7 @@ public abstract class TensorGenerator {
             // long as the list.
             Set<List<Dimension<?>>> shapesOfField =
                 (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
-                        && isStaticShapeElementWrite(asin, fieldIndex)
+                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
                     ? Set.of(emptyList())
                     : this.readElementShapes(
                             builder, pointerKeyForInstanceField, instanceFieldPointsToSet, exact)
@@ -6870,7 +6882,7 @@ public abstract class TensorGenerator {
             // A static shape element, `t.shape[k]`, is a Python int, which converts to int32.
             Set<DType> fieldDTypes =
                 (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
-                        && isStaticShapeElementWrite(asin, fieldIndex)
+                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
                     ? EnumSet.of(DType.INT32)
                     : this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
