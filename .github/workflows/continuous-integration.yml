@@ -90,6 +90,11 @@ jobs:
           | grep -q "^Main-Class: com.ibm.wala.cast.python.ml.driver.Ariadne" \
           || { echo "fat JAR ${JARS[0]} missing expected Main-Class manifest entry" >&2; exit 1; }
       shell: bash
+    # The jython and jython3 modules hold files at the same package path, which the report names
+    # by package alone, so Codecov cannot place either copy. Splitting the report by module source
+    # directory, each part named for that directory, makes Codecov's lookup the repository path.
+    - name: Split the coverage report by module
+      run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v7
       with:
@@ -197,6 +202,11 @@ jobs:
     # than overlap. The no-test guards keep the upstream reactor modules green with zero matches.
     - name: Run whole-project fixture tests (${{ matrix.shard }})
       run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco -Dtest='${{ matrix.tests }}' -Dsurefire.failIfNoSpecifiedTests=false -DfailIfNoTests=false
+    # The jython and jython3 modules hold files at the same package path, which the report names
+    # by package alone, so Codecov cannot place either copy. Splitting the report by module source
+    # directory, each part named for that directory, makes Codecov's lookup the repository path.
+    - name: Split the coverage report by module
+      run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v7
       with:
