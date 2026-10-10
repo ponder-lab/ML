@@ -109,6 +109,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -930,6 +931,57 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processListAppend(inst);
       processTextRead(inst);
       processDictMethod(inst);
+      processNamedTupleConstruction(inst);
+    }
+
+    /**
+     * Constructs a {@code collections.namedtuple} instance where a call's callee may be a
+     * namedtuple type, by a side effect on the callee's points-to set; see {@link
+     * NamedTupleOperator}.
+     *
+     * @param inst The call.
+     */
+    private void processNamedTupleConstruction(PythonInvokeInstruction inst) {
+      if (!inst.hasDef()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int positional = inst.getNumberOfPositionalParameters();
+      Object[] positionalArguments = new Object[Math.max(0, positional - 1)];
+      for (int i = 1; i < positional; i++)
+        positionalArguments[i - 1] = argumentValue(symtab, inst.getUse(i));
+      Map<String, Object> keywordArguments = new LinkedHashMap<>();
+      if (inst.getKeywords() != null)
+        for (String keyword : inst.getKeywords())
+          keywordArguments.put(keyword, argumentValue(symtab, inst.getUse(keyword)));
+      NamedTupleOperator operator =
+          getBuilder()
+          .new NamedTupleOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              positionalArguments,
+              keywordArguments);
+      int calleeVn = inst.getUse(0);
+      PointerKey calleeKey = getPointerKeyForLocal(calleeVn);
+      if (contentsAreInvariant(symtab, du, calleeVn) || system.isImplicit(calleeKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+          operator.construct(key);
+        return;
+      }
+      system.newSideEffect(operator, calleeKey);
+    }
+
+    /**
+     * An argument's value as a namedtuple construction binds it: its keys when they are invariant,
+     * its pointer key otherwise.
+     *
+     * @param symtab The symbol table.
+     * @param vn The argument's value number.
+     * @return An {@code InstanceKey[]} or a {@link PointerKey}.
+     */
+    private Object argumentValue(SymbolTable symtab, int vn) {
+      return contentsAreInvariant(symtab, du, vn)
+          ? getInvariantContents(symtab, du, node, vn)
+          : getPointerKeyForLocal(vn);
     }
 
     /**
@@ -2075,6 +2127,212 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /** The most fields of a {@code collections.namedtuple} whose names bind its arguments. */
+  private static final int MAX_NAMED_TUPLE_FIELDS = 32;
+
+  /** The type object a {@code collections.namedtuple} call returns. */
+  public static final TypeReference NAMED_TUPLE_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lcollections/namedtuple"));
+
+  /** An instance a {@code collections.namedtuple} type constructs. */
+  public static final TypeReference NAMED_TUPLE_INSTANCE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lcollections/namedtuple/instance"));
+
+  /**
+   * Constructs a {@code collections.namedtuple} instance at a call whose callee is a namedtuple
+   * type: an instance allocated at the call, each positional argument bound to the field the type
+   * names at its position and to that position, and each keyword argument to its own field and to
+   * its name's position. The type keeps its field names on {@code _fields}, as the {@code
+   * namedtuple} summary stores them: a sequence of name strings, or one string of names separated
+   * by commas or spaces. Names that have not reached that field yet bind when they arrive. Before,
+   * a namedtuple type was unmodeled, so its instances were nothing and every field read off one was
+   * empty. Equal for the same call, so the propagation system keeps one per call site.
+   */
+  public final class NamedTupleOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final Object[] positionalArguments;
+    private final Map<String, Object> keywordArguments;
+    private final Set<InstanceKey> constructed = HashSetFactory.make();
+
+    private NamedTupleOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        Object[] positionalArguments,
+        Map<String, Object> keywordArguments) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.positionalArguments = positionalArguments;
+      this.keywordArguments = keywordArguments;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null)
+        rhs.getValue().foreach(i -> construct(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Constructs an instance if a key the callee may be is a namedtuple type.
+     *
+     * @param type A key the callee may be.
+     */
+    void construct(InstanceKey type) {
+      if (!type.concreteType().getReference().equals(NAMED_TUPLE_TYPE) || !constructed.add(type))
+        return;
+      InstanceKey instance =
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, NAMED_TUPLE_INSTANCE));
+      if (instance == null) return;
+      getSystem().newConstraint(resultKey, instance);
+      IField fields = resolveRootField(getClassHierarchy(), "_fields");
+      if (fields == null) return;
+      PointerKey fieldsKey = getPointerKeyForInstanceField(type, fields);
+      NamesOperator names = new NamesOperator(instance);
+      // A keyword argument names its field itself; its position waits for the type's names.
+      for (Map.Entry<String, Object> keyword : keywordArguments.entrySet())
+        names.bindField(
+            instance, resolveRootField(getClassHierarchy(), keyword.getKey()), keyword.getValue());
+      getSystem().newSideEffect(names, fieldsKey);
+    }
+
+    /** Binds the arguments to an instance as the type's field names arrive. */
+    private final class NamesOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey instance;
+      private final Set<InstanceKey> read = HashSetFactory.make();
+
+      private NamesOperator(InstanceKey instance) {
+        this.instance = instance;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (rhs.getValue() != null)
+          rhs.getValue().foreach(i -> readNames(getSystem().getInstanceKey(i)));
+        return NOT_CHANGED;
+      }
+
+      private void readNames(InstanceKey fieldNames) {
+        if (!read.add(fieldNames)) return;
+        if (fieldNames instanceof ConstantKey<?> constant
+            && constant.getValue() instanceof String text) {
+          List<String> names = new ArrayList<>();
+          for (String name : text.split("[,\\s]+")) if (!name.isEmpty()) names.add(name);
+          bind(names);
+          return;
+        }
+        // A sequence of names: each position's name, which may arrive after this read. A
+        // namedtuple names few fields; positions past the bound bind nothing.
+        IClassHierarchy cha = getClassHierarchy();
+        for (int i = 0; i < MAX_NAMED_TUPLE_FIELDS; i++) {
+          IField position = resolveRootField(cha, Integer.toString(i));
+          if (position == null) continue;
+          PointerKey positionKey = getPointerKeyForInstanceField(fieldNames, position);
+          final int index = i;
+          getSystem()
+              .newSideEffect(
+                  new UnaryOperator<PointsToSetVariable>() {
+                    @Override
+                    public byte evaluate(PointsToSetVariable l, PointsToSetVariable r) {
+                      if (r.getValue() != null)
+                        r.getValue()
+                            .foreach(
+                                k -> {
+                                  if (getSystem().getInstanceKey(k) instanceof ConstantKey<?> name
+                                      && name.getValue() instanceof String text)
+                                    bindName(index, text);
+                                });
+                      return NOT_CHANGED;
+                    }
+
+                    @Override
+                    public int hashCode() {
+                      return instance.hashCode() * 31 + index;
+                    }
+
+                    @Override
+                    public boolean equals(Object o) {
+                      return this == o;
+                    }
+
+                    @Override
+                    public String toString() {
+                      return "namedtuple field name " + index + " of " + instance;
+                    }
+                  },
+                  positionKey);
+        }
+      }
+
+      private void bind(List<String> names) {
+        for (int i = 0; i < names.size(); i++) bindName(i, names.get(i));
+      }
+
+      /** Binds the argument for the field at a position, named {@code name}. */
+      private void bindName(int index, String name) {
+        Object argument =
+            index < positionalArguments.length
+                ? positionalArguments[index]
+                : keywordArguments.get(name);
+        if (argument == null) return;
+        IClassHierarchy cha = getClassHierarchy();
+        IField named = resolveRootField(cha, name);
+        IField numbered = resolveRootField(cha, Integer.toString(index));
+        AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForObjectCatalog(instance),
+                getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(index), index));
+        bindField(instance, named, argument);
+        bindField(instance, numbered, argument);
+      }
+
+      /** Binds an argument's value to a field of the instance. */
+      private void bindField(InstanceKey instance, IField field, Object argument) {
+        if (field == null || argument == null) return;
+        PointerKey target = getPointerKeyForInstanceField(instance, field);
+        if (argument instanceof InstanceKey[] keys)
+          for (InstanceKey key : keys) getSystem().newConstraint(target, key);
+        else getSystem().newConstraint(target, assignOperator, (PointerKey) argument);
+      }
+
+      @Override
+      public int hashCode() {
+        return instance.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof NamesOperator other && other.instance.equals(instance);
+      }
+
+      @Override
+      public String toString() {
+        return "namedtuple field names of " + instance;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof NamedTupleOperator other && other.node.equals(node) && other.pc == pc;
+    }
+
+    @Override
+    public String toString() {
+      return "namedtuple construction at " + node + "@" + pc;
+    }
   }
 
   /**
