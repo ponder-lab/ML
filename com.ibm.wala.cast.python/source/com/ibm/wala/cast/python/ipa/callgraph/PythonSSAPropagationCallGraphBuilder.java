@@ -2244,6 +2244,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           IField position = resolveRootField(cha, Integer.toString(i));
           if (position == null) continue;
           PointerKey positionKey = getPointerKeyForInstanceField(fieldNames, position);
+          // Names that may be `None`, as a defaulted `names=None` reads, have no fields to read.
+          if (positionKey == null) continue;
           final int index = i;
           getSystem()
               .newSideEffect(
