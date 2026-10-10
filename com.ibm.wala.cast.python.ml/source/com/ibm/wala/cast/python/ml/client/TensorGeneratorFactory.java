@@ -218,6 +218,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORDOT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_ARRAY_READS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_SCATTER_ND_UPDATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TFRECORD_DATASET_TYPE;
@@ -320,6 +321,19 @@ public class TensorGeneratorFactory {
   /** Attributes of `tf.Tensor` that do not represent tensor elements. */
   private static final Set<String> NON_TENSOR_ATTRIBUTES =
       Set.of("value_index", "dtype", "shape", "name", "graph", "op", "device", "consumers");
+
+  /**
+   * Whether a called function is one of the methods of a {@code tf.TensorArray} that read tensors
+   * back from it.
+   *
+   * @param calledFunction The called function's type.
+   * @return {@code true} iff it is one of {@link
+   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_ARRAY_READS}.
+   */
+  private static boolean isTensorArrayRead(TypeReference calledFunction) {
+    for (TypeReference read : TENSOR_ARRAY_READS) if (isType(calledFunction, read)) return true;
+    return false;
+  }
 
   /**
    * Registry of property-name → generator-constructor mappings used by the duck-typing dispatch
@@ -2541,6 +2555,7 @@ public class TensorGeneratorFactory {
       return new ReadDataSets(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
+    else if (isTensorArrayRead(calledFunction)) return new TensorArrayRead(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
     else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
