@@ -66,3 +66,12 @@ first, _ = point
 consume_unpacked(first)
 spread = Point(tf.constant(1.0), *[tf.zeros((3,))])
 consume_starred(tf.convert_to_tensor(spread.y))
+
+
+def consume_listed(x):
+    assert x.dtype == tf.float32
+    assert x.shape == (2,)
+
+
+listed = Point([tf.ones((2,))], y=0)
+consume_listed(listed.x[0])

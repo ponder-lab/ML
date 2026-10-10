@@ -104,4 +104,17 @@ public class TestNamedTupleKeyword extends AbstractTensorTest {
   public void testStarred() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_starred", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /**
+   * A field given a list literal, {@code Point([t], y=0)}: the literal is bound to the field as
+   * allocated, so subscripting the field reads the list's element.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testListLiteral() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_listed", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
 }
