@@ -1,0 +1,34 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- collections model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="collections" allocatable="true">
+      <method name="import" static="true" descriptor="()Lcollections;">
+        <new def="x" class="Lcollections"/>
+        <new def="namedtuple" class="Lcollections/functions/namedtuple"/>
+        <putfield class="LRoot" field="namedtuple" fieldType="LRoot" ref="x" value="namedtuple"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="collections/functions">
+      <!-- https://docs.python.org/3/library/collections.html#collections.namedtuple -->
+      <!-- `namedtuple(typename, field_names)` returns a tuple subclass whose instances name their positions. The returned type object keeps `field_names`, a sequence of names or one string of names separated by commas or spaces, on its `_fields`; the call builder constructs an instance where the type is called, binding each argument, positional or keyword, to its named field and to its position (`PythonSSAPropagationCallGraphBuilder.NamedTupleOperator`). -->
+      <class name="namedtuple" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self typename field_names rename defaults module">
+          <new def="type" class="Lcollections/namedtuple"/>
+          <putfield class="LRoot" field="_fields" fieldType="LRoot" ref="type" value="field_names"/>
+          <return value="type"/>
+        </method>
+      </class>
+    </package>
+    <package name="collections">
+      <!-- The type object a `namedtuple` call returns. -->
+      <class name="namedtuple" allocatable="true"></class>
+    </package>
+    <package name="collections/namedtuple">
+      <!-- An instance a `namedtuple` type constructs: its fields are the arguments of the call that constructed it, named and positional. -->
+      <class name="instance" allocatable="true"></class>
+    </package>
+  </classloader>
+</summary-spec>
