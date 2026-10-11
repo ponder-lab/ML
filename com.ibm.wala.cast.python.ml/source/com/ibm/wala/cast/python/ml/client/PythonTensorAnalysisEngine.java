@@ -343,6 +343,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 entry.type(),
                 entry.anchor(),
                 entry.attributionSuffix());
+            mergeAnnotationIntoDownstreamSeeds(
+                builder,
+                dataflow,
+                init,
+                initOrigins,
+                var,
+                entry.type(),
+                entry.anchor(),
+                entry.attributionSuffix());
             LOGGER.fine(
                 () ->
                     "Refined the inferred "
@@ -363,6 +372,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           init.put(var, HashSetFactory.make(Set.of(entry.type())));
           initOrigins.put(var, EnumSet.of(TensorOrigin.ANNOTATION));
           mergeAnnotationIntoUpstreamSeeds(
+              dataflow,
+              init,
+              initOrigins,
+              var,
+              entry.type(),
+              entry.anchor(),
+              entry.attributionSuffix());
+          mergeAnnotationIntoDownstreamSeeds(
+              builder,
               dataflow,
               init,
               initOrigins,
@@ -617,7 +635,129 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
   }
 
-  /** Visit cap for {@link #mergeAnnotationIntoUpstreamSeeds}'s predecessor walk. */
+  /**
+   * Merges a matched annotation into the seeds dataflow-downstream of the matched binding that hold
+   * the same value (<a href="https://github.com/wala/ML/issues/1046">wala/ML#1046</a>). A caller
+   * that receives the binding as a call result is seeded on its own, by delegating to the producer
+   * that created the value, so the at-binding and upstream merges leave that seed holding the
+   * unfilled type, and the caller reads it beside the filled one.
+   *
+   * <p>A downstream seed is the same value when its points-to set is non-empty and contained in the
+   * binding's: every object it can hold is one the binding holds, so the annotation describes it.
+   * An operation's result is a new allocation and fails the test, so the walk never refines a value
+   * computed from the binding. The walk continues past a seed that holds the same value, since a
+   * value returned again is seeded again, and stops at any other seed.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis decides sameness.
+   * @param dataflow The dataflow graph whose successor edges are walked.
+   * @param init The seed map to merge into.
+   * @param initOrigins The seed-origin map to stamp.
+   * @param var The matched binding's variable.
+   * @param annotation The annotation's type.
+   * @param anchor The annotation's anchor, for logging.
+   * @param attributionSuffix The annotation's attribution suffix, for logging.
+   */
+  private static void mergeAnnotationIntoDownstreamSeeds(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
+      PointsToSetVariable var,
+      TensorType annotation,
+      String anchor,
+      String attributionSuffix) {
+    if (!dataflow.containsNode(var)) return;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Set<InstanceKey> held = HashSetFactory.make();
+    for (InstanceKey ik : pa.getPointsToSet(var.getPointerKey())) held.add(ik);
+    if (held.isEmpty()) {
+      // Nothing to compare against, as distinct from a walk that found no same-value seed.
+      LOGGER.fine(
+          () ->
+              "Type annotation "
+                  + anchor
+                  + " binds a value with an empty points-to set at "
+                  + describe(var.getPointerKey())
+                  + "; no downstream seed can be shown to hold it (wala/ML#1046).");
+      return;
+    }
+    Deque<PointsToSetVariable> work = new ArrayDeque<>();
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    work.add(var);
+    visited.add(var);
+    while (!work.isEmpty()) {
+      PointsToSetVariable v = work.poll();
+      for (Iterator<PointsToSetVariable> it = dataflow.getSuccNodes(v); it.hasNext(); ) {
+        PointsToSetVariable succ = it.next();
+        if (!visited.add(succ)) continue;
+        Set<TensorType> seed = init.get(succ);
+        if (seed == null || seed.isEmpty()) {
+          // An unseeded pass-through: keep walking, under the same cap as the upstream walk.
+          if (visited.size() < UPSTREAM_ANNOTATION_MERGE_CAP) work.add(succ);
+          continue;
+        }
+        if (!holdsOnly(pa, succ, held)) continue; // A different value: stop this path.
+        Set<TensorType> merged = mergeAnnotationIntoInferredTypes(seed, annotation);
+        if (merged == null) {
+          LOGGER.warning(
+              "Type annotation "
+                  + anchor
+                  + " = "
+                  + annotation
+                  + " conflicts with the downstream seed "
+                  + seed
+                  + " at "
+                  + describe(succ.getPointerKey())
+                  + "; the seed is not refined (wala/ML#1046)"
+                  + attributionSuffix
+                  + ".");
+          continue;
+        }
+        if (merged != seed) {
+          init.put(succ, HashSetFactory.make(merged));
+          EnumSet<TensorOrigin> origins = EnumSet.of(TensorOrigin.ANNOTATION);
+          Set<TensorOrigin> priorOrigins = initOrigins.get(succ);
+          if (priorOrigins != null) origins.addAll(priorOrigins);
+          initOrigins.put(succ, origins);
+          LOGGER.fine(
+              () ->
+                  "Refined the downstream seed "
+                      + seed
+                      + " with type annotation "
+                      + anchor
+                      + " = "
+                      + annotation
+                      + " at "
+                      + describe(succ.getPointerKey())
+                      + " (wala/ML#1046)"
+                      + attributionSuffix
+                      + ".");
+        }
+        if (visited.size() < UPSTREAM_ANNOTATION_MERGE_CAP) work.add(succ);
+      }
+    }
+  }
+
+  /**
+   * Whether a variable can hold only objects in the given set, and holds at least one
+   * (wala/ML#1046).
+   *
+   * @param pa The pointer analysis.
+   * @param v The variable.
+   * @param held The objects the annotated binding holds.
+   * @return {@code true} when {@code v}'s points-to set is non-empty and contained in {@code held}.
+   */
+  private static boolean holdsOnly(
+      PointerAnalysis<InstanceKey> pa, PointsToSetVariable v, Set<InstanceKey> held) {
+    boolean any = false;
+    for (InstanceKey ik : pa.getPointsToSet(v.getPointerKey())) {
+      if (!held.contains(ik)) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /** Visit cap for the annotation merges' predecessor and successor walks. */
   private static final int UPSTREAM_ANNOTATION_MERGE_CAP = 64;
 
   /**

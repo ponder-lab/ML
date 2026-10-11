@@ -1668,6 +1668,26 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/1046">wala/ML#1046</a>: an annotation on
+   * a binding its function returns reaches the caller.
+   *
+   * <p>The entry fills {@code make}'s {@code x}. The caller's {@code out} holds the same array, but
+   * it is seeded on its own from the {@code np.zeros} that created it, so before this the caller
+   * read the unfilled type beside the filled one.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testAnnotationOnReturnedBindingReachesCaller() throws Exception {
+    sidecarWarnings(
+        "driver_returned_binding.py",
+        "consume",
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(4))))));
+  }
+
+  /**
    * A numpy array's shape and dtype are read from its construction, and a transpose preserves both.
    * The controls that localise <a href="https://github.com/wala/ML/issues/910">wala/ML#910</a> to
    * one call rather than to the chain around it.
