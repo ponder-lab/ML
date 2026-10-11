@@ -4156,6 +4156,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     addSummaryBypassLogic(options, "tensorflow.xml");
     // SentencePiece's id encodings are lists of Python ints a text model's prompt is built from.
     addSummaryBypassLogic(options, "sentencepiece.xml");
+    // scikit-learn's `train_test_split` halves are lists of the input's elements.
+    addSummaryBypassLogic(options, "sklearn.xml");
   }
 
   /**
