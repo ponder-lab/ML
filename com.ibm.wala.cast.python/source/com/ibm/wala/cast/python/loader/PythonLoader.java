@@ -589,8 +589,12 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
   @Override
   protected void finishTranslation() {
-    // Translate the deferred entities as their dependencies complete; whatever remains after a
-    // pass makes no progress is a dependency cycle and goes in the given order.
+    // Translate the deferred entities as their dependencies complete. A pass that makes no progress
+    // has a dependency cycle among the pending entities: the first of them, in the given order,
+    // that
+    // lies on a cycle is translated, which breaks it, and the rest keep their dependency order, so
+    // an entity merely waiting behind a cycle is not translated before its own bases' modules
+    // (wala/ML#1042).
     List<CAstEntity> pending = new ArrayList<>(deferred);
     deferred.clear();
     while (!pending.isEmpty()) {
@@ -608,14 +612,41 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
         }
       }
       if (!progress) {
-        for (CAstEntity entity : pending) {
-          translator.translate(entity, entryOf.get(entity));
-          translated.add(entity);
-        }
-        pending.clear();
+        CAstEntity breaker = pending.get(0);
+        for (CAstEntity entity : pending)
+          if (onPendingCycle(entity, pending)) {
+            breaker = entity;
+            break;
+          }
+        translator.translate(breaker, entryOf.get(breaker));
+        translated.add(breaker);
+        pending.remove(breaker);
       }
     }
     super.finishTranslation();
+  }
+
+  /**
+   * Whether an entity lies on a cycle of base dependencies among the pending, untranslated
+   * entities: some chain of its pending dependencies leads back to it.
+   *
+   * @param entity The entity.
+   * @param pending The entities not yet translated.
+   * @return {@code true} iff the entity reaches itself through pending dependencies.
+   */
+  private boolean onPendingCycle(CAstEntity entity, List<CAstEntity> pending) {
+    Set<CAstEntity> seen = HashSetFactory.make();
+    List<CAstEntity> work = new ArrayList<>();
+    work.add(entity);
+    while (!work.isEmpty()) {
+      CAstEntity next = work.remove(work.size() - 1);
+      for (CAstEntity dependency : baseDependencies.getOrDefault(next, Collections.emptySet())) {
+        if (translated.contains(dependency) || !pending.contains(dependency)) continue;
+        if (dependency == entity) return true;
+        if (seen.add(dependency)) work.add(dependency);
+      }
+    }
+    return false;
   }
 
   final CoreClass CodeBody =
