@@ -89,6 +89,33 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                   receiver.getName() + "/" + INIT_METHOD_NAME);
           IClass ctorCls = cha.lookupClass(ctorRef);
           IMethod init = ctorCls == null ? null : ctorCls.getMethod(AstMethodReference.fnSelector);
+          // A class without its own `__init__` runs the nearest one in its method resolution order
+          // (wala/ML#1048). Looking only for the class's own left such a class with a constructor
+          // that called nothing and dropped its arguments. The walk stops at a summary class that
+          // declares an initializer: that one is the nearest, and it runs below as an inherited
+          // summary initializer, not as a program one.
+          TypeReference inheritedInitRef = null;
+          if (init == null)
+            for (IClass parent : inheritedBases(receiver)) {
+              if (parent instanceof PythonSummaryShellClass) {
+                if (declaresShellInit(parent)) break;
+                continue;
+              }
+              TypeReference parentInitRef =
+                  TypeReference.findOrCreate(
+                      receiver.getClassLoader().getReference(),
+                      parent.getName() + "/" + INIT_METHOD_NAME);
+              IClass parentInitCls = cha.lookupClass(parentInitRef);
+              IMethod parentInit =
+                  parentInitCls == null
+                      ? null
+                      : parentInitCls.getMethod(AstMethodReference.fnSelector);
+              if (parentInit != null) {
+                init = parentInit;
+                inheritedInitRef = parentInitRef;
+                break;
+              }
+            }
           /*
            * https://github.com/wala/ML/issues/579: a NamedTuple with no explicit __init__ maps
            * positional constructor arguments to its declared fields in declaration order. Collect
@@ -437,12 +464,24 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           }
 
           if (init != null) {
+            // An inherited initializer is read off its declaring class's global, as an inherited
+            // method is: the constructed class object's copied `__init__` field can hold another
+            // base's (wala/ML#1006, wala/ML#1048).
+            int initHolder = 1;
+            if (inheritedInitRef != null) {
+              initHolder = v++;
+              ctor.addStatement(
+                  new AstGlobalRead(
+                      pc++,
+                      initHolder,
+                      makeGlobalRef(receiver.getClassLoader(), getGlobalName(inheritedInitRef))));
+            }
             int fv = v++;
             ctor.addStatement(
                 insts.GetInstruction(
                     pc,
                     fv,
-                    1,
+                    initHolder,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom(INIT_METHOD_NAME),
@@ -560,6 +599,18 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
       }
     }
     return base.getCalleeTarget(caller, site, receiver);
+  }
+
+  /**
+   * Whether a summary class declares an initializer of its own (wala/ML#1048).
+   *
+   * @param shell The summary class.
+   * @return {@code true} when one of its methods is named {@code __init__} at the Python level.
+   */
+  private static boolean declaresShellInit(IClass shell) {
+    for (MethodReference m : ((IPythonClass) shell).getMethodReferences())
+      if (instanceFieldName(m, true).toString().equals(INIT_METHOD_NAME)) return true;
+    return false;
   }
 
   /**
