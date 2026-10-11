@@ -1021,6 +1021,18 @@ public class TensorType implements Iterable<Dimension<?>> {
   }
 
   /**
+   * Whether this member is the type of Python's {@code None} in a parameter's state rather than a
+   * tensor type (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). Such a member
+   * is a {@link NoneType}; its dtype and dims are meaningless, so a client tests this before
+   * reading {@link #getDType()} or {@link #getDims()}.
+   *
+   * @return {@code true} iff this is the {@code None} member.
+   */
+  public boolean isNone() {
+    return false;
+  }
+
+  /**
    * Returns the dtype of the tensor as a typed {@link DType} enum value.
    *
    * <p>{@code dtype} is the internal source of truth since wala/ML#533; consumers branch on it as a

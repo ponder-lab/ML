@@ -1679,6 +1679,24 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
+   * Adds a member to variables' states after a solve without propagating it (<a
+   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). A variable the solver does not
+   * hold, or whose state is an unknown tensor (⊤), is left as it is.
+   *
+   * @param variables The variables.
+   * @param member The member to add.
+   * @return The number of variables whose state changed.
+   */
+  public int addMember(Set<PointsToSetVariable> variables, TensorType member) {
+    int changed = 0;
+    for (PointsToSetVariable variable : variables) {
+      TensorVariable out = getOut(variable);
+      if (out != null && out.state != null && out.state.add(member)) changed++;
+    }
+    return changed;
+  }
+
+  /**
    * Restores suppressed seeds on fed destinations whose dtype feed delivered no state
    * (wala/ML#736). A dtype feed replaces a pure-⊤ seed profitably only when some operand state
    * arrives; when none ever does, the destination would otherwise lose its tensor identity entirely

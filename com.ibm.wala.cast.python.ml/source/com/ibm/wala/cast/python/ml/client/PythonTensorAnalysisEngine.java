@@ -12,6 +12,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 
+import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
@@ -20,6 +21,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.types.NoneType;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -32,12 +34,15 @@ import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.fixpoint.UnaryStatement;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -62,17 +67,22 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.shrike.shrikeBT.IConditionalBranchInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSACFG;
+import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -82,6 +92,7 @@ import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
+import com.ibm.wala.util.graph.dominators.Dominators;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -2248,6 +2259,484 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return this.resolverCensus;
   }
 
+  /** The most rounds {@link #addNoneMembers} runs to follow {@code None} through parameters. */
+  private static final int MAX_NONE_ROUNDS = 16;
+
+  /**
+   * Adds {@link NoneType#INSTANCE} to each parameter of the analyzed program that a live call
+   * passes {@code None}, when the same parameter of the same function receives tensors in some
+   * context (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). A call in a block
+   * that is not decidably dead (as for wala/ML#968) passes {@code None} to a parameter when the
+   * argument it binds there is:
+   *
+   * <ul>
+   *   <li>the {@code None} constant, written at the call;
+   *   <li>a parameter of the caller that a call passes {@code None}, so {@code None} is forwarded;
+   *       or
+   *   <li>absent, the call leaving the parameter to a {@code None} default.
+   * </ul>
+   *
+   * <p>The parameter's points-to set alone cannot decide this: it also holds the null constant the
+   * IR gives a variable on a path where it is unbound, which no call passes since reading it
+   * raises, and a default that a {@code **} argument may cover. A call with a starred or {@code **}
+   * argument at or before the parameter's position, or one reaching the function other than through
+   * a method's trampoline, decides nothing.
+   *
+   * <p>The member is added after the solve and does not propagate, so no transfer function reads
+   * it; it records what reaches the parameter, which a client reads with the parameter's types.
+   *
+   * @param builder The builder.
+   * @param tt The solved analysis.
+   * @param flowVarsByKey The dataflow variables by pointer key.
+   * @param heapModel The heap model.
+   */
+  private static void addNoneMembers(
+      PropagationCallGraphBuilder builder,
+      TensorTypeAnalysis tt,
+      Map<PointerKey, PointsToSetVariable> flowVarsByKey,
+      HeapModel heapModel) {
+    CallGraph cg = builder.getCallGraph();
+    Set<Pair<InstanceKey, String>> noneStores = noneStores(builder);
+    // The dominators of each IR the guard reads, for this pass only.
+    Map<IR, Dominators<ISSABasicBlock>> dominators = HashMapFactory.make();
+    Set<Pair<CGNode, Integer>> noneParams = HashSetFactory.make();
+    for (int round = 0; round < MAX_NONE_ROUNDS; round++) {
+      boolean changed = false;
+      for (CGNode node : cg) {
+        IR ir = node.getIR();
+        if (ir == null || !isProgramCode(node)) continue;
+        for (ISSABasicBlock block : ir.getControlFlowGraph()) {
+          if (Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block)))
+            continue;
+          for (SSAInstruction inst : block) {
+            if (!(inst instanceof PythonInvokeInstruction call)) continue;
+            for (CGNode target : cg.getPossibleTargets(node, call.getCallSite()))
+              for (Pair<CGNode, Integer> callee : programCallees(cg, target))
+                for (int p = 2; p <= callee.fst.getMethod().getNumberOfParameters(); p++)
+                  if (passesNone(
+                          builder,
+                          node,
+                          call,
+                          callee.fst,
+                          p,
+                          callee.snd,
+                          noneParams,
+                          noneStores,
+                          dominators)
+                      && noneParams.add(Pair.make(callee.fst, p))) {
+                    changed = true;
+                    int parameter = p;
+                    LOGGER.fine(
+                        () ->
+                            "wala/ML#1040: "
+                                + node.getMethod().getSignature()
+                                + " passes None to v"
+                                + parameter
+                                + " of "
+                                + callee.fst
+                                + " at "
+                                + call.toString(ir.getSymbolTable()));
+                  }
+          }
+        }
+      }
+      if (!changed) break;
+      if (round == MAX_NONE_ROUNDS - 1)
+        LOGGER.fine(
+            "wala/ML#1040: stopped following None through parameters after "
+                + MAX_NONE_ROUNDS
+                + " rounds with changes pending.");
+    }
+    Set<Pair<IMethod, Integer>> tensorBearing = HashSetFactory.make();
+    for (CGNode node : cg) {
+      if (node.getIR() == null || !isProgramCode(node)) continue;
+      for (int p = 2; p <= node.getMethod().getNumberOfParameters(); p++) {
+        PointsToSetVariable var = flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, p));
+        if (var == null) continue;
+        Set<TensorType> state = tt.getOutState(var);
+        if (state == null || state.stream().anyMatch(t -> !t.isNone()))
+          tensorBearing.add(Pair.make(node.getMethod(), p));
+      }
+    }
+    Set<PointsToSetVariable> targets = HashSetFactory.make();
+    for (Pair<CGNode, Integer> parameter : noneParams) {
+      if (!tensorBearing.contains(Pair.make(parameter.fst.getMethod(), parameter.snd))) continue;
+      PointsToSetVariable var =
+          flowVarsByKey.get(heapModel.getPointerKeyForLocal(parameter.fst, parameter.snd));
+      if (var != null) targets.add(var);
+    }
+    int changed = tt.addMember(targets, NoneType.INSTANCE);
+    LOGGER.fine(() -> "wala/ML#1040: None added to " + changed + " parameter variables.");
+  }
+
+  /**
+   * The program functions a call reaches through a call target, each with the offset from a
+   * parameter's value number to the call's positional slot that binds it. A program function the
+   * call targets directly binds slot {@code p - 1} to parameter {@code p}, slot 0 being the callee;
+   * a method reached through its trampoline binds slot {@code p - 2}, its receiver being bound by
+   * the trampoline. Any other synthetic target is not followed.
+   *
+   * @param cg The call graph.
+   * @param target The call's target.
+   * @return The (program function, offset) pairs.
+   */
+  private static Set<Pair<CGNode, Integer>> programCallees(CallGraph cg, CGNode target) {
+    Set<Pair<CGNode, Integer>> callees = HashSetFactory.make();
+    if (isProgramCode(target)) {
+      callees.add(Pair.make(target, 1));
+      return callees;
+    }
+    if (!target.getMethod().getSignature().contains(".trampoline")) return callees;
+    for (Iterator<CGNode> it = cg.getSuccNodes(target); it.hasNext(); ) {
+      CGNode callee = it.next();
+      IR ir = callee.getIR();
+      if (ir == null || !isProgramCode(callee) || callee.getMethod().getNumberOfParameters() < 2)
+        continue;
+      String[] names = ir.getLocalNames(0, 2);
+      if (names != null && names.length > 0 && "self".equals(names[0]))
+        callees.add(Pair.make(callee, 2));
+    }
+    return callees;
+  }
+
+  /**
+   * Whether a call passes {@code None} to a callee parameter, as {@link #addNoneMembers} describes.
+   *
+   * @param builder The builder.
+   * @param caller The calling node.
+   * @param call The call.
+   * @param callee The called program function.
+   * @param p The parameter's value number.
+   * @param offset The offset from {@code p} to the positional slot that binds it.
+   * @param noneParams The caller parameters already known to receive {@code None}.
+   * @param noneStores The (object, field or key) pairs the program stores {@code None} to.
+   * @param dominators The dominators of each IR read so far in this pass.
+   * @return {@code true} iff the call passes {@code None} to the parameter.
+   */
+  private static boolean passesNone(
+      PropagationCallGraphBuilder builder,
+      CGNode caller,
+      PythonInvokeInstruction call,
+      CGNode callee,
+      int p,
+      int offset,
+      Set<Pair<CGNode, Integer>> noneParams,
+      Set<Pair<InstanceKey, String>> noneStores,
+      Map<IR, Dominators<ISSABasicBlock>> dominators) {
+    int slot = p - offset;
+    if (slot < 1) return false;
+    int starred = call.firstStarredPosition();
+    if (starred >= 0 && starred <= slot) return false;
+    int arg;
+    if (slot < call.getNumberOfPositionalParameters()) arg = call.getUse(slot);
+    else {
+      String[] names = callee.getIR().getLocalNames(0, p);
+      String name = names == null || names.length == 0 ? null : names[0];
+      List<String> keywords = call.getKeywords();
+      if (name != null && keywords.contains(name)) arg = call.getUse(name);
+      // The front end tags a `**` argument as the keyword "null" (`String.valueOf` of the parser's
+      // absent keyword name).
+      else if (starred >= 0 || keywords.contains("null")) return false;
+      else return defaultIsNone(builder, callee, p);
+    }
+    if (!isWrittenNone(builder, caller, arg, noneParams, noneStores)) return false;
+    // A parameter forwarded where a test of it against `None` has ruled `None` out does not pass
+    // it.
+    return !(arg <= caller.getIR().getNumberOfParameters()
+        && !caller.getIR().getSymbolTable().isConstant(arg)
+        && excludesNone(caller, caller.getIR().getBasicBlockForInstruction(call), arg, dominators));
+  }
+
+  /** The value {@link #excludesNone} gives a value that is {@code None}. */
+  private static final Object NONE_VALUE = new Object();
+
+  /**
+   * Whether a block runs only when a value is not {@code None}: some block dominating it ends in a
+   * branch that, were the value {@code None}, takes the edge away from it, as {@code if x is None:
+   * ... else: f(x)} and {@code if x is not None: f(x)} do (<a
+   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   *
+   * @param node The node.
+   * @param block The block.
+   * @param vn The value.
+   * @param dominators The dominators of each IR read so far in this pass, which gains {@code
+   *     node}'s.
+   * @return {@code true} iff {@code block} does not run when {@code vn} is {@code None}.
+   */
+  private static boolean excludesNone(
+      CGNode node, ISSABasicBlock block, int vn, Map<IR, Dominators<ISSABasicBlock>> dominators) {
+    IR ir = node.getIR();
+    SSACFG cfg = ir.getControlFlowGraph();
+    Dominators<ISSABasicBlock> dominatorsOfIr =
+        dominators.computeIfAbsent(ir, k -> Dominators.make(cfg, cfg.entry()));
+    for (Iterator<ISSABasicBlock> it = dominatorsOfIr.dominators(block); it.hasNext(); ) {
+      ISSABasicBlock dominator = it.next();
+      if (dominator.equals(block)
+          || dominator.getLastInstructionIndex() < 0
+          || dominator.getLastInstructionIndex() < dominator.getFirstInstructionIndex()) continue;
+      if (!(dominator.getLastInstruction() instanceof SSAConditionalBranchInstruction branch))
+        continue;
+      Collection<ISSABasicBlock> successors = cfg.getNormalSuccessors(dominator);
+      ISSABasicBlock target = cfg.getBlockForInstruction(branch.getTarget());
+      if (successors.size() != 2 || target == null) continue;
+      Object left = valueIfNone(node, branch.getUse(0), vn, 0);
+      Object right = valueIfNone(node, branch.getUse(1), vn, 0);
+      Boolean taken = compare(left, right, branch.getOperator(), true);
+      if (taken == null) continue;
+      ISSABasicBlock notTaken = null;
+      for (ISSABasicBlock successor : successors)
+        if (successor.equals(target) != taken) notTaken = successor;
+      if (notTaken != null
+          && (notTaken.equals(block) || dominatorsOfIr.isDominatedBy(block, notTaken))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * A value as it would be were {@code vn} {@code None}: {@link #NONE_VALUE} for {@code vn} and the
+   * {@code None} constant, a constant's value, the outcome of an equality test over those, or
+   * {@code null} when it does not fold.
+   *
+   * @param node The node.
+   * @param value The value to fold.
+   * @param vn The value assumed {@code None}.
+   * @param depth The fold depth so far.
+   * @return The folded value, or {@code null}.
+   */
+  private static Object valueIfNone(CGNode node, int value, int vn, int depth) {
+    SymbolTable symtab = node.getIR().getSymbolTable();
+    if (value == vn || symtab.isNullConstant(value)) return NONE_VALUE;
+    if (symtab.isConstant(value)) return symtab.getConstantValue(value);
+    if (depth > 4) return null;
+    SSAInstruction def = node.getDU().getDef(value);
+    if (def instanceof SSABinaryOpInstruction binop
+        && binop.getOperator() instanceof CAstBinaryOp op
+        && (op == CAstBinaryOp.EQ || op == CAstBinaryOp.NE)) {
+      Boolean outcome =
+          compare(
+              valueIfNone(node, binop.getUse(0), vn, depth + 1),
+              valueIfNone(node, binop.getUse(1), vn, depth + 1),
+              op == CAstBinaryOp.EQ
+                  ? IConditionalBranchInstruction.Operator.EQ
+                  : IConditionalBranchInstruction.Operator.NE,
+              false);
+      return outcome;
+    }
+    return null;
+  }
+
+  /**
+   * Compares two folded values for equality. At a branch ({@code truthTest}), the IR tests a
+   * condition by comparing it with {@code 0}, so {@link #NONE_VALUE} there equals {@code 0} and
+   * {@code False}, a {@code None} being false; in an expression it equals only itself.
+   *
+   * @param left The left value.
+   * @param right The right value.
+   * @param operator The comparison.
+   * @param truthTest Whether the comparison is a branch's test of a condition.
+   * @return The outcome, or {@code null} when either side does not fold or the comparison is not an
+   *     equality.
+   */
+  private static Boolean compare(
+      Object left,
+      Object right,
+      IConditionalBranchInstruction.IOperator operator,
+      boolean truthTest) {
+    if (left == null || right == null) return null;
+    boolean equal;
+    if (left == NONE_VALUE && right == NONE_VALUE) equal = true;
+    else if (left == NONE_VALUE || right == NONE_VALUE)
+      equal = truthTest && isFalsy(left == NONE_VALUE ? right : left);
+    else if (left instanceof Number l && right instanceof Number r)
+      equal = l.doubleValue() == r.doubleValue();
+    else if (left instanceof Boolean || right instanceof Boolean)
+      equal = isFalsy(left) == isFalsy(right);
+    else equal = left.equals(right);
+    if (operator == IConditionalBranchInstruction.Operator.EQ) return equal;
+    if (operator == IConditionalBranchInstruction.Operator.NE) return !equal;
+    return null;
+  }
+
+  /**
+   * Whether a folded value is {@code False} or zero.
+   *
+   * @param value The value.
+   * @return {@code true} iff it is {@code False} or a zero number.
+   */
+  private static boolean isFalsy(Object value) {
+    return Boolean.FALSE.equals(value)
+        || (value instanceof Number number && number.doubleValue() == 0);
+  }
+
+  /**
+   * Whether a value is {@code None} the program writes, rather than the null constant the IR gives
+   * a variable on a path where it is unbound, which only a phi carries: the {@code None} constant
+   * itself, a parameter a call passes {@code None}, the result of a call to a program function that
+   * returns the {@code None} constant, or a field or entry read where the program stores the {@code
+   * None} constant (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   *
+   * @param builder The builder.
+   * @param node The node holding the value.
+   * @param vn The value.
+   * @param noneParams The parameters known to receive {@code None}.
+   * @param noneStores The (object, field or key) pairs the program stores {@code None} to.
+   * @return {@code true} iff the value may be {@code None} the program writes.
+   */
+  private static boolean isWrittenNone(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> noneParams,
+      Set<Pair<InstanceKey, String>> noneStores) {
+    IR ir = node.getIR();
+    if (ir.getSymbolTable().isNullConstant(vn)) return true;
+    if (vn <= ir.getNumberOfParameters()) return noneParams.contains(Pair.make(node, vn));
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSAAbstractInvokeInstruction call) {
+      for (CGNode target : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+        if (!isProgramCode(target) || target.getIR() == null) continue;
+        for (SSAInstruction inst : target.getIR().getInstructions())
+          if (inst instanceof SSAReturnInstruction ret
+              && ret.getNumberOfUses() > 0
+              && target.getIR().getSymbolTable().isNullConstant(ret.getResult())) return true;
+      }
+      return false;
+    }
+    int ref;
+    String member;
+    if (def instanceof SSAGetInstruction get && !get.isStatic()) {
+      ref = get.getRef();
+      member = get.getDeclaredField().getName().toString();
+    } else if (def instanceof PythonPropertyRead read) {
+      ref = read.getObjectRef();
+      member = memberName(ir, read.getMemberRef());
+    } else return false;
+    if (member == null) return false;
+    // Flow-insensitive, so only a read every value of which is `None` counts: a field set to
+    // `None` in `__init__` and to a tensor in `build` also reaches the read as the tensor, and the
+    // read may run only after the reassignment.
+    if (!onlyNone(
+        builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, vn))))
+      return false;
+    for (InstanceKey ik :
+        builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, ref)))
+      if (noneStores.contains(Pair.make(ik, member))) return true;
+    return false;
+  }
+
+  /**
+   * Whether a parameter's declared default is {@code None}: the global the builder binds an omitted
+   * parameter from, {@code <entity>_defaults_<i>}, holds the {@code None} constant. The parameter's
+   * own points-to set cannot decide this, since it also holds what other calls in the same context
+   * pass.
+   *
+   * @param builder The builder.
+   * @param callee The called program function.
+   * @param p The parameter's value number.
+   * @return {@code true} iff the parameter's default is {@code None}.
+   */
+  private static boolean defaultIsNone(PropagationCallGraphBuilder builder, CGNode callee, int p) {
+    FieldReference global =
+        FieldReference.findOrCreate(
+            PythonTypes.Root,
+            Atom.findOrCreateUnicodeAtom(
+                "global "
+                    + callee.getMethod().getDeclaringClass().getName()
+                    + "_defaults_"
+                    + (p - 1)),
+            PythonTypes.Root);
+    IField field = builder.getClassHierarchy().resolveField(global);
+    if (field == null) return false;
+    return holdsNone(
+        builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForStaticField(field)));
+  }
+
+  /**
+   * Whether a points-to set holds only Python's {@code None}.
+   *
+   * @param pts The points-to set.
+   * @return {@code true} iff it is non-empty and every member is the {@code None} constant.
+   */
+  private static boolean onlyNone(OrdinalSet<InstanceKey> pts) {
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts)
+      if (!(ik instanceof ConstantKey<?> constant) || constant.getValue() != null) return false;
+    return true;
+  }
+
+  /**
+   * The (object, field or key) pairs the program stores the {@code None} constant to, directly as
+   * the stored value (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   *
+   * @param builder The builder.
+   * @return The pairs.
+   */
+  private static Set<Pair<InstanceKey, String>> noneStores(PropagationCallGraphBuilder builder) {
+    Set<Pair<InstanceKey, String>> stores = HashSetFactory.make();
+    for (CGNode node : builder.getCallGraph()) {
+      IR ir = node.getIR();
+      if (ir == null || !isProgramCode(node)) continue;
+      for (SSAInstruction inst : ir.getInstructions()) {
+        int ref;
+        String member;
+        if (inst instanceof SSAPutInstruction put
+            && !put.isStatic()
+            && ir.getSymbolTable().isNullConstant(put.getVal())) {
+          ref = put.getRef();
+          member = put.getDeclaredField().getName().toString();
+        } else if (inst instanceof PythonPropertyWrite write
+            && ir.getSymbolTable().isNullConstant(write.getValue())) {
+          ref = write.getObjectRef();
+          member = memberName(ir, write.getMemberRef());
+        } else continue;
+        if (member == null) continue;
+        for (InstanceKey ik :
+            builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, ref)))
+          stores.add(Pair.make(ik, member));
+      }
+    }
+    return stores;
+  }
+
+  /**
+   * The name of a constant member a property read or write accesses: a string key or attribute, or
+   * the decimal form of an integer index.
+   *
+   * @param ir The IR holding the access.
+   * @param memberRef The member value.
+   * @return The name, or {@code null} when the member is not a constant.
+   */
+  private static String memberName(IR ir, int memberRef) {
+    SymbolTable symtab = ir.getSymbolTable();
+    if (!symtab.isConstant(memberRef) || symtab.isNullConstant(memberRef)) return null;
+    return String.valueOf(symtab.getConstantValue(memberRef));
+  }
+
+  /**
+   * Whether a node is a function or method of the analyzed program, rather than a library summary
+   * or a trampoline.
+   *
+   * @param node The node.
+   * @return {@code true} iff the node's declaring class is a script's.
+   */
+  private static boolean isProgramCode(CGNode node) {
+    return node.getMethod().getDeclaringClass().getName().toString().startsWith("Lscript ")
+        && !node.getMethod().getSignature().contains(".trampoline");
+  }
+
+  /**
+   * Whether a points-to set holds Python's {@code None}.
+   *
+   * @param pts The points-to set.
+   * @return {@code true} iff some member is the {@code None} constant.
+   */
+  private static boolean holdsNone(OrdinalSet<InstanceKey> pts) {
+    if (pts == null) return false;
+    for (InstanceKey ik : pts)
+      if (ik instanceof ConstantKey<?> constant && constant.getValue() == null) return true;
+    return false;
+  }
+
   /**
    * The argument bindings a call site induces in the dataflow graph: its positional argument {@code
    * i} flows into parameter {@code i + 1} of each possible callee (the builder's calling
@@ -3158,6 +3647,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // and continue the (monotone) fixpoint so the restored members propagate (wala/ML#736).
       if (tt.restoreUnfedSeeds(suppressedSeeds, suppressedOrigins))
         tt.solve(new NullProgressMonitor());
+
+      // A parameter's types are all the parameter receives only when a None that reaches it is
+      // among them (wala/ML#1040).
+      addNoneMembers(builder, tt, flowVarsByKey, heapModel);
       for (PointsToSetVariable fed : typeFeeds.keySet())
         LOGGER.fine(
             () ->
@@ -3462,7 +3955,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @return {@code true} if any of {@code variable}'s types has a {@code null} dimension list.
    */
   private static boolean hasTopShape(TensorVariable variable) {
-    for (TensorType type : variable.getTypes()) if (type.getDims() == null) return true;
+    for (TensorType type : variable.getTypes())
+      // The `None` member has no dims; it is not a tensor whose shape is unknown (wala/ML#1040).
+      if (!type.isNone() && type.getDims() == null) return true;
     return false;
   }
 
