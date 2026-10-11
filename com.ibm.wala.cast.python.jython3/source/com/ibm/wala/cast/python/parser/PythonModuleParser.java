@@ -203,16 +203,21 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
             // (`from pkg import mod`) is bound to the submodule's own path, `pkg.mod`: recorded
             // through the package's initialization module it named a script that does not exist,
             // and a base written through it, `class C(mod.Base)`, resolved no superclass
-            // (wala/ML#1018). A name the initialization module defines keeps that module's path.
+            // (wala/ML#1018), and so is a subpackage (`from pkg import sub`, `sub/__init__.py` in
+            // scope), so a base written through it, `class C(sub.Base)`, reaches the classes
+            // `sub` re-exports (wala/ML#1042). A name the initialization module defines keeps
+            // that module's path.
             for (alias n : importFrom.getInternalNames())
               if (n.getInternalNameNodes() != null) {
                 String submodule = fromModule + "/" + n.getInternalName();
                 noteImportedName(
                     n.getInternalAsname() != null ? n.getInternalAsname() : n.getInternalName(),
                     isLocalModule(submodule)
+                            || isLocalModule(submodule + "/" + MODULE_INITIALIZATION_ENTITY_NAME)
                         ? submodule.replace('/', '.')
                         : moduleName.replace('/', '.') + "." + n.getInternalName());
               }
+            noteReexportSource(moduleName.replace('/', '.'));
             if (importFrom.getInternalNames().stream()
                 .anyMatch(a -> "*".equals(a.getInternalName())))
               noteWildcardSource(

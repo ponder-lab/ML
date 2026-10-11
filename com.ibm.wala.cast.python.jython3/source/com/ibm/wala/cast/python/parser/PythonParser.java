@@ -12,6 +12,7 @@ package com.ibm.wala.cast.python.parser;
 
 import static com.ibm.wala.cast.python.util.Util.CLASS_METHOD_ANNOTATION_NAME;
 import static com.ibm.wala.cast.python.util.Util.DYNAMIC_ANNOTATION_KEY;
+import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_ENTITY_NAME;
 import static com.ibm.wala.cast.python.util.Util.STATIC_METHOD_ANNOTATION_NAME;
 import static com.ibm.wala.cast.python.util.Util.getNames;
 import static com.ibm.wala.cast.python.util.Util.removeFileProtocolFromPath;
@@ -428,6 +429,25 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
   }
 
   /**
+   * Records, for the loader's translation order, that this package's initialization module takes
+   * names from the given in-scope module (wala/ML#1042). A package re-exports classes its modules
+   * define, and a class whose base is written through the package depends on the package's module
+   * for its translation order (wala/ML#944); the package's module then waits for the module it
+   * imports from, so the base's own module is translated before the class that extends it. Only an
+   * initialization module records these, as the re-exporting kind; every module doing so would
+   * order the whole translation by imports. A module outside the analysed sources is recorded too
+   * and orders nothing, since the loader matches a dependency only against the scripts in scope.
+   *
+   * @param module The dotted path of the module imported from.
+   */
+  protected void noteReexportSource(String module) {
+    String script = scriptName();
+    String init = MODULE_INITIALIZATION_ENTITY_NAME + ".py";
+    if (script.equals(init) || script.endsWith("/" + init))
+      BaseDependencies.note(types, script, module);
+  }
+
+  /**
    * Resolves a base-class name by this module's scope rather than by a global table of simple names
    * (wala/ML#946): a class defined in this module first, else the class the module's import binding
    * names in the script it names, else {@code null} so the caller records a missing type and the
@@ -444,24 +464,120 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       CAstType local = localClassTypes.get(baseName);
       if (local != null) return local;
     }
-    String qualified = expandImportedName(baseName);
-    if (qualified.equals(baseName)) return null;
+    // A root no import binds names no module. A bound root can expand to itself: `import pkg` binds
+    // `pkg` to `pkg`, and `class C(pkg.Base)` then names the package's `Base` (wala/ML#1042).
+    int dot = baseName.indexOf('.');
+    String root = dot < 0 ? baseName : baseName.substring(0, dot);
+    if (!importedNames.containsKey(root) && wildcardBoundRoot(root) == null) return null;
+    return resolveQualifiedClass(expandImportedName(baseName), 0);
+  }
+
+  /**
+   * The most re-export hops {@link #resolveQualifiedClass} follows, a bound on a chain of modules
+   * each importing the name from the next, which also ends an import cycle.
+   */
+  private static final int MAX_REEXPORT_HOPS = 8;
+
+  /**
+   * Resolves a fully qualified class name, {@code module.Name}, as Python does: to the one module
+   * the path names, then to the class that module defines, else to the class the module imports
+   * under that name. A package's initialization module re-exports the classes of its modules
+   * ({@code from pkg.mod import Base} in {@code pkg/__init__.py}) and defines none of them, so
+   * {@code pkg.Base} is followed to {@code pkg.mod.Base} (wala/ML#1042). The module is a script,
+   * {@code module.py}, or a package, {@code module/__init__.py}, matched as the importer matches a
+   * script name, by whole name or path-component suffix. Several scripts can match, as two packages
+   * of one project each holding a module of that path do; the module is then chosen by {@link
+   * #moduleRank}, not by the order a map yields its scripts.
+   *
+   * @param qualified The dotted module path and class name.
+   * @param hops The re-export hops followed so far.
+   * @return The resolved class type, or {@code null} if no module of that path defines or imports a
+   *     class under the name.
+   */
+  private CAstType resolveQualifiedClass(String qualified, int hops) {
     int dot = qualified.lastIndexOf('.');
     if (dot <= 0) return null;
     String module = qualified.substring(0, dot).replace('.', '/');
     String name = qualified.substring(dot + 1);
+    // Every parsed module publishes its bindings, so the binding registry's scripts are the
+    // modules in scope.
+    Map<String, Map<String, String>> bindings = IMPORT_BINDINGS.get(types);
+    if (bindings == null) return null;
+    String chosen;
+    synchronized (bindings) {
+      chosen = chooseModule(bindings.keySet(), module);
+    }
+    if (chosen == null) return null;
     Map<String, Map<String, CAstType>> byScript = CLASS_REGISTRY.get(types);
-    if (byScript == null) return null;
-    synchronized (byScript) {
-      for (Map.Entry<String, Map<String, CAstType>> e : byScript.entrySet()) {
-        String script = e.getKey();
-        if (script.equals(module + ".py") || script.endsWith("/" + module + ".py")) {
-          CAstType t = e.getValue().get(name);
-          if (t != null) return t;
+    if (byScript != null) {
+      Map<String, CAstType> classes;
+      synchronized (byScript) {
+        classes = byScript.get(chosen);
+      }
+      CAstType t = classes == null ? null : classes.get(name);
+      if (t != null) return t;
+    }
+    if (hops >= MAX_REEXPORT_HOPS) return null;
+    String reexported;
+    synchronized (bindings) {
+      Map<String, String> own = bindings.get(chosen);
+      reexported = own == null ? null : own.get(name);
+    }
+    if (reexported == null || reexported.equals(qualified)) return null;
+    return resolveQualifiedClass(reexported, hops + 1);
+  }
+
+  /**
+   * Chooses the script a module path names among the scripts in scope: those that are the module,
+   * {@code module.py}, or the package, {@code module/__init__.py}, by whole name or path-component
+   * suffix, the first by {@link #moduleRank} (wala/ML#1042).
+   *
+   * @param scripts The script names in scope.
+   * @param module The module path, slash-separated, e.g. {@code pkg/sub}.
+   * @return The chosen script, or {@code null} if none matches.
+   */
+  static String chooseModule(Collection<String> scripts, String module) {
+    String chosen = null;
+    String chosenRank = null;
+    for (String script : scripts)
+      for (String file :
+          java.util.List.of(
+              module + ".py", module + "/" + MODULE_INITIALIZATION_ENTITY_NAME + ".py")) {
+        if (!namesModule(script, file)) continue;
+        String rank = moduleRank(script, file);
+        if (chosenRank == null || rank.compareTo(chosenRank) < 0) {
+          chosen = script;
+          chosenRank = rank;
         }
       }
-    }
-    return null;
+    return chosen;
+  }
+
+  /**
+   * The order in which scripts matching a module path are preferred: the one with the fewest path
+   * components ahead of the match, which is the one nearest the root the path is written from (a
+   * script named exactly by the path has none), then a package over a module of the same path in
+   * the same directory, as Python's import system takes the package, then by name, so the choice
+   * does not depend on map order (wala/ML#1042, as https://github.com/wala/ML/issues/168 did for
+   * imports).
+   *
+   * @param script The matching script name.
+   * @param file The module file it matched, {@code m.py} or {@code m/__init__.py}.
+   * @return A comparable rank; smaller is preferred.
+   */
+  private static String moduleRank(String script, String file) {
+    long ahead =
+        script.chars().filter(c -> c == '/').count() - file.chars().filter(c -> c == '/').count();
+    boolean isPackage = file.endsWith("/" + MODULE_INITIALIZATION_ENTITY_NAME + ".py");
+    return String.format("%06d %d %s", ahead, isPackage ? 0 : 1, script);
+  }
+
+  /**
+   * Whether a script name is the given module file, matched as the importer matches it: the whole
+   * name, or a suffix starting at a path component.
+   */
+  private static boolean namesModule(String script, String file) {
+    return script.equals(file) || script.endsWith("/" + file);
   }
 
   /**

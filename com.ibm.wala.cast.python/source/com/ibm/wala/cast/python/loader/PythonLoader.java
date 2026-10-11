@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.loader;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
+import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_ENTITY_NAME;
 import static com.ibm.wala.cast.python.util.Util.getNames;
 import static com.ibm.wala.cast.python.util.Util.traceImportBinding;
 import static java.util.stream.Collectors.toList;
@@ -545,9 +546,14 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       Set<String> modules = recorded.get(scriptOf.get(p.fst));
       if (modules == null) continue;
       for (String module : modules) {
-        String plain = module.replace('.', '/') + ".py";
+        // A module is a script, `m.py`, or a package, whose classes and re-exports its
+        // initialization module holds, `m/__init__.py` (wala/ML#1042).
+        String path = module.replace('.', '/');
+        String plain = path + ".py";
+        String init = path + "/" + MODULE_INITIALIZATION_ENTITY_NAME + ".py";
         for (Map.Entry<String, CAstEntity> e : byScript.entrySet())
-          if (scriptNameMatches(e.getKey(), plain) && e.getValue() != p.fst)
+          if ((scriptNameMatches(e.getKey(), plain) || scriptNameMatches(e.getKey(), init))
+              && e.getValue() != p.fst)
             baseDependencies.computeIfAbsent(p.fst, k -> HashSetFactory.make()).add(e.getValue());
       }
     }
@@ -583,8 +589,12 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
   @Override
   protected void finishTranslation() {
-    // Translate the deferred entities as their dependencies complete; whatever remains after a
-    // pass makes no progress is a dependency cycle and goes in the given order.
+    // Translate the deferred entities as their dependencies complete. A pass that makes no progress
+    // has a dependency cycle among the pending entities: the first of them, in the given order,
+    // that
+    // lies on a cycle is translated, which breaks it, and the rest keep their dependency order, so
+    // an entity merely waiting behind a cycle is not translated before its own bases' modules
+    // (wala/ML#1042).
     List<CAstEntity> pending = new ArrayList<>(deferred);
     deferred.clear();
     while (!pending.isEmpty()) {
@@ -602,14 +612,41 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
         }
       }
       if (!progress) {
-        for (CAstEntity entity : pending) {
-          translator.translate(entity, entryOf.get(entity));
-          translated.add(entity);
-        }
-        pending.clear();
+        CAstEntity breaker = pending.get(0);
+        for (CAstEntity entity : pending)
+          if (onPendingCycle(entity, pending)) {
+            breaker = entity;
+            break;
+          }
+        translator.translate(breaker, entryOf.get(breaker));
+        translated.add(breaker);
+        pending.remove(breaker);
       }
     }
     super.finishTranslation();
+  }
+
+  /**
+   * Whether an entity lies on a cycle of base dependencies among the pending, untranslated
+   * entities: some chain of its pending dependencies leads back to it.
+   *
+   * @param entity The entity.
+   * @param pending The entities not yet translated.
+   * @return {@code true} iff the entity reaches itself through pending dependencies.
+   */
+  private boolean onPendingCycle(CAstEntity entity, List<CAstEntity> pending) {
+    Set<CAstEntity> seen = HashSetFactory.make();
+    List<CAstEntity> work = new ArrayList<>();
+    work.add(entity);
+    while (!work.isEmpty()) {
+      CAstEntity next = work.remove(work.size() - 1);
+      for (CAstEntity dependency : baseDependencies.getOrDefault(next, Collections.emptySet())) {
+        if (translated.contains(dependency) || !pending.contains(dependency)) continue;
+        if (dependency == entity) return true;
+        if (seen.add(dependency)) work.add(dependency);
+      }
+    }
+    return false;
   }
 
   final CoreClass CodeBody =
