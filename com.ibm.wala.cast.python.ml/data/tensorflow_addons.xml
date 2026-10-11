@@ -1,0 +1,27 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <classloader name="PythonLoader">
+    <!-- https://www.tensorflow.org/addons/api_docs/python/tfa: TensorFlow Addons, as far as a training script uses it for its optimizer (wala/ML#1050). `import tensorflow_addons as tfa` resolves to this module object. -->
+    <class name="tensorflow_addons" allocatable="true">
+      <method name="import" static="true" descriptor="()Ltensorflow_addons;">
+        <new def="x" class="Ltensorflow_addons"/>
+        <new def="optimizers" class="Lobject"/>
+        <putfield class="LRoot" field="optimizers" fieldType="LRoot" ref="x" value="optimizers"/>
+        <new def="lazy_adam" class="Ltensorflow_addons/optimizers/LazyAdam"/>
+        <putfield class="LRoot" field="LazyAdam" fieldType="LRoot" ref="optimizers" value="lazy_adam"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="tensorflow_addons/optimizers">
+      <!-- https://www.tensorflow.org/addons/api_docs/python/tfa/optimizers/LazyAdam: a subclass of Keras's `Adam` that updates only the rows a sparse gradient touches. It applies gradients, and calls its learning rate, as `Adam` does, so it constructs one through the Keras `Adam` summary; an instance allocated here would not carry the methods `tensorflow.xml` declares, since a summary file attaches methods only to the classes it declares itself. Parameters are those of tensorflow-addons 0.23. -->
+      <class name="LazyAdam" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self learning_rate beta_1 beta_2 epsilon amsgrad name">
+          <new def="adam" class="Ltensorflow/keras/optimizers/class/Adam"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="adam" arg1="learning_rate" numArgs="2" def="res"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>

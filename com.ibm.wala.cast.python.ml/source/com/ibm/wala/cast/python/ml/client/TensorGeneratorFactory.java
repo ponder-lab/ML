@@ -526,6 +526,11 @@ public class TensorGeneratorFactory {
     if (isType(type, NumpyTypes.NDARRAY_TRANSPOSE.getDeclaringClass()))
       return anchor.makeGenerator(s -> new NpTranspose(s, true), n -> new NpTranspose(n, true));
 
+    // The step an optimizer passes to its learning-rate schedule (wala/ML#1050). Registered here so
+    // one entry serves both dispatch routes.
+    if (isType(type, TensorFlowTypes.LEARNING_RATE_STEP.getDeclaringClass()))
+      return anchor.makeGenerator(LearningRateStep::new, LearningRateStep::new);
+
     // The Sequential registrations live here so one entry serves both dispatch routes
     // (wala/ML#817): the constructor type takes the `Model` treatment, and the instance's call
     // node — `Sequential/__call__`, not `Model/__call__` — takes the layer-list fold, which is the

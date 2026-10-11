@@ -127,6 +127,25 @@
         <putfield class="LRoot" field="get" fieldType="LRoot" ref="constraints" value="constraints_get"/>
         <new def="nonneg_cls" class="Ltensorflow/keras/constraints/class/NonNeg"/>
         <putfield class="LRoot" field="NonNeg" fieldType="LRoot" ref="constraints" value="nonneg_cls"/>
+        <!-- `tf.keras.optimizers` (wala/ML#1050): each optimizer class constructs an `Optimizer` instance holding its `learning_rate`, which the instance calls when it applies gradients. -->
+        <new def="optimizers" class="Lobject"/>
+        <putfield class="LRoot" field="optimizers" fieldType="LRoot" ref="keras" value="optimizers"/>
+        <new def="optimizers_Adam" class="Ltensorflow/keras/optimizers/class/Adam"/>
+        <putfield class="LRoot" field="Adam" fieldType="LRoot" ref="optimizers" value="optimizers_Adam"/>
+        <new def="optimizers_SGD" class="Ltensorflow/keras/optimizers/class/SGD"/>
+        <putfield class="LRoot" field="SGD" fieldType="LRoot" ref="optimizers" value="optimizers_SGD"/>
+        <new def="optimizers_RMSprop" class="Ltensorflow/keras/optimizers/class/RMSprop"/>
+        <putfield class="LRoot" field="RMSprop" fieldType="LRoot" ref="optimizers" value="optimizers_RMSprop"/>
+        <new def="optimizers_Adagrad" class="Ltensorflow/keras/optimizers/class/Adagrad"/>
+        <putfield class="LRoot" field="Adagrad" fieldType="LRoot" ref="optimizers" value="optimizers_Adagrad"/>
+        <new def="optimizers_Adadelta" class="Ltensorflow/keras/optimizers/class/Adadelta"/>
+        <putfield class="LRoot" field="Adadelta" fieldType="LRoot" ref="optimizers" value="optimizers_Adadelta"/>
+        <new def="optimizers_Adamax" class="Ltensorflow/keras/optimizers/class/Adamax"/>
+        <putfield class="LRoot" field="Adamax" fieldType="LRoot" ref="optimizers" value="optimizers_Adamax"/>
+        <new def="optimizers_Nadam" class="Ltensorflow/keras/optimizers/class/Nadam"/>
+        <putfield class="LRoot" field="Nadam" fieldType="LRoot" ref="optimizers" value="optimizers_Nadam"/>
+        <new def="optimizers_Ftrl" class="Ltensorflow/keras/optimizers/class/Ftrl"/>
+        <putfield class="LRoot" field="Ftrl" fieldType="LRoot" ref="optimizers" value="optimizers_Ftrl"/>
         <!-- `tf.keras.utils` (wala/ML#997, wala/ML#996) and the `serialize`/`deserialize`/`get` functions of the `layers`, `constraints`, `initializers` and `regularizers` modules (wala/ML#996). -->
         <new def="utils" class="Lobject"/>
         <putfield class="LRoot" field="utils" fieldType="LRoot" ref="keras" value="utils"/>
@@ -3067,6 +3086,101 @@
           <new def="res" class="Ltensorflow/keras/losses/SparseCategoricalCrossentropy"/>
           <putfield class="LRoot" field="reduction" fieldType="LRoot" ref="res" value="reduction"/>
           <putfield class="LRoot" field="from_logits" fieldType="LRoot" ref="res" value="from_logits"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/optimizers/class">
+      <!-- The Keras optimizer classes, with their TensorFlow 2.9 constructor parameters (wala/ML#1050). Each constructs an `Optimizer` instance and keeps its `learning_rate`, a number or a learning-rate schedule. -->
+      <class name="Adam" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/Adam -->
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self learning_rate beta_1 beta_2 epsilon amsgrad name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="SGD" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/SGD -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self learning_rate momentum nesterov name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="RMSprop" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/RMSprop -->
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self learning_rate rho momentum epsilon centered name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Adagrad" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/Adagrad -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self learning_rate initial_accumulator_value epsilon name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Adadelta" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/Adadelta -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self learning_rate rho epsilon name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Adamax" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/Adamax -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self learning_rate beta_1 beta_2 epsilon name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Nadam" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/Nadam -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self learning_rate beta_1 beta_2 epsilon name">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Ftrl" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/optimizers/Ftrl -->
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self learning_rate learning_rate_power initial_accumulator_value l1_regularization_strength l2_regularization_strength name l2_shrinkage_regularization_strength beta">
+          <new def="res" class="Ltensorflow/keras/optimizers/Optimizer"/>
+          <putfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="res" value="learning_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/optimizers">
+      <!-- An optimizer instance (wala/ML#1050). Applying gradients calls its learning rate with the step count cast to the variables' dtype, `float32` (`OptimizerV2._decayed_lr`: `lr_t(tf.cast(self.iterations, var_dtype))`), so a learning-rate schedule the optimizer holds is called by the optimizer and not only by the program. A learning rate that is a number is not callable, and the call reaches nothing. `minimize` computes the gradients and applies them, so it makes the same call. -->
+      <class name="Optimizer" allocatable="true">
+        <method name="apply_gradients" descriptor="()LRoot;" numArgs="5" paramNames="func self grads_and_vars name experimental_aggregate_gradients">
+          <getfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="self" def="lr"/>
+          <new def="step_fn" class="Ltensorflow/keras/optimizers/step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step_fn" numArgs="1" def="step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="lr" arg1="step" numArgs="2" def="decayed"/>
+          <new def="op" class="Lobject"/>
+          <return value="op"/>
+        </method>
+        <method name="minimize" descriptor="()LRoot;" numArgs="7" paramNames="func self loss var_list grad_loss name tape">
+          <getfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="self" def="lr"/>
+          <new def="step_fn" class="Ltensorflow/keras/optimizers/step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step_fn" numArgs="1" def="step"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="lr" arg1="step" numArgs="2" def="decayed"/>
+          <new def="op" class="Lobject"/>
+          <return value="op"/>
+        </method>
+      </class>
+      <!-- The step an optimizer passes its learning rate (wala/ML#1050), typed by `LearningRateStep`. -->
+      <class name="step" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>

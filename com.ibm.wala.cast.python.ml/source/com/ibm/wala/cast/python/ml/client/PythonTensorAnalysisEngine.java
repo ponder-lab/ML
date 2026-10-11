@@ -4158,6 +4158,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     addSummaryBypassLogic(options, "sentencepiece.xml");
     // scikit-learn's `train_test_split` halves are lists of the input's elements.
     addSummaryBypassLogic(options, "sklearn.xml");
+    // TensorFlow Addons' optimizers are Keras optimizers (wala/ML#1050).
+    addSummaryBypassLogic(options, "tensorflow_addons.xml");
   }
 
   /**
