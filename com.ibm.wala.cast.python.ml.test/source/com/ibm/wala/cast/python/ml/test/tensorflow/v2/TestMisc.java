@@ -1610,6 +1610,64 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/1043">wala/ML#1043</a>: an annotation's
+   * concrete extent fills the axis a {@code -1} reshape leaves as {@code ?}.
+   *
+   * <p>{@code read} reshapes a flat array whose length inference does not compute into rows of 7,
+   * so the row count is {@code ?}. That placeholder says only that the extent was not computed, so
+   * an author recording the count their program reads supplies a fact the analysis cannot reach.
+   * Before this the entry conflicted and was discarded, leaving the axis open.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testAnnotationFillsReshapePlaceholderAxis() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_reshape_extent.py",
+            "consume",
+            Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 7))));
+    assertTrue(
+        "A concrete extent must fill a reshape's `?` axis rather than conflicting with it"
+            + " (wala/ML#1043). Warnings: "
+            + warnings,
+        warnings.stream()
+            .noneMatch(w -> w.contains("driver_reshape_extent") && w.contains("conflicts")));
+  }
+
+  /**
+   * A named entry axis keeps the {@code ?} a {@code -1} reshape leaves (<a
+   * href="https://github.com/wala/ML/issues/1043">wala/ML#1043</a>, with the <a
+   * href="https://github.com/wala/ML/issues/1045">wala/ML#1045</a> rule).
+   *
+   * <p>{@code read_named}'s entry names the row count and states the 7 inference already holds, so
+   * it refines nothing and is reported inert rather than in conflict.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNamedAnnotationAxisKeepsReshapePlaceholderAxis() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_reshape_extent.py",
+            "consume_named",
+            Map.of(
+                2,
+                Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(7))))));
+    assertTrue(
+        "A named axis must keep a reshape's `?` axis rather than conflicting with it"
+            + " (wala/ML#1043). Warnings: "
+            + warnings,
+        warnings.stream()
+            .anyMatch(w -> w.contains("read_named") && w.contains("contributed nothing")));
+    assertTrue(
+        "A named axis must keep a reshape's `?` axis rather than conflicting with it"
+            + " (wala/ML#1043). Warnings: "
+            + warnings,
+        warnings.stream().noneMatch(w -> w.contains("read_named") && w.contains("conflicts")));
+  }
+
+  /**
    * A numpy array's shape and dtype are read from its construction, and a transpose preserves both.
    * The controls that localise <a href="https://github.com/wala/ML/issues/910">wala/ML#910</a> to
    * one call rather than to the chain around it.

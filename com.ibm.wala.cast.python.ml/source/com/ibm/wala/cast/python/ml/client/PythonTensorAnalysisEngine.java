@@ -628,8 +628,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * wala/ML#721 criterion). A {@link TensorType.DynamicDim} accepts one as well (wala/ML#888): its
    * runtime-{@code None} evidence says the size is FEED-DEPENDENT rather than unknowable, so an
    * author recording what their program is actually run with supplies a fact the analysis cannot
-   * reach instead of contradicting one it holds. A named annotation axis asserts no extent, so
-   * either one keeps its inferred axis against it (wala/ML#1045). Against an inferred {@link
+   * reach instead of contradicting one it holds. So does the {@code ?} placeholder a {@code -1}
+   * reshape leaves (wala/ML#1043), which says only that the extent was not computed; a named
+   * inferred symbolic dimension still conflicts. Where {@code ?} is a dataset's batch axis, whose
+   * final batch can be partial, the number is the author's claim that every batch has that size, on
+   * the same footing as a {@code Dynamic} fill. A named annotation axis asserts no extent, so each
+   * of the three keeps its inferred axis against it (wala/ML#1045). Against an inferred {@link
    * NumericDim} a name still conflicts: an author names an axis whose size changes from call to
    * call, and the analysis holding one fixed extent there says the entry describes a different
    * value than the one it matched. Names are not checked against each other, so an entry repeating
@@ -658,14 +662,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // a fact the analysis cannot reach rather than contradicting one it holds. Refusing this was
       // the reason an annotation could not tighten any axis of a modeled content-dependent read.
       else if (inf instanceof DynamicDim && ann instanceof NumericDim) out.add(ann);
+      // The `?` a `-1` reshape leaves accepts a concrete extent as well (wala/ML#1043): it says
+      // only that the extent was not computed, so the annotation contradicts nothing it holds.
+      else if (isExtentPlaceholder(inf) && ann instanceof NumericDim) out.add(ann);
       // A named annotation axis asserts no extent, so it cannot contradict an inferred axis that
       // holds none either (wala/ML#1045). An author names an axis whose size changes from call to
       // call; the inferred axis is kept, and the entry's other axes still merge.
-      else if ((inf instanceof UnresolvedDim || inf instanceof DynamicDim)
+      else if ((inf instanceof UnresolvedDim
+              || inf instanceof DynamicDim
+              || isExtentPlaceholder(inf))
           && ann instanceof SymbolicDim) out.add(inf);
       else return null;
     }
     return out;
+  }
+
+  /**
+   * Whether an inferred axis is the {@code ?} placeholder, the {@link SymbolicDim} a generator
+   * leaves where it could not compute an extent (a {@code -1} reshape axis, a batch axis), as
+   * opposed to a named symbolic dimension recording a relation between axes (wala/ML#1043).
+   *
+   * @param dim The inferred axis.
+   * @return {@code true} when the axis is the {@code ?} placeholder.
+   */
+  private static boolean isExtentPlaceholder(Dimension<?> dim) {
+    return dim instanceof SymbolicDim && "?".equals(dim.value());
   }
 
   @Override
