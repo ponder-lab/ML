@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
+import com.ibm.wala.cast.python.ml.types.NoneType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
@@ -345,7 +346,9 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * This pins the generation sibling's {@code predict} node and its parameter type, which must be
    * symmetric with {@link #testNlpgnnFullInteractive()}. The sampler's loop body calls {@code
    * predict} with its loop variables, so {@code past} reads the rank-6 float32 cache the body
-   * reshapes and {@code inputs} the int32 samples beside the context (wala/ML#942).
+   * reshapes and {@code inputs} the int32 samples beside the context (wala/ML#942). The sampler's
+   * first {@code body(None, context, context)} call forwards {@code None} as {@code past}, so
+   * {@code past} also has {@code None} among its types (wala/ML#1040).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -392,7 +395,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(2),
                         UnresolvedDim.INSTANCE,
                         new SymbolicDim("?"),
-                        UnresolvedDim.INSTANCE)))));
+                        UnresolvedDim.INSTANCE)),
+                NoneType.INSTANCE)));
   }
 
   /**
@@ -849,7 +853,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(2),
                         UnresolvedDim.INSTANCE,
                         new SymbolicDim("?"),
-                        UnresolvedDim.INSTANCE)))));
+                        UnresolvedDim.INSTANCE)),
+                NoneType.INSTANCE)));
   }
 
   /**
