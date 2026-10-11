@@ -525,6 +525,20 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ONES_SIGNATURE = "tf.ones()";
 
+  /**
+   * The step an optimizer passes to its learning-rate schedule (wala/ML#1050), allocated by the
+   * summaries of the Keras optimizers when they apply gradients.
+   */
+  public static final MethodReference LEARNING_RATE_STEP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/optimizers/step")),
+          AstMethodReference.fnSelector);
+
+  private static final String LEARNING_RATE_STEP_SIGNATURE =
+      "tf.keras.optimizers.Optimizer._decayed_lr/step";
+
   /** https://www.tensorflow.org/api_docs/python/tf/constant. */
   public static final MethodReference CONSTANT =
       MethodReference.findOrCreate(
@@ -2656,6 +2670,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(VAR_LEN_FEATURE.getDeclaringClass(), VAR_LEN_FEATURE_SIGNATURE),
           Map.entry(FIXED_LEN_FEATURE.getDeclaringClass(), FIXED_LEN_FEATURE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
+          Map.entry(LEARNING_RATE_STEP.getDeclaringClass(), LEARNING_RATE_STEP_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONE_HOT.getDeclaringClass(), ONE_HOT_SIGNATURE),
           Map.entry(UNIFORM.getDeclaringClass(), UNIFORM_SIGNATURE),
