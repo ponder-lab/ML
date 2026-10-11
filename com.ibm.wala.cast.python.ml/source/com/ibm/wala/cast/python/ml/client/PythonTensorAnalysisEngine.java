@@ -111,7 +111,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -2298,6 +2297,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       HeapModel heapModel) {
     CallGraph cg = builder.getCallGraph();
     Set<Pair<InstanceKey, String>> noneStores = noneStores(builder);
+    // The dominators of each IR the guard reads, for this pass only.
+    Map<IR, Dominators<ISSABasicBlock>> dominators = HashMapFactory.make();
     Set<Pair<CGNode, Integer>> noneParams = HashSetFactory.make();
     for (int round = 0; round < MAX_NONE_ROUNDS; round++) {
       boolean changed = false;
@@ -2313,7 +2314,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               for (Pair<CGNode, Integer> callee : programCallees(cg, target))
                 for (int p = 2; p <= callee.fst.getMethod().getNumberOfParameters(); p++)
                   if (passesNone(
-                          builder, node, call, callee.fst, p, callee.snd, noneParams, noneStores)
+                          builder,
+                          node,
+                          call,
+                          callee.fst,
+                          p,
+                          callee.snd,
+                          noneParams,
+                          noneStores,
+                          dominators)
                       && noneParams.add(Pair.make(callee.fst, p))) {
                     changed = true;
                     int parameter = p;
@@ -2338,7 +2347,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 + MAX_NONE_ROUNDS
                 + " rounds with changes pending.");
     }
-    DOMINATORS.clear();
     Set<Pair<IMethod, Integer>> tensorBearing = HashSetFactory.make();
     for (CGNode node : cg) {
       if (node.getIR() == null || !isProgramCode(node)) continue;
@@ -2401,6 +2409,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @param p The parameter's value number.
    * @param offset The offset from {@code p} to the positional slot that binds it.
    * @param noneParams The caller parameters already known to receive {@code None}.
+   * @param noneStores The (object, field or key) pairs the program stores {@code None} to.
+   * @param dominators The dominators of each IR read so far in this pass.
    * @return {@code true} iff the call passes {@code None} to the parameter.
    */
   private static boolean passesNone(
@@ -2411,7 +2421,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       int p,
       int offset,
       Set<Pair<CGNode, Integer>> noneParams,
-      Set<Pair<InstanceKey, String>> noneStores) {
+      Set<Pair<InstanceKey, String>> noneStores,
+      Map<IR, Dominators<ISSABasicBlock>> dominators) {
     int slot = p - offset;
     if (slot < 1) return false;
     int starred = call.firstStarredPosition();
@@ -2433,14 +2444,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // it.
     return !(arg <= caller.getIR().getNumberOfParameters()
         && !caller.getIR().getSymbolTable().isConstant(arg)
-        && excludesNone(caller, caller.getIR().getBasicBlockForInstruction(call), arg));
+        && excludesNone(caller, caller.getIR().getBasicBlockForInstruction(call), arg, dominators));
   }
-
-  /**
-   * The dominators of each IR {@link #excludesNone} reads, kept for one {@link #addNoneMembers}
-   * pass, which asks of the same IRs once per call, parameter and round.
-   */
-  private static final Map<IR, Dominators<ISSABasicBlock>> DOMINATORS = new WeakHashMap<>();
 
   /** The value {@link #excludesNone} gives a value that is {@code None}. */
   private static final Object NONE_VALUE = new Object();
@@ -2454,14 +2459,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @param node The node.
    * @param block The block.
    * @param vn The value.
+   * @param dominators The dominators of each IR read so far in this pass, which gains {@code
+   *     node}'s.
    * @return {@code true} iff {@code block} does not run when {@code vn} is {@code None}.
    */
-  private static boolean excludesNone(CGNode node, ISSABasicBlock block, int vn) {
+  private static boolean excludesNone(
+      CGNode node, ISSABasicBlock block, int vn, Map<IR, Dominators<ISSABasicBlock>> dominators) {
     IR ir = node.getIR();
     SSACFG cfg = ir.getControlFlowGraph();
-    Dominators<ISSABasicBlock> dominators =
-        DOMINATORS.computeIfAbsent(ir, k -> Dominators.make(cfg, cfg.entry()));
-    for (Iterator<ISSABasicBlock> it = dominators.dominators(block); it.hasNext(); ) {
+    Dominators<ISSABasicBlock> dominatorsOfIr =
+        dominators.computeIfAbsent(ir, k -> Dominators.make(cfg, cfg.entry()));
+    for (Iterator<ISSABasicBlock> it = dominatorsOfIr.dominators(block); it.hasNext(); ) {
       ISSABasicBlock dominator = it.next();
       if (dominator.equals(block)
           || dominator.getLastInstructionIndex() < 0
@@ -2478,8 +2486,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       ISSABasicBlock notTaken = null;
       for (ISSABasicBlock successor : successors)
         if (successor.equals(target) != taken) notTaken = successor;
-      if (notTaken != null && (notTaken.equals(block) || dominators.isDominatedBy(block, notTaken)))
-        return true;
+      if (notTaken != null
+          && (notTaken.equals(block) || dominatorsOfIr.isDominatedBy(block, notTaken))) return true;
     }
     return false;
   }

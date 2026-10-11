@@ -211,4 +211,27 @@ public class TestNoneParameter extends AbstractTensorTest {
         3,
         Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
   }
+
+  /** A method's {@code None} default, left by one call through the method's trampoline. */
+  @Test
+  public void testMethodNoneDefault() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_parameter.py",
+        "Masker.apply",
+        2,
+        3,
+        Map.of(3, Set.of(TENSOR_2_FLOAT32), 4, Set.of(TENSOR_2_FLOAT32, NoneType.INSTANCE)));
+  }
+
+  /** A method's default that is not {@code None}, left by one call, receives no {@code None}. */
+  @Test
+  public void testMethodNonNoneDefault()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_parameter.py",
+        "Masker.scale",
+        2,
+        3,
+        Map.of(3, Set.of(TENSOR_2_FLOAT32), 4, Set.of(TENSOR_2_FLOAT32)));
+  }
 }

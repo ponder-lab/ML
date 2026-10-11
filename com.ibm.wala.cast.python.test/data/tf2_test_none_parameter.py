@@ -223,3 +223,24 @@ u1 = scaled(tf.ones([2]), tf.ones([2]))
 assert u1.shape == (2,)
 u2 = scaled(tf.ones([2]))
 assert u2.shape == (2,)
+
+
+class Masker:
+    def apply(self, x, mask=None):
+        if mask is None:
+            return x
+        return x * mask
+
+    def scale(self, x, factor=1.0):
+        return x * factor
+
+
+masker = Masker()
+v1 = masker.apply(tf.ones([2]), tf.ones([2]))
+assert v1.shape == (2,)
+v2 = masker.apply(tf.ones([2]))
+assert v2.shape == (2,)
+w1 = masker.scale(tf.ones([2]), tf.ones([2]))
+assert w1.shape == (2,)
+w2 = masker.scale(tf.ones([2]))
+assert w2.shape == (2,)
