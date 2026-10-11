@@ -91,7 +91,7 @@ public class PythonClassMethodTrampolineTargetSelector<T>
     // Read the field from the class corresponding to the called method.
     FieldReference method =
         FieldReference.findOrCreate(
-            PythonTypes.Root, Atom.findOrCreateUnicodeAtom("the_class_method"), PythonTypes.Root);
+            PythonTypes.Root, receiver.getName().getClassName(), PythonTypes.Root);
 
     x.addStatement(insts.GetInstruction(pc++, getInstRes, globalReadRes, method));
 

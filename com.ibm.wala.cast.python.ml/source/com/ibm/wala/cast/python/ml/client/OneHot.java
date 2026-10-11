@@ -11,7 +11,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -171,24 +173,27 @@ public class OneHot extends TensorTypeAllocator {
       return Collections.emptySet();
     }
 
+    // The depth axis per `depth` member. TensorFlow raises on a None depth, so a None member is a
+    // value no execution reaching the call holds (an unbound default overwritten before the call)
+    // and contributes no axis. A member that is not an integer is a fixed extent the analysis
+    // could not compute, `Unresolved` by the wala/ML#721 criterion; so is a depth whose only member
+    // is None, since the overwrite the analysis missed is then the only way the call runs.
+    Set<Dimension<?>> depthDims = HashSetFactory.make();
+    for (InstanceKey depthIK : depthPTS) {
+      if (depthIK instanceof ConstantKey<?> constant && constant.getValue() == null) continue;
+      depthDims.add(
+          getIntValueFromInstanceKey(depthIK)
+              .<Dimension<?>>map(NumericDim::new)
+              .orElse(UnresolvedDim.INSTANCE));
+    }
+    if (depthDims.isEmpty()) depthDims.add(UnresolvedDim.INSTANCE);
+
     Set<Integer> possibleAxes = this.getPossibleAxes(builder);
 
     for (int axis : possibleAxes)
-      for (InstanceKey depthIK : depthPTS) {
-        int depth =
-            getIntValueFromInstanceKey(depthIK)
-                .orElseThrow(
-                    () ->
-                        new IllegalStateException(
-                            "Depth argument value for "
-                                + OneHot.class.getName()
-                                + " is not an integer: "
-                                + depthIK
-                                + "."));
-
+      for (Dimension<?> dim : depthDims) {
         // For each shape in indices, append the depth as a new dimension.
         for (List<Dimension<?>> shape : indices) {
-          NumericDim dim = new NumericDim(depth);
           List<Dimension<?>> newShape = new ArrayList<>(shape);
 
           if (axis == AXIS_END) newShape.add(dim);

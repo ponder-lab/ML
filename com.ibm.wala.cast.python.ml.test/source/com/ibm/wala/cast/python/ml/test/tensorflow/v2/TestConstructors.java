@@ -678,6 +678,18 @@ public class TestConstructors extends AbstractTensorTest {
             5, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
+  /**
+   * A {@code depth} whose points-to set holds None beside an integer reads the integer's extent.
+   * TensorFlow raises on a None depth, so that member is a value no execution reaching the call
+   * holds; before this the generator threw on it and aborted the analysis (wala/ML#1047, where the
+   * class-method dispatch first reached such a call).
+   */
+  @Test
+  public void testOneHot21()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot21.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_3_FLOAT32)));
+  }
+
   @Test
   public void testEye()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
