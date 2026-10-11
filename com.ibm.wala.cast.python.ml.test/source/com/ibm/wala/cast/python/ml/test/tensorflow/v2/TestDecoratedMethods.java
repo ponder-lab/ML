@@ -363,6 +363,17 @@ public class TestDecoratedMethods extends AbstractTensorTest {
     test("tf2_test_class_method5.py", "MyClass.f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  /**
+   * Test <a href="https://github.com/wala/ML/issues/1047">wala/ML#1047</a>: a class method called
+   * through its class dispatches under its own name. {@code from_value} reaches {@code f}, and
+   * {@code cast}, called from {@code __init__}, returns its argument to the field it sets.
+   */
+  @Test
+  public void testClassMethod6() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_class_method6.py", "MyClass.f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_class_method6.py", "consume", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   @Test
   public void testDecoratedMethod() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
