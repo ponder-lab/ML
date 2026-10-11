@@ -1636,6 +1636,38 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * A named entry axis keeps the {@code ?} a {@code -1} reshape leaves (<a
+   * href="https://github.com/wala/ML/issues/1043">wala/ML#1043</a>, with the <a
+   * href="https://github.com/wala/ML/issues/1045">wala/ML#1045</a> rule).
+   *
+   * <p>{@code read_named}'s entry names the row count and states the 7 inference already holds, so
+   * it refines nothing and is reported inert rather than in conflict.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNamedAnnotationAxisKeepsReshapePlaceholderAxis() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_reshape_extent.py",
+            "consume_named",
+            Map.of(
+                2,
+                Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(7))))));
+    assertTrue(
+        "A named axis must keep a reshape's `?` axis rather than conflicting with it"
+            + " (wala/ML#1043). Warnings: "
+            + warnings,
+        warnings.stream()
+            .anyMatch(w -> w.contains("read_named") && w.contains("contributed nothing")));
+    assertTrue(
+        "A named axis must keep a reshape's `?` axis rather than conflicting with it"
+            + " (wala/ML#1043). Warnings: "
+            + warnings,
+        warnings.stream().noneMatch(w -> w.contains("read_named") && w.contains("conflicts")));
+  }
+
+  /**
    * A numpy array's shape and dtype are read from its construction, and a transpose preserves both.
    * The controls that localise <a href="https://github.com/wala/ML/issues/910">wala/ML#910</a> to
    * one call rather than to the chain around it.

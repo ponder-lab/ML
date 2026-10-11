@@ -168,6 +168,14 @@
       "dtype": "float32",
       "shape": "3 7",
       "attribution": "fixture: the row count of the values this program reads, recorded against the axis a -1 reshape leaves as ? (wala/ML#1043)"
+    },
+    {
+      "module": "driver_reshape_extent.py",
+      "function": "read_named",
+      "variable": "x",
+      "dtype": "float32",
+      "shape": "rows 7",
+      "attribution": "fixture: names the row count against the axis a -1 reshape leaves as ?, which keeps the ? (wala/ML#1043)"
     }
   ]
 }

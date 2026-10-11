@@ -630,7 +630,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * author recording what their program is actually run with supplies a fact the analysis cannot
    * reach instead of contradicting one it holds. So does the {@code ?} placeholder a {@code -1}
    * reshape leaves (wala/ML#1043), which says only that the extent was not computed; a named
-   * inferred symbolic dimension still conflicts. A named annotation axis asserts no extent, so each
+   * inferred symbolic dimension still conflicts. Where {@code ?} is a dataset's batch axis, whose
+   * final batch can be partial, the number is the author's claim that every batch has that size, on
+   * the same footing as a {@code Dynamic} fill. A named annotation axis asserts no extent, so each
    * of the three keeps its inferred axis against it (wala/ML#1045). Against an inferred {@link
    * NumericDim} a name still conflicts: an author names an axis whose size changes from call to
    * call, and the analysis holding one fixed extent there says the entry describes a different
