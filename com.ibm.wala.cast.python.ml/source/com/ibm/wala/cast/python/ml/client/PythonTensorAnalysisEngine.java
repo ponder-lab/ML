@@ -670,7 +670,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Set<InstanceKey> held = HashSetFactory.make();
     for (InstanceKey ik : pa.getPointsToSet(var.getPointerKey())) held.add(ik);
-    if (held.isEmpty()) return;
+    if (held.isEmpty()) {
+      // Nothing to compare against, as distinct from a walk that found no same-value seed.
+      LOGGER.fine(
+          () ->
+              "Type annotation "
+                  + anchor
+                  + " binds a value with an empty points-to set at "
+                  + describe(var.getPointerKey())
+                  + "; no downstream seed can be shown to hold it (wala/ML#1046).");
+      return;
+    }
     Deque<PointsToSetVariable> work = new ArrayDeque<>();
     Set<PointsToSetVariable> visited = HashSetFactory.make();
     work.add(var);
