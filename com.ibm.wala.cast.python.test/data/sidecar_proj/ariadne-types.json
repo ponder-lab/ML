@@ -176,6 +176,14 @@
       "dtype": "float32",
       "shape": "rows 7",
       "attribution": "fixture: names the row count against the axis a -1 reshape leaves as ?, which keeps the ? (wala/ML#1043)"
+    },
+    {
+      "module": "driver_returned_binding.py",
+      "function": "make",
+      "variable": "x",
+      "dtype": "float32",
+      "shape": "n 4",
+      "attribution": "fixture: the binding is returned, and the caller must see the filled type alone (wala/ML#1046)"
     }
   ]
 }
