@@ -1,0 +1,71 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <classloader name="PythonLoader">
+    <!-- scikit-learn, as far as a training script uses it to split its data before training. `from sklearn.model_selection import train_test_split` resolves through the `model_selection` field of this module object. -->
+    <class name="sklearn" allocatable="true">
+      <method name="import" static="true" descriptor="()Lsklearn;">
+        <new def="x" class="Lsklearn"/>
+        <new def="model_selection" class="Lsklearn/model_selection"/>
+        <putfield class="LRoot" field="model_selection" fieldType="LRoot" ref="x" value="model_selection"/>
+        <new def="train_test_split_fn" class="Lsklearn/model_selection/train_test_split"/>
+        <putfield class="LRoot" field="train_test_split" fieldType="LRoot" ref="model_selection" value="train_test_split_fn"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="sklearn">
+      <!-- The `sklearn.model_selection` submodule object, a field of the `sklearn` module, as `scipy/sparse` is of `scipy`. -->
+      <class name="model_selection" allocatable="true"></class>
+    </package>
+    <package name="sklearn/model_selection">
+      <!-- https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html -->
+      <!-- `train_test_split(*arrays, ...)` returns a train half and a test half of each of its arrays, in order. Each half is a NEW list whose elements are some of its input's, so the input's appended and operation contents flow into the half's order-free operation contents: iterating a half, or subscripting it with an index, reads the input's elements, and no reader counting numbered elements reads a length off it. Neither half aliases its input, because a half's length is a fraction of the input's: aliasing an array would give its halves the input's row count. An array split this way therefore reads as a list with no tensor type, which is unknown rather than wrong. Up to four arrays are modeled. -->
+      <class name="train_test_split" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self a0 a1 a2 a3 test_size train_size random_state shuffle stratify">
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="a0" def="a0_appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a0" def="a0_contents"/>
+          <new def="a0_train" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a0_train" value="a0_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a0_train" value="a0_contents"/>
+          <new def="a0_test" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a0_test" value="a0_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a0_test" value="a0_contents"/>
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="a1" def="a1_appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a1" def="a1_contents"/>
+          <new def="a1_train" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a1_train" value="a1_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a1_train" value="a1_contents"/>
+          <new def="a1_test" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a1_test" value="a1_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a1_test" value="a1_contents"/>
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="a2" def="a2_appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a2" def="a2_contents"/>
+          <new def="a2_train" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a2_train" value="a2_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a2_train" value="a2_contents"/>
+          <new def="a2_test" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a2_test" value="a2_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a2_test" value="a2_contents"/>
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="a3" def="a3_appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a3" def="a3_contents"/>
+          <new def="a3_train" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a3_train" value="a3_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a3_train" value="a3_contents"/>
+          <new def="a3_test" class="Llist"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a3_test" value="a3_appended"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="a3_test" value="a3_contents"/>
+          <new def="ret" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="ret" value="a0_train"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="ret" value="a0_test"/>
+          <putfield class="LRoot" field="2" fieldType="LRoot" ref="ret" value="a1_train"/>
+          <putfield class="LRoot" field="3" fieldType="LRoot" ref="ret" value="a1_test"/>
+          <putfield class="LRoot" field="4" fieldType="LRoot" ref="ret" value="a2_train"/>
+          <putfield class="LRoot" field="5" fieldType="LRoot" ref="ret" value="a2_test"/>
+          <putfield class="LRoot" field="6" fieldType="LRoot" ref="ret" value="a3_train"/>
+          <putfield class="LRoot" field="7" fieldType="LRoot" ref="ret" value="a3_test"/>
+          <return value="ret"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
