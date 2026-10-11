@@ -30,6 +30,12 @@ public class TestTrainTestSplit extends AbstractTensorTest {
     test(FIXTURE, "consume_test_element", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }
 
+  /** An element read off the train half by a computed index, as a batching loop reads it. */
+  @Test
+  public void testIndexedElement() throws ClassHierarchyException, CancelException, IOException {
+    test(FIXTURE, "consume_indexed", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
   /**
    * The train half of an array. Its row count is a fraction of the input's, so it must not carry
    * the input's {@code (10, 4)}. The halves are modeled as lists, so it is reached with no tensor
