@@ -40,7 +40,9 @@ import com.ibm.wala.cast.python.util.PythonInterpreter;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.fixpoint.UnaryStatement;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -80,6 +82,7 @@ import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -108,6 +111,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -2328,7 +2332,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         }
       }
       if (!changed) break;
+      if (round == MAX_NONE_ROUNDS - 1)
+        LOGGER.fine(
+            "wala/ML#1040: stopped following None through parameters after "
+                + MAX_NONE_ROUNDS
+                + " rounds with changes pending.");
     }
+    DOMINATORS.clear();
     Set<Pair<IMethod, Integer>> tensorBearing = HashSetFactory.make();
     for (CGNode node : cg) {
       if (node.getIR() == null || !isProgramCode(node)) continue;
@@ -2416,10 +2426,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // The front end tags a `**` argument as the keyword "null" (`String.valueOf` of the parser's
       // absent keyword name).
       else if (starred >= 0 || keywords.contains("null")) return false;
-      else
-        // Left to its default, which is in the parameter's points-to set.
-        return holdsNone(
-            builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(callee, p)));
+      else return defaultIsNone(builder, callee, p);
     }
     if (!isWrittenNone(builder, caller, arg, noneParams, noneStores)) return false;
     // A parameter forwarded where a test of it against `None` has ruled `None` out does not pass
@@ -2428,6 +2435,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         && !caller.getIR().getSymbolTable().isConstant(arg)
         && excludesNone(caller, caller.getIR().getBasicBlockForInstruction(call), arg));
   }
+
+  /**
+   * The dominators of each IR {@link #excludesNone} reads, kept for one {@link #addNoneMembers}
+   * pass, which asks of the same IRs once per call, parameter and round.
+   */
+  private static final Map<IR, Dominators<ISSABasicBlock>> DOMINATORS = new WeakHashMap<>();
 
   /** The value {@link #excludesNone} gives a value that is {@code None}. */
   private static final Object NONE_VALUE = new Object();
@@ -2446,7 +2459,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean excludesNone(CGNode node, ISSABasicBlock block, int vn) {
     IR ir = node.getIR();
     SSACFG cfg = ir.getControlFlowGraph();
-    Dominators<ISSABasicBlock> dominators = Dominators.make(cfg, cfg.entry());
+    Dominators<ISSABasicBlock> dominators =
+        DOMINATORS.computeIfAbsent(ir, k -> Dominators.make(cfg, cfg.entry()));
     for (Iterator<ISSABasicBlock> it = dominators.dominators(block); it.hasNext(); ) {
       ISSABasicBlock dominator = it.next();
       if (dominator.equals(block)
@@ -2590,10 +2604,56 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       member = memberName(ir, read.getMemberRef());
     } else return false;
     if (member == null) return false;
+    // Flow-insensitive, so only a read every value of which is `None` counts: a field set to
+    // `None` in `__init__` and to a tensor in `build` also reaches the read as the tensor, and the
+    // read may run only after the reassignment.
+    if (!onlyNone(
+        builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, vn))))
+      return false;
     for (InstanceKey ik :
         builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, ref)))
       if (noneStores.contains(Pair.make(ik, member))) return true;
     return false;
+  }
+
+  /**
+   * Whether a parameter's declared default is {@code None}: the global the builder binds an omitted
+   * parameter from, {@code <entity>_defaults_<i>}, holds the {@code None} constant. The parameter's
+   * own points-to set cannot decide this, since it also holds what other calls in the same context
+   * pass.
+   *
+   * @param builder The builder.
+   * @param callee The called program function.
+   * @param p The parameter's value number.
+   * @return {@code true} iff the parameter's default is {@code None}.
+   */
+  private static boolean defaultIsNone(PropagationCallGraphBuilder builder, CGNode callee, int p) {
+    FieldReference global =
+        FieldReference.findOrCreate(
+            PythonTypes.Root,
+            Atom.findOrCreateUnicodeAtom(
+                "global "
+                    + callee.getMethod().getDeclaringClass().getName()
+                    + "_defaults_"
+                    + (p - 1)),
+            PythonTypes.Root);
+    IField field = builder.getClassHierarchy().resolveField(global);
+    if (field == null) return false;
+    return holdsNone(
+        builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForStaticField(field)));
+  }
+
+  /**
+   * Whether a points-to set holds only Python's {@code None}.
+   *
+   * @param pts The points-to set.
+   * @return {@code true} iff it is non-empty and every member is the {@code None} constant.
+   */
+  private static boolean onlyNone(OrdinalSet<InstanceKey> pts) {
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts)
+      if (!(ik instanceof ConstantKey<?> constant) || constant.getValue() != null) return false;
+    return true;
   }
 
   /**

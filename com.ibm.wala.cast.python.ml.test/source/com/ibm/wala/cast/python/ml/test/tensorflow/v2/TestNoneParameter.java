@@ -188,4 +188,27 @@ public class TestNoneParameter extends AbstractTensorTest {
         2,
         Map.of(2, Set.of(TensorType.of(FLOAT_32))));
   }
+
+  /**
+   * A field set to {@code None} in {@code __init__} and to a tensor in {@code build}, the Keras
+   * idiom: the {@code call} that reads it runs after {@code build}, so no call passes {@code None}
+   * on. A flow-insensitive read cannot order the two stores, so only a read every value of which is
+   * {@code None} counts.
+   */
+  @Test
+  public void testFieldReassignedInBuild()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_none_parameter.py", "kernel_sink", 1, 2, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /** A parameter left to a default that is not {@code None} receives no {@code None}. */
+  @Test
+  public void testNonNoneDefault() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_parameter.py",
+        "scaled",
+        2,
+        3,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
+  }
 }

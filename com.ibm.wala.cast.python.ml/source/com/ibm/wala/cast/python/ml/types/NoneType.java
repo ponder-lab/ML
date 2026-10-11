@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.types;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 
 /**
@@ -37,5 +39,18 @@ public final class NoneType extends TensorType {
   @Override
   public String toCString(boolean useMarkdown) {
     return "None";
+  }
+
+  /**
+   * Describes {@code None} as JSON Schema's {@code null} type, rather than as a tensor of unknown
+   * shape and dtype.
+   *
+   * @return The schema.
+   */
+  @Override
+  public JsonElement toJsonSchema() {
+    JsonObject schema = new JsonObject();
+    schema.addProperty("type", "null");
+    return schema;
   }
 }

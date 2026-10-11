@@ -193,3 +193,33 @@ r1 = truth_outer(tf.ones([2]), tf.constant(1.0))
 assert r1.shape == (2,)
 r2 = truth_outer(tf.ones([2]))
 assert r2.shape == (2,)
+
+
+def kernel_sink(kernel):
+    return kernel * 2
+
+
+class Built(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.kernel = None
+
+    def build(self, input_shape):
+        self.kernel = tf.ones([2])
+
+    def call(self, x):
+        return x + kernel_sink(self.kernel)
+
+
+s1 = Built()(tf.ones([2]))
+assert s1.shape == (2,)
+
+
+def scaled(x, scale=1.0):
+    return x * scale
+
+
+u1 = scaled(tf.ones([2]), tf.ones([2]))
+assert u1.shape == (2,)
+u2 = scaled(tf.ones([2]))
+assert u2.shape == (2,)
