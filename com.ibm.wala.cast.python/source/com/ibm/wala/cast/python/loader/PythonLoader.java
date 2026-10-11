@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.loader;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
+import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_ENTITY_NAME;
 import static com.ibm.wala.cast.python.util.Util.getNames;
 import static com.ibm.wala.cast.python.util.Util.traceImportBinding;
 import static java.util.stream.Collectors.toList;
@@ -545,9 +546,14 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       Set<String> modules = recorded.get(scriptOf.get(p.fst));
       if (modules == null) continue;
       for (String module : modules) {
-        String plain = module.replace('.', '/') + ".py";
+        // A module is a script, `m.py`, or a package, whose classes and re-exports its
+        // initialization module holds, `m/__init__.py` (wala/ML#1042).
+        String path = module.replace('.', '/');
+        String plain = path + ".py";
+        String init = path + "/" + MODULE_INITIALIZATION_ENTITY_NAME + ".py";
         for (Map.Entry<String, CAstEntity> e : byScript.entrySet())
-          if (scriptNameMatches(e.getKey(), plain) && e.getValue() != p.fst)
+          if ((scriptNameMatches(e.getKey(), plain) || scriptNameMatches(e.getKey(), init))
+              && e.getValue() != p.fst)
             baseDependencies.computeIfAbsent(p.fst, k -> HashSetFactory.make()).add(e.getValue());
       }
     }

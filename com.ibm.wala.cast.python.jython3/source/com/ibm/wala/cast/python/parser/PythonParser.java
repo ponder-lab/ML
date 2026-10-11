@@ -12,6 +12,7 @@ package com.ibm.wala.cast.python.parser;
 
 import static com.ibm.wala.cast.python.util.Util.CLASS_METHOD_ANNOTATION_NAME;
 import static com.ibm.wala.cast.python.util.Util.DYNAMIC_ANNOTATION_KEY;
+import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_ENTITY_NAME;
 import static com.ibm.wala.cast.python.util.Util.STATIC_METHOD_ANNOTATION_NAME;
 import static com.ibm.wala.cast.python.util.Util.getNames;
 import static com.ibm.wala.cast.python.util.Util.removeFileProtocolFromPath;
@@ -428,6 +429,24 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
   }
 
   /**
+   * Records, for the loader's translation order, that this package's initialization module takes
+   * names from the given in-scope module (wala/ML#1042). A package re-exports classes its modules
+   * define, and a class whose base is written through the package depends on the package's module
+   * for its translation order (wala/ML#944); the package's module then waits for the module it
+   * imports from, so the base's own module is translated before the class that extends it. Only an
+   * initialization module records these, as the re-exporting kind; every module doing so would
+   * order the whole translation by imports.
+   *
+   * @param module The dotted path of the module imported from.
+   */
+  protected void noteReexportSource(String module) {
+    String script = scriptName();
+    String init = MODULE_INITIALIZATION_ENTITY_NAME + ".py";
+    if (script.equals(init) || script.endsWith("/" + init))
+      BaseDependencies.note(types, script, module);
+  }
+
+  /**
    * Resolves a base-class name by this module's scope rather than by a global table of simple names
    * (wala/ML#946): a class defined in this module first, else the class the module's import binding
    * names in the script it names, else {@code null} so the caller records a missing type and the
@@ -444,24 +463,72 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       CAstType local = localClassTypes.get(baseName);
       if (local != null) return local;
     }
-    String qualified = expandImportedName(baseName);
-    if (qualified.equals(baseName)) return null;
+    // A root no import binds names no module. A bound root can expand to itself: `import pkg` binds
+    // `pkg` to `pkg`, and `class C(pkg.Base)` then names the package's `Base` (wala/ML#1042).
+    int dot = baseName.indexOf('.');
+    String root = dot < 0 ? baseName : baseName.substring(0, dot);
+    if (!importedNames.containsKey(root) && wildcardBoundRoot(root) == null) return null;
+    return resolveQualifiedClass(expandImportedName(baseName), 0);
+  }
+
+  /**
+   * The most re-export hops {@link #resolveQualifiedClass} follows, a bound on a chain of modules
+   * each importing the name from the next, which also ends an import cycle.
+   */
+  private static final int MAX_REEXPORT_HOPS = 8;
+
+  /**
+   * Resolves a fully qualified class name, {@code module.Name}, to the class the named module
+   * defines, else to the class the module imports under that name: a package's initialization
+   * module re-exports the classes of its modules ({@code from pkg.mod import Base} in {@code
+   * pkg/__init__.py}) and defines none of them, so {@code pkg.Base} is followed to {@code
+   * pkg.mod.Base} (wala/ML#1042). The module is matched as a script, {@code module.py}, or as a
+   * package, {@code module/__init__.py}.
+   *
+   * @param qualified The dotted module path and class name.
+   * @param hops The re-export hops followed so far.
+   * @return The resolved class type, or {@code null} if neither the module nor what it imports
+   *     under the name is a class in this analysis.
+   */
+  private CAstType resolveQualifiedClass(String qualified, int hops) {
     int dot = qualified.lastIndexOf('.');
     if (dot <= 0) return null;
     String module = qualified.substring(0, dot).replace('.', '/');
     String name = qualified.substring(dot + 1);
+    String asScript = module + ".py";
+    String asPackage = module + "/" + MODULE_INITIALIZATION_ENTITY_NAME + ".py";
     Map<String, Map<String, CAstType>> byScript = CLASS_REGISTRY.get(types);
-    if (byScript == null) return null;
-    synchronized (byScript) {
-      for (Map.Entry<String, Map<String, CAstType>> e : byScript.entrySet()) {
-        String script = e.getKey();
-        if (script.equals(module + ".py") || script.endsWith("/" + module + ".py")) {
-          CAstType t = e.getValue().get(name);
-          if (t != null) return t;
-        }
+    if (byScript != null)
+      synchronized (byScript) {
+        for (Map.Entry<String, Map<String, CAstType>> e : byScript.entrySet())
+          if (namesModule(e.getKey(), asScript) || namesModule(e.getKey(), asPackage)) {
+            CAstType t = e.getValue().get(name);
+            if (t != null) return t;
+          }
       }
-    }
-    return null;
+    if (hops >= MAX_REEXPORT_HOPS) return null;
+    String reexported = null;
+    Map<String, Map<String, String>> bindings = IMPORT_BINDINGS.get(types);
+    if (bindings != null)
+      synchronized (bindings) {
+        for (Map.Entry<String, Map<String, String>> e : bindings.entrySet())
+          if (namesModule(e.getKey(), asScript) || namesModule(e.getKey(), asPackage)) {
+            String target = e.getValue().get(name);
+            if (target != null && !target.equals(qualified)) {
+              reexported = target;
+              break;
+            }
+          }
+      }
+    return reexported == null ? null : resolveQualifiedClass(reexported, hops + 1);
+  }
+
+  /**
+   * Whether a script name is the given module file, matched as the importer matches it: the whole
+   * name, or a suffix starting at a path component.
+   */
+  private static boolean namesModule(String script, String file) {
+    return script.equals(file) || script.endsWith("/" + file);
   }
 
   /**
