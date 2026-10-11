@@ -628,8 +628,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * wala/ML#721 criterion). A {@link TensorType.DynamicDim} accepts one as well (wala/ML#888): its
    * runtime-{@code None} evidence says the size is FEED-DEPENDENT rather than unknowable, so an
    * author recording what their program is actually run with supplies a fact the analysis cannot
-   * reach instead of contradicting one it holds. Every other disagreement still conflicts, numeric
-   * and symbolic ones being definite-vs-definite.
+   * reach instead of contradicting one it holds. A named annotation axis asserts no extent, so
+   * either one keeps its inferred axis against it (wala/ML#1045). Against an inferred {@link
+   * NumericDim} a name still conflicts: an author names an axis whose size changes from call to
+   * call, and the analysis holding one fixed extent there says the entry describes a different
+   * value than the one it matched. Names are not checked against each other, so an entry repeating
+   * a name across axes asserts no equality between them. Every other disagreement still conflicts.
    *
    * <p>Rank mismatch remains a conflict under any rule. Filling an extent is recoverable; changing
    * a value's rank on a stale entry is not, and it is the change most likely to produce a shape no
@@ -654,6 +658,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // a fact the analysis cannot reach rather than contradicting one it holds. Refusing this was
       // the reason an annotation could not tighten any axis of a modeled content-dependent read.
       else if (inf instanceof DynamicDim && ann instanceof NumericDim) out.add(ann);
+      // A named annotation axis asserts no extent, so it cannot contradict an inferred axis that
+      // holds none either (wala/ML#1045). An author names an axis whose size changes from call to
+      // call; the inferred axis is kept, and the entry's other axes still merge.
+      else if ((inf instanceof UnresolvedDim || inf instanceof DynamicDim)
+          && ann instanceof SymbolicDim) out.add(inf);
       else return null;
     }
     return out;
