@@ -1365,7 +1365,11 @@
           <putfield class="LRoot" field="experimental_relax_shapes" fieldType="LRoot" ref="params" value="experimental_relax_shapes"/>
           <putfield class="LRoot" field="experimental_compile" fieldType="LRoot" ref="params" value="experimental_compile"/>
           <putfield class="LRoot" field="experimental_follow_type_hints" fieldType="LRoot" ref="params" value="experimental_follow_type_hints"/>
-          <return value="params"/>
+          <!-- `tf.function(f)` called directly returns a callable that runs `f` (wala/ML#1051), so the result is `f` beside the configured `Function`: calling it dispatches to `f` with the caller's arguments. The configured `Function` stays in the result for the factory form, `tf.function(...)(f)` and the bare decorator, whose application calls it with `f`; there `func` is unbound and contributes nothing. The union is formed through a field of the allocation, since a summary has one return. -->
+          <putfield class="LRoot" field="__tf_function_result__" fieldType="LRoot" ref="params" value="params"/>
+          <putfield class="LRoot" field="__tf_function_result__" fieldType="LRoot" ref="params" value="func"/>
+          <getfield class="LRoot" field="__tf_function_result__" fieldType="LRoot" ref="params" def="result"/>
+          <return value="result"/>
         </method>
       </class>
       <class name="Custom_gradient" allocatable="true">
