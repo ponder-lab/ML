@@ -629,8 +629,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * runtime-{@code None} evidence says the size is FEED-DEPENDENT rather than unknowable, so an
    * author recording what their program is actually run with supplies a fact the analysis cannot
    * reach instead of contradicting one it holds. A named annotation axis asserts no extent, so
-   * either one keeps its inferred axis against it (wala/ML#1045). Every other disagreement still
-   * conflicts, numeric and symbolic ones being definite-vs-definite.
+   * either one keeps its inferred axis against it (wala/ML#1045). Against an inferred {@link
+   * NumericDim} a name still conflicts: an author names an axis whose size changes from call to
+   * call, and the analysis holding one fixed extent there says the entry describes a different
+   * value than the one it matched. Names are not checked against each other, so an entry repeating
+   * a name across axes asserts no equality between them. Every other disagreement still conflicts.
    *
    * <p>Rank mismatch remains a conflict under any rule. Filling an extent is recoverable; changing
    * a value's rank on a stale entry is not, and it is the change most likely to produce a shape no
