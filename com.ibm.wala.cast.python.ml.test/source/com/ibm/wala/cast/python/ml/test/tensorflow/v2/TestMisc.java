@@ -1581,6 +1581,35 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * Witness for <a href="https://github.com/wala/ML/issues/1045">wala/ML#1045</a>: an annotation
+   * that names one axis still fills another.
+   *
+   * <p>{@code make}'s leading axis is the length of its argument, a different size at each call,
+   * which inference holds as {@code Unresolved} and an author can only name. Its second axis is a
+   * count computed from the data, held as {@code Dynamic}, which the entry states as 4. The name
+   * asserts no extent, so it keeps the inferred axis; before this it conflicted and the whole entry
+   * was discarded, leaving the second axis open.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testNamedAnnotationAxisKeepsInferredAxis() throws Exception {
+    List<String> warnings =
+        sidecarWarnings(
+            "driver_named_axis.py",
+            "consume",
+            Map.of(
+                2,
+                Set.of(
+                    new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(4))))));
+    assertTrue(
+        "A named axis must not conflict with an Unresolved axis (wala/ML#1045). Warnings: "
+            + warnings,
+        warnings.stream()
+            .noneMatch(w -> w.contains("driver_named_axis") && w.contains("conflicts")));
+  }
+
+  /**
    * A numpy array's shape and dtype are read from its construction, and a transpose preserves both.
    * The controls that localise <a href="https://github.com/wala/ML/issues/910">wala/ML#910</a> to
    * one call rather than to the chain around it.

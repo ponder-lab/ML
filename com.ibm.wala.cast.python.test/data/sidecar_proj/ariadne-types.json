@@ -152,6 +152,14 @@
       "dtype": "float32",
       "shape": "4 3",
       "attribution": "fixture: tf.constant of an opaque np.load, handed to an input_signature-decorated function (wala/ML#810)"
+    },
+    {
+      "module": "driver_named_axis.py",
+      "function": "make",
+      "variable": "x",
+      "dtype": "float32",
+      "shape": "n 4",
+      "attribution": "fixture: names the per-call row count and states the label count read from the data"
     }
   ]
 }
