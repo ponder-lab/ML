@@ -349,28 +349,19 @@ public class Util {
   private Util() {}
 
   /**
-   * If the given {@link ConstantKey}'s value is <code>null</code>, then issue a warning and return
-   * <code>null</code>. Otherwise, issue a warning stating that an {@link AllocationSiteInNode}
-   * cannot be extracted from the given {@link ConstantKey}. A value of <code>
-   * null</code> most likely indicates that a receiver can potentially be <code>null</code>.
+   * Declines to extract an {@link AllocationSiteInNode} from the given {@link ConstantKey}. A
+   * constant, a Python literal such as {@code 0} or {@code None} or an attribute name, is an
+   * ordinary points-to member with no allocation site, so {@code null} is the expected answer and
+   * is logged at fine level only: callers ask once per member on every re-evaluation of a generator
+   * transfer, so a warning here repeated millions of times on a whole-program analysis
+   * (wala/ML#1058).
    *
    * @param constantKey The {@link ConstantKey} from which to extract the corresponding {@link
    *     AllocationSiteInNode}.
    * @return <code>null</code>.
    */
   private static AllocationSiteInNode getAllocationSiteInNode(ConstantKey<?> constantKey) {
-    Object value = constantKey.getValue();
-
-    if (value == null)
-      LOGGER.warning("Can't extract AllocationSiteInNode from: " + constantKey + ".");
-    else
-      LOGGER.warning(
-          "Can't extract AllocationSiteInNode from: "
-              + constantKey
-              + ". Not expecting value of: "
-              + value
-              + " from ConstantKey.");
-
+    LOGGER.fine(() -> "No AllocationSiteInNode behind constant: " + constantKey + ".");
     return null;
   }
 
@@ -378,16 +369,17 @@ public class Util {
    * Finds the {@link AllocationSiteInNode} behind the given {@link InstanceKey}, or returns {@code
    * null} when there is none (wala/ML#925). The scheme is {@link
    * #getAllocationSiteInNode(InstanceKey)}'s: the key itself when it is an allocation site, the
-   * base of a {@link ScopeMappingInstanceKey} when that is one, and the constant overload for a
-   * {@link ConstantKey}, which declines. That method therefore already returns {@code null} for a
-   * constant; it throws for any other key with no allocation behind it, a {@link ConcreteTypeKey}
-   * for a builtin among them, and this one declines there too, so the two agree on constants and
-   * differ on everything else unextractable (wala/ML#933). The scheme is repeated here rather than
-   * shared for that reason: writing the throwing method as "find, then throw on {@code null}" would
-   * turn its constant case into a throw. A caller that tests the result for {@code null} wants this
-   * variant: a throw inside a generator is caught by the worklist resolver and floors the whole
-   * query to unknown, so the value reads like one the analysis could not compute, and nothing above
-   * fine level says why; a decline lets the caller floor the one member and go on with the rest.
+   * base of a {@link ScopeMappingInstanceKey} when that is one, and {@code null} for a {@link
+   * ConstantKey}, without logging, since a constant is an ordinary points-to member (wala/ML#1058).
+   * That method also returns {@code null} for a constant; it throws for any other key with no
+   * allocation behind it, a {@link ConcreteTypeKey} for a builtin among them, and this one declines
+   * there too, so the two agree on constants and differ on everything else unextractable
+   * (wala/ML#933). The scheme is repeated here rather than shared for that reason: writing the
+   * throwing method as "find, then throw on {@code null}" would turn its constant case into a
+   * throw. A caller that tests the result for {@code null} wants this variant: a throw inside a
+   * generator is caught by the worklist resolver and floors the whole query to unknown, so the
+   * value reads like one the analysis could not compute, and nothing above fine level says why; a
+   * decline lets the caller floor the one member and go on with the rest.
    *
    * @param instanceKey The {@link InstanceKey} in question.
    * @return The {@link AllocationSiteInNode} behind the key, or {@code null} when it has none.
@@ -397,11 +389,7 @@ public class Util {
     if (instanceKey instanceof ScopeMappingInstanceKey) {
       InstanceKey base = ((ScopeMappingInstanceKey) instanceKey).getBase();
       if (base instanceof AllocationSiteInNode) return (AllocationSiteInNode) base;
-      if (base instanceof ConstantKey) return getAllocationSiteInNode((ConstantKey<?>) base);
-      return null;
     }
-    if (instanceKey instanceof ConstantKey)
-      return getAllocationSiteInNode((ConstantKey<?>) instanceKey);
     return null;
   }
 
