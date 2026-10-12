@@ -255,14 +255,17 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
 
   /**
    * Whether a code body calls {@code __delete__} or {@code delattr}: an invocation whose function
-   * is a value the body defines by allocating that builtin or reading a variable of its name. The
-   * scan reads the instructions before SSA conversion, where a value may have more than one
-   * definition; any definition of a deletion counts, which only disables more.
+   * is a value the body defines by allocating that builtin or reading a variable of its name,
+   * directly or through assignments. The scan reads the instructions before SSA conversion, where a
+   * value may have more than one definition; any definition of a deletion counts, which only
+   * disables more. A body with no instructions to read counts as calling one.
    *
    * @param body The code body.
    * @return {@code true} iff the body calls a deletion.
    */
   private static boolean callsDeletion(AstMethod body) {
+    // A body without instructions to read cannot be ruled out.
+    if (body.cfg() == null) return true;
     Object[] instructions = body.cfg().getInstructions();
     Set<Integer> deletions = HashSetFactory.make();
     for (Object instruction : instructions)
