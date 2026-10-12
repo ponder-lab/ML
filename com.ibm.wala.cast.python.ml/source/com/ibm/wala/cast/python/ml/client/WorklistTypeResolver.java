@@ -73,6 +73,13 @@ final class WorklistTypeResolver {
   private static final int EVALUATION_CAP = 100;
 
   /**
+   * The depth of nested inline evaluations past which a first-sighted read defers to the worklist.
+   * A whole-program analysis can have a dependency chain longer than a default thread stack holds
+   * as nested evaluations; below the bound, scheduling is unchanged.
+   */
+  private static final int INLINE_DEPTH_BOUND = 256;
+
+  /**
    * Sentinel for the legacy null dtype result (⊤). The state table cannot hold {@code null}, but
    * legacy callers null-check dtype results to run fallback arms, so {@link #read} and {@link
    * #demand} translate this back to {@code null} at every boundary crossing.
@@ -168,6 +175,9 @@ final class WorklistTypeResolver {
    */
   private int caughtQueryExceptions = 0;
 
+  /** How many reads deferred a first-sighted query past {@link #INLINE_DEPTH_BOUND}. */
+  private int deferredReads = 0;
+
   /**
    * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
    * hybrid inline scheduling fixes the acyclic region's evaluation order, so the orders the engine
@@ -184,6 +194,13 @@ final class WorklistTypeResolver {
 
   /** The stack of currently-evaluating queries; reads record edges against the top. */
   private final Deque<Object> evaluating = new ArrayDeque<>();
+
+  /**
+   * Whether a read deferred a first-sighted query past {@link #INLINE_DEPTH_BOUND} since the last
+   * fixpoint. Its reader consumed an interim value, as a cycle read's does, so the fixpoint ends in
+   * the settlement pass.
+   */
+  private boolean deferredSeen;
 
   /** Membership view of {@link #evaluating}, the inline-recursion cycle break. */
   private final Set<Object> inStack = HashSetFactory.make();
@@ -321,7 +338,9 @@ final class WorklistTypeResolver {
                 + census.cyclicSliceQueries()
                 + " slice generators in cycles, "
                 + census.caughtQueryExceptions()
-                + " query evaluations floored by a caught exception.");
+                + " query evaluations floored by a caught exception, "
+                + engine.deferredReads
+                + " reads deferred past the inline depth bound.");
     return census;
   }
 
@@ -513,8 +532,18 @@ final class WorklistTypeResolver {
     // region its natural (reverse-topological) order and each such query runs once; only an
     // on-stack read (a cycle) returns the current value and defers to the worklist, which then
     // converges just the cycle-affected keys.
-    if (!this.evaluated.contains(key) && !this.inStack.contains(key)) this.evaluate(key);
-    else if (this.inStack.contains(key)) this.cycleSeen = true;
+    // A first-sighted query deeper than the inline bound is deferred to the worklist instead, so
+    // the longest acyclic dependency chain is not the Java stack's depth: the reader consumes the
+    // current value, as an on-stack read does, and the version record below re-runs it once the
+    // deferred query grows.
+    if (!this.evaluated.contains(key) && !this.inStack.contains(key)) {
+      if (this.evaluating.size() < INLINE_DEPTH_BOUND) this.evaluate(key);
+      else {
+        this.enqueue(key);
+        this.deferredSeen = true;
+        this.deferredReads++;
+      }
+    } else if (this.inStack.contains(key)) this.cycleSeen = true;
     // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
     // evaluation so it matches the value returned below, and an on-stack (interim) read records the
     // pre-completion version, which lags as soon as the read value grows.
@@ -537,7 +566,7 @@ final class WorklistTypeResolver {
    * @return {@code true} iff a value read now may later grow.
    */
   boolean mayObserveInterim() {
-    return this.cycleSeen || !this.worklist.isEmpty();
+    return this.cycleSeen || this.deferredSeen || !this.worklist.isEmpty();
   }
 
   /**
@@ -670,8 +699,10 @@ final class WorklistTypeResolver {
       moved = this.enqueueStaleReaders();
       if (!moved) moved = this.cycleSeen && this.promotePureCycles();
     } while (moved);
-    if (this.cycleSeen || !this.settlementRequested.isEmpty()) this.canonicalize();
+    if (this.cycleSeen || this.deferredSeen || !this.settlementRequested.isEmpty())
+      this.canonicalize();
     this.cycleSeen = false;
+    this.deferredSeen = false;
     this.dumpFiltered();
   }
 
