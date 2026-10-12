@@ -69,6 +69,32 @@ public class TestAttributeOverMethod extends AbstractTensorTest {
   }
 
   /**
+   * A program that deletes the attribute through a local alias of {@code delattr} exposes the
+   * method again, so the call reaches both the assigned value and the model's method.
+   */
+  @Test
+  public void testDeletedThroughAlias()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<String> targets =
+        predictTargets("tf2_test_attribute_over_method_deleted_alias.py", "calls_replaced");
+    assertTrue(targets.toString(), targets.stream().anyMatch(t -> t.contains(LEN)));
+    assertTrue(targets.toString(), targets.stream().anyMatch(t -> t.contains(MODEL_PREDICT)));
+  }
+
+  /**
+   * The rule still applies in a program with a function whose SSA conversion fails: the scan for
+   * attribute deletions reads each body's instructions before conversion, so that function neither
+   * aborts the call graph's construction nor counts as a deletion.
+   */
+  @Test
+  public void testUnconvertibleBody() throws ClassHierarchyException, CancelException, IOException {
+    Set<String> targets =
+        predictTargets("tf2_test_attribute_over_method_unconvertible.py", "calls_replaced");
+    assertTrue(targets.toString(), targets.stream().anyMatch(t -> t.contains(LEN)));
+    assertFalse(targets.toString(), targets.stream().anyMatch(t -> t.contains(MODEL_PREDICT)));
+  }
+
+  /**
    * Returns the declaring classes of the targets of the calls in a function's nodes that are not
    * calls of TensorFlow functions, which in the fixtures are the {@code m.predict(t)} calls.
    *
