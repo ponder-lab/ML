@@ -73,9 +73,9 @@ final class WorklistTypeResolver {
   private static final int EVALUATION_CAP = 100;
 
   /**
-   * The depth of nested inline evaluations past which a first-sighted read defers to the worklist.
-   * A whole-program analysis can have a dependency chain longer than a default thread stack holds
-   * as nested evaluations; below the bound, scheduling is unchanged.
+   * The depth of nested inline evaluations at which a first-sighted read unwinds them (see {@link
+   * DepthUnwind}). A whole-program analysis can have a dependency chain longer than a default
+   * thread stack holds as nested evaluations; below the bound, scheduling is unchanged.
    */
   private static final int INLINE_DEPTH_BOUND = 256;
 
@@ -175,8 +175,8 @@ final class WorklistTypeResolver {
    */
   private int caughtQueryExceptions = 0;
 
-  /** How many reads deferred a first-sighted query past {@link #INLINE_DEPTH_BOUND}. */
-  private int deferredReads = 0;
+  /** How many reads unwound the evaluations in progress at {@link #INLINE_DEPTH_BOUND}. */
+  private int depthUnwinds = 0;
 
   /**
    * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
@@ -194,13 +194,6 @@ final class WorklistTypeResolver {
 
   /** The stack of currently-evaluating queries; reads record edges against the top. */
   private final Deque<Object> evaluating = new ArrayDeque<>();
-
-  /**
-   * Whether a read deferred a first-sighted query past {@link #INLINE_DEPTH_BOUND} since the last
-   * fixpoint. Its reader consumed an interim value, as a cycle read's does, so the fixpoint ends in
-   * the settlement pass.
-   */
-  private boolean deferredSeen;
 
   /** Membership view of {@link #evaluating}, the inline-recursion cycle break. */
   private final Set<Object> inStack = HashSetFactory.make();
@@ -339,8 +332,8 @@ final class WorklistTypeResolver {
                 + " slice generators in cycles, "
                 + census.caughtQueryExceptions()
                 + " query evaluations floored by a caught exception, "
-                + engine.deferredReads
-                + " reads deferred past the inline depth bound.");
+                + engine.depthUnwinds
+                + " unwinds at the inline depth bound.");
     return census;
   }
 
@@ -532,17 +525,15 @@ final class WorklistTypeResolver {
     // region its natural (reverse-topological) order and each such query runs once; only an
     // on-stack read (a cycle) returns the current value and defers to the worklist, which then
     // converges just the cycle-affected keys.
-    // A first-sighted query deeper than the inline bound is deferred to the worklist instead, so
-    // the longest acyclic dependency chain is not the Java stack's depth: the reader consumes the
-    // current value, as an on-stack read does, and the version record below re-runs it once the
-    // deferred query grows.
+    // Past the inline depth bound, a first-sighted query unwinds the evaluations in progress
+    // instead
+    // (see DepthUnwind), so the longest acyclic dependency chain is not the Java stack's depth.
     if (!this.evaluated.contains(key) && !this.inStack.contains(key)) {
-      if (this.evaluating.size() < INLINE_DEPTH_BOUND) this.evaluate(key);
-      else {
-        this.enqueue(key);
-        this.deferredSeen = true;
-        this.deferredReads++;
+      if (this.evaluating.size() >= INLINE_DEPTH_BOUND) {
+        this.depthUnwinds++;
+        throw new DepthUnwind(key, this.evaluating);
       }
+      this.evaluate(key);
     } else if (this.inStack.contains(key)) this.cycleSeen = true;
     // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
     // evaluation so it matches the value returned below, and an on-stack (interim) read records the
@@ -566,7 +557,7 @@ final class WorklistTypeResolver {
    * @return {@code true} iff a value read now may later grow.
    */
   boolean mayObserveInterim() {
-    return this.cycleSeen || this.deferredSeen || !this.worklist.isEmpty();
+    return this.cycleSeen || !this.worklist.isEmpty();
   }
 
   /**
@@ -605,7 +596,11 @@ final class WorklistTypeResolver {
       this.transfers.put(key, transfer);
       this.shapeKinds.put(key, shapeKind);
     }
-    if (!this.evaluated.contains(key) && !this.inStack.contains(key)) this.evaluate(key);
+    this.unwinding(
+        () -> {
+          if (!this.evaluated.contains(key) && !this.inStack.contains(key)) this.evaluate(key);
+          return null;
+        });
     this.solve();
     Object value = this.state.get(key);
     if (value == NULL_DTYPE) return null;
@@ -699,10 +694,8 @@ final class WorklistTypeResolver {
       moved = this.enqueueStaleReaders();
       if (!moved) moved = this.cycleSeen && this.promotePureCycles();
     } while (moved);
-    if (this.cycleSeen || this.deferredSeen || !this.settlementRequested.isEmpty())
-      this.canonicalize();
+    if (this.cycleSeen || !this.settlementRequested.isEmpty()) this.canonicalize();
     this.cycleSeen = false;
-    this.deferredSeen = false;
     this.dumpFiltered();
   }
 
@@ -878,7 +871,8 @@ final class WorklistTypeResolver {
         }
       if (targets.isEmpty()) continue;
       Map<Object, Object> replacements = HashMapFactory.make();
-      for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
+      for (Object key : targets)
+        replacements.put(key, this.unwinding(() -> this.recomputeSettled(key)));
       for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
         Object key = replacement.getKey();
         Object value = replacement.getValue();
@@ -1012,7 +1006,7 @@ final class WorklistTypeResolver {
         this.evaluating.push(key);
         this.inStack.add(key);
         try {
-          result = transfer.get();
+          result = this.unwinding(transfer);
         } catch (IllegalArgumentException e) {
           LOGGER.log(Level.FINE, e, () -> "REPLAY IAE for " + brief(key) + ".");
           continue;
@@ -1095,6 +1089,70 @@ final class WorklistTypeResolver {
     return prefix + (s.length() > 400 ? s.substring(0, 400) : s);
   }
 
+  /**
+   * Thrown by {@link #read} when a first-sighted query would nest one evaluation deeper than {@link
+   * #INLINE_DEPTH_BOUND}, to unwind the evaluations in progress to the nearest {@link #unwinding}
+   * caller. It carries the query and the chain of evaluations above it, which that caller evaluates
+   * deepest first, each from an empty stack, before retrying. No reader sees a value of a query
+   * that has not been evaluated, so the values are those an unbounded stack would give. An {@link
+   * Error}, so that a transfer catching {@link Exception} cannot swallow it, and without a stack
+   * trace, which would cost as much as the stack it unwinds.
+   */
+  private static final class DepthUnwind extends Error {
+
+    private static final long serialVersionUID = 1L;
+
+    /** The query whose evaluation would have exceeded the bound, then the chain, deepest first. */
+    private final transient List<Object> pending;
+
+    /**
+     * @param query The first-sighted query being read.
+     * @param evaluating The evaluations in progress, innermost first.
+     */
+    private DepthUnwind(Object query, Deque<Object> evaluating) {
+      super(null, null, false, false);
+      this.pending = new ArrayList<>(evaluating.size() + 1);
+      this.pending.add(query);
+      this.pending.addAll(evaluating);
+    }
+  }
+
+  /**
+   * Runs an action from the current stack depth, absorbing any {@link DepthUnwind} thrown above it:
+   * the unwound chain's queries are evaluated deepest first from this depth, skipping those already
+   * evaluated or still in progress below this frame, and the action is retried. A chain that
+   * unwinds again pushes its own queries above the rest, so the pending queries are a stack held
+   * here rather than on the Java stack. Each unwind leaves at least its first-sighted query to be
+   * evaluated before the retry, so the action makes progress.
+   *
+   * @param <T> The action's result type.
+   * @param action The action.
+   * @return The action's result.
+   */
+  private <T> T unwinding(Supplier<T> action) {
+    Deque<Object> pending = new ArrayDeque<>();
+    while (true) {
+      while (!pending.isEmpty()) {
+        Object query = pending.peek();
+        if (this.evaluated.contains(query) || this.inStack.contains(query)) {
+          pending.pop();
+          continue;
+        }
+        try {
+          this.evaluate(query);
+          pending.pop();
+        } catch (DepthUnwind unwind) {
+          for (int i = unwind.pending.size() - 1; i >= 0; i--) pending.push(unwind.pending.get(i));
+        }
+      }
+      try {
+        return action.get();
+      } catch (DepthUnwind unwind) {
+        for (int i = unwind.pending.size() - 1; i >= 0; i--) pending.push(unwind.pending.get(i));
+      }
+    }
+  }
+
   private void iterate() {
     while (!this.worklist.isEmpty()) {
       Object key = this.worklist.poll();
@@ -1110,7 +1168,11 @@ final class WorklistTypeResolver {
                   + "; pinning at its current value. Investigate the transfer's monotonicity.");
         continue;
       }
-      this.evaluate(key);
+      this.unwinding(
+          () -> {
+            this.evaluate(key);
+            return null;
+          });
     }
   }
 
@@ -1122,10 +1184,16 @@ final class WorklistTypeResolver {
     Map<Object, Integer> records = this.readVersions.get(key);
     if (records != null) records.clear();
     Object result;
+    boolean unwound = false;
     this.evaluating.push(key);
     this.inStack.add(key);
     try {
       result = transfer.get();
+    } catch (DepthUnwind e) {
+      // An unwound evaluation leaves no value and stays unevaluated; it reruns once the chain under
+      // it has been evaluated.
+      unwound = true;
+      throw e;
     } catch (IllegalArgumentException e) {
       // Demand-driven callers catch this variously; under the engine the conservative reading is
       // an unknown value of the query's kind.
@@ -1145,7 +1213,7 @@ final class WorklistTypeResolver {
     } finally {
       this.evaluating.pop();
       this.inStack.remove(key);
-      this.evaluated.add(key);
+      if (!unwound) this.evaluated.add(key);
     }
     // The legacy dtype convention allows a null transfer result meaning ⊤, and CALLERS null-check
     // it to run fallback arms. The state table cannot hold null, so store the sentinel and let
