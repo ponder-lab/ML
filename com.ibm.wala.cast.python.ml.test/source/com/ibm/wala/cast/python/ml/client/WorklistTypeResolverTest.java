@@ -145,6 +145,96 @@ public class WorklistTypeResolverTest {
     assertTrue(line, line.endsWith("treating as ⊤."));
   }
 
+  /**
+   * A dependency chain longer than the Java stack can hold as nested evaluations still resolves:
+   * each query reads the next, and only the last has a value of its own. Evaluating every
+   * first-sighted read inline made the chain's length the stack's depth, which overflowed on a
+   * whole-program analysis.
+   */
+  @Test
+  public void testDeepAcyclicChain() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    Object result = engine.demand(0, chainLink(engine, 0, false), false);
+
+    assertEquals(EnumSet.of(DType.FLOAT32), result);
+  }
+
+  /**
+   * A deep chain whose links read an empty dependency as unknown, as a generator's fallback arm
+   * does, settles at the base's value: a link that ran before its dependency was evaluated must not
+   * keep the unknown it read then.
+   */
+  @Test
+  public void testDeepChainRetractsInterimUnknown() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    Object result = engine.demand(0, chainLink(engine, 0, true), false);
+
+    assertEquals(EnumSet.of(DType.FLOAT32), result);
+  }
+
+  /**
+   * A dependency cycle longer than the inline depth bound, entered from a member with a base value,
+   * settles at that value at every member: the cycle closes at the member it was entered from, as
+   * it does on an unbounded stack, rather than being re-entered from a later member on each retry.
+   */
+  @Test(timeout = 60_000)
+  public void testCycleLongerThanInlineBound() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    Object result = engine.demand(0, ringLink(engine, 0), false);
+
+    assertEquals(EnumSet.of(DType.FLOAT32), result);
+    assertEquals(
+        EnumSet.of(DType.FLOAT32),
+        engine.demand(RING_LENGTH / 2, ringLink(engine, RING_LENGTH / 2), false));
+  }
+
+  /** The length of the ring in the long-cycle test, beyond the inline depth bound. */
+  private static final int RING_LENGTH = 1_000;
+
+  /**
+   * The transfer of one link of a dtype ring: link {@code i} reads link {@code (i + 1) mod n}, and
+   * link 0 also contributes float32.
+   *
+   * @param engine The engine.
+   * @param i The link's index, which is also its key.
+   * @return The link's transfer.
+   */
+  private static Supplier<Object> ringLink(WorklistTypeResolver engine, int i) {
+    return () -> {
+      Object next =
+          engine.read((i + 1) % RING_LENGTH, ringLink(engine, (i + 1) % RING_LENGTH), false);
+      if (i != 0) return next;
+      Set<DType> joined = EnumSet.of(DType.FLOAT32);
+      if (next instanceof Set<?> set) for (Object o : set) joined.add((DType) o);
+      return joined;
+    };
+  }
+
+  /** The length of the chains in the deep-chain tests, far beyond a default thread stack. */
+  private static final int DEEP_CHAIN_LENGTH = 100_000;
+
+  /**
+   * The transfer of one link of a deep dtype chain: link {@code i} reads link {@code i + 1}, and
+   * the last link is float32.
+   *
+   * @param engine The engine.
+   * @param i The link's index, which is also its key.
+   * @param emptyIsUnknown Whether an empty dependency reads as unknown ({@code null}).
+   * @return The link's transfer.
+   */
+  private static Supplier<Object> chainLink(
+      WorklistTypeResolver engine, int i, boolean emptyIsUnknown) {
+    return () -> {
+      if (i == DEEP_CHAIN_LENGTH) return EnumSet.of(DType.FLOAT32);
+      Object next = engine.read(i + 1, chainLink(engine, i + 1, emptyIsUnknown), false);
+      if (emptyIsUnknown && next instanceof Set<?> set && set.isEmpty()) return null;
+      return next;
+    };
+  }
+
   /** A dtype query's value passes through unchanged. */
   @Test
   public void testDtypeValue() {
