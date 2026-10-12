@@ -67,15 +67,25 @@ public class PythonModRef extends AstModRef<InstanceKey> {
 
   /**
    * The static fields of the analysis of the {@link #computeMod} under way, shared by the visitors
-   * of all its nodes (https://github.com/wala/ML/issues/1063).
+   * of all its nodes, or {@code null} outside one (https://github.com/wala/ML/issues/1063).
    */
   private StaticFields staticFields;
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>An instance holds the static fields of the call under way, so it is not for concurrent calls
+   * of this method.
+   */
   @Override
   public Map<CGNode, OrdinalSet<PointerKey>> computeMod(
       CallGraph cg, PointerAnalysis<InstanceKey> pa, HeapExclusions heapExclude) {
     this.staticFields = new StaticFields(pa);
-    return super.computeMod(cg, pa, heapExclude);
+    try {
+      return super.computeMod(cg, pa, heapExclude);
+    } finally {
+      this.staticFields = null;
+    }
   }
 
   /**
