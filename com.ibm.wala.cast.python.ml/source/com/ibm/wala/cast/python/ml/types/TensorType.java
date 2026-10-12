@@ -275,11 +275,13 @@ public class TensorType implements Iterable<Dimension<?>> {
      * Override {@link Dimension#hashCode} (which hashes only the payload {@code value}) so that
      * null-payload singletons of different concrete classes don't collide. {@link Dimension#equals}
      * already distinguishes by {@code getClass()}, so the bucket-level separation here is a
-     * hash-performance fix, not a correctness one.
+     * hash-performance fix, not a correctness one. The hash is the class name's, not the class
+     * object's, whose identity hash differs between runs and made a hash set of tensor types
+     * iterate in a different order on each run (wala/ML#1061).
      */
     @Override
     public int hashCode() {
-      return RaggedDim.class.hashCode();
+      return RaggedDim.class.getName().hashCode();
     }
 
     /**
@@ -365,7 +367,7 @@ public class TensorType implements Iterable<Dimension<?>> {
      */
     @Override
     public int hashCode() {
-      return DynamicDim.class.hashCode();
+      return DynamicDim.class.getName().hashCode();
     }
 
     /**
@@ -449,7 +451,7 @@ public class TensorType implements Iterable<Dimension<?>> {
      */
     @Override
     public int hashCode() {
-      return UnresolvedDim.class.hashCode();
+      return UnresolvedDim.class.getName().hashCode();
     }
 
     /**
