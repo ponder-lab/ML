@@ -70,6 +70,15 @@ public class DenseCall extends TensorGenerator {
       ThreadLocal.withInitial(HashSet::new);
 
   /**
+   * Returns whether this thread has a {@link #INPUT_SHAPE_NODES_IN_PROGRESS} frame open.
+   *
+   * @return {@code true} iff the guard is in progress.
+   */
+  static boolean guardInProgress() {
+    return !INPUT_SHAPE_NODES_IN_PROGRESS.get().isEmpty();
+  }
+
+  /**
    * Parameter positions and names for calls to {@code tf.keras.layers.Dense}.
    *
    * @see <a

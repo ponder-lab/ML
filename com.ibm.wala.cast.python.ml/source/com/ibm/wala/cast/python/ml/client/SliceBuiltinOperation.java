@@ -149,6 +149,15 @@ public class SliceBuiltinOperation extends TensorGenerator {
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RECEIVER_ORIGINS_IN_PROGRESS =
       ThreadLocal.withInitial(HashSetFactory::make);
 
+  /**
+   * Returns whether this thread has a {@link #RECEIVER_ORIGINS_IN_PROGRESS} frame open.
+   *
+   * @return {@code true} iff the guard is in progress.
+   */
+  static boolean guardInProgress() {
+    return !RECEIVER_ORIGINS_IN_PROGRESS.get().isEmpty();
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     LOGGER.fine(() -> "Entered getDefaultShapes for source=" + describe(source));

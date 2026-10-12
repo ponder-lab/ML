@@ -4063,6 +4063,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * The logger of the per-source annotation-candidate lines, apart from the engine's own, so the
+   * deduplicated candidate set can be compared between runs.
+   */
+  private static final Logger ANNOTATION_CANDIDATES =
+      Logger.getLogger(PythonTensorAnalysisEngine.class.getName() + ".annotationCandidates");
+
+  /**
    * Records the triaged wala/ML#370 shape-annotation worklist (wala/ML#735): the allocators whose
    * shape argument did not resolve, classified content-dependent vs recoverable-gap. The generators
    * accumulate the raw {@code (source, cause)} pairs during the run (see {@link
@@ -4101,6 +4108,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     byKey.forEach(
         (key, cause) -> shapeAnnotationCandidates.add(new ShapeAnnotationCandidate(key, cause)));
+    if (ANNOTATION_CANDIDATES.isLoggable(Level.FINE))
+      byKey.entrySet().stream()
+          .map(e -> e.getKey() + " " + e.getValue())
+          .sorted()
+          .forEach(line -> ANNOTATION_CANDIDATES.fine("Annotation candidate: " + line));
 
     long contentDependent =
         shapeAnnotationCandidates.stream()

@@ -7973,6 +7973,26 @@ public abstract class TensorGenerator {
       ThreadLocal.withInitial(HashSetFactory::make);
 
   /**
+   * Returns whether this thread has any generator guard frame open: the phi, rank and parameter
+   * frames here and the per-generator frames of {@link CreatorJoin}, {@link SliceBuiltinOperation},
+   * {@link ElementWiseOperation}, {@link NpTranspose} and {@link DenseCall}. A transfer may read
+   * them, so the settlement pass skips no recomputation inside one.
+   *
+   * @return {@code true} iff some guard is in progress on this thread.
+   */
+  static boolean guardsInProgress() {
+    return !PHI_FOLD_ON_STACK.get().isEmpty()
+        || !RANK_FOLDS_IN_PROGRESS.get().isEmpty()
+        || !RANK_FOLDS_REENTERED.get().isEmpty()
+        || !PARAMETER_CALLER_STACK.get().isEmpty()
+        || CreatorJoin.guardInProgress()
+        || SliceBuiltinOperation.guardInProgress()
+        || ElementWiseOperation.guardInProgress()
+        || NpTranspose.guardInProgress()
+        || DenseCall.guardInProgress();
+  }
+
+  /**
    * Resolves an attribute read as the union, over the attribute's writes on the read's receiver
    * instances, of the stored values read in their writing frames (wala/ML#1021). The field's
    * points-to set unions every allocation ever stored under the field, including those a dead
