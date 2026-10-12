@@ -18,6 +18,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import org.junit.Test;
 
 public class TensorFlowTypesTest {
@@ -212,5 +213,21 @@ public class TensorFlowTypesTest {
     // they'd collide in hash buckets — degrading `HashSet<Dimension<?>>` lookups to O(n) when
     // both kinds are stored. Verify the per-class overrides keep them in distinct buckets.
     assertNotEquals(DynamicDim.INSTANCE.hashCode(), RaggedDim.INSTANCE.hashCode());
+  }
+
+  /**
+   * The null-payload markers hash the same on every run (wala/ML#1061). A hash derived from the
+   * class object's identity differs between runs, so a hash set of tensor types holding one of
+   * these dimensions iterated in a different order on each run of the same analysis. Each marker's
+   * hash is its class name's {@link String#hashCode()}, which the language specifies, so it cannot
+   * vary between runs.
+   */
+  @Test
+  public void testNullPayloadSentinelHashCodesAreStableAcrossRuns() {
+    assertEquals(RaggedDim.class.getName().hashCode(), RaggedDim.INSTANCE.hashCode());
+    assertEquals(DynamicDim.class.getName().hashCode(), DynamicDim.INSTANCE.hashCode());
+    assertEquals(UnresolvedDim.class.getName().hashCode(), UnresolvedDim.INSTANCE.hashCode());
+    assertNotEquals(UnresolvedDim.INSTANCE.hashCode(), DynamicDim.INSTANCE.hashCode());
+    assertNotEquals(UnresolvedDim.INSTANCE.hashCode(), RaggedDim.INSTANCE.hashCode());
   }
 }
