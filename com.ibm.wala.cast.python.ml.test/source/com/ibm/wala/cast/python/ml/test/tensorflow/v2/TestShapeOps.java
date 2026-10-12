@@ -43,6 +43,7 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -2642,6 +2643,27 @@ public class TestShapeOps extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A reshape whose shape list holds an element that may be a list the concatenation model
+   * synthesized, which has no literal dimension of its own (wala/ML#1062). The reader reads that
+   * element as unresolvable rather than throwing, so the analysis completes: the result keeps the
+   * input's dtype, and the shape list's length still fixes its rank, with neither dimension known.
+   * Before, the type-feed pass asked for the reshape's rule outside the resolver and the throw
+   * aborted the whole analysis.
+   */
+  @Test
+  public void testReshapeNestedShapeElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_nested_shape_element.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new SymbolicDim("?"))))));
   }
 
   /**
