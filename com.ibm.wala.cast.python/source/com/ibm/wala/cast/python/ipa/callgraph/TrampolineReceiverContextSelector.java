@@ -11,8 +11,8 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
+import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
-import com.ibm.wala.cast.ir.ssa.AstIRFactory;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
@@ -28,23 +28,20 @@ import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
-import com.ibm.wala.ipa.callgraph.impl.Everywhere;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
-import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
-import com.ibm.wala.ssa.IRFactory;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
-import com.ibm.wala.ssa.SSAOptions;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.IntSet;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -229,7 +226,9 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * Whether any code body of the program calls {@code __delete__}, to which the front end lowers a
    * {@code del} statement, or {@code delattr}. The front end drops the target of a {@code del}, so
    * the deleted attribute's name is unknown and every deletion counts. Computed once, and only when
-   * some call's result is assigned attributes before any other use.
+   * some call's result is assigned attributes before any other use. The scan reads each body's
+   * instructions as translated, before SSA conversion, so it neither converts code bodies the
+   * analysis never reaches nor depends on their conversion succeeding.
    *
    * @param cha The class hierarchy.
    * @return {@code true} iff the program may delete an attribute.
@@ -237,14 +236,12 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
   private boolean programDeletesAttributes(IClassHierarchy cha) {
     if (this.deletesAttributes == null) {
       boolean deletes = false;
-      IRFactory<IMethod> factory = AstIRFactory.makeDefaultFactory();
       for (IClass type : cha) {
         if (deletes) break;
         if (!type.getClassLoader().getReference().equals(PythonTypes.pythonLoader)) continue;
         for (IMethod method : type.getDeclaredMethods()) {
-          if (!(method instanceof AstMethod)) continue;
-          IR ir = factory.makeIR(method, Everywhere.EVERYWHERE, SSAOptions.defaultOptions());
-          if (ir != null && callsDeletion(ir)) {
+          if (method instanceof AstMethod body && callsDeletion(body)) {
+            LOGGER.fine("Deletion called in " + body + ".");
             deletes = true;
             break;
           }
@@ -258,28 +255,53 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
 
   /**
    * Whether a code body calls {@code __delete__} or {@code delattr}: an invocation whose function
-   * is allocated as that builtin or read from a variable of its name.
+   * is a value the body defines by allocating that builtin or reading a variable of its name. The
+   * scan reads the instructions before SSA conversion, where a value may have more than one
+   * definition; any definition of a deletion counts, which only disables more.
    *
-   * @param ir The code body's IR.
+   * @param body The code body.
    * @return {@code true} iff the body calls a deletion.
    */
-  private static boolean callsDeletion(IR ir) {
-    DefUse du = new DefUse(ir);
-    for (SSAInstruction instruction : ir.getInstructions())
+  private static boolean callsDeletion(AstMethod body) {
+    Object[] instructions = body.cfg().getInstructions();
+    Set<Integer> deletions = HashSetFactory.make();
+    for (Object instruction : instructions)
+      if (instruction instanceof SSANewInstruction allocation) {
+        if (isDeletion(allocation.getConcreteType().getName().toString()))
+          deletions.add(allocation.getDef());
+      } else if (instruction instanceof AstGlobalRead global) {
+        if (isDeletion(global.getGlobalName())) deletions.add(global.getDef());
+      } else if (instruction instanceof AstLexicalRead lexical)
+        for (int i = 0; i < lexical.getAccessCount(); i++)
+          if (isDeletion(lexical.getAccess(i).variableName()))
+            deletions.add(lexical.getAccess(i).valueNumber());
+    if (deletions.isEmpty()) return false;
+    // Nothing has propagated copies yet, so follow assignments to a fixpoint: `d = delattr` and
+    // then
+    // `d(o, name)` call the deletion through the local.
+    for (boolean grew = true; grew; ) {
+      grew = false;
+      for (Object instruction : instructions)
+        if (instruction instanceof AssignInstruction assign
+            && deletions.contains(assign.getUse(0))
+            && deletions.add(assign.getDef())) grew = true;
+    }
+    for (Object instruction : instructions)
       if (instruction instanceof SSAAbstractInvokeInstruction invoke
-          && invoke.getNumberOfUses() > 0) {
-        SSAInstruction function = du.getDef(invoke.getUse(0));
-        String name = null;
-        if (function instanceof SSANewInstruction allocation)
-          name = allocation.getConcreteType().getName().toString();
-        else if (function instanceof AstGlobalRead global) name = global.getGlobalName();
-        else if (function instanceof AstLexicalRead lexical)
-          name = lexical.getAccess(0).variableName();
-        // A suffix match also takes names that merely end in these, which only disables more.
-        if (name != null && (name.endsWith(DELETE_NAME) || name.endsWith(DELATTR_NAME)))
-          return true;
-      }
+          && invoke.getNumberOfUses() > 0
+          && deletions.contains(invoke.getUse(0))) return true;
     return false;
+  }
+
+  /**
+   * Whether a name is that of a deletion builtin. A suffix match also takes names that merely end
+   * in these, which only disables more.
+   *
+   * @param name The name.
+   * @return {@code true} iff the name ends in {@code __delete__} or {@code delattr}.
+   */
+  private static boolean isDeletion(String name) {
+    return name != null && (name.endsWith(DELETE_NAME) || name.endsWith(DELATTR_NAME));
   }
 
   /** The builtin a {@code del} statement is lowered to a call of. */
