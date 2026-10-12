@@ -525,9 +525,8 @@ final class WorklistTypeResolver {
     // region its natural (reverse-topological) order and each such query runs once; only an
     // on-stack read (a cycle) returns the current value and defers to the worklist, which then
     // converges just the cycle-affected keys.
-    // Past the inline depth bound, a first-sighted query unwinds the evaluations in progress
-    // instead
-    // (see DepthUnwind), so the longest acyclic dependency chain is not the Java stack's depth.
+    // Past the inline depth bound, a first-sighted query unwinds the evaluations in progress (see
+    // DepthUnwind), so the longest acyclic dependency chain is not the Java stack's depth.
     if (!this.evaluated.contains(key) && !this.inStack.contains(key)) {
       if (this.evaluating.size() >= INLINE_DEPTH_BOUND) {
         this.depthUnwinds++;
@@ -1093,10 +1092,17 @@ final class WorklistTypeResolver {
    * Thrown by {@link #read} when a first-sighted query would nest one evaluation deeper than {@link
    * #INLINE_DEPTH_BOUND}, to unwind the evaluations in progress to the nearest {@link #unwinding}
    * caller. It carries the query and the chain of evaluations above it, which that caller evaluates
-   * deepest first, each from an empty stack, before retrying. No reader sees a value of a query
-   * that has not been evaluated, so the values are those an unbounded stack would give. An {@link
-   * Error}, so that a transfer catching {@link Exception} cannot swallow it, and without a stack
-   * trace, which would cost as much as the stack it unwinds.
+   * deepest first, each from its own depth, before retrying. No reader sees a value of a query that
+   * has not been evaluated, so on an acyclic chain the values are those an unbounded stack would
+   * give. A cycle that crosses the bound reaches the same fixpoint entered from another member: the
+   * unwound members are no longer on the stack, so the deep query evaluates one of them instead of
+   * reading its interim value. That is the cycle-entry order dependence the settlement pass ({@link
+   * #canonicalize}) removes. A discarded evaluation is rerun, so its side effects repeat: the
+   * census's count of evaluations floored by a caught exception, and its log lines, can count one
+   * query more than once on an analysis that unwinds.
+   *
+   * <p>An {@link Error}, so that a transfer catching {@link Exception} cannot swallow it, and
+   * without a stack trace, which would cost as much as the stack it unwinds.
    */
   private static final class DepthUnwind extends Error {
 
