@@ -33,6 +33,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.SummarizedMethod;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -40,7 +41,9 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.IntSet;
 import java.util.ArrayDeque;
@@ -49,6 +52,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -132,6 +136,12 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    */
   private static final String DO_METHOD_NAME = "do";
 
+  /**
+   * The method names each summary body installs on what it allocates; see {@link
+   * #installedMethods}.
+   */
+  private final Map<IMethod, Set<String>> installedMethods = HashMapFactory.make();
+
   /** Whether the program deletes an attribute anywhere; see {@link #programDeletesAttributes}. */
   private Boolean deletesAttributes;
 
@@ -143,7 +153,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     // keyed on those attributes as well, so the instance it allocates there is its own, and the
     // methods it installs under those names are left out of it (wala/ML#1044).
     if (isSummaryBody(callee)) {
-      Set<String> shadowed = this.shadowedAttributes(caller, site, callee.getClassHierarchy());
+      Set<String> shadowed = this.shadowedAttributes(caller, site, callee);
       if (!shadowed.isEmpty()) {
         LOGGER.fine(
             () ->
@@ -174,13 +184,15 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * the front end does not keep a deleted attribute's name, any deletion in the program disables
    * the rule.
    *
+   * <p>Only names the callee installs as methods count: a write of any other name shadows nothing,
+   * so the call keeps its context.
+   *
    * @param caller The calling node.
    * @param site The call site.
-   * @param cha The class hierarchy.
+   * @param callee The library summary being called.
    * @return The attribute names, empty if there are none.
    */
-  private Set<String> shadowedAttributes(
-      CGNode caller, CallSiteReference site, IClassHierarchy cha) {
+  private Set<String> shadowedAttributes(CGNode caller, CallSiteReference site, IMethod callee) {
     IR ir = caller.getIR();
     if (ir == null) return Collections.emptySet();
     SSAAbstractInvokeInstruction[] calls = ir.getCalls(site);
@@ -213,13 +225,46 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
           && write.getValue() != result
           && symbols.isStringConstant(write.getMemberRef())) {
         String name = symbols.getStringValue(write.getMemberRef());
-        if (!DO_METHOD_NAME.equals(name)) shadowed.add(name);
+        if (!DO_METHOD_NAME.equals(name) && this.installedMethods(callee).contains(name))
+          shadowed.add(name);
         continue;
       }
       break;
     }
-    if (shadowed.isEmpty() || this.programDeletesAttributes(cha)) return Collections.emptySet();
+    if (shadowed.isEmpty() || this.programDeletesAttributes(callee.getClassHierarchy()))
+      return Collections.emptySet();
     return shadowed;
+  }
+
+  /**
+   * The names a library summary installs as methods on what it allocates: the fields it writes with
+   * a method trampoline it allocates, which the summary rewrite in {@code PythonAnalysisEngine}
+   * adds after the allocation of a class that declares methods. Memoized per summary.
+   *
+   * @param callee The library summary.
+   * @return The installed method names, empty if there are none.
+   */
+  private Set<String> installedMethods(IMethod callee) {
+    return this.installedMethods.computeIfAbsent(
+        callee,
+        method -> {
+          if (!(method instanceof SummarizedMethod summary)) return Collections.emptySet();
+          IClassHierarchy cha = method.getClassHierarchy();
+          SSAInstruction[] statements = summary.getStatements();
+          Set<Integer> trampolines = new HashSet<>();
+          for (SSAInstruction statement : statements)
+            if (statement instanceof SSANewInstruction allocation
+                && cha.lookupClass(allocation.getConcreteType())
+                    instanceof PythonInstanceMethodTrampoline) trampolines.add(allocation.getDef());
+          if (trampolines.isEmpty()) return Collections.emptySet();
+          Set<String> names = new HashSet<>();
+          for (SSAInstruction statement : statements)
+            if (statement instanceof SSAPutInstruction put
+                && !put.isStatic()
+                && trampolines.contains(put.getVal()))
+              names.add(put.getDeclaredField().getName().toString());
+          return names;
+        });
   }
 
   /**

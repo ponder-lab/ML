@@ -1,11 +1,13 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static java.util.Collections.emptyList;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.util.Util;
@@ -92,6 +94,41 @@ public class TestAttributeOverMethod extends AbstractTensorTest {
         predictTargets("tf2_test_attribute_over_method_unconvertible.py", "calls_replaced");
     assertTrue(targets.toString(), targets.stream().anyMatch(t -> t.contains(LEN)));
     assertFalse(targets.toString(), targets.stream().anyMatch(t -> t.contains(MODEL_PREDICT)));
+  }
+
+  /**
+   * A write before any other use of a name the model does not install as a method shadows nothing,
+   * so the call that creates the object keeps its context.
+   */
+  @Test
+  public void testNonMethodNotKeyed() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(0, keyedNodes("tf2_test_attribute_over_non_method.py"));
+  }
+
+  /** A write over an installed method keys the call that creates the object. */
+  @Test
+  public void testMethodKeyed() throws ClassHierarchyException, CancelException, IOException {
+    assertTrue(keyedNodes("tf2_test_attribute_over_method.py") > 0);
+  }
+
+  /**
+   * Counts the call graph's nodes whose context carries {@link
+   * TrampolineReceiverContextSelector#SHADOWED_ATTRIBUTES}.
+   *
+   * @param fixture The fixture file.
+   * @return The number of keyed nodes.
+   */
+  private long keyedNodes(String fixture)
+      throws ClassHierarchyException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine = makeEngine(emptyList(), new String[] {fixture});
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    Util.addPytestEntrypoints(builder);
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    long keyed = 0;
+    for (CGNode node : CG)
+      if (node.getContext().get(TrampolineReceiverContextSelector.SHADOWED_ATTRIBUTES) != null)
+        keyed++;
+    return keyed;
   }
 
   /**
