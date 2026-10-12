@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -326,6 +327,161 @@ public class WorklistTypeResolverTest {
         });
 
     assertEquals(scalar, engine.demand("GUARD_G", transfers.get(0), true));
+  }
+
+  /**
+   * A settled cyclic query whose reads have not changed since its last settled recomputation is not
+   * recomputed by a later settlement pass: the recomputation would return the value it settled at.
+   * The second demand's own cycle runs that pass.
+   */
+  @Test
+  public void testSettledCycleNotRecomputedWhenUnchanged() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    // The check mode recomputes what the pass skips; this test counts recomputations.
+    engine.disableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = {0};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          runs[0]++;
+          engine.read("SKIP_Q", transfers.get(1), true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("SKIP_P", transfers.get(0), true);
+          return scalar;
+        });
+    assertEquals(scalar, engine.demand("SKIP_P", transfers.get(0), true));
+    int afterFirstDemand = runs[0];
+
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("SKIP_S", others.get(1), true);
+          return scalar;
+        });
+    others.add(
+        () -> {
+          engine.read("SKIP_R", others.get(0), true);
+          return scalar;
+        });
+    assertEquals(scalar, engine.demand("SKIP_R", others.get(0), true));
+
+    assertEquals(afterFirstDemand, runs[0]);
+    assertEquals(scalar, engine.demand("SKIP_P", transfers.get(0), true));
+  }
+
+  /**
+   * A settled cyclic query whose partner the settlement pass rewrote is recomputed by the next
+   * pass, as before: the partner's settled-arm value is a read that changed after the query's own
+   * settled recomputation began.
+   */
+  @Test
+  public void testSettledCycleRecomputedWhenPartnerRewritten() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // REWRITE_A passes its partner through and adds a scalar.
+    transfers.add(
+        () -> ((ShapeResult) engine.read("REWRITE_B", transfers.get(1), true)).union(scalar));
+    // REWRITE_B passes REWRITE_A through, and adds a vector only once the state is settled, as a
+    // finality-dependent arm does.
+    transfers.add(
+        () -> {
+          ShapeResult a = (ShapeResult) engine.read("REWRITE_A", transfers.get(0), true);
+          return engine.isSettling() ? a.union(vector) : a;
+        });
+    assertEquals(scalar, engine.demand("REWRITE_A", transfers.get(0), true));
+
+    // An unrelated cycle runs another settlement pass, in which REWRITE_A reads the rewritten
+    // REWRITE_B.
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("REWRITE_D", others.get(1), true);
+          return scalar;
+        });
+    others.add(
+        () -> {
+          engine.read("REWRITE_C", others.get(0), true);
+          return scalar;
+        });
+    engine.demand("REWRITE_C", others.get(0), true);
+
+    assertEquals(scalar.union(vector), engine.demand("REWRITE_A", transfers.get(0), true));
+  }
+
+  /**
+   * The reads a skip decision compares are those of the query's last settled recomputation, which a
+   * later fixpoint evaluation of the query, taking its non-final arm, does not replace.
+   */
+  @Test
+  public void testSettledReadsSurviveFixpointEvaluation() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // SNAP_K reads SNAP_S on its settled arm and SNAP_T otherwise, and is in a cycle with SNAP_J.
+    transfers.add(
+        () -> {
+          engine.read("SNAP_J", transfers.get(1), true);
+          engine.read(engine.isSettling() ? "SNAP_S" : "SNAP_T", () -> scalar, true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("SNAP_K", transfers.get(0), true);
+          return scalar;
+        });
+    engine.demand("SNAP_K", transfers.get(0), true);
+    assertTrue(engine.settledReadsOf("SNAP_K").contains("SNAP_S"));
+
+    engine.evaluateForTest("SNAP_K");
+
+    assertTrue(engine.settledReadsOf("SNAP_K").contains("SNAP_S"));
+  }
+
+  /**
+   * The check mode recomputes each query a settlement pass skips, without writing the result back,
+   * and passes when the recomputation matches the settled value.
+   */
+  @Test
+  public void testSkipCheckModeVerifiesSkips() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read("CHECK_Q", transfers.get(1), true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("CHECK_P", transfers.get(0), true);
+          return scalar;
+        });
+    engine.demand("CHECK_P", transfers.get(0), true);
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("CHECK_S", others.get(1), true);
+          return scalar;
+        });
+    others.add(
+        () -> {
+          engine.read("CHECK_R", others.get(0), true);
+          return scalar;
+        });
+    engine.demand("CHECK_R", others.get(0), true);
+
+    assertTrue(engine.checkedSkips() > 0);
   }
 
   /**
