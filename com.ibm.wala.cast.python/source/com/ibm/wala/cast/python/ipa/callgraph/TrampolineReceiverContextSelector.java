@@ -171,9 +171,11 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * name, and a write that runs before any other use of the instance shadows it for every read, so
    * a method the summary installs under that name is never seen. The writes are the ones that
    * follow the call on its normal path with nothing between them that runs code or uses the result
-   * in another way: only other such writes and reads of variables. The method may be seen again
-   * only if the attribute is deleted; since the front end does not keep a deleted attribute's name,
-   * any deletion in the program disables the rule.
+   * in another way: only other such writes and reads of variables. So the value written is one
+   * already held by a variable; a value that must be computed first (a lambda, a call, a read of
+   * the result) ends the walk. The method may be seen again only if the attribute is deleted; since
+   * the front end does not keep a deleted attribute's name, any deletion in the program disables
+   * the rule.
    *
    * @param caller The calling node.
    * @param site The call site.
@@ -273,6 +275,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
         else if (function instanceof AstGlobalRead global) name = global.getGlobalName();
         else if (function instanceof AstLexicalRead lexical)
           name = lexical.getAccess(0).variableName();
+        // A suffix match also takes names that merely end in these, which only disables more.
         if (name != null && (name.endsWith(DELETE_NAME) || name.endsWith(DELATTR_NAME)))
           return true;
       }
