@@ -225,6 +225,16 @@ final class WorklistTypeResolver {
    */
   private final Map<Object, Set<Object>> settledReads = HashMapFactory.make();
 
+  /**
+   * The queries whose last settled recomputation read their own value. {@link #read} records no
+   * edge from a query to itself, so such a read is noted here; the query's own write-back then
+   * counts as a change of an input.
+   */
+  private final Set<Object> settledSelfReaders = HashSetFactory.make();
+
+  /** Whether a query read its own value during the settled recomputation in progress. */
+  private boolean selfReadInRecomputation;
+
   /** Whether the settlement pass in progress was entered with a generator guard in progress. */
   private boolean guardedSettlement;
 
@@ -236,6 +246,15 @@ final class WorklistTypeResolver {
 
   /** The system property that turns on {@link #checkSkips}. */
   static final String CHECK_SKIPS_PROPERTY = "ariadne.typeResolution.checkSettlementSkips";
+
+  /**
+   * The system property that turns the settlement pass's skip off when {@code false}, so every
+   * cyclic query is recomputed by every pass, as before the skip.
+   */
+  static final String SETTLEMENT_SKIP_PROPERTY = "ariadne.typeResolution.settlementSkip";
+
+  /** Whether the settlement pass may skip a query; see {@link #SETTLEMENT_SKIP_PROPERTY}. */
+  private boolean skipEnabled = !"false".equals(System.getProperty(SETTLEMENT_SKIP_PROPERTY));
 
   /** The settlement census: passes, guarded passes, recomputations, skips and checked skips. */
   private long settlementPasses,
@@ -586,6 +605,7 @@ final class WorklistTypeResolver {
    */
   Object read(Object key, Supplier<Object> transfer, boolean shapeKind) {
     Object reader = this.evaluating.peek();
+    if (this.settling && reader != null && reader.equals(key)) this.selfReadInRecomputation = true;
     if (reader != null && !reader.equals(key)) {
       this.reads.computeIfAbsent(reader, k -> HashSetFactory.make()).add(key);
       this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
@@ -999,6 +1019,7 @@ final class WorklistTypeResolver {
     if (records != null) records.clear();
     Object result;
     this.recomputationThrew = false;
+    this.selfReadInRecomputation = false;
     this.evaluating.push(key);
     this.inStack.add(key);
     try {
@@ -1048,6 +1069,8 @@ final class WorklistTypeResolver {
       return;
     }
     this.settledAt.put(key, entry);
+    if (this.selfReadInRecomputation) this.settledSelfReaders.add(key);
+    else this.settledSelfReaders.remove(key);
     Map<Object, Integer> records = this.readVersions.get(key);
     this.settledReads.put(
         key, records == null ? Collections.emptySet() : new HashSet<>(records.keySet()));
@@ -1065,10 +1088,13 @@ final class WorklistTypeResolver {
    * @return {@code true} iff the query's recomputation can be skipped.
    */
   private boolean settledInputsUnchanged(Object key) {
-    if (this.guardedSettlement) return false;
+    if (!this.skipEnabled || this.guardedSettlement) return false;
     Long at = this.settledAt.get(key);
     if (at == null) return false;
-    if (this.selfStamps.getOrDefault(key, 0L) > at) return false;
+    // A query that read itself had its own write-back as an input; any other query only its writes
+    // by an evaluation or a promotion.
+    Map<Object, Long> own = this.settledSelfReaders.contains(key) ? this.stamps : this.selfStamps;
+    if (own.getOrDefault(key, 0L) > at) return false;
     for (Object read : this.settledReads.get(key))
       if (this.stamps.getOrDefault(read, 0L) > at) return false;
     return true;
@@ -1076,7 +1102,7 @@ final class WorklistTypeResolver {
 
   /**
    * The check mode: recomputes a skipped query without writing anything back and fails if the
-   * recomputation would have replaced the settled value.
+   * recomputation would have replaced the settled value, wrote any state or deferred.
    *
    * @param key The skipped query.
    * @throws AssertionError if the recomputation differs from the settled value.
@@ -1084,8 +1110,15 @@ final class WorklistTypeResolver {
   private void checkSkip(Object key) {
     Map<Object, Integer> records = this.readVersions.get(key);
     Map<Object, Integer> saved = records == null ? null : HashMapFactory.make(records);
+    long before = this.clock;
+    boolean deferredBefore = this.reentryDeferredAtSettlement.contains(key);
     Object value = this.unwinding(() -> this.recomputeSettled(key));
     if (saved != null) this.readVersions.put(key, saved);
+    // A recomputation the skip stands for writes nothing and defers nothing; one that does breaks
+    // the skip's premise even when its value passes the comparison below.
+    if (this.clock != before || (!deferredBefore && this.reentryDeferredAtSettlement.contains(key)))
+      throw new AssertionError(
+          "A skipped settled recomputation of " + key + " wrote state or deferred.");
     Object settled = this.state.get(key);
     if (value != null
         && !value.equals(settled)
@@ -1104,6 +1137,11 @@ final class WorklistTypeResolver {
   /** Turns on the check mode of {@link #checkSkip} for this engine. */
   void enableSkipCheck() {
     this.checkSkips = true;
+  }
+
+  /** Turns off the settlement pass's skip for this engine, whatever the property says. */
+  void disableSkip() {
+    this.skipEnabled = false;
   }
 
   /**
