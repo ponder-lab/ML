@@ -174,6 +174,45 @@ public class WorklistTypeResolverTest {
     assertEquals(EnumSet.of(DType.FLOAT32), result);
   }
 
+  /**
+   * A dependency cycle longer than the inline depth bound, entered from a member with a base value,
+   * settles at that value at every member: the cycle closes at the member it was entered from, as
+   * it does on an unbounded stack, rather than being re-entered from a later member on each retry.
+   */
+  @Test(timeout = 60_000)
+  public void testCycleLongerThanInlineBound() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    Object result = engine.demand(0, ringLink(engine, 0), false);
+
+    assertEquals(EnumSet.of(DType.FLOAT32), result);
+    assertEquals(
+        EnumSet.of(DType.FLOAT32),
+        engine.demand(RING_LENGTH / 2, ringLink(engine, RING_LENGTH / 2), false));
+  }
+
+  /** The length of the ring in the long-cycle test, beyond the inline depth bound. */
+  private static final int RING_LENGTH = 1_000;
+
+  /**
+   * The transfer of one link of a dtype ring: link {@code i} reads link {@code (i + 1) mod n}, and
+   * link 0 also contributes float32.
+   *
+   * @param engine The engine.
+   * @param i The link's index, which is also its key.
+   * @return The link's transfer.
+   */
+  private static Supplier<Object> ringLink(WorklistTypeResolver engine, int i) {
+    return () -> {
+      Object next =
+          engine.read((i + 1) % RING_LENGTH, ringLink(engine, (i + 1) % RING_LENGTH), false);
+      if (i != 0) return next;
+      Set<DType> joined = EnumSet.of(DType.FLOAT32);
+      if (next instanceof Set<?> set) for (Object o : set) joined.add((DType) o);
+      return joined;
+    };
+  }
+
   /** The length of the chains in the deep-chain tests, far beyond a default thread stack. */
   private static final int DEEP_CHAIN_LENGTH = 100_000;
 

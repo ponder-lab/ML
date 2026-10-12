@@ -198,6 +198,13 @@ final class WorklistTypeResolver {
   /** Membership view of {@link #evaluating}, the inline-recursion cycle break. */
   private final Set<Object> inStack = HashSetFactory.make();
 
+  /**
+   * The queries held in the pending stacks of the {@link #unwinding} frames, with their
+   * multiplicities. They are the evaluations an unbounded stack would still have in progress, so a
+   * read of one is a cycle read, like a read of a query in {@link #inStack}.
+   */
+  private final Map<Object, Integer> unwindPending = HashMapFactory.make();
+
   /** Queries whose first (inline) evaluation has completed. */
   private final Set<Object> evaluated = HashSetFactory.make();
 
@@ -527,13 +534,14 @@ final class WorklistTypeResolver {
     // converges just the cycle-affected keys.
     // Past the inline depth bound, a first-sighted query unwinds the evaluations in progress (see
     // DepthUnwind), so the longest acyclic dependency chain is not the Java stack's depth.
-    if (!this.evaluated.contains(key) && !this.inStack.contains(key)) {
+    boolean inProgress = this.inStack.contains(key) || this.unwindPending.containsKey(key);
+    if (!this.evaluated.contains(key) && !inProgress) {
       if (this.evaluating.size() >= INLINE_DEPTH_BOUND) {
         this.depthUnwinds++;
         throw new DepthUnwind(key, this.evaluating);
       }
       this.evaluate(key);
-    } else if (this.inStack.contains(key)) this.cycleSeen = true;
+    } else if (inProgress) this.cycleSeen = true;
     // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
     // evaluation so it matches the value returned below, and an on-stack (interim) read records the
     // pre-completion version, which lags as soon as the read value grows.
@@ -1094,12 +1102,14 @@ final class WorklistTypeResolver {
    * caller. It carries the query and the chain of evaluations above it, which that caller evaluates
    * deepest first, each from its own depth, before retrying. No reader sees a value of a query that
    * has not been evaluated, so on an acyclic chain the values are those an unbounded stack would
-   * give. A cycle that crosses the bound reaches the same fixpoint entered from another member: the
-   * unwound members are no longer on the stack, so the deep query evaluates one of them instead of
-   * reading its interim value. That is the cycle-entry order dependence the settlement pass ({@link
-   * #canonicalize}) removes. A discarded evaluation is rerun, so its side effects repeat: the
-   * census's count of evaluations floored by a caught exception, and its log lines, can count one
-   * query more than once on an analysis that unwinds.
+   * give. The unwound chain stays in progress while it is pending ({@link #unwindPending}), so a
+   * cycle that crosses the bound closes where it would on an unbounded stack: a read of a pending
+   * member is a cycle read of its current value. Were the pending members read as not in progress,
+   * each retry of a cycle longer than the bound would start from its deepest member and walk the
+   * bound's length around it before unwinding again, never reaching a member in progress. A
+   * discarded evaluation is rerun, so its side effects repeat: the census's count of evaluations
+   * floored by a caught exception, and its log lines, can count one query more than once on an
+   * analysis that unwinds.
    *
    * <p>An {@link Error}, so that a transfer catching {@link Exception} cannot swallow it, and
    * without a stack trace, which would cost as much as the stack it unwinds.
@@ -1137,26 +1147,53 @@ final class WorklistTypeResolver {
    */
   private <T> T unwinding(Supplier<T> action) {
     Deque<Object> pending = new ArrayDeque<>();
-    while (true) {
-      while (!pending.isEmpty()) {
-        Object query = pending.peek();
-        if (this.evaluated.contains(query) || this.inStack.contains(query)) {
-          pending.pop();
-          continue;
+    try {
+      while (true) {
+        while (!pending.isEmpty()) {
+          Object query = pending.peek();
+          if (this.evaluated.contains(query) || this.inStack.contains(query)) {
+            this.popPending(pending);
+            continue;
+          }
+          try {
+            this.evaluate(query);
+            this.popPending(pending);
+          } catch (DepthUnwind unwind) {
+            this.pushPending(pending, unwind);
+          }
         }
         try {
-          this.evaluate(query);
-          pending.pop();
+          return action.get();
         } catch (DepthUnwind unwind) {
-          for (int i = unwind.pending.size() - 1; i >= 0; i--) pending.push(unwind.pending.get(i));
+          this.pushPending(pending, unwind);
         }
       }
-      try {
-        return action.get();
-      } catch (DepthUnwind unwind) {
-        for (int i = unwind.pending.size() - 1; i >= 0; i--) pending.push(unwind.pending.get(i));
-      }
+    } finally {
+      while (!pending.isEmpty()) this.popPending(pending);
     }
+  }
+
+  /**
+   * Pushes an unwound chain onto a pending stack, outermost first, so that its query is on top.
+   *
+   * @param pending The pending stack.
+   * @param unwind The unwind carrying the chain.
+   */
+  private void pushPending(Deque<Object> pending, DepthUnwind unwind) {
+    for (int i = unwind.pending.size() - 1; i >= 0; i--) {
+      Object query = unwind.pending.get(i);
+      pending.push(query);
+      this.unwindPending.merge(query, 1, Integer::sum);
+    }
+  }
+
+  /**
+   * Pops the top of a pending stack.
+   *
+   * @param pending The pending stack.
+   */
+  private void popPending(Deque<Object> pending) {
+    this.unwindPending.computeIfPresent(pending.pop(), (k, n) -> n == 1 ? null : n - 1);
   }
 
   private void iterate() {
