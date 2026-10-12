@@ -34,6 +34,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -888,6 +889,55 @@ public class TestMisc extends AbstractTensorTest {
             + warnings,
         warnings.stream()
             .anyMatch(w -> w.contains("driver_inert.py") && w.contains("contributed nothing")));
+  }
+
+  /**
+   * Witness for <a href="https://github.com/wala/ML/issues/1058">wala/ML#1058</a>: a constant in a
+   * points-to set is declined by the allocation-site lookup without a warning.
+   *
+   * <p>A Python literal, such as the {@code 4} in {@code shape} or the attribute name of a property
+   * read, is an ordinary points-to member, and it has no allocation site, so the lookup's {@code
+   * null} for it is the expected answer, not a condition to report. The lookup used to log a
+   * warning for every constant it was asked about, and a generator transfer reruns on every
+   * re-evaluation, so a whole-program analysis repeated the same line millions of times. The type
+   * assertion pins that the result is the one the analysis computed before.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testConstantAllocationLookupIsQuiet() throws Exception {
+    Logger logger = Logger.getLogger(Util.class.getName());
+    List<String> warnings = new ArrayList<>();
+    Handler handler =
+        new Handler() {
+          @Override
+          public void publish(LogRecord record) {
+            if (record.getLevel().intValue() >= Level.WARNING.intValue())
+              warnings.add(record.getMessage());
+          }
+
+          @Override
+          public void flush() {}
+
+          @Override
+          public void close() {}
+        };
+    logger.addHandler(handler);
+    try {
+      test(
+          "tf2_test_negative_tuple_subscript.py",
+          "consume_positive",
+          1,
+          1,
+          Map.of(2, Set.of(TensorType.of(FLOAT_64, 4))));
+    } finally {
+      logger.removeHandler(handler);
+    }
+
+    assertTrue(
+        "Expecting no warning for a constant points-to member (wala/ML#1058). Warnings: "
+            + warnings,
+        warnings.stream().noneMatch(w -> w.startsWith("Can't extract AllocationSiteInNode")));
   }
 
   /**
