@@ -2646,6 +2646,23 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A reshape whose shape is a constant over a list concatenation, {@code tf.constant([4] + [6])}
+   * (wala/ML#1062): the constant's value is a list the concatenation model synthesizes, with no
+   * literal dimension of its own, so the reader reads it as unresolvable rather than throwing, and
+   * the analysis completes.
+   */
+  @Test
+  public void testReshapeConstantConcatShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_constant_concat_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * A reshape whose shape list holds an element that may be a list the concatenation model
    * synthesized, which has no literal dimension of its own (wala/ML#1062). The reader reads that
    * element as unresolvable rather than throwing, so the analysis completes: the result keeps the
