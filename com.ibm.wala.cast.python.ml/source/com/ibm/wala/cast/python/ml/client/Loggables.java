@@ -7,6 +7,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.util.intset.OrdinalSet;
 
 /**
@@ -50,6 +51,10 @@ final class Loggables {
     if (pk instanceof InstanceFieldKey) {
       InstanceFieldKey ifk = (InstanceFieldKey) pk;
       return ifk.getField().getName() + " on " + describe(ifk.getInstanceKey());
+    }
+    if (pk instanceof ReturnValueKey) {
+      ReturnValueKey rvk = (ReturnValueKey) pk;
+      return "return value of " + signature(rvk.getNode());
     }
     return pk.getClass().getSimpleName();
   }

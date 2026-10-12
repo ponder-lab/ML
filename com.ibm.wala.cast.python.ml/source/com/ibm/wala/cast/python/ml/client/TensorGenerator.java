@@ -564,6 +564,34 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Reads a part of a shape argument the reader reaches inside it: a nested element, a dictionary
+   * value, a constant's value or a spec's shape. A part with no literal shape evidence of its own,
+   * such as a list the concatenation or repetition model synthesized or a starred literal, is a
+   * form the reader cannot resolve, so the shape is ⊤, as for any other unrecognized form
+   * (wala/ML#471, wala/ML#1062). Only the argument itself is held to the entry contract.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The part's points-to set.
+   * @param onWalk The containers whose elements are being read.
+   * @return As {@link #getShapesFromShapeArgument(PropagationCallGraphBuilder, Iterable)}, or
+   *     {@code null} (⊤) when the part holds no literal shape evidence.
+   */
+  private Set<List<Dimension<?>>> readNestedShapeArgument(
+      PropagationCallGraphBuilder builder,
+      Iterable<InstanceKey> pointsToSet,
+      Set<InstanceKey> onWalk) {
+    if (!hasLiteralShapeEvidence(builder, pointsToSet)) {
+      LOGGER.fine(
+          () ->
+              "Shape argument part without literal evidence in source: "
+                  + describe(this.getSource())
+                  + "; returning ⊤.");
+      return null;
+    }
+    return this.getShapesFromShapeArgument(builder, pointsToSet, onWalk);
+  }
+
+  /**
    * Reads a shape argument, carrying the containers already on the walk (wala/ML#990). A list
    * rebuilt around its previous value in a loop ({@code shape = [shape, 2]}) is one abstract object
    * that contains itself, and reading its nested elements recursed without end. A container met
@@ -640,8 +668,7 @@ public abstract class TensorGenerator {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
               OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
               if (fieldPts == null || fieldPts.isEmpty()) continue;
-              Set<List<Dimension<?>>> sub =
-                  this.getShapesFromShapeArgument(builder, fieldPts, onWalk);
+              Set<List<Dimension<?>>> sub = this.readNestedShapeArgument(builder, fieldPts, onWalk);
               if (sub == null) return null;
               ret.addAll(sub);
             }
@@ -744,10 +771,9 @@ public abstract class TensorGenerator {
                     || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
                     || innerReference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
                   // Nested tuple/list or Spec. Recurse on the same walk, which reads an element
-                  // already
-                  // being read as unresolvable (wala/ML#990).
+                  // already being read as unresolvable (wala/ML#990).
                   Set<List<Dimension<?>>> nestedShapes =
-                      this.getShapesFromShapeArgument(
+                      this.readNestedShapeArgument(
                           builder, Collections.singleton(instanceFieldIK), onWalk);
 
                   if (nestedShapes == null) return null;
@@ -922,7 +948,7 @@ public abstract class TensorGenerator {
           }
           if (valuePts == null || valuePts.isEmpty()) return null;
           Set<List<Dimension<?>>> constantShapes =
-              this.getShapesFromShapeArgument(builder, valuePts, onWalk);
+              this.readNestedShapeArgument(builder, valuePts, onWalk);
           if (constantShapes == null) return null;
           ret.addAll(constantShapes);
         } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
@@ -945,7 +971,7 @@ public abstract class TensorGenerator {
           OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
           if (shapePts == null || shapePts.isEmpty()) return null;
           Set<List<Dimension<?>>> specShapes =
-              this.getShapesFromShapeArgument(builder, shapePts, onWalk);
+              this.readNestedShapeArgument(builder, shapePts, onWalk);
           if (specShapes == null) return null;
           ret.addAll(specShapes);
         } else {
