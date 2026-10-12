@@ -265,7 +265,10 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    */
   private static boolean callsDeletion(AstMethod body) {
     // A body without instructions to read cannot be ruled out.
-    if (body.cfg() == null) return true;
+    if (body.cfg() == null) {
+      LOGGER.fine(() -> "No instructions to read in " + body + "; counting it as a deletion.");
+      return true;
+    }
     Object[] instructions = body.cfg().getInstructions();
     Set<Integer> deletions = HashSetFactory.make();
     for (Object instruction : instructions)
@@ -279,9 +282,8 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
           if (isDeletion(lexical.getAccess(i).variableName()))
             deletions.add(lexical.getAccess(i).valueNumber());
     if (deletions.isEmpty()) return false;
-    // Nothing has propagated copies yet, so follow assignments to a fixpoint: `d = delattr` and
-    // then
-    // `d(o, name)` call the deletion through the local.
+    // Nothing has propagated copies yet, so follow assignments to a fixpoint, since a call such as
+    // `d(o, name)` after `d = delattr` reaches the deletion through the local.
     for (boolean grew = true; grew; ) {
       grew = false;
       for (Object instruction : instructions)
