@@ -743,9 +743,22 @@ public abstract class TensorGenerator {
                     || innerReference.equals(TensorFlowTypes.TENSOR_SPEC)
                     || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
                     || innerReference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
+                  // A nested element with no literal evidence of its own (a list the concatenation
+                  // or repetition model synthesized, or a starred literal) is a form the reader
+                  // cannot resolve, so the shape is ⊤, as for any other unrecognized nested form
+                  // (wala/ML#471, wala/ML#1062).
+                  if (!hasLiteralShapeEvidence(builder, Collections.singleton(instanceFieldIK))) {
+                    LOGGER.fine(
+                        () ->
+                            "Nested shape element without literal evidence at position "
+                                + fieldIndex
+                                + ": "
+                                + describe(instanceFieldIK)
+                                + "; returning ⊤.");
+                    return null;
+                  }
                   // Nested tuple/list or Spec. Recurse on the same walk, which reads an element
-                  // already
-                  // being read as unresolvable (wala/ML#990).
+                  // already being read as unresolvable (wala/ML#990).
                   Set<List<Dimension<?>>> nestedShapes =
                       this.getShapesFromShapeArgument(
                           builder, Collections.singleton(instanceFieldIK), onWalk);
