@@ -417,6 +417,96 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A settled cyclic query that reads itself is recomputed by the next pass after the pass wrote it
+   * back, as before: its own written value is an input of its recomputation, though the engine
+   * records no read edge from a query to itself.
+   */
+  @Test
+  public void testSelfReadingCycleRecomputedAfterOwnWriteBack() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // SELF_A reads itself and SELF_B. Once settled, it adds a vector, and a matrix once it holds
+    // the
+    // vector, so one settled recomputation does not reach its own fixpoint.
+    transfers.add(
+        () -> {
+          ShapeResult self = (ShapeResult) engine.read("SELF_A", transfers.get(0), true);
+          ShapeResult b = (ShapeResult) engine.read("SELF_B", transfers.get(1), true);
+          if (!engine.isSettling()) return b.union(scalar);
+          return self.members().containsAll(vector.members())
+              ? self.union(matrix)
+              : self.union(vector);
+        });
+    transfers.add(
+        () -> {
+          engine.read("SELF_A", transfers.get(0), true);
+          return scalar;
+        });
+    engine.demand("SELF_A", transfers.get(0), true);
+
+    // An unrelated cycle runs another settlement pass.
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("SELF_D", others.get(1), true);
+          return scalar;
+        });
+    others.add(
+        () -> {
+          engine.read("SELF_C", others.get(0), true);
+          return scalar;
+        });
+    engine.demand("SELF_C", others.get(0), true);
+
+    assertEquals(
+        scalar.union(vector).union(matrix), engine.demand("SELF_A", transfers.get(0), true));
+  }
+
+  /** With the skip off, a later settlement pass recomputes a settled cycle, as before the skip. */
+  @Test
+  public void testSettlementSkipCanBeTurnedOff() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkip();
+    engine.disableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = {0};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          runs[0]++;
+          engine.read("OFF_Q", transfers.get(1), true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("OFF_P", transfers.get(0), true);
+          return scalar;
+        });
+    engine.demand("OFF_P", transfers.get(0), true);
+    int afterFirstDemand = runs[0];
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("OFF_S", others.get(1), true);
+          return scalar;
+        });
+    others.add(
+        () -> {
+          engine.read("OFF_R", others.get(0), true);
+          return scalar;
+        });
+    engine.demand("OFF_R", others.get(0), true);
+
+    assertTrue(runs[0] > afterFirstDemand);
+  }
+
+  /**
    * The reads a skip decision compares are those of the query's last settled recomputation, which a
    * later fixpoint evaluation of the query, taking its non-final arm, does not replace.
    */
