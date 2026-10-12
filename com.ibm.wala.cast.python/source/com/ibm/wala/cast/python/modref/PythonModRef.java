@@ -6,8 +6,8 @@ import com.ibm.wala.cast.ir.ssa.AstGlobalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.classLoader.IField;
-import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -15,10 +15,99 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.modref.ExtendedHeapModel;
+import com.ibm.wala.ipa.slicer.HeapExclusions;
+import com.ibm.wala.util.collections.HashMapFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 public class PythonModRef extends AstModRef<InstanceKey> {
+
+  /**
+   * The fields of a pointer analysis's {@link StaticFieldKey}s, indexed by name on first use, so
+   * that a global write finds its keys without reading every pointer key of the analysis
+   * (https://github.com/wala/ML/issues/1063).
+   */
+  private static final class StaticFields {
+
+    /** The pointer analysis whose static fields these are. */
+    private final PointerAnalysis<?> pa;
+
+    /** The fields by name, or {@code null} before the first lookup. */
+    private Map<String, List<IField>> byName;
+
+    private StaticFields(PointerAnalysis<?> pa) {
+      this.pa = pa;
+    }
+
+    /**
+     * The fields of the analysis's static field keys with the given name.
+     *
+     * @param name The name of a global variable.
+     * @return The fields named {@code name}.
+     */
+    private List<IField> named(String name) {
+      if (this.byName == null) {
+        this.byName = HashMapFactory.make();
+        for (PointerKey pk : this.pa.getPointerKeys())
+          if (pk instanceof StaticFieldKey) {
+            IField field = ((StaticFieldKey) pk).getField();
+            this.byName
+                .computeIfAbsent(field.getName().toString(), k -> new ArrayList<>())
+                .add(field);
+          }
+      }
+      return this.byName.getOrDefault(name, Collections.emptyList());
+    }
+  }
+
+  /**
+   * The static fields of the analysis of the {@link #computeMod} under way, shared by the visitors
+   * of all its nodes, or {@code null} outside one (https://github.com/wala/ML/issues/1063).
+   */
+  private StaticFields staticFields;
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>An instance holds the static fields of the call under way, so it is not for concurrent calls
+   * of this method.
+   */
+  @Override
+  public Map<CGNode, OrdinalSet<PointerKey>> computeMod(
+      CallGraph cg, PointerAnalysis<InstanceKey> pa, HeapExclusions heapExclude) {
+    this.staticFields = new StaticFields(pa);
+    try {
+      return super.computeMod(cg, pa, heapExclude);
+    } finally {
+      this.staticFields = null;
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>This is the factory {@link #computeMod} makes each node's visitor with. It hands a {@link
+   * PythonModVisitor} the static fields of the analysis under way, so that a subclass overriding
+   * the factory that this one delegates to shares them too.
+   */
+  @Override
+  protected ModVisitor<InstanceKey, ?> makeModVisitor(
+      CGNode n,
+      Collection<PointerKey> result,
+      PointerAnalysis<InstanceKey> pa,
+      ExtendedHeapModel h) {
+    ModVisitor<InstanceKey, ?> visitor = super.makeModVisitor(n, result, pa, h);
+    if (visitor instanceof PythonModVisitor
+        && this.staticFields != null
+        && this.staticFields.pa == pa)
+      ((PythonModVisitor<?>) visitor).staticFields = this.staticFields;
+    return visitor;
+  }
 
   public static class PythonRefVisitor<T extends InstanceKey> extends AstRefVisitor<T>
       implements PythonInstructionVisitor {
@@ -41,6 +130,12 @@ public class PythonModRef extends AstModRef<InstanceKey> {
   public static class PythonModVisitor<T extends InstanceKey> extends AstModVisitor<T>
       implements PythonInstructionVisitor {
 
+    /**
+     * The analysis's static fields: those of the {@link PythonModRef#computeMod} that made this
+     * visitor, else, made on first use, this visitor's own.
+     */
+    private StaticFields staticFields;
+
     public PythonModVisitor(
         CGNode n,
         Collection<PointerKey> result,
@@ -53,18 +148,11 @@ public class PythonModRef extends AstModRef<InstanceKey> {
     @Override
     public void visitAstGlobalWrite(AstGlobalWrite instruction) {
       super.visitAstGlobalWrite(instruction);
-      String globalName = instruction.getGlobalName();
 
-      // find the pointer key corresponding to this global.
-      for (PointerKey pk : this.pa.getPointerKeys()) {
-        if (pk instanceof StaticFieldKey) {
-          StaticFieldKey staticFieldKey = (StaticFieldKey) pk;
-          IField field = staticFieldKey.getField();
-          Atom fieldName = field.getName();
-          if (fieldName.toString().equals(globalName))
-            this.result.add(this.h.getPointerKeyForStaticField(field));
-        }
-      }
+      // find the pointer keys corresponding to this global.
+      if (this.staticFields == null) this.staticFields = new StaticFields(this.pa);
+      for (IField field : this.staticFields.named(instruction.getGlobalName()))
+        this.result.add(this.h.getPointerKeyForStaticField(field));
     }
 
     @Override
