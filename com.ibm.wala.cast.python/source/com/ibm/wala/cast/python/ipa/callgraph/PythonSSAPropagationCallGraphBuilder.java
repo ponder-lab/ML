@@ -555,6 +555,44 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return super.getPointerKeysForReflectedFieldWrite(I, F);
     }
 
+    /**
+     * Leaves out the method a library summary installs on the instance it allocates under an
+     * attribute the program assigns over before any other use of the instance (wala/ML#1044); see
+     * {@link TrampolineReceiverContextSelector#SHADOWED_ATTRIBUTES}. Every read of the attribute
+     * sees the program's value, which the program's write supplies.
+     *
+     * @param instruction The field write.
+     */
+    @Override
+    public void visitPut(SSAPutInstruction instruction) {
+      if (installsShadowedMethod(instruction)) {
+        logger.fine(
+            () -> "Leaving out shadowed method installed by " + instruction + " in " + node + ".");
+        return;
+      }
+      super.visitPut(instruction);
+    }
+
+    /**
+     * Whether a field write installs a method trampoline under an attribute that this node's
+     * context names as assigned over by the program.
+     *
+     * @param instruction The field write.
+     * @return {@code true} iff the write installs a shadowed method.
+     */
+    private boolean installsShadowedMethod(SSAPutInstruction instruction) {
+      if (instruction.isStatic()) return false;
+      ContextItem item =
+          node.getContext().get(TrampolineReceiverContextSelector.SHADOWED_ATTRIBUTES);
+      if (!(item instanceof ContextItem.Value<?> value)
+          || !(value.getValue() instanceof Set<?> attributes)
+          || !attributes.contains(instruction.getDeclaredField().getName().toString()))
+        return false;
+      return du.getDef(instruction.getVal()) instanceof SSANewInstruction allocation
+          && getClassHierarchy().lookupClass(allocation.getConcreteType())
+              instanceof PythonInstanceMethodTrampoline;
+    }
+
     private static final String GLOBAL_IDENTIFIER = "global";
 
     private static final Atom IMPORT_FUNCTION_NAME = Atom.findOrCreateAsciiAtom("import");

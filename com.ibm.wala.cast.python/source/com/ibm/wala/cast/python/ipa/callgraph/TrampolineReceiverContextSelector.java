@@ -11,6 +11,11 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
+import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstIRFactory;
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
+import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
@@ -23,20 +28,29 @@ import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.impl.Everywhere;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.ReceiverInstanceContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
+import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.IRFactory;
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAOptions;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.intset.IntSet;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -102,8 +116,185 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     this.base = base;
   }
 
+  /**
+   * The context item naming the attributes the program assigns over the methods a library summary
+   * installs on the instance it allocates, before any other use of the instance (wala/ML#1044); a
+   * {@link ContextItem.Value} of a set of attribute names. See {@link #shadowedAttributes}.
+   */
+  public static final ContextKey SHADOWED_ATTRIBUTES =
+      new ContextKey() {
+        @Override
+        public String toString() {
+          return "SHADOWED_ATTRIBUTES";
+        }
+      };
+
+  /**
+   * The name under which the summary rewrite also installs a callable's method, for the callable
+   * dispatch. It is the analysis's own name, not an attribute a program assigns over.
+   */
+  private static final String DO_METHOD_NAME = "do";
+
+  /** Whether the program deletes an attribute anywhere; see {@link #programDeletesAttributes}. */
+  private Boolean deletesAttributes;
+
   @Override
   public Context getCalleeTarget(
+      CGNode caller, CallSiteReference site, IMethod callee, InstanceKey[] actualParameters) {
+    Context context = this.select(caller, site, callee, actualParameters);
+    // A library summary whose result the program assigns attributes over before any other use is
+    // keyed on those attributes as well, so the instance it allocates there is its own, and the
+    // methods it installs under those names are left out of it (wala/ML#1044).
+    if (isSummaryBody(callee)) {
+      Set<String> shadowed = this.shadowedAttributes(caller, site, callee.getClassHierarchy());
+      if (!shadowed.isEmpty()) {
+        LOGGER.fine(
+            () ->
+                "Keying summary "
+                    + callee
+                    + " at "
+                    + site
+                    + " in "
+                    + caller
+                    + " on attributes assigned before any other use: "
+                    + shadowed
+                    + ".");
+        return new ShadowedAttributesContext(context, shadowed);
+      }
+    }
+    return context;
+  }
+
+  /**
+   * Returns the attributes the program assigns on a call's result before anything else can observe
+   * the result (wala/ML#1044). At run time an instance attribute shadows the class's method of that
+   * name, and a write that runs before any other use of the instance shadows it for every read, so
+   * a method the summary installs under that name is never seen. The writes are the ones that
+   * follow the call on its normal path with nothing between them that runs code or uses the result
+   * in another way: only other such writes and reads of variables. The method may be seen again
+   * only if the attribute is deleted; since the front end does not keep a deleted attribute's name,
+   * any deletion in the program disables the rule.
+   *
+   * @param caller The calling node.
+   * @param site The call site.
+   * @param cha The class hierarchy.
+   * @return The attribute names, empty if there are none.
+   */
+  private Set<String> shadowedAttributes(
+      CGNode caller, CallSiteReference site, IClassHierarchy cha) {
+    IR ir = caller.getIR();
+    if (ir == null) return Collections.emptySet();
+    SSAAbstractInvokeInstruction[] calls = ir.getCalls(site);
+    if (calls.length != 1 || calls[0].getNumberOfReturnValues() == 0) return Collections.emptySet();
+    SSAAbstractInvokeInstruction call = calls[0];
+    int result = call.getDef();
+    SymbolTable symbols = ir.getSymbolTable();
+    Set<String> shadowed = new HashSet<>();
+    SSACFG cfg = ir.getControlFlowGraph();
+    ISSABasicBlock block = ir.getBasicBlockForInstruction(call);
+    int index = call.iIndex() + 1;
+    SSAInstruction[] instructions = ir.getInstructions();
+    while (true) {
+      if (index > block.getLastInstructionIndex()) {
+        // The call ends its block; continue into its only normal successor, provided the call's
+        // block is that successor's only predecessor, so nothing else flows in before the writes.
+        Collection<ISSABasicBlock> successors = cfg.getNormalSuccessors(block);
+        if (successors.size() != 1) break;
+        ISSABasicBlock next = successors.iterator().next();
+        if (cfg.getPredNodeCount(next) != 1 || next.isExitBlock()) break;
+        block = next;
+        index = block.getFirstInstructionIndex();
+        continue;
+      }
+      SSAInstruction instruction = instructions[index++];
+      if (instruction == null) continue;
+      if (instruction instanceof AstLexicalRead || instruction instanceof AstGlobalRead) continue;
+      if (instruction instanceof AstPropertyWrite write
+          && write.getObjectRef() == result
+          && write.getValue() != result
+          && symbols.isStringConstant(write.getMemberRef())) {
+        String name = symbols.getStringValue(write.getMemberRef());
+        if (!DO_METHOD_NAME.equals(name)) shadowed.add(name);
+        continue;
+      }
+      break;
+    }
+    if (shadowed.isEmpty() || this.programDeletesAttributes(cha)) return Collections.emptySet();
+    return shadowed;
+  }
+
+  /**
+   * Whether any code body of the program calls {@code __delete__}, to which the front end lowers a
+   * {@code del} statement, or {@code delattr}. The front end drops the target of a {@code del}, so
+   * the deleted attribute's name is unknown and every deletion counts. Computed once, and only when
+   * some call's result is assigned attributes before any other use.
+   *
+   * @param cha The class hierarchy.
+   * @return {@code true} iff the program may delete an attribute.
+   */
+  private boolean programDeletesAttributes(IClassHierarchy cha) {
+    if (this.deletesAttributes == null) {
+      boolean deletes = false;
+      IRFactory<IMethod> factory = AstIRFactory.makeDefaultFactory();
+      for (IClass type : cha) {
+        if (deletes) break;
+        if (!type.getClassLoader().getReference().equals(PythonTypes.pythonLoader)) continue;
+        for (IMethod method : type.getDeclaredMethods()) {
+          if (!(method instanceof AstMethod)) continue;
+          IR ir = factory.makeIR(method, Everywhere.EVERYWHERE, SSAOptions.defaultOptions());
+          if (ir != null && callsDeletion(ir)) {
+            deletes = true;
+            break;
+          }
+        }
+      }
+      this.deletesAttributes = deletes;
+      LOGGER.fine("Program deletes an attribute: " + deletes + ".");
+    }
+    return this.deletesAttributes;
+  }
+
+  /**
+   * Whether a code body calls {@code __delete__} or {@code delattr}: an invocation whose function
+   * is allocated as that builtin or read from a variable of its name.
+   *
+   * @param ir The code body's IR.
+   * @return {@code true} iff the body calls a deletion.
+   */
+  private static boolean callsDeletion(IR ir) {
+    DefUse du = new DefUse(ir);
+    for (SSAInstruction instruction : ir.getInstructions())
+      if (instruction instanceof SSAAbstractInvokeInstruction invoke
+          && invoke.getNumberOfUses() > 0) {
+        SSAInstruction function = du.getDef(invoke.getUse(0));
+        String name = null;
+        if (function instanceof SSANewInstruction allocation)
+          name = allocation.getConcreteType().getName().toString();
+        else if (function instanceof AstGlobalRead global) name = global.getGlobalName();
+        else if (function instanceof AstLexicalRead lexical)
+          name = lexical.getAccess(0).variableName();
+        if (name != null && (name.endsWith(DELETE_NAME) || name.endsWith(DELATTR_NAME)))
+          return true;
+      }
+    return false;
+  }
+
+  /** The builtin a {@code del} statement is lowered to a call of. */
+  private static final String DELETE_NAME = "__delete__";
+
+  /** The builtin that deletes an attribute by name. */
+  private static final String DELATTR_NAME = "delattr";
+
+  /**
+   * Selects the context before the attribute keying of {@link #getCalleeTarget}.
+   *
+   * @param caller The calling node.
+   * @param site The call site.
+   * @param callee The method being called.
+   * @param actualParameters The receiver and arguments that are relevant to dispatch.
+   * @return The context.
+   */
+  private Context select(
       CGNode caller, CallSiteReference site, IMethod callee, InstanceKey[] actualParameters) {
     // Calls made from a synthesized constructor inherit its context (wala/ML#671).
     if (caller.getMethod() instanceof PythonConstructorFunction) return caller.getContext();
@@ -600,6 +791,49 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
           + "@"
           + this.site.getProgramCounter()
           + (this.base == null ? "" : ", Base: " + this.base);
+    }
+  }
+
+  /**
+   * A context that adds the attributes assigned over a summary's installed methods ({@link
+   * #SHADOWED_ATTRIBUTES}) to the context the selector would otherwise choose (wala/ML#1044).
+   */
+  public static final class ShadowedAttributesContext implements Context {
+
+    private final Context base;
+
+    private final Set<String> attributes;
+
+    /**
+     * @param base The context the selector would otherwise choose.
+     * @param attributes The attribute names.
+     */
+    private ShadowedAttributesContext(Context base, Set<String> attributes) {
+      this.base = base;
+      this.attributes = Set.copyOf(attributes);
+    }
+
+    @Override
+    public ContextItem get(ContextKey name) {
+      if (name == SHADOWED_ATTRIBUTES) return new ContextItem.Value<>(this.attributes);
+      return this.base.get(name);
+    }
+
+    @Override
+    public int hashCode() {
+      return 31 * this.base.hashCode() + this.attributes.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj instanceof ShadowedAttributesContext other
+          && this.base.equals(other.base)
+          && this.attributes.equals(other.attributes);
+    }
+
+    @Override
+    public String toString() {
+      return this.base + " shadowing " + this.attributes;
     }
   }
 }
