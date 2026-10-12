@@ -41,6 +41,15 @@ public class CreatorJoin extends TensorGenerator {
   private static final ThreadLocal<Set<PointerKey>> JOINS_IN_PROGRESS =
       ThreadLocal.withInitial(HashSetFactory::make);
 
+  /**
+   * Returns whether this thread has a {@link #JOINS_IN_PROGRESS} frame open.
+   *
+   * @return {@code true} iff the guard is in progress.
+   */
+  static boolean guardInProgress() {
+    return !JOINS_IN_PROGRESS.get().isEmpty();
+  }
+
   private final List<TensorGenerator> parts;
 
   /**

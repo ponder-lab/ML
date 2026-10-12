@@ -208,6 +208,15 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
       ThreadLocal.withInitial(HashSetFactory::make);
 
   /**
+   * Returns whether this thread has a {@link #OPERAND_ORIGINS_IN_PROGRESS} frame open.
+   *
+   * @return {@code true} iff the guard is in progress.
+   */
+  static boolean guardInProgress() {
+    return !OPERAND_ORIGINS_IN_PROGRESS.get().isEmpty();
+  }
+
+  /**
    * Classifies one binary-operator operand's origins. A parameter of the defining frame carries the
    * hybridization-frame origin (wala/ML#726): under tracing it is a symbolic tensor whatever its
    * eager feeds, so it classifies as {@link TensorOrigin#PARAMETER} rather than through the
