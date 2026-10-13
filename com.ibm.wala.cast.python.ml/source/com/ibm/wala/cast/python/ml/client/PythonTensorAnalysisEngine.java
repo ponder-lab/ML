@@ -12,6 +12,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 
+import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
@@ -2609,38 +2610,73 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       else if (starred >= 0 || keywords.contains("null")) return false;
       else return defaultIsNone(builder, callee, p);
     }
-    if (!isWrittenNone(builder, caller, arg, noneParams, noneStores)) return false;
+    if (!isWrittenNone(builder, caller, arg, noneParams, noneStores, dominators)) return false;
     // A parameter forwarded where a test of it against `None` has ruled `None` out does not pass
     // it.
     return !(arg <= caller.getIR().getNumberOfParameters()
         && !caller.getIR().getSymbolTable().isConstant(arg)
-        && excludesNone(caller, caller.getIR().getBasicBlockForInstruction(call), arg, dominators));
+        && excludesNone(
+            caller,
+            caller.getIR().getBasicBlockForInstruction(call),
+            arg,
+            call.iIndex(),
+            dominators));
   }
 
   /** The value {@link #excludesNone} gives a value that is {@code None}. */
   private static final Object NONE_VALUE = new Object();
 
   /**
-   * Whether a block runs only when a value is not {@code None}: some block dominating it ends in a
-   * branch that, were the value {@code None}, takes the edge away from it, as {@code if x is None:
-   * ... else: f(x)} and {@code if x is not None: f(x)} do (<a
-   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   * Whether a block runs to its end only when a value is not {@code None}, as {@link
+   * #excludesNone(CGNode, ISSABasicBlock, int, int, Map)} decides for a point after every
+   * instruction of the block.
    *
    * @param node The node.
    * @param block The block.
    * @param vn The value.
    * @param dominators The dominators of each IR read so far in this pass, which gains {@code
    *     node}'s.
-   * @return {@code true} iff {@code block} does not run when {@code vn} is {@code None}.
+   * @return {@code true} iff the end of {@code block} is not reached when {@code vn} is {@code
+   *     None}.
    */
   private static boolean excludesNone(
       CGNode node, ISSABasicBlock block, int vn, Map<IR, Dominators<ISSABasicBlock>> dominators) {
+    return excludesNone(node, block, vn, Integer.MAX_VALUE, dominators);
+  }
+
+  /**
+   * Whether a point in a block is reached only when a value is not {@code None}: some block
+   * dominating it ends in a branch that, were the value {@code None}, takes the edge away from it,
+   * as {@code if x is None: ... else: f(x)} and {@code if x is not None: f(x)} do, or an assertion
+   * before the point, in the block or in a block dominating it, fails were the value {@code None},
+   * as {@code assert x is not None} does (<a
+   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   *
+   * @param node The node.
+   * @param block The block.
+   * @param vn The value.
+   * @param before The index of the instruction the point precedes; only the assertions of {@code
+   *     block} with a lower index are read.
+   * @param dominators The dominators of each IR read so far in this pass, which gains {@code
+   *     node}'s.
+   * @return {@code true} iff the point is not reached when {@code vn} is {@code None}.
+   */
+  private static boolean excludesNone(
+      CGNode node,
+      ISSABasicBlock block,
+      int vn,
+      int before,
+      Map<IR, Dominators<ISSABasicBlock>> dominators) {
     IR ir = node.getIR();
     SSACFG cfg = ir.getControlFlowGraph();
     Dominators<ISSABasicBlock> dominatorsOfIr =
         dominators.computeIfAbsent(ir, k -> Dominators.make(cfg, cfg.entry()));
     for (Iterator<ISSABasicBlock> it = dominatorsOfIr.dominators(block); it.hasNext(); ) {
       ISSABasicBlock dominator = it.next();
+      for (SSAInstruction inst : dominator)
+        if (inst instanceof AstAssertInstruction assertion
+            && (!dominator.equals(block) || assertion.iIndex() < before)
+            && isFalsy(valueIfNone(node, assertion.getUse(0), vn, 0))) return true;
       if (dominator.equals(block)
           || dominator.getLastInstructionIndex() < 0
           || dominator.getLastInstructionIndex() < dominator.getFirstInstructionIndex()) continue;
@@ -2742,14 +2778,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * Whether a value is {@code None} the program writes, rather than the null constant the IR gives
    * a variable on a path where it is unbound, which only a phi carries: the {@code None} constant
    * itself, a parameter a call passes {@code None}, the result of a call to a program function that
-   * returns the {@code None} constant, or a field or entry read where the program stores the {@code
-   * None} constant (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   * returns the {@code None} constant, a field or entry read where the program stores the {@code
+   * None} constant, or a phi one of whose operands is such a value or a {@code None} written on the
+   * operand's path (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
    *
    * @param builder The builder.
    * @param node The node holding the value.
    * @param vn The value.
    * @param noneParams The parameters known to receive {@code None}.
    * @param noneStores The (object, field or key) pairs the program stores {@code None} to.
+   * @param dominators The dominators of each IR read so far in this pass.
    * @return {@code true} iff the value may be {@code None} the program writes.
    */
   private static boolean isWrittenNone(
@@ -2757,11 +2795,69 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       CGNode node,
       int vn,
       Set<Pair<CGNode, Integer>> noneParams,
-      Set<Pair<InstanceKey, String>> noneStores) {
+      Set<Pair<InstanceKey, String>> noneStores,
+      Map<IR, Dominators<ISSABasicBlock>> dominators) {
+    return isWrittenNone(
+        builder, node, vn, noneParams, noneStores, dominators, HashSetFactory.make());
+  }
+
+  /**
+   * As {@link #isWrittenNone(PropagationCallGraphBuilder, CGNode, int, Set, Set, Map)}, carrying
+   * the phis already being read, so a loop's phi that reaches itself decides nothing more.
+   *
+   * @param builder The builder.
+   * @param node The node holding the value.
+   * @param vn The value.
+   * @param noneParams The parameters known to receive {@code None}.
+   * @param noneStores The (object, field or key) pairs the program stores {@code None} to.
+   * @param dominators The dominators of each IR read so far in this pass.
+   * @param onWalk The phi values being read.
+   * @return {@code true} iff the value may be {@code None} the program writes.
+   */
+  private static boolean isWrittenNone(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> noneParams,
+      Set<Pair<InstanceKey, String>> noneStores,
+      Map<IR, Dominators<ISSABasicBlock>> dominators,
+      Set<Integer> onWalk) {
     IR ir = node.getIR();
     if (ir.getSymbolTable().isNullConstant(vn)) return true;
     if (vn <= ir.getNumberOfParameters()) return noneParams.contains(Pair.make(node, vn));
     SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSAPhiInstruction phi) {
+      if (!onWalk.add(vn)) return false;
+      ISSABasicBlock block = phiBlock(ir, phi);
+      if (block == null) return false;
+      List<ISSABasicBlock> predecessors = new ArrayList<>();
+      ir.getControlFlowGraph().getPredNodes(block).forEachRemaining(predecessors::add);
+      Set<String> names = HashSetFactory.make();
+      for (int index = 0; index < ir.getInstructions().length; index++)
+        names.addAll(localNames(ir, index, vn));
+      for (int i = 0; i < phi.getNumberOfUses(); i++) {
+        int use = phi.getUse(i);
+        if (ir.getSymbolTable().isNullConstant(use)) {
+          // A value no source variable names is an expression's, such as a conditional's, bound on
+          // every path, so its null operand is a written `None`. A variable's is written on the
+          // operand's path when the constant carries the variable's name at the end of the
+          // predecessor it arrives from; on a path where the variable is unbound it carries none.
+          if (names.isEmpty()) return true;
+          if (i < predecessors.size()) {
+            Set<String> operandNames =
+                localNames(ir, predecessors.get(i).getLastInstructionIndex(), use);
+            operandNames.retainAll(names);
+            if (!operandNames.isEmpty()) return true;
+          }
+        } else if (i < predecessors.size()
+            // An operand a test against `None` has ruled out on its path, as `assert x is not None`
+            // does, does not carry it, as for a forwarded parameter.
+            && !excludesNone(node, predecessors.get(i), use, dominators)
+            && isWrittenNone(builder, node, use, noneParams, noneStores, dominators, onWalk))
+          return true;
+      }
+      return false;
+    }
     if (def instanceof SSAAbstractInvokeInstruction call) {
       for (CGNode target : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
         if (!isProgramCode(target) || target.getIR() == null) continue;
@@ -2792,6 +2888,36 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, ref)))
       if (noneStores.contains(Pair.make(ik, member))) return true;
     return false;
+  }
+
+  /**
+   * The block holding a phi.
+   *
+   * @param ir The IR.
+   * @param phi The phi.
+   * @return The block, or {@code null} when no block holds it.
+   */
+  private static ISSABasicBlock phiBlock(IR ir, SSAPhiInstruction phi) {
+    for (ISSABasicBlock block : ir.getControlFlowGraph())
+      for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); )
+        if (it.next() == phi) return block;
+    return null;
+  }
+
+  /**
+   * The source names a value carries at an instruction index.
+   *
+   * @param ir The IR.
+   * @param index The instruction index.
+   * @param vn The value.
+   * @return The names, empty when the value carries none there or the index is out of range.
+   */
+  private static Set<String> localNames(IR ir, int index, int vn) {
+    Set<String> names = HashSetFactory.make();
+    if (index < 0) return names;
+    String[] localNames = ir.getLocalNames(index, vn);
+    if (localNames != null) for (String name : localNames) if (name != null) names.add(name);
+    return names;
   }
 
   /**
