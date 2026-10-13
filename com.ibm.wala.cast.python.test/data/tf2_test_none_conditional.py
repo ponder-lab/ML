@@ -1,0 +1,99 @@
+# Test that `None` written as one arm of a conditional reaches a parameter as a `None` member, passed
+# directly or forwarded, while a variable left unbound on one path does not.
+import tensorflow as tf
+
+
+def direct_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def direct(x, aligned):
+    return direct_sink(x, tf.constant(2) if aligned else None)
+
+
+def forwarded_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def forward(x, n):
+    return forwarded_sink(x, n)
+
+
+def forwarded(x, aligned):
+    return forward(x, tf.constant(2) if aligned else None)
+
+
+def statement_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def statement(x, aligned):
+    if aligned:
+        n = tf.constant(2)
+    else:
+        n = None
+    return statement_sink(x, n)
+
+
+def both_sink(x, n):
+    return x * tf.cast(n, x.dtype)
+
+
+def both(x, aligned):
+    return both_sink(x, tf.constant(2) if aligned else tf.constant(3))
+
+
+def unbound_sink(x, n):
+    return x * tf.cast(n, x.dtype)
+
+
+def unbound(x, aligned):
+    if aligned:
+        n = tf.constant(2)
+    return unbound_sink(x, n)
+
+
+def asserted_sink(x, n):
+    return x * tf.cast(n, x.dtype)
+
+
+def asserted(x, n=None, start=None):
+    if start is None:
+        assert n is not None
+    else:
+        n = tf.constant(start)
+    return asserted_sink(x, n)
+
+
+x = tf.constant([1.0, 2.0])
+
+assert direct(x, True).shape == (2,)
+assert direct(x, False).shape == (2,)
+
+assert forwarded(x, True).shape == (2,)
+assert forwarded(x, False).shape == (2,)
+
+assert statement(x, True).shape == (2,)
+assert statement(x, False).shape == (2,)
+
+assert both(x, True).shape == (2,)
+assert both(x, False).shape == (2,)
+
+assert unbound(x, True).shape == (2,)
+try:
+    unbound(x, False)
+    assert False
+except UnboundLocalError:
+    pass
+
+assert asserted(x, tf.constant(2)).shape == (2,)
+assert asserted(x, start=3).shape == (2,)
+
+assert tf.constant(2).dtype == tf.int32
+assert tf.constant(2).shape == ()
