@@ -408,4 +408,20 @@ public class TestNoneParameter extends AbstractTensorTest {
             3,
             Set.of(TensorType.of(INT_32), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /**
+   * An assertion inside a suppressing {@code with}, below a string whose lines start in column
+   * zero: the string's lines open no block, so the assertion is still read as inside the {@code
+   * with}.
+   */
+  @Test
+  public void testSuppressedAssertionBelowMultilineString()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "multiline_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
 }

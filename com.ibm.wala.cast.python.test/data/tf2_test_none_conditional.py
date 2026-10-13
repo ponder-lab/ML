@@ -148,6 +148,21 @@ class Asserter:
         return method_sink(x, n)
 
 
+def multiline_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def multiline(x, n=None):
+    with contextlib.suppress(AssertionError):
+        message = """
+n is required
+"""
+        assert n is not None, message
+    return multiline_sink(x, n)
+
+
 x = tf.constant([1.0, 2.0])
 
 assert direct(x, True).shape == (2,)
@@ -190,6 +205,9 @@ assert loop_first(x, 1).shape == (2,)
 asserter = Asserter()
 assert asserter.apply(x, tf.constant(2)).shape == (2,)
 assert asserter.apply(x, start=3).shape == (2,)
+
+assert multiline(x, tf.constant(2)).shape == (2,)
+assert multiline(x).shape == (2,)
 
 assert tf.constant(2).dtype == tf.int32
 assert tf.constant(2).shape == ()
