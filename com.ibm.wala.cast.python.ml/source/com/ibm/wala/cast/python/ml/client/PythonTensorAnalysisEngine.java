@@ -2690,12 +2690,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static final Pattern HANDLER_LINE =
       Pattern.compile("^\\s*(try\\s*:|(async\\s+)?with\\b)");
 
+  /** The end of a block opener's header: a colon, then at most a comment. */
+  private static final Pattern BLOCK_OPENER_END = Pattern.compile(":\\s*(#.*)?$");
+
   /**
    * Whether an assertion's failure may be caught in its function and execution go on after it: a
    * {@code try} or {@code with} statement encloses it, or its function's source cannot be read. The
    * IR drops a handler that only an assertion's failure reaches, since an assertion has no
    * exceptional edge, so the source is the only place it shows. A statement encloses the assertion
-   * when it is the nearest line above it indented less than the lines between.
+   * when it is the nearest line above it indented less than the lines between. A less indented line
+   * that does not end a block opener's header with {@code :} leaves the structure unread, so the
+   * failure may be caught.
    *
    * @param method The function.
    * @param assertion The assertion.
@@ -2719,6 +2724,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       LOGGER.log(Level.FINE, e, () -> "wala/ML#1040: cannot read the source of " + method + ".");
       return true;
     }
+    if (lines.isEmpty()) return true;
     int indent = indentation(lines.get(lines.size() - 1));
     for (int i = lines.size() - 2; i >= 0 && indent > 0; i--) {
       String line = lines.get(i);
@@ -2726,6 +2732,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       int lineIndent = indentation(line);
       if (lineIndent >= indent) continue;
       if (HANDLER_LINE.matcher(line).find()) return true;
+      // A less indented line that opens no block, such as a string's line or a dedented
+      // continuation, hides the structure above it.
+      if (!BLOCK_OPENER_END.matcher(line).find()) return true;
       indent = lineIndent;
     }
     return false;
