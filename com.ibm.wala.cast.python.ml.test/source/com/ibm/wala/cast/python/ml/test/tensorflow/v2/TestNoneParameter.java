@@ -318,4 +318,31 @@ public class TestNoneParameter extends AbstractTensorTest {
             3,
             Set.of(TensorType.of(INT_32), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /** A {@code None} written as one arm of a conditional expression assigned to a variable. */
+  @Test
+  public void testNamedConditionalNone()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "named_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /**
+   * A parameter left to its {@code None} default and asserted not {@code None} inside a {@code try}
+   * whose handler catches the failure and falls through to the call: the assertion does not rule
+   * {@code None} out.
+   */
+  @Test
+  public void testCaughtAssertion() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "caught_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
 }

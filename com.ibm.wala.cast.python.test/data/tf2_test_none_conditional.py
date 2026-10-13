@@ -71,6 +71,31 @@ def asserted(x, n=None, start=None):
     return asserted_sink(x, n)
 
 
+def named_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def named(x, aligned):
+    n = tf.constant(2) if aligned else None
+    return named_sink(x, n)
+
+
+def caught_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def caught(x, n=None):
+    try:
+        assert n is not None
+    except AssertionError:
+        pass
+    return caught_sink(x, n)
+
+
 x = tf.constant([1.0, 2.0])
 
 assert direct(x, True).shape == (2,)
@@ -94,6 +119,12 @@ except UnboundLocalError:
 
 assert asserted(x, tf.constant(2)).shape == (2,)
 assert asserted(x, start=3).shape == (2,)
+
+assert named(x, True).shape == (2,)
+assert named(x, False).shape == (2,)
+
+assert caught(x, tf.constant(2)).shape == (2,)
+assert caught(x).shape == (2,)
 
 assert tf.constant(2).dtype == tf.int32
 assert tf.constant(2).shape == ()
