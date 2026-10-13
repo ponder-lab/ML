@@ -131,6 +131,23 @@ def loop_first(x, k):
     return loop_first_sink(x, n)
 
 
+def method_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+class Asserter:
+    def apply(self, x, n=None, start=None):
+        if start is None:
+
+            # The caller passes `n` whenever it passes no `start`.
+            assert n is not None
+        else:
+            n = tf.constant(start)
+        return method_sink(x, n)
+
+
 x = tf.constant([1.0, 2.0])
 
 assert direct(x, True).shape == (2,)
@@ -169,6 +186,10 @@ assert param_arm(x, tf.constant(2), True).shape == (2,)
 assert param_arm(x, None, False).shape == (2,)
 
 assert loop_first(x, 1).shape == (2,)
+
+asserter = Asserter()
+assert asserter.apply(x, tf.constant(2)).shape == (2,)
+assert asserter.apply(x, start=3).shape == (2,)
 
 assert tf.constant(2).dtype == tf.int32
 assert tf.constant(2).shape == ()

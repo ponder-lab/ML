@@ -387,4 +387,25 @@ public class TestNoneParameter extends AbstractTensorTest {
         4,
         Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32))));
   }
+
+  /**
+   * A method's parameter left to its {@code None} default, asserted not {@code None} below a
+   * comment and a blank line on the one path that keeps it: the assertion rules {@code None} out.
+   * The tensor assigned from {@code tf.constant(start)} reaches the parameter with its type
+   * unknown, a separate imprecision.
+   */
+  @Test
+  public void testMethodAssertedNotNone()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "method_sink",
+        2,
+        4,
+        Map.of(
+            2,
+            Set.of(TENSOR_2_FLOAT32),
+            3,
+            Set.of(TensorType.of(INT_32), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
