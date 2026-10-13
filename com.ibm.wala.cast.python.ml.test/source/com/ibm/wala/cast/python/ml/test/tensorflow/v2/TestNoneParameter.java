@@ -345,4 +345,46 @@ public class TestNoneParameter extends AbstractTensorTest {
         4,
         Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
   }
+
+  /**
+   * A parameter left to its {@code None} default and asserted not {@code None} inside a {@code
+   * with} whose context manager suppresses the failure: the assertion does not rule {@code None}
+   * out.
+   */
+  @Test
+  public void testSuppressedAssertion()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "suppressed_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /** A parameter passed {@code None}, forwarded as one arm of a conditional expression. */
+  @Test
+  public void testConditionalParameterArm()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "param_arm_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /**
+   * A variable bound only in a loop that opens its function is unbound, not {@code None}, on the
+   * path that skips the loop.
+   */
+  @Test
+  public void testUnboundBeforeLoop() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "loop_first_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32))));
+  }
 }

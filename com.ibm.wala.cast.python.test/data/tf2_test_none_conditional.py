@@ -1,5 +1,7 @@
 # Test that `None` written as one arm of a conditional reaches a parameter as a `None` member, passed
 # directly or forwarded, while a variable left unbound on one path does not.
+import contextlib
+
 import tensorflow as tf
 
 
@@ -96,6 +98,39 @@ def caught(x, n=None):
     return caught_sink(x, n)
 
 
+def suppressed_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def suppressed(x, n=None):
+    with contextlib.suppress(AssertionError):
+        assert n is not None
+    return suppressed_sink(x, n)
+
+
+def param_arm_sink(x, n):
+    if n is None:
+        return x
+    return x * tf.cast(n, x.dtype)
+
+
+def param_arm(x, n, aligned):
+    return param_arm_sink(x, n if aligned else tf.constant(3))
+
+
+def loop_first_sink(x, n):
+    return x * tf.cast(n, x.dtype)
+
+
+def loop_first(x, k):
+    while k > 0:
+        n = tf.constant(2)
+        k -= 1
+    return loop_first_sink(x, n)
+
+
 x = tf.constant([1.0, 2.0])
 
 assert direct(x, True).shape == (2,)
@@ -125,6 +160,15 @@ assert named(x, False).shape == (2,)
 
 assert caught(x, tf.constant(2)).shape == (2,)
 assert caught(x).shape == (2,)
+
+assert suppressed(x, tf.constant(2)).shape == (2,)
+assert suppressed(x).shape == (2,)
+
+assert param_arm(x, None, True).shape == (2,)
+assert param_arm(x, tf.constant(2), True).shape == (2,)
+assert param_arm(x, None, False).shape == (2,)
+
+assert loop_first(x, 1).shape == (2,)
 
 assert tf.constant(2).dtype == tf.int32
 assert tf.constant(2).shape == ()

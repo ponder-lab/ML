@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -51,5 +52,9 @@ public class PhiBlockTest extends TestPythonMLCallGraphShape {
     assertNotSame(phi, copy);
 
     assertSame(block, PythonTensorAnalysisEngine.phiBlock(ir, copy));
+
+    // A value no phi defines, such as the function's first parameter, has no phi block.
+    assertNull(
+        PythonTensorAnalysisEngine.phiBlock(ir, new SSAPhiInstruction(phi.iIndex(), 1, uses)));
   }
 }
