@@ -2624,7 +2624,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // By index, not instance: the call may come from another IR of the node.
             caller.getIR().getControlFlowGraph().getBlockForInstruction(call.iIndex()),
             arg,
-            call.iIndex(),
             dominators));
   }
 
@@ -2632,12 +2631,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static final Object NONE_VALUE = new Object();
 
   /**
-   * Whether a block runs to its end only when a value is not {@code None}, as {@link
-   * #excludesNone(CGNode, ISSABasicBlock, int, int, Map)} decides for a point after every
-   * instruction of the block.
+   * Whether a block runs to its end only when a value is not {@code None}: some block dominating it
+   * ends in a branch that, were the value {@code None}, takes the edge away from it, as {@code if x
+   * is None: ... else: f(x)} and {@code if x is not None: f(x)} do, or an assertion in the block or
+   * in a block dominating it fails were the value {@code None}, as {@code assert x is not None}
+   * does (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). A call ends its
+   * block, so an assertion in a call's block precedes the call. An assertion is read as running,
+   * which {@code python -O} does not do, and only outside a {@code try} or {@code with} (see {@link
+   * #mayCatchAssertion}).
    *
    * @param node The node.
-   * @param block The block.
+   * @param block The block, of any IR of {@code node}.
    * @param vn The value.
    * @param dominators The dominators of each IR read so far in this pass, which gains {@code
    *     node}'s.
@@ -2646,45 +2650,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private static boolean excludesNone(
       CGNode node, ISSABasicBlock block, int vn, Map<IR, Dominators<ISSABasicBlock>> dominators) {
-    return excludesNone(node, block, vn, Integer.MAX_VALUE, dominators);
-  }
-
-  /**
-   * Whether a point in a block is reached only when a value is not {@code None}: some block
-   * dominating it ends in a branch that, were the value {@code None}, takes the edge away from it,
-   * as {@code if x is None: ... else: f(x)} and {@code if x is not None: f(x)} do, or an assertion
-   * before the point, in the block or in a block dominating it, fails were the value {@code None},
-   * as {@code assert x is not None} does (<a
-   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). An assertion is read as
-   * running, which {@code python -O} does not do, and only in a function with no {@code try}, since
-   * the IR keeps no trace of a handler that catches the assertion's failure and falls through.
-   *
-   * @param node The node.
-   * @param block The block.
-   * @param vn The value.
-   * @param before The index of the instruction the point precedes; only the assertions of {@code
-   *     block} with a lower index are read.
-   * @param dominators The dominators of each IR read so far in this pass, which gains {@code
-   *     node}'s.
-   * @return {@code true} iff the point is not reached when {@code vn} is {@code None}.
-   */
-  private static boolean excludesNone(
-      CGNode node,
-      ISSABasicBlock block,
-      int vn,
-      int before,
-      Map<IR, Dominators<ISSABasicBlock>> dominators) {
     IR ir = node.getIR();
     SSACFG cfg = ir.getControlFlowGraph();
     Dominators<ISSABasicBlock> dominatorsOfIr =
         dominators.computeIfAbsent(ir, k -> Dominators.make(cfg, cfg.entry()));
+    // This IR's block of that number: the block passed in may be another IR's (wala/ML#900).
+    block = cfg.getNode(block.getNumber());
     for (Iterator<ISSABasicBlock> it = dominatorsOfIr.dominators(block); it.hasNext(); ) {
       ISSABasicBlock dominator = it.next();
       for (SSAInstruction inst : dominator)
         if (inst instanceof AstAssertInstruction assertion
-            && (!dominator.equals(block) || assertion.iIndex() < before)
             && isFalsy(valueIfNone(node, assertion.getUse(0), vn, 0))
-            && !mayCatchAssertion(node.getMethod())) return true;
+            && !mayCatchAssertion(node.getMethod(), assertion)) return true;
       if (dominator.equals(block)
           || dominator.getLastInstructionIndex() < 0
           || dominator.getLastInstructionIndex() < dominator.getFirstInstructionIndex()) continue;
@@ -2706,34 +2683,62 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return false;
   }
 
-  /** A line opening a {@code try} statement. */
-  private static final Pattern TRY_LINE = Pattern.compile("^\\s*try\\s*:");
+  /**
+   * A line opening a {@code try} statement or a {@code with} statement, whose context manager may
+   * suppress an exception, as {@code contextlib.suppress} does.
+   */
+  private static final Pattern HANDLER_LINE =
+      Pattern.compile("^\\s*(try\\s*:|(async\\s+)?with\\b)");
 
   /**
-   * Whether a function may catch an assertion's failure: its source has a {@code try} statement, or
-   * its source cannot be read. The IR drops a handler that only an assertion's failure reaches,
-   * since an assertion has no exceptional edge, so the source is the only place it shows.
+   * Whether an assertion's failure may be caught in its function and execution go on after it: a
+   * {@code try} or {@code with} statement encloses it, or its function's source cannot be read. The
+   * IR drops a handler that only an assertion's failure reaches, since an assertion has no
+   * exceptional edge, so the source is the only place it shows. A statement encloses the assertion
+   * when it is the nearest line above it indented less than the lines between.
    *
    * @param method The function.
-   * @return {@code true} unless the function's source is read and has no {@code try}.
+   * @param assertion The assertion.
+   * @return {@code true} unless the function's source is read and no {@code try} or {@code with}
+   *     encloses the assertion.
    */
-  private static boolean mayCatchAssertion(IMethod method) {
+  private static boolean mayCatchAssertion(IMethod method, AstAssertInstruction assertion) {
     if (!(method instanceof AstMethod astMethod)) return true;
-    Position position = astMethod.getSourcePosition();
-    if (position == null || position.getFirstLine() <= 0) return true;
-    try (BufferedReader reader = new BufferedReader(position.getReader())) {
-      int line = 0;
-      for (String text = reader.readLine(); text != null; text = reader.readLine()) {
-        line++;
-        if (line < position.getFirstLine()) continue;
-        if (line > position.getLastLine()) break;
-        if (TRY_LINE.matcher(text).find()) return true;
-      }
-      return false;
+    Position function = astMethod.getSourcePosition();
+    Position at = astMethod.getSourcePosition(assertion.iIndex());
+    if (function == null || at == null || function.getFirstLine() <= 0) return true;
+    List<String> lines;
+    try (BufferedReader reader = new BufferedReader(function.getReader())) {
+      lines =
+          reader
+              .lines()
+              .skip(function.getFirstLine() - 1)
+              .limit(at.getFirstLine() - function.getFirstLine() + 1)
+              .toList();
     } catch (IOException | RuntimeException e) {
       LOGGER.log(Level.FINE, e, () -> "wala/ML#1040: cannot read the source of " + method + ".");
       return true;
     }
+    int indent = indentation(lines.get(lines.size() - 1));
+    for (int i = lines.size() - 2; i >= 0 && indent > 0; i--) {
+      String line = lines.get(i);
+      if (line.isBlank() || line.strip().startsWith("#")) continue;
+      int lineIndent = indentation(line);
+      if (lineIndent >= indent) continue;
+      if (HANDLER_LINE.matcher(line).find()) return true;
+      indent = lineIndent;
+    }
+    return false;
+  }
+
+  /**
+   * The number of leading whitespace characters of a line.
+   *
+   * @param line The line.
+   * @return Its indentation.
+   */
+  private static int indentation(String line) {
+    return line.length() - line.stripLeading().length();
   }
 
   /**
@@ -2868,8 +2873,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!onWalk.add(vn)) return false;
       ISSABasicBlock block = phiBlock(ir, phi);
       if (block == null) return false;
-      // Read the operands off this IR's own phi, which the predecessors below are this IR's.
-      phi = phiDefining(block, vn);
       List<ISSABasicBlock> predecessors = new ArrayList<>();
       ir.getControlFlowGraph().getPredNodes(block).forEachRemaining(predecessors::add);
       Set<String> names = HashSetFactory.make();
@@ -2883,16 +2886,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // operand's path when the constant carries the variable's name at the end of the
           // predecessor it arrives from; on a path where the variable is unbound it carries none.
           if (names.isEmpty()) return true;
-          if (i < predecessors.size()) {
-            Set<String> operandNames =
-                localNames(ir, predecessors.get(i).getLastInstructionIndex(), use);
-            operandNames.retainAll(names);
-            if (!operandNames.isEmpty()) return true;
-          }
-        } else if (i < predecessors.size()
+          Set<String> operandNames =
+              localNames(ir, predecessors.get(i).getLastInstructionIndex(), use);
+          operandNames.retainAll(names);
+          if (!operandNames.isEmpty()) return true;
+        } else if (!excludesNone(node, predecessors.get(i), use, dominators)
             // An operand a test against `None` has ruled out on its path, as `assert x is not None`
             // does, does not carry it, as for a forwarded parameter.
-            && !excludesNone(node, predecessors.get(i), use, dominators)
             && isWrittenNone(builder, node, use, noneParams, noneStores, dominators, onWalk))
           return true;
       }
@@ -2944,21 +2944,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (ISSABasicBlock block : ir.getControlFlowGraph())
       for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); )
         if (it.next().getDef() == phi.getDef()) return block;
-    return null;
-  }
-
-  /**
-   * The phi of a block that defines a value.
-   *
-   * @param block The block.
-   * @param vn The value.
-   * @return The phi, or {@code null} when none of the block's phis defines {@code vn}.
-   */
-  private static SSAPhiInstruction phiDefining(ISSABasicBlock block, int vn) {
-    for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); ) {
-      SSAPhiInstruction phi = it.next();
-      if (phi.getDef() == vn) return phi;
-    }
     return null;
   }
 
