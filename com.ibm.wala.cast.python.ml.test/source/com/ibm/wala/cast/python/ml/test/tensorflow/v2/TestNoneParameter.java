@@ -120,19 +120,18 @@ public class TestNoneParameter extends AbstractTensorTest {
 
   /**
    * A variable that is {@code None} on one branch and a tensor on the other: the IR merges the two
-   * in a phi whose {@code None} operand is the null constant it also gives an unbound path, so the
-   * {@code None} is not decided and the parameter has no {@code None} member.
-   *
-   * <p>TODO: Known gap, tracked by https://github.com/wala/ML/issues/1040.
+   * in a phi whose {@code None} operand is the null constant it also gives an unbound path. The phi
+   * is a conditional expression's, which no source variable names and which is bound on every path,
+   * so its {@code None} is written.
    */
   @Test
-  public void testPhiNoneUndecided() throws ClassHierarchyException, CancelException, IOException {
+  public void testPhiNone() throws ClassHierarchyException, CancelException, IOException {
     test(
         "tf2_test_none_parameter.py",
         "from_phi",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32, NoneType.INSTANCE)));
   }
 
   /**
@@ -233,5 +232,196 @@ public class TestNoneParameter extends AbstractTensorTest {
         2,
         3,
         Map.of(3, Set.of(TENSOR_2_FLOAT32), 4, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /** A {@code None} written as one arm of a conditional expression, passed directly. */
+  @Test
+  public void testConditionalNone() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "direct_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /**
+   * A {@code None} written as one arm of a conditional expression, forwarded through a parameter.
+   */
+  @Test
+  public void testConditionalNoneForwarded()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "forwarded_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /** A {@code None} assigned on one branch of an {@code if} statement and passed after it. */
+  @Test
+  public void testBranchAssignedNone()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "statement_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /** A conditional expression both of whose arms are tensors passes no {@code None}. */
+  @Test
+  public void testConditionalBothTensors()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "both_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32))));
+  }
+
+  /**
+   * A variable bound on one branch only and passed after it is unbound, not {@code None}, on the
+   * other, beside a conditional that writes {@code None}.
+   */
+  @Test
+  public void testConditionallyBoundBesideConditionalNone()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "unbound_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32))));
+  }
+
+  /**
+   * A parameter left to its {@code None} default, but asserted not {@code None} on the one path
+   * that keeps it, merged in a phi with a tensor assigned on the other: the phi carries no {@code
+   * None}. The tensor assigned from {@code tf.constant(start)} reaches the parameter with its type
+   * unknown, a separate imprecision.
+   */
+  @Test
+  public void testAssertedNotNoneThroughPhi()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "asserted_sink",
+        2,
+        4,
+        Map.of(
+            2,
+            Set.of(TENSOR_2_FLOAT32),
+            3,
+            Set.of(TensorType.of(INT_32), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /** A {@code None} written as one arm of a conditional expression assigned to a variable. */
+  @Test
+  public void testNamedConditionalNone()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "named_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /**
+   * A parameter left to its {@code None} default and asserted not {@code None} inside a {@code try}
+   * whose handler catches the failure and falls through to the call: the assertion does not rule
+   * {@code None} out.
+   */
+  @Test
+  public void testCaughtAssertion() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "caught_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /**
+   * A parameter left to its {@code None} default and asserted not {@code None} inside a {@code
+   * with} whose context manager suppresses the failure: the assertion does not rule {@code None}
+   * out.
+   */
+  @Test
+  public void testSuppressedAssertion()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "suppressed_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /** A parameter passed {@code None}, forwarded as one arm of a conditional expression. */
+  @Test
+  public void testConditionalParameterArm()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "param_arm_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
+  }
+
+  /**
+   * A variable bound only in a loop that opens its function is unbound, not {@code None}, on the
+   * path that skips the loop.
+   */
+  @Test
+  public void testUnboundBeforeLoop() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "loop_first_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32))));
+  }
+
+  /**
+   * A method's parameter left to its {@code None} default, asserted not {@code None} below a
+   * comment and a blank line on the one path that keeps it: the assertion rules {@code None} out.
+   * The tensor assigned from {@code tf.constant(start)} reaches the parameter with its type
+   * unknown, a separate imprecision.
+   */
+  @Test
+  public void testMethodAssertedNotNone()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "method_sink",
+        2,
+        4,
+        Map.of(
+            2,
+            Set.of(TENSOR_2_FLOAT32),
+            3,
+            Set.of(TensorType.of(INT_32), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * An assertion inside a suppressing {@code with}, below a string whose lines start in column
+   * zero: the string's lines open no block, so the assertion is still read as inside the {@code
+   * with}.
+   */
+  @Test
+  public void testSuppressedAssertionBelowMultilineString()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "multiline_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32), NoneType.INSTANCE)));
   }
 }
