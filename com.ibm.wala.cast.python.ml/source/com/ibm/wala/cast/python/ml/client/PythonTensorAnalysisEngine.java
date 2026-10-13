@@ -38,6 +38,7 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
+import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -97,7 +98,9 @@ import com.ibm.wala.util.graph.dominators.Dominators;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -114,6 +117,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
 
@@ -2617,7 +2621,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         && !caller.getIR().getSymbolTable().isConstant(arg)
         && excludesNone(
             caller,
-            caller.getIR().getBasicBlockForInstruction(call),
+            // By index, not instance: the call may come from another IR of the node.
+            caller.getIR().getControlFlowGraph().getBlockForInstruction(call.iIndex()),
             arg,
             call.iIndex(),
             dominators));
@@ -2650,7 +2655,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * as {@code if x is None: ... else: f(x)} and {@code if x is not None: f(x)} do, or an assertion
    * before the point, in the block or in a block dominating it, fails were the value {@code None},
    * as {@code assert x is not None} does (<a
-   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>).
+   * href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). An assertion is read as
+   * running, which {@code python -O} does not do, and only in a function with no {@code try}, since
+   * the IR keeps no trace of a handler that catches the assertion's failure and falls through.
    *
    * @param node The node.
    * @param block The block.
@@ -2676,7 +2683,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (SSAInstruction inst : dominator)
         if (inst instanceof AstAssertInstruction assertion
             && (!dominator.equals(block) || assertion.iIndex() < before)
-            && isFalsy(valueIfNone(node, assertion.getUse(0), vn, 0))) return true;
+            && isFalsy(valueIfNone(node, assertion.getUse(0), vn, 0))
+            && !mayCatchAssertion(node.getMethod())) return true;
       if (dominator.equals(block)
           || dominator.getLastInstructionIndex() < 0
           || dominator.getLastInstructionIndex() < dominator.getFirstInstructionIndex()) continue;
@@ -2696,6 +2704,36 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           && (notTaken.equals(block) || dominatorsOfIr.isDominatedBy(block, notTaken))) return true;
     }
     return false;
+  }
+
+  /** A line opening a {@code try} statement. */
+  private static final Pattern TRY_LINE = Pattern.compile("^\\s*try\\s*:");
+
+  /**
+   * Whether a function may catch an assertion's failure: its source has a {@code try} statement, or
+   * its source cannot be read. The IR drops a handler that only an assertion's failure reaches,
+   * since an assertion has no exceptional edge, so the source is the only place it shows.
+   *
+   * @param method The function.
+   * @return {@code true} unless the function's source is read and has no {@code try}.
+   */
+  private static boolean mayCatchAssertion(IMethod method) {
+    if (!(method instanceof AstMethod astMethod)) return true;
+    Position position = astMethod.getSourcePosition();
+    if (position == null || position.getFirstLine() <= 0) return true;
+    try (BufferedReader reader = new BufferedReader(position.getReader())) {
+      int line = 0;
+      for (String text = reader.readLine(); text != null; text = reader.readLine()) {
+        line++;
+        if (line < position.getFirstLine()) continue;
+        if (line > position.getLastLine()) break;
+        if (TRY_LINE.matcher(text).find()) return true;
+      }
+      return false;
+    } catch (IOException | RuntimeException e) {
+      LOGGER.log(Level.FINE, e, () -> "wala/ML#1040: cannot read the source of " + method + ".");
+      return true;
+    }
   }
 
   /**
@@ -2830,6 +2868,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!onWalk.add(vn)) return false;
       ISSABasicBlock block = phiBlock(ir, phi);
       if (block == null) return false;
+      // Read the operands off this IR's own phi, which the predecessors below are this IR's.
+      phi = phiDefining(block, vn);
       List<ISSABasicBlock> predecessors = new ArrayList<>();
       ir.getControlFlowGraph().getPredNodes(block).forEachRemaining(predecessors::add);
       Set<String> names = HashSetFactory.make();
@@ -2891,16 +2931,34 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * The block holding a phi.
+   * The block of an IR holding a phi, matched by the value the phi defines rather than by identity:
+   * the phi may come from a {@link DefUse} built over another IR of the same node, whose instances
+   * this IR's blocks do not hold (as for {@link TensorGenerator#computePhiArmFeasibility}, <a
+   * href="https://github.com/wala/ML/issues/900">wala/ML#900</a>).
    *
    * @param ir The IR.
    * @param phi The phi.
-   * @return The block, or {@code null} when no block holds it.
+   * @return The block, or {@code null} when no block of {@code ir} holds a phi defining the value.
    */
-  private static ISSABasicBlock phiBlock(IR ir, SSAPhiInstruction phi) {
+  static ISSABasicBlock phiBlock(IR ir, SSAPhiInstruction phi) {
     for (ISSABasicBlock block : ir.getControlFlowGraph())
       for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); )
-        if (it.next() == phi) return block;
+        if (it.next().getDef() == phi.getDef()) return block;
+    return null;
+  }
+
+  /**
+   * The phi of a block that defines a value.
+   *
+   * @param block The block.
+   * @param vn The value.
+   * @return The phi, or {@code null} when none of the block's phis defines {@code vn}.
+   */
+  private static SSAPhiInstruction phiDefining(ISSABasicBlock block, int vn) {
+    for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); ) {
+      SSAPhiInstruction phi = it.next();
+      if (phi.getDef() == vn) return phi;
+    }
     return null;
   }
 
