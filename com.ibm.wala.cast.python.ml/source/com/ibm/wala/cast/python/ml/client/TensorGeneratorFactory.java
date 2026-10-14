@@ -286,6 +286,7 @@ import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeName;
@@ -299,6 +300,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1534,18 +1536,19 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * The one call that made every value an attribute read may yield: the read's attribute is found
-   * among the writes on the instances its object may be, and each written value is traced back to
-   * the calls that made it.
+   * The calls that made the values an attribute read may yield: the read's attribute is found among
+   * the writes on the instances its object may be, and each written value is traced back to the
+   * calls that made it. A write of {@code None} makes nothing to read through, so it contributes
+   * none.
    *
    * @param node The node holding the read.
    * @param def The value's definition.
    * @param builder The propagation call graph builder.
-   * @return The variable of the one making call, or {@code null} when {@code def} is not an
-   *     attribute read with a constant name, its writes are not determinable, or they trace back to
-   *     no call or to several.
+   * @return The variables of the making calls, distinct and at least one, or {@code null} when
+   *     {@code def} is not an attribute read with a constant name, its writes are not determinable,
+   *     or a written value other than {@code None} traces back to no call.
    */
-  private static PointsToSetVariable attributeCreator(
+  private static List<PointsToSetVariable> attributeCreators(
       CGNode node, SSAInstruction def, PropagationCallGraphBuilder builder) {
     int object;
     String name;
@@ -1566,9 +1569,14 @@ public class TensorGeneratorFactory {
     if (receivers.isEmpty()) return null;
     List<Pair<CGNode, Integer>> writers =
         TensorGenerator.attributeWriters(builder, receivers, name);
-    if (writers == null || writers.isEmpty()) return null;
-    Set<PointsToSetVariable> creators = HashSetFactory.make();
+    if (writers == null) return null;
+    Set<PointsToSetVariable> creators = new LinkedHashSet<>();
     for (Pair<CGNode, Integer> writer : writers) {
+      if (writer.fst.getIR().getSymbolTable().isNullConstant(writer.snd)) continue;
+      // A write that stores the attribute's own value back, through a call returning its
+      // argument unchanged, as `self.loader = strategy.experimental_distribute_dataset(
+      // self.loader)` does, stores no value the other writes do not.
+      if (rewritesAttribute(writer.fst, writer.snd, name, builder)) continue;
       PointsToSetVariable value =
           getPointsToSetVariable(heapModel.getPointerKeyForLocal(writer.fst, writer.snd), builder);
       if (value == null) return null;
@@ -1581,7 +1589,48 @@ public class TensorGeneratorFactory {
         creators.add(creator);
       }
     }
-    return creators.size() == 1 ? creators.iterator().next() : null;
+    return creators.isEmpty() ? null : new ArrayList<>(creators);
+  }
+
+  /**
+   * Whether a value is the result of a call that returns one of its arguments unchanged, where that
+   * argument is a read of the given attribute: the call stores back what the attribute held.
+   *
+   * @param node The node holding the value.
+   * @param vn The value.
+   * @param name The attribute.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff every callee returns a parameter, and the argument bound to it is a
+   *     read of {@code name}.
+   */
+  private static boolean rewritesAttribute(
+      CGNode node, int vn, String name, PropagationCallGraphBuilder builder) {
+    if (!(node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call)) return false;
+    Set<CGNode> callees = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (callees.isEmpty()) return false;
+    for (CGNode callee : callees) {
+      IR ir = callee.getIR();
+      if (ir == null) return false;
+      Integer returned = null;
+      for (SSAInstruction inst : ir.getInstructions()) {
+        if (!(inst instanceof SSAReturnInstruction ret) || ret.getNumberOfUses() == 0) continue;
+        int value = ret.getResult();
+        if (value < 1 || value > ir.getNumberOfParameters()) return false;
+        if (returned != null && returned != value) return false;
+        returned = value;
+      }
+      if (returned == null || returned - 1 >= call.getNumberOfUses()) return false;
+      SSAInstruction argumentDef = node.getDU().getDef(call.getUse(returned - 1));
+      String read;
+      if (argumentDef instanceof PythonPropertyRead propertyRead
+          && node.getIR().getSymbolTable().isStringConstant(propertyRead.getMemberRef()))
+        read = node.getIR().getSymbolTable().getStringValue(propertyRead.getMemberRef());
+      else if (argumentDef instanceof SSAGetInstruction get && !get.isStatic())
+        read = get.getDeclaredField().getName().toString();
+      else return false;
+      if (!name.equals(read)) return false;
+    }
+    return true;
   }
 
   /**
@@ -1968,17 +2017,31 @@ public class TensorGeneratorFactory {
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+            if (iterableSrc == null) return null;
             // An iterable read off an object's attribute, as `enumerate(self.loader)` reads a
             // dataset a trainer holds, is defined by the read, not by the call that made it, and
             // the assignment graph does not cross the field. Follow the attribute's writes to the
-            // calls that made the values they store, and take that call when it is the only one:
-            // several would each give their own element.
-            PointsToSetVariable written =
-                attributeCreator(node, node.getDU().getDef(iterableVn), builder);
-            if (written != null) iterableSrc = written;
-            return (iterableSrc != null)
-                ? new EnumerateGenerator(source, tryGetGenerator(iterableSrc, builder, visited))
-                : null;
+            // calls that made the values they store: the iterable is any of them, so its element
+            // is the join of theirs.
+            List<PointsToSetVariable> written =
+                attributeCreators(node, node.getDU().getDef(iterableVn), builder);
+            TensorGenerator underlying = null;
+            if (written != null && written.size() == 1)
+              underlying = tryGetGenerator(written.get(0), builder, visited);
+            else if (written != null) {
+              List<TensorGenerator> parts = new ArrayList<>();
+              for (PointsToSetVariable creator : written) {
+                TensorGenerator part = tryGetGenerator(creator, builder, visited);
+                if (part == null) {
+                  parts = null;
+                  break;
+                }
+                parts.add(part);
+              }
+              if (parts != null) underlying = new DatasetCreatorJoin(iterableSrc, parts);
+            }
+            if (underlying == null) underlying = tryGetGenerator(iterableSrc, builder, visited);
+            return new EnumerateGenerator(source, underlying);
           }
 
           // If we're calling `iter`, the result is an iterator over the collection.

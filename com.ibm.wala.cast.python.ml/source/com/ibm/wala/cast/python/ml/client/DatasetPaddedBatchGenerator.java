@@ -124,7 +124,8 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
    *
    * @implNote A path reaching an entry of the {@code padded_shapes} argument, which mirrors the
    *     element's structure, gives that entry, padded against the upstream component's shapes and
-   *     batched. Otherwise the upstream component's shapes are batched.
+   *     batched, or an unknown shape when the entry cannot be read. A path reaching no entry
+   *     batches the upstream component's shapes.
    */
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
@@ -144,14 +145,13 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
       } catch (IllegalArgumentException e) {
         padded = null;
       }
-      if (padded != null && !padded.isEmpty()) {
-        TensorGenerator receiver = this.getReceiverGenerator(builder);
-        Set<List<Dimension<?>>> upstream =
-            receiver instanceof TupleElementProvider tep
-                ? tep.getShapesForPath(builder, path)
-                : null;
-        return this.applyBatching(padToLongest(padded, upstream), builder);
-      }
+      // An entry that cannot be read leaves the shape unknown: the padding may change the
+      // upstream component's, so falling back to it would claim a shape the batch does not have.
+      if (padded == null || padded.isEmpty()) return null;
+      TensorGenerator receiver = this.getReceiverGenerator(builder);
+      Set<List<Dimension<?>>> upstream =
+          receiver instanceof TupleElementProvider tep ? tep.getShapesForPath(builder, path) : null;
+      return this.applyBatching(padToLongest(padded, upstream), builder);
     }
     return super.getShapesForPath(builder, path);
   }
