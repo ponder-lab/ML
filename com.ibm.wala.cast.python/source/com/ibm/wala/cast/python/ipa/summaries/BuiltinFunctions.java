@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
 public class BuiltinFunctions {
@@ -562,20 +563,18 @@ public class BuiltinFunctions {
       return AstMethodReference.fnSelector.equals(selector) ? builtinCode : null;
     }
 
-    protected final Map<Atom, IField> declaredFields = HashMapFactory.make();
+    /**
+     * The fields created on a lookup miss, by name, safe to create from several threads at once.
+     */
+    protected final Map<Atom, IField> declaredFields = new ConcurrentHashMap<>();
 
     @Override
     public IField getField(final Atom name) {
-      IField x;
-      if (declaredFields.containsKey(name)) {
-        return declaredFields.get(name);
-      } else if (getSuperclass() != null && (x = getSuperclass().getField(name)) != null) {
-        return x;
-      } else {
-        declaredFields.put(name, new AstDynamicField(false, this, name, PythonTypes.Root));
-
-        return declaredFields.get(name);
-      }
+      IField x = declaredFields.get(name);
+      if (x != null) return x;
+      if (getSuperclass() != null && (x = getSuperclass().getField(name)) != null) return x;
+      return declaredFields.computeIfAbsent(
+          name, n -> new AstDynamicField(false, this, n, PythonTypes.Root));
     }
 
     @Override

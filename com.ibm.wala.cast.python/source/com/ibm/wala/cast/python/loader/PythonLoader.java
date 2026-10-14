@@ -9,6 +9,7 @@ import static java.util.stream.Collectors.toList;
 import com.ibm.wala.cast.ir.translator.AstTranslator.AstLexicalInformation;
 import com.ibm.wala.cast.ir.translator.AstTranslator.WalkContext;
 import com.ibm.wala.cast.ir.translator.TranslatorToIR;
+import com.ibm.wala.cast.loader.AstDynamicField;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.CAstAbstractModuleLoader;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
@@ -61,6 +62,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -363,7 +366,68 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     }
   }
 
-  public class PythonClass extends CoreClass implements IPythonClass {
+  /**
+   * A core class whose fields created on a lookup miss are safe to create and read from several
+   * threads at once. WALA's {@code AstDynamicPropertyClass} puts such a field into a plain map, and
+   * every miss on a Python class creates it on the root class, so a client looking fields up from
+   * parallel threads, such as a consumer checking functions in parallel, broke another thread's
+   * enumeration of them with a {@link java.util.ConcurrentModificationException}, or let a resize
+   * leave out fields that existed all along. These fields are kept in a concurrent map instead, and
+   * WALA's map, which nothing else writes, stays empty.
+   *
+   * <p>TODO: Remove when the WALA release Ariadne builds on makes {@code AstDynamicPropertyClass}
+   * thread-safe (https://github.com/wala/WALA/issues/2083).
+   */
+  public class PythonCoreClass extends CoreClass {
+
+    /** The fields created on a lookup miss, by name. */
+    private final ConcurrentMap<Atom, IField> dynamicFields = new ConcurrentHashMap<>();
+
+    /**
+     * Creates a core class.
+     *
+     * @param name The class's name.
+     * @param superName The superclass's name, or {@code null} for the root.
+     * @param loader The loader.
+     * @param sourcePosition The class's source position, or {@code null}.
+     */
+    public PythonCoreClass(
+        TypeName name,
+        TypeName superName,
+        IClassLoader loader,
+        CAstSourcePositionMap.Position sourcePosition) {
+      super(name, superName, loader, sourcePosition);
+    }
+
+    @Override
+    public IField getField(Atom name) {
+      IField field = this.dynamicFields.get(name);
+      if (field != null) return field;
+      IClass superclass = this.getSuperclass();
+      if (superclass != null && (field = superclass.getField(name)) != null) return field;
+      return this.dynamicFields.computeIfAbsent(
+          name,
+          n ->
+              new AstDynamicField(
+                  this.isStaticField(n), this, n, PythonLoader.this.getLanguage().getRootType()));
+    }
+
+    @Override
+    public Collection<IField> getDeclaredInstanceFields() {
+      Set<IField> fields = HashSetFactory.make(super.getDeclaredInstanceFields());
+      for (IField field : this.dynamicFields.values()) if (!field.isStatic()) fields.add(field);
+      return fields;
+    }
+
+    @Override
+    public Collection<IField> getDeclaredStaticFields() {
+      Set<IField> fields = HashSetFactory.make(super.getDeclaredStaticFields());
+      for (IField field : this.dynamicFields.values()) if (field.isStatic()) fields.add(field);
+      return fields;
+    }
+  }
+
+  public class PythonClass extends PythonCoreClass implements IPythonClass {
     /**
      * Insertion-ordered so declared fields keep declaration order for positional {@code
      * NamedTuple}/dataclass construction (<a
@@ -463,11 +527,12 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
   protected final CAstPattern sliceAssignOp =
       CAstPattern.parse("<top>ASSIGN_POST_OP(CALL(VAR(\"slice\"),<args>**),<value>*,<op>*)");
-  final CoreClass Root = new CoreClass(PythonTypes.rootTypeName, null, this, null);
-  final CoreClass Exception =
-      new CoreClass(PythonTypes.Exception.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass BaseException =
-      new CoreClass(
+  final PythonCoreClass Root = new PythonCoreClass(PythonTypes.rootTypeName, null, this, null);
+  final PythonCoreClass Exception =
+      new PythonCoreClass(
+          PythonTypes.Exception.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass BaseException =
+      new PythonCoreClass(
           PythonTypes.BaseException.getName(), PythonTypes.Exception.getName(), this, null);
 
   protected CAstNode rewriteSubscriptAssign(Segments s) {
@@ -649,39 +714,41 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     return false;
   }
 
-  final CoreClass CodeBody =
-      new CoreClass(PythonTypes.CodeBody.getName(), PythonTypes.rootTypeName, this, null);
-  final CoreClass lambda =
-      new CoreClass(PythonTypes.lambda.getName(), PythonTypes.CodeBody.getName(), this, null);
-  final CoreClass filter =
-      new CoreClass(PythonTypes.filter.getName(), PythonTypes.CodeBody.getName(), this, null);
-  final CoreClass comprehension =
-      new CoreClass(
+  final PythonCoreClass CodeBody =
+      new PythonCoreClass(PythonTypes.CodeBody.getName(), PythonTypes.rootTypeName, this, null);
+  final PythonCoreClass lambda =
+      new PythonCoreClass(PythonTypes.lambda.getName(), PythonTypes.CodeBody.getName(), this, null);
+  final PythonCoreClass filter =
+      new PythonCoreClass(PythonTypes.filter.getName(), PythonTypes.CodeBody.getName(), this, null);
+  final PythonCoreClass comprehension =
+      new PythonCoreClass(
           PythonTypes.comprehension.getName(), PythonTypes.CodeBody.getName(), this, null);
-  final CoreClass object =
-      new CoreClass(PythonTypes.object.getName(), PythonTypes.rootTypeName, this, null);
-  final CoreClass list =
-      new CoreClass(PythonTypes.list.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass set =
-      new CoreClass(PythonTypes.set.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass dict =
-      new CoreClass(PythonTypes.dict.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass tuple =
-      new CoreClass(PythonTypes.tuple.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass string =
-      new CoreClass(PythonTypes.string.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass trampoline =
-      new CoreClass(PythonTypes.trampoline.getName(), PythonTypes.CodeBody.getName(), this, null);
-  final CoreClass superfun =
-      new CoreClass(PythonTypes.superfun.getName(), PythonTypes.CodeBody.getName(), this, null);
-  final CoreClass iterator =
-      new CoreClass(PythonTypes.iterator.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass file =
-      new CoreClass(PythonTypes.file.getName(), PythonTypes.object.getName(), this, null);
-  final CoreClass clickDefault =
-      new CoreClass(PythonTypes.clickDefault.getName(), PythonTypes.rootTypeName, this, null);
-  final CoreClass clickDefaultString =
-      new CoreClass(
+  final PythonCoreClass object =
+      new PythonCoreClass(PythonTypes.object.getName(), PythonTypes.rootTypeName, this, null);
+  final PythonCoreClass list =
+      new PythonCoreClass(PythonTypes.list.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass set =
+      new PythonCoreClass(PythonTypes.set.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass dict =
+      new PythonCoreClass(PythonTypes.dict.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass tuple =
+      new PythonCoreClass(PythonTypes.tuple.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass string =
+      new PythonCoreClass(PythonTypes.string.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass trampoline =
+      new PythonCoreClass(
+          PythonTypes.trampoline.getName(), PythonTypes.CodeBody.getName(), this, null);
+  final PythonCoreClass superfun =
+      new PythonCoreClass(
+          PythonTypes.superfun.getName(), PythonTypes.CodeBody.getName(), this, null);
+  final PythonCoreClass iterator =
+      new PythonCoreClass(PythonTypes.iterator.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass file =
+      new PythonCoreClass(PythonTypes.file.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass clickDefault =
+      new PythonCoreClass(PythonTypes.clickDefault.getName(), PythonTypes.rootTypeName, this, null);
+  final PythonCoreClass clickDefaultString =
+      new PythonCoreClass(
           PythonTypes.clickDefaultString.getName(), PythonTypes.string.getName(), this, null);
 
   /**
