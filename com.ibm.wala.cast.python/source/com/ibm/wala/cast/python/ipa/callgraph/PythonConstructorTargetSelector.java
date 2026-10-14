@@ -280,7 +280,9 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           // its class object, the first class in that order that assigns the name winning, as for
           // methods; the receiver's class object is the callable, and a base's is read off its
           // global. Methods and inner classes are bound above and below; an instance write of the
-          // same name stores beside this one, as the heap is not ordered.
+          // same name stores beside this one, as the heap is not ordered. A name assigned to the
+          // class only outside its body, as `Cls.x = ...` elsewhere, is not among its declared
+          // fields, so it is not bound here.
           if (receiver instanceof IPythonClass) {
             Set<Atom> excluded = new HashSet<>();
             for (MethodReference r : methodReferences)
@@ -299,6 +301,10 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
               for (IField field : c.getDeclaredStaticFields()) {
                 Atom name = field.getName();
                 if (!excluded.add(name)) continue;
+                // A value Python binds or reads through a descriptor is not the instance's value;
+                // its name still shadows a base's.
+                if (c instanceof PythonLoader.PythonClass pythonClass
+                    && pythonClass.bindsOnRead(name)) continue;
                 if (classObject == 1 && c != receiver) {
                   classObject = v++;
                   ctor.addStatement(

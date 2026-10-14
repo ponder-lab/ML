@@ -93,6 +93,7 @@ import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -8246,16 +8247,14 @@ public abstract class TensorGenerator {
               return byName;
             });
     // A Python instance is allocated as an object in its class's constructor, so its class is the
-    // constructor's declaring class as well as its own type.
+    // constructor's declaring class as well as its own type. The walk stops below `object` and the
+    // root, which declare the fields of every module, import and instance alike: matching them
+    // would take every write of the name in the program as this one's.
     Set<TypeReference> classes = HashSetFactory.make();
     for (InstanceKey receiver : receivers) {
-      for (IClass c = receiver.concreteType(); c != null; c = c.getSuperclass())
-        classes.add(c.getReference());
+      addProgramClasses(receiver.concreteType(), classes);
       AllocationSiteInNode site = getAllocationSiteInNode(receiver);
-      if (site != null)
-        for (IClass c = site.getNode().getMethod().getDeclaringClass();
-            c != null;
-            c = c.getSuperclass()) classes.add(c.getReference());
+      if (site != null) addProgramClasses(site.getNode().getMethod().getDeclaringClass(), classes);
     }
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     List<Pair<CGNode, Integer>> writers = new ArrayList<>();
@@ -8264,6 +8263,21 @@ public abstract class TensorGenerator {
           || mayPointTo(pa, site.node(), site.object(), receivers))
         writers.add(Pair.make(site.node(), site.value()));
     return writers;
+  }
+
+  /**
+   * Adds a class and the classes it inherits from, stopping at {@code object} and the root.
+   *
+   * @param start The class.
+   * @param classes The classes, which gains these.
+   */
+  private static void addProgramClasses(IClass start, Set<TypeReference> classes) {
+    for (IClass c = start; c != null; c = c.getSuperclass()) {
+      TypeName name = c.getReference().getName();
+      if (name.equals(PythonTypes.object.getName()) || name.equals(PythonTypes.rootTypeName))
+        return;
+      classes.add(c.getReference());
+    }
   }
 
   /**

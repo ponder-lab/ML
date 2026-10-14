@@ -371,6 +371,26 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
      */
     Set<IField> staticFields = new java.util.LinkedHashSet<>();
 
+    /**
+     * The class-body attributes whose assigned value Python transforms when read through an
+     * instance: a function, which binds to the instance as a method, or a descriptor such as a
+     * property, which reads as its getter's value. The assignment alone cannot say which an
+     * expression naming a value is, so any such expression counts.
+     */
+    private final Set<Atom> boundOnRead = HashSetFactory.make();
+
+    /**
+     * Whether a class-body attribute's value is transformed when read through an instance, so the
+     * instance's attribute is not the class body's value.
+     *
+     * @param name The attribute.
+     * @return {@code true} iff the class body assigns the attribute a function, a name or attribute
+     *     that may be one, or a descriptor.
+     */
+    public boolean bindsOnRead(Atom name) {
+      return this.boundOnRead.contains(name);
+    }
+
     Set<MethodReference> methodTypes = HashSetFactory.make();
     private java.util.Set<TypeReference> innerTypes = HashSetFactory.make();
     Set<String> missingTypeNames;
@@ -927,8 +947,53 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     types.put(cls, new PythonClass(cls, parent, this, sourcePosition, missingTypes, bases));
   }
 
+  /** The callables whose result Python transforms on a read through an instance. */
+  private static final Set<String> DESCRIPTOR_FACTORIES =
+      Set.of(
+          "property",
+          "staticmethod",
+          "classmethod",
+          "cached_property",
+          "partialmethod",
+          "setter",
+          "getter",
+          "deleter");
+
+  /**
+   * Whether a class-body attribute's assigned expression may be a value Python transforms when read
+   * through an instance: a lambda; a name or an attribute, which may denote a function; or a call
+   * making a descriptor, such as {@code property(...)} or {@code prop.setter(...)}.
+   *
+   * @param value The assigned expression, or {@code null} for an annotation alone.
+   * @return {@code true} iff the value may bind or be a descriptor.
+   */
+  private static boolean bindsOnRead(CAstNode value) {
+    if (value == null) return false;
+    switch (value.getKind()) {
+      case CAstNode.FUNCTION_EXPR:
+      case CAstNode.VAR:
+      case CAstNode.OBJECT_REF:
+        return true;
+      case CAstNode.CALL:
+        {
+          CAstNode callee = value.getChild(0);
+          CAstNode name =
+              callee.getKind() == CAstNode.VAR
+                  ? callee.getChild(0)
+                  : callee.getKind() == CAstNode.OBJECT_REF ? callee.getChild(1) : null;
+          return name != null
+              && name.getValue() instanceof String n
+              && DESCRIPTOR_FACTORIES.contains(n);
+        }
+      default:
+        return false;
+    }
+  }
+
   public void defineField(TypeName cls, CAstEntity field) {
     assert types.containsKey(cls);
+    if (bindsOnRead(field.getAST()))
+      ((PythonClass) types.get(cls)).boundOnRead.add(Atom.findOrCreateUnicodeAtom(field.getName()));
     ((PythonClass) types.get(cls))
         .staticFields.add(
             new IField() {
