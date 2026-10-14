@@ -299,4 +299,29 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
                     UNKNOWN,
                     asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(1))))));
   }
+
+  /**
+   * A key of a dict the map function writes into its input and returns, which neither a dict the
+   * map function returns nor a {@code padded_shapes} entry names: the key's type is unknown, not
+   * the union of every key's.
+   */
+  @Test
+  public void testUnresolvedKey() throws ClassHierarchyException, CancelException, IOException {
+    test(LOAD_MAP_FILE, "rewritten_sink", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * A key of the dict a map function returns from two sites, one storing a loaded array and one a
+   * value it computes: either site's value.
+   */
+  @Test
+  public void testMapDictReturnSites()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_map_dict_sites.py",
+        "sites_sink",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null), new TensorType(INT_32, null))));
+  }
 }

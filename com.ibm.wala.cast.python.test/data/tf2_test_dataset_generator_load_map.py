@@ -1,6 +1,7 @@
 # Test that a dataset built by `from_generator` with a dict of file names, whose `map` loads each
 # file into a new dict of arrays and a second `map` rebuilds that dict, types each key a trainer
-# reads from its padded batch.
+# reads from its padded batch, and that a key no `map` return or `padded_shapes` entry names is
+# unknown.
 import numpy as np
 import tensorflow as tf
 
@@ -19,6 +20,10 @@ def local_sink(x):
 
 def built_sink(x):
     return x * 2.0
+
+
+def rewritten_sink(x):
+    return x
 
 
 def load_audio(name):
@@ -128,3 +133,24 @@ built_results = []
 for steps, batch in enumerate(built, 1):
     built_results.append(built_sink(tf.expand_dims(batch["audios"], -1)))
 assert built_results[0].dtype == tf.float32 and built_results[0].shape == (2, 7, 1)
+
+
+def frames_generator():
+    for i in range(2):
+        yield {"lengths": np.int32(4), "frames": np.ones((4, 2), dtype=np.float32)}
+
+
+def scale(items):
+    items["frames"] = items["frames"] * 2.0
+    return items
+
+
+rewritten = tf.data.Dataset.from_generator(
+    frames_generator,
+    output_types={"lengths": tf.int32, "frames": tf.float32},
+    output_shapes={"lengths": [], "frames": [4, 2]},
+)
+rewritten = rewritten.map(scale).batch(2)
+for batch in rewritten:
+    rewritten_result = rewritten_sink(batch["frames"])
+assert rewritten_result.dtype == tf.float32 and rewritten_result.shape == (2, 4, 2)
