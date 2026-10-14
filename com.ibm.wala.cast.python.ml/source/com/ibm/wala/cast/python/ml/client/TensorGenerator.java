@@ -8202,6 +8202,70 @@ public abstract class TensorGenerator {
     return writers;
   }
 
+  /** A field write: an instruction putting a value into a named field of an object. */
+  private record FieldPutSite(CGNode node, int object, int value, TypeReference declaringClass) {}
+
+  /** The field writes in the final call graph by field name, one scan per builder. */
+  private static final Map<PropagationCallGraphBuilder, Map<String, List<FieldPutSite>>>
+      FIELD_PUT_INDEX = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The field writes of the attribute that the given instances' reads of it may see, as {@code
+   * (node, value)} pairs: a write into the field of an object that may be one of the instances, and
+   * a write into the field of the instances' class or a class it inherits from, as a class body's
+   * assignment is, which an instance reads unless it shadows it. Property writes are {@link
+   * #attributeWriters}'.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph is scanned.
+   * @param receivers The instances the read's object may be.
+   * @param attributeName The attribute.
+   * @return The writes, possibly empty.
+   */
+  static List<Pair<CGNode, Integer>> fieldWriters(
+      PropagationCallGraphBuilder builder, Set<InstanceKey> receivers, String attributeName) {
+    Map<String, List<FieldPutSite>> index =
+        FIELD_PUT_INDEX.computeIfAbsent(
+            builder,
+            b -> {
+              Map<String, List<FieldPutSite>> byName = new HashMap<>();
+              for (CGNode candidate : b.getCallGraph()) {
+                IR ir = candidate.getIR();
+                if (ir == null) continue;
+                for (SSAInstruction inst : ir.getInstructions())
+                  if (inst instanceof SSAPutInstruction put && !put.isStatic())
+                    byName
+                        .computeIfAbsent(
+                            put.getDeclaredField().getName().toString(), k -> new ArrayList<>())
+                        .add(
+                            new FieldPutSite(
+                                candidate,
+                                put.getRef(),
+                                put.getVal(),
+                                put.getDeclaredField().getDeclaringClass()));
+              }
+              return byName;
+            });
+    // A Python instance is allocated as an object in its class's constructor, so its class is the
+    // constructor's declaring class as well as its own type.
+    Set<TypeReference> classes = HashSetFactory.make();
+    for (InstanceKey receiver : receivers) {
+      for (IClass c = receiver.concreteType(); c != null; c = c.getSuperclass())
+        classes.add(c.getReference());
+      AllocationSiteInNode site = getAllocationSiteInNode(receiver);
+      if (site != null)
+        for (IClass c = site.getNode().getMethod().getDeclaringClass();
+            c != null;
+            c = c.getSuperclass()) classes.add(c.getReference());
+    }
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    List<Pair<CGNode, Integer>> writers = new ArrayList<>();
+    for (FieldPutSite site : index.getOrDefault(attributeName, Collections.emptyList()))
+      if (classes.contains(site.declaringClass())
+          || mayPointTo(pa, site.node(), site.object(), receivers))
+        writers.add(Pair.make(site.node(), site.value()));
+    return writers;
+  }
+
   /**
    * Whether a local's points-to set meets the given instances.
    *

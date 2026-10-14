@@ -1537,13 +1537,12 @@ public class TensorGeneratorFactory {
 
   /**
    * The calls that made the values an attribute read may yield: the read's attribute is found among
-   * the writes on the instances its object may be, and each written value is traced back to the
-   * calls that made it. A write of {@code None} makes nothing to read through, so it contributes
-   * none.
+   * the writes that the instances its object may be can see, and each written value is traced back
+   * to the calls that made it. A write of {@code None} makes nothing to read through, so it
+   * contributes none.
    *
-   * <p>Known gap: a write of the attribute on the class, rather than on an instance, is not among
-   * an instance's writes, so the calls it stores are missed, and the join over the rest may leave
-   * out a value the read yields.
+   * <p>The writes are the property writes on the instances and the field writes on them or on their
+   * class, such as a class body's assignment.
    *
    * @param node The node holding the read.
    * @param def The value's definition.
@@ -1574,6 +1573,8 @@ public class TensorGeneratorFactory {
     List<Pair<CGNode, Integer>> writers =
         TensorGenerator.attributeWriters(builder, receivers, name);
     if (writers == null) return null;
+    writers = new ArrayList<>(writers);
+    writers.addAll(TensorGenerator.fieldWriters(builder, receivers, name));
     Set<PointsToSetVariable> creators = new LinkedHashSet<>();
     for (Pair<CGNode, Integer> writer : writers) {
       if (writer.fst.getIR().getSymbolTable().isNullConstant(writer.snd)) continue;

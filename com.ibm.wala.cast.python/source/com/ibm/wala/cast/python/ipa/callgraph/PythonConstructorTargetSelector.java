@@ -274,6 +274,50 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
           }
 
+          // An instance reads an attribute its class body assigns, or a base class body does, when
+          // it has none of its own: Python looks the name up on the instance, then on its class and
+          // the bases in method resolution order. Store each such attribute on the instance from
+          // its class object, the first class in that order that assigns the name winning, as for
+          // methods; the receiver's class object is the callable, and a base's is read off its
+          // global. Methods and inner classes are bound above and below; an instance write of the
+          // same name stores beside this one, as the heap is not ordered.
+          if (receiver instanceof IPythonClass) {
+            Set<Atom> excluded = new HashSet<>();
+            for (MethodReference r : methodReferences)
+              excluded.add(instanceFieldName(r, summaryDeclaredMethods.contains(r)));
+            for (TypeReference r : innerReferences) {
+              String typeName = r.getName().toString();
+              excluded.add(
+                  Atom.findOrCreateUnicodeAtom(typeName.substring(typeName.lastIndexOf('/') + 1)));
+            }
+            List<IClass> classes = new ArrayList<>();
+            classes.add(receiver);
+            for (IClass base : inheritedBases(receiver))
+              if (!(base instanceof PythonSummaryShellClass)) classes.add(base);
+            for (IClass c : classes) {
+              int classObject = 1;
+              for (IField field : c.getDeclaredStaticFields()) {
+                Atom name = field.getName();
+                if (!excluded.add(name)) continue;
+                if (classObject == 1 && c != receiver) {
+                  classObject = v++;
+                  ctor.addStatement(
+                      new AstGlobalRead(
+                          pc++,
+                          classObject,
+                          makeGlobalRef(
+                              c.getClassLoader(),
+                              c.getReference().getName().toString().substring(1))));
+                }
+                FieldReference attribute =
+                    FieldReference.findOrCreate(PythonTypes.Root, name, PythonTypes.Root);
+                int value = v++;
+                ctor.addStatement(insts.GetInstruction(pc++, value, classObject, attribute));
+                ctor.addStatement(insts.PutInstruction(pc++, inst, value, attribute));
+              }
+            }
+          }
+
           for (MethodReference r : methodReferences) {
             // A method declared with `@property` is a getter: the instance's attribute of that
             // name is the getter's VALUE, `inst.name = name(inst)`, not a bound method

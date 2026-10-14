@@ -480,7 +480,6 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
 
   @Override
   public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (path.size() == 1 && path.get(0) instanceof Integer) return this.yieldsTuple(builder);
     return this.component(builder, Parameters.OUTPUT_SIGNATURE, path) != null
         || this.component(builder, Parameters.OUTPUT_TYPES, path) != null;
   }
@@ -495,8 +494,6 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
-    if (path.size() == 1 && path.get(0) instanceof Integer index)
-      return this.getShapesForIndex(builder, index);
     for (Parameters parameter : List.of(Parameters.OUTPUT_SIGNATURE, Parameters.OUTPUT_SHAPES)) {
       OrdinalSet<InstanceKey> component = this.component(builder, parameter, path);
       if (component == null) continue;
@@ -518,8 +515,6 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    */
   @Override
   public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (path.size() == 1 && path.get(0) instanceof Integer index)
-      return this.getDTypesForIndex(builder, index);
     for (Parameters parameter : List.of(Parameters.OUTPUT_SIGNATURE, Parameters.OUTPUT_TYPES)) {
       OrdinalSet<InstanceKey> component = this.component(builder, parameter, path);
       if (component == null) continue;

@@ -63,27 +63,35 @@ public class DatasetCreatorJoin extends CreatorJoin implements TupleElementProvi
     return joined;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The shapes of the joined component's types.
+   */
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
-    List<TupleElementProvider> providers = this.providers();
-    if (providers == null) return null;
-    Set<List<Dimension<?>>> joined = HashSetFactory.make();
-    for (TupleElementProvider provider : providers) {
-      Set<List<Dimension<?>>> shapes = provider.getShapesForIndex(builder, index);
-      if (shapes == null) return null;
-      joined.addAll(shapes);
+    Set<TensorType> types = this.getTensorTypesForIndex(builder, index);
+    if (types == null) return null;
+    Set<List<Dimension<?>>> shapes = HashSetFactory.make();
+    for (TensorType type : types) {
+      if (type.getDims() == null) return null;
+      shapes.add(type.getDims());
     }
-    return joined;
+    return shapes;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The dtypes of the joined component's types.
+   */
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    List<TupleElementProvider> providers = this.providers();
-    if (providers == null) return EnumSet.of(DType.UNKNOWN);
-    Set<DType> joined = EnumSet.noneOf(DType.class);
-    for (TupleElementProvider provider : providers)
-      joined.addAll(provider.getDTypesForIndex(builder, index));
-    return joined;
+    Set<TensorType> types = this.getTensorTypesForIndex(builder, index);
+    if (types == null) return EnumSet.of(DType.UNKNOWN);
+    Set<DType> dtypes = EnumSet.noneOf(DType.class);
+    for (TensorType type : types) dtypes.add(type.getDType());
+    return dtypes;
   }
 
   @Override
