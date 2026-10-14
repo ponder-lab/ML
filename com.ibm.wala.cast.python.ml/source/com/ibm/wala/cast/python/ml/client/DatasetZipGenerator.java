@@ -24,7 +24,6 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -102,19 +101,6 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
     return ret;
   }
 
-  /**
-   * The generator of the dataset at an index of the zipped tuple, the first when several are
-   * possible, as before.
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
-   * @param targetIndex The index.
-   * @return The dataset's generator, or {@code null} when none is found.
-   */
-  private TensorGenerator getDatasetForIndex(PropagationCallGraphBuilder builder, int targetIndex) {
-    List<TensorGenerator> datasets = this.getDatasetsFor(builder, targetIndex);
-    return datasets.isEmpty() ? null : datasets.get(0);
-  }
-
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> datasetsPTS =
@@ -153,33 +139,54 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
     return super.getTensorTypes(builder);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The union of the element types of the datasets at the index, unknown when any of them
+   *     is.
+   */
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    TensorGenerator dsGen = getDatasetForIndex(builder, index);
-    if (dsGen != null) {
-      Set<TensorType> types = dsGen.getTensorTypes(builder);
+    Set<TensorType> ret = HashSetFactory.make();
+    for (TensorGenerator dataset : this.getDatasetsFor(builder, index)) {
+      Set<TensorType> types = dataset.getTensorTypes(builder);
       // An unknown component is a tensor of unknown shape and dtype.
-      return types == null ? Set.of(new TensorType(UNKNOWN_DTYPE, null)) : types;
+      if (types == null) return Set.of(new TensorType(UNKNOWN_DTYPE, null));
+      ret.addAll(types);
     }
-    return Collections.emptySet();
+    return ret;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The union of the element shapes of the datasets at the index, unknown when any of
+   *     them is.
+   */
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
-    TensorGenerator dsGen = getDatasetForIndex(builder, index);
-    if (dsGen != null) {
-      return dsGen.getShapes(builder);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (TensorGenerator dataset : this.getDatasetsFor(builder, index)) {
+      Set<List<Dimension<?>>> shapes = dataset.getShapes(builder);
+      if (shapes == null) return null;
+      ret.addAll(shapes);
     }
-    return Collections.emptySet();
+    return ret;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The union of the element dtypes of the datasets at the index.
+   */
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    TensorGenerator dsGen = getDatasetForIndex(builder, index);
-    if (dsGen != null) {
-      return dsGen.getDTypes(builder);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    for (TensorGenerator dataset : this.getDatasetsFor(builder, index)) {
+      Set<DType> dtypes = dataset.getDTypes(builder);
+      if (dtypes != null) ret.addAll(dtypes);
     }
-    return Collections.emptySet();
+    return ret;
   }
 
   /**
