@@ -324,4 +324,41 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_32, null), new TensorType(INT_32, null))));
   }
+
+  /**
+   * A key of the dict a map function returns, holding a tensor it allocates, read from a batch
+   * without {@code padded_shapes}: the tensor's own shape under the batch axis.
+   */
+  @Test
+  public void testMapDictAllocatedKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "concrete_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))))));
+  }
+
+  /**
+   * A key of the same dict holding a value the map function computes, which has no allocation: the
+   * computed value's shape under the batch axis.
+   */
+  @Test
+  public void testMapDictComputedKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "computed_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(INT_32, 2), new TensorType(INT_32, asList(new SymbolicDim("?"))))));
+  }
 }

@@ -26,6 +26,14 @@ def rewritten_sink(x):
     return x
 
 
+def concrete_sink(x):
+    return x
+
+
+def computed_sink(x):
+    return x
+
+
 def load_audio(name):
     return np.ones(5 + len(name), dtype=np.float32)
 
@@ -154,3 +162,20 @@ rewritten = rewritten.map(scale).batch(2)
 for batch in rewritten:
     rewritten_result = rewritten_sink(batch["frames"])
 assert rewritten_result.dtype == tf.float32 and rewritten_result.shape == (2, 4, 2)
+
+
+def concrete_and_computed(items):
+    return {"ones": tf.ones((3,), dtype=tf.float32), "scaled": items["lengths"] * 2}
+
+
+mapped = tf.data.Dataset.from_generator(
+    frames_generator,
+    output_types={"lengths": tf.int32, "frames": tf.float32},
+    output_shapes={"lengths": [], "frames": [4, 2]},
+)
+mapped = mapped.map(concrete_and_computed).batch(2)
+for batch in mapped:
+    concrete_result = concrete_sink(batch["ones"])
+    computed_result = computed_sink(batch["scaled"])
+assert concrete_result.dtype == tf.float32 and concrete_result.shape == (2, 3)
+assert computed_result.dtype == tf.int32 and computed_result.shape == (2,)
