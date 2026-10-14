@@ -386,20 +386,32 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   /**
    * The values {@code map_func} returns at the given path of its element: the points-to set of the
-   * component the path reaches, or, for a single selector, the values the callback stores there.
+   * component the path reaches and, for a single selector, the values the callback stores there
+   * that the points-to set cannot hold, those without an allocation (<a
+   * href="https://github.com/wala/ML/issues/688">wala/ML#688</a>). The element may be returned from
+   * several sites, so both may be non-empty.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
    * @param path The selectors, outermost first.
-   * @return The component's points-to set, possibly empty, and the stored values, possibly empty.
+   * @return The component's points-to set, possibly empty, and the stored values without an
+   *     allocation, possibly empty.
    */
   private Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> getMappedElementComponent(
       PropagationCallGraphBuilder builder, List<Object> path) {
     OrdinalSet<InstanceKey> component =
         selectComponent(builder, getMappedElementPointsToSet(builder), path);
-    Set<Pair<CGNode, Integer>> stored =
-        path.size() == 1
-            ? getMappedElementComponentValueNumbers(builder, path.get(0))
-            : Collections.emptySet();
+    Set<Pair<CGNode, Integer>> stored = HashSetFactory.make();
+    if (path.size() == 1)
+      for (Pair<CGNode, Integer> value :
+          getMappedElementComponentValueNumbers(builder, path.get(0)))
+        if (builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(value.fst, value.snd))
+            .isEmpty()) stored.add(value);
     return Pair.make(component == null ? OrdinalSet.empty() : component, stored);
   }
 
@@ -421,8 +433,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
   /**
    * {@inheritDoc}
    *
-   * @implNote The shapes of the values {@code map_func} returns at the path, or an unknown shape
-   *     when they do not resolve; the receiver's when the return is not known at all.
+   * @implNote The union of the shapes of the values {@code map_func} returns at the path, unknown
+   *     when any of them is; the receiver's when the return is not known at all.
    */
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
@@ -430,40 +442,43 @@ public class DatasetMapGenerator extends DatasetGenerator {
     if (!this.knowsMappedElement(builder)) return super.getShapesForPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
     if (!component.fst.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, component.fst);
-      if (shapes != null && !shapes.isEmpty()) return shapes;
+      if (shapes == null) return null;
+      ret.addAll(shapes);
     }
-    Set<List<Dimension<?>>> ssaShapes = HashSetFactory.make();
     for (Pair<CGNode, Integer> value : component.snd) {
       Set<List<Dimension<?>>> shapes = this.getShapes(builder, value.fst, value.snd);
       if (shapes == null) return null;
-      ssaShapes.addAll(shapes);
+      ret.addAll(shapes);
     }
-    return ssaShapes.isEmpty() ? null : ssaShapes;
+    return ret.isEmpty() ? null : ret;
   }
 
   /**
    * {@inheritDoc}
    *
-   * @implNote The dtypes of the values {@code map_func} returns at the path, or an unknown dtype
-   *     when they do not resolve; the receiver's when the return is not known at all.
+   * @implNote The union of the dtypes of the values {@code map_func} returns at the path, unknown
+   *     when any of them is; the receiver's when the return is not known at all.
    */
   @Override
   public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
     if (!this.knowsMappedElement(builder)) return super.getDTypesForPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
     if (!component.fst.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, component.fst);
-      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+      if (dtypes == null || dtypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+      ret.addAll(dtypes);
     }
-    Set<DType> ssaDTypes = EnumSet.noneOf(DType.class);
     for (Pair<CGNode, Integer> value : component.snd) {
       Set<DType> dtypes = this.getDTypes(builder, value.fst, value.snd);
-      if (dtypes != null) ssaDTypes.addAll(dtypes);
+      if (dtypes == null || dtypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+      ret.addAll(dtypes);
     }
-    return ssaDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ssaDTypes;
+    return ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
   }
 
   /**
