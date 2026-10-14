@@ -4956,7 +4956,9 @@ public abstract class TensorGenerator {
    * propagation graph from the read's pointer key to the {@link AstLexicalWrite} writers' local
    * keys (the {@code PythonTurtleAnalysisEngine} recipe), yielding the (definer node, value number)
    * pairs the SSA-chain walkers continue in. Comprehension bodies read their enclosing frame's
-   * locals this way, which previously dead-ended both walkers (wala/ML#796).
+   * locals this way, which previously dead-ended both walkers (wala/ML#796). It must be asked only
+   * of a lexical read's value: a local of another frame flowing straight into it is then one of the
+   * read's reaching writes, where for another value it would be an argument passed to a call.
    *
    * @param builder The propagation call graph builder.
    * @param node The reading node.
@@ -4974,10 +4976,18 @@ public abstract class TensorGenerator {
     if (!flow.containsNode(av)) return ret;
     for (Iterator<PointsToSetVariable> outer = flow.getPredNodes(av); outer.hasNext(); ) {
       PointsToSetVariable p = outer.next();
-      // The read's immediate predecessor is the upward-funarg key linking the closure to its
-      // enclosing frame; its own predecessors are the defining locals. An explicit
-      // AstLexicalWrite use is not required: a comprehension's closure capture flows through the
-      // funarg key by direct constraint, so the funarg hop itself is the discriminator.
+      // A local of another frame flowing straight into the read is a value the defining frame
+      // writes to its lexical scope ahead of the closure's creation: the builder links the read to
+      // the writes that reach the closure (wala/ML#1026), which a frame has for every name an
+      // enclosed comprehension reads (wala/ML#1066).
+      if (p.getPointerKey() instanceof LocalPointerKey direct && !direct.getNode().equals(node)) {
+        ret.add(Pair.make(direct.getNode(), direct.getValueNumber()));
+        continue;
+      }
+      // Otherwise the read's immediate predecessor is the upward-funarg key linking the closure to
+      // its enclosing frame; its own predecessors are the defining locals. A comprehension whose
+      // frame writes no capture flows through the funarg key by direct constraint, so the funarg
+      // hop itself is the discriminator.
       if (!p.getPointerKey().getClass().getSimpleName().contains("UpwardFunarg")) continue;
       for (Iterator<PointsToSetVariable> inner = flow.getPredNodes(p); inner.hasNext(); ) {
         PointsToSetVariable pp = inner.next();

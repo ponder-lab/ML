@@ -1667,6 +1667,23 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    */
   public static final String COMPREHENSION_FILTER_KEYWORD_PREFIX = "filter";
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote As the base translation, with the Python exposed-names pass, which also finds the
+   *     names a comprehension reads from its enclosing function (<a
+   *     href="https://github.com/wala/ML/issues/1066">wala/ML#1066</a>).
+   */
+  @Override
+  public void translate(CAstEntity N, WalkContext context) {
+    PythonExposedNamesCollector collector = new PythonExposedNamesCollector();
+    collector.run(N);
+    if (this.liftDeclarationsForLexicalScoping()) collector.run(N);
+    this.entity2ExposedNames = collector.getEntity2ExposedNames();
+    this.entity2WrittenNames = collector.getEntity2WrittenNames();
+    this.walkEntities(N, context);
+  }
+
   @Override
   protected boolean doVisit(CAstNode n, WalkContext context, CAstVisitor<WalkContext> visitor) {
     if (n.getKind() == CAstNode.COMPREHENSION_EXPR) {
