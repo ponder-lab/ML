@@ -23,6 +23,9 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_dataset_generator_dict.py";
 
+  /** A dataset of file names whose maps load them into a dict of arrays. */
+  private static final String LOAD_MAP_FILE = "tf2_test_dataset_generator_load_map.py";
+
   /**
    * A padded batch of 1-D {@code float32} values, expanded to rank 3: a full batch of two, or a
    * last, partial one.
@@ -225,5 +228,137 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(BOOL, 2, 3))));
+  }
+
+  /**
+   * A dataset whose {@code from_generator} element holds file names, whose {@code map} loads them
+   * into a new dict of arrays and a second {@code map} rebuilds that dict, padded and batched, and
+   * read by key in a trainer: the key is typed from the mapped dict, padded by its own {@code
+   * padded_shapes} entry. Before, the key read was the union of every entry of {@code
+   * padded_shapes}, of unknown dtype.
+   */
+  @Test
+  public void testLoadingMapKey() throws ClassHierarchyException, CancelException, IOException {
+    test(LOAD_MAP_FILE, "load_sink", 1, 2, Map.of(2, EXPANDED_BATCH));
+  }
+
+  /** Another key of the same batch, padded to two axes. */
+  @Test
+  public void testLoadingMapOtherKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "mels_sink",
+        1,
+        2,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        DynamicDim.INSTANCE,
+                        new NumericDim(80),
+                        new NumericDim(1))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new SymbolicDim("?"),
+                        DynamicDim.INSTANCE,
+                        new NumericDim(80),
+                        new NumericDim(1))))));
+  }
+
+  /** The same key, read from a batch the dataset is enumerated into directly. */
+  @Test
+  public void testLoadingMapKeyEnumerated()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(LOAD_MAP_FILE, "local_sink", 1, 2, Map.of(2, EXPANDED_BATCH));
+  }
+
+  /**
+   * A key of a dict the map function builds by calling {@code dict}, whose keys the analysis does
+   * not read: the key's shape is its own {@code padded_shapes} entry, not the union of every entry,
+   * and its dtype, which the built dict would give, is unknown.
+   */
+  @Test
+  public void testLoadingMapBuiltDict()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "built_sink",
+        1,
+        2,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UNKNOWN, asList(new NumericDim(2), DynamicDim.INSTANCE, new NumericDim(1))),
+                new TensorType(
+                    UNKNOWN,
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(1))))));
+  }
+
+  /**
+   * A key of a dict the map function writes into its input and returns, which neither a dict the
+   * map function returns nor a {@code padded_shapes} entry names: the key's type is unknown, not
+   * the union of every key's.
+   */
+  @Test
+  public void testUnresolvedKey() throws ClassHierarchyException, CancelException, IOException {
+    test(LOAD_MAP_FILE, "rewritten_sink", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * A key of the dict a map function returns from two sites, one storing a loaded array and one a
+   * value it computes: either site's value.
+   */
+  @Test
+  public void testMapDictReturnSites()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_map_dict_sites.py",
+        "sites_sink",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null), new TensorType(INT_32, null))));
+  }
+
+  /**
+   * A key of the dict a map function returns, holding a tensor it allocates, read from a batch
+   * without {@code padded_shapes}: the tensor's own shape under the batch axis.
+   */
+  @Test
+  public void testMapDictAllocatedKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "concrete_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))))));
+  }
+
+  /**
+   * A key of the same dict holding a value the map function computes, which has no allocation: the
+   * computed value's shape under the batch axis.
+   */
+  @Test
+  public void testMapDictComputedKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "computed_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(INT_32, 2), new TensorType(INT_32, asList(new SymbolicDim("?"))))));
   }
 }

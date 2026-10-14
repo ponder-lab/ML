@@ -2503,15 +2503,17 @@ public class TensorGeneratorFactory {
         // it. wala/ML#656.
         // A string-keyed subscript on a dataset element (e.g. `batch["t"]` over a
         // dict-structured dataset) navigates the element's record structure rather than
-        // extracting a positional slice of a tensor, so no dimension is peeled: the field
-        // carries the element's (per-field-unioned) type. wala/ML#673. An element read off the
-        // iterator protocol's allocation (wala/ML#1010) is the same element.
+        // extracting a positional slice of a tensor, so no dimension is peeled (wala/ML#673). The
+        // path gate above types a key the element's structure resolves, so a key reaching here
+        // is one it does not: the component is unknown, not the union of the element's
+        // components. An element read off the iterator protocol's allocation (wala/ML#1010) is
+        // the same element.
         if (propertyName != null
             && propertyIndex == null
             && !isNonTensorAttribute(propertyName)
             && (containerGenerator instanceof DatasetElementGenerator
                 || containerGenerator instanceof DatasetIteratorElementGenerator)) {
-          return containerGenerator;
+          return new UnresolvedComponent(source);
         }
 
         // A non-constant subscript member with its own tensor-producing generator is a FANCY
@@ -2727,6 +2729,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
     else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
+    else if (isType(calledFunction, TensorFlowTypes.NUMPY_FUNCTION.getDeclaringClass()))
+      return new NumpyFunction(source);
+    else if (isType(calledFunction, TensorFlowTypes.PY_FUNCTION.getDeclaringClass()))
+      return new PyFunction(source);
     else if (isType(calledFunction, TensorFlowTypes.READ_FILE.getDeclaringClass()))
       return new ReadFile(source);
     else if (isType(calledFunction, TensorFlowTypes.DECODE_JPEG.getDeclaringClass()))

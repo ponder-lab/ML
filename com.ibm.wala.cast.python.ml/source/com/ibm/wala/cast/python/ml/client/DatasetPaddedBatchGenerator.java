@@ -120,6 +120,38 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
   }
 
   /**
+   * The entry of the {@code padded_shapes} argument a path reaches, which mirrors the element's
+   * structure.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param path The selectors, outermost first.
+   * @return The entry's points-to set, or {@code null} when the path reaches no entry.
+   */
+  private OrdinalSet<InstanceKey> paddedShapesEntry(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    return selectComponent(
+        builder,
+        this.getArgumentPointsToSet(
+            builder,
+            PaddedParameters.PADDED_SHAPES.getIndex(),
+            PaddedParameters.PADDED_SHAPES.getName()),
+        path);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A path reaching an entry of the {@code padded_shapes} argument reaches a component of
+   *     the element, whose shape that entry gives, whether or not the upstream dataset resolves the
+   *     path.
+   */
+  @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    OrdinalSet<InstanceKey> entry = this.paddedShapesEntry(builder, path);
+    return (entry != null && !entry.isEmpty()) || super.resolvesPath(builder, path);
+  }
+
+  /**
    * {@inheritDoc}
    *
    * @implNote A path reaching an entry of the {@code padded_shapes} argument, which mirrors the
@@ -130,14 +162,7 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
-    OrdinalSet<InstanceKey> component =
-        selectComponent(
-            builder,
-            this.getArgumentPointsToSet(
-                builder,
-                PaddedParameters.PADDED_SHAPES.getIndex(),
-                PaddedParameters.PADDED_SHAPES.getName()),
-            path);
+    OrdinalSet<InstanceKey> component = this.paddedShapesEntry(builder, path);
     if (component != null && !component.isEmpty()) {
       Set<List<Dimension<?>>> padded;
       try {
