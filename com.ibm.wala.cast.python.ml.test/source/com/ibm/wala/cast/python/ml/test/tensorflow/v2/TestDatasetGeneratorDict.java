@@ -117,4 +117,98 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_dataset_generator_trainer.py", "copier_sink", 0, 0, Map.of());
   }
+
+  /** A padded batch without {@code padded_shapes}: each key pads to the longest in its batch. */
+  @Test
+  public void testPaddedBatchWithoutPaddedShapes()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "unpadded_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
+  }
+
+  /** A declared shape the reader cannot read: the key's shape is unknown, its dtype declared. */
+  @Test
+  public void testUnreadOutputShape() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "unread_shape_sink", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * An attribute two calls write datasets of dicts to, enumerated and read by key: the element is
+   * either dataset's.
+   */
+  @Test
+  public void testJoinedDatasetsByKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_enumerate_join.py",
+        "dict_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 2, 3))));
+  }
+
+  /**
+   * An attribute two calls write datasets of tuples to, enumerated and read by index: the element
+   * is either dataset's.
+   */
+  @Test
+  public void testJoinedDatasetsByIndex()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_enumerate_join.py",
+        "tuple_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 2, 3))));
+  }
+
+  /**
+   * The same joined tuple element expanded: the expansion reads the element's shapes and dtypes by
+   * index from the join.
+   */
+  @Test
+  public void testJoinedDatasetsExpanded()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_enumerate_join.py",
+        "expanded_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 1), TensorType.of(INT_32, 2, 3, 1))));
+  }
+
+  /** A dataset the class body assigns, enumerated through an instance and read by key. */
+  @Test
+  public void testClassAttributeLoader()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_enumerate_class_attribute.py",
+        "class_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * A dataset the class body assigns beside one an instance write stores: the element is either,
+   * not the instance write's alone.
+   */
+  @Test
+  public void testClassAndInstanceAttributeLoader()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_enumerate_class_attribute.py",
+        "mixed_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 2, 3))));
+  }
 }

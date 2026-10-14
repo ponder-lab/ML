@@ -83,3 +83,32 @@ signed = signed.padded_batch(2, padded_shapes={"utt_ids": [], "audios": [None]})
 for batch in signed:
     result = signature_sink(tf.expand_dims(batch["audios"], -1))
     assert result.dtype == tf.float32 and result.shape == (2, 7, 1)
+
+
+def unpadded_sink(x):
+    return x
+
+
+def unread_shape_sink(x):
+    return x
+
+
+unpadded = tf.data.Dataset.from_generator(
+    generate,
+    output_types={"utt_ids": tf.string, "audios": tf.float32},
+    output_shapes={"utt_ids": [], "audios": [None]},
+)
+# Without `padded_shapes`, every component pads to the longest in its batch.
+unpadded = unpadded.padded_batch(2)
+for batch in unpadded:
+    unpadded_sink(batch["audios"])
+    assert batch["audios"].shape == (2, 7)
+
+# The declared shape is a concatenation, which the shape reader does not resolve.
+unread_shape = tf.data.Dataset.from_generator(
+    generate,
+    output_types={"utt_ids": tf.string, "audios": tf.float32},
+    output_shapes={"utt_ids": [], "audios": [None] + []},
+)
+for element in unread_shape:
+    unread_shape_sink(element["audios"])
