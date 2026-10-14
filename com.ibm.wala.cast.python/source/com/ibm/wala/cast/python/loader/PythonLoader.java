@@ -955,6 +955,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
           "classmethod",
           "cached_property",
           "partialmethod",
+          "function",
           "setter",
           "getter",
           "deleter");
@@ -962,7 +963,10 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   /**
    * Whether a class-body attribute's assigned expression may be a value Python transforms when read
    * through an instance: a lambda; a name or an attribute, which may denote a function; or a call
-   * making a descriptor, such as {@code property(...)} or {@code prop.setter(...)}.
+   * making a descriptor, such as {@code property(...)}, {@code prop.setter(...)} or {@code
+   * tf.function(f)}, whose result binds to the instance as {@code f} would. An instance of a class
+   * the program defines with its own {@code __get__} is a descriptor too, which the assignment
+   * cannot show, so its raw value is bound.
    *
    * @param value The assigned expression, or {@code null} for an annotation alone.
    * @return {@code true} iff the value may bind or be a descriptor.
