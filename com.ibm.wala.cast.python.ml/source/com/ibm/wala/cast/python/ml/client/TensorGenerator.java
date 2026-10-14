@@ -4956,7 +4956,9 @@ public abstract class TensorGenerator {
    * propagation graph from the read's pointer key to the {@link AstLexicalWrite} writers' local
    * keys (the {@code PythonTurtleAnalysisEngine} recipe), yielding the (definer node, value number)
    * pairs the SSA-chain walkers continue in. Comprehension bodies read their enclosing frame's
-   * locals this way, which previously dead-ended both walkers (wala/ML#796).
+   * locals this way, which previously dead-ended both walkers (wala/ML#796). It must be asked only
+   * of a lexical read's value: a local of another frame flowing straight into it is then one of the
+   * read's reaching writes, where for another value it would be an argument passed to a call.
    *
    * @param builder The propagation call graph builder.
    * @param node The reading node.
