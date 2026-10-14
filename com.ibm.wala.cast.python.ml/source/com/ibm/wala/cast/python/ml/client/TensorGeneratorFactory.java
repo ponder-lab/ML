@@ -2727,6 +2727,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
     else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
+    else if (isType(calledFunction, TensorFlowTypes.NUMPY_FUNCTION.getDeclaringClass()))
+      return new NumpyFunction(source);
     else if (isType(calledFunction, TensorFlowTypes.READ_FILE.getDeclaringClass()))
       return new ReadFile(source);
     else if (isType(calledFunction, TensorFlowTypes.DECODE_JPEG.getDeclaringClass()))

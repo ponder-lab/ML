@@ -372,19 +372,113 @@ public class DatasetMapGenerator extends DatasetGenerator {
   }
 
   /**
-   * Finds the SSA values stored into the given numeric field of the mapped element tuple, per
-   * containing node: for each tuple allocation flowing out of {@code map_func}, locates its
-   * allocation's definition and the instruction storing {@code <field index>} on it, and returns
-   * the stored value number. This recovers computed tuple members (binary-op results and other
-   * allocation-less values) whose points-to sets are empty (<a
-   * href="https://github.com/wala/ML/issues/688">wala/ML#688</a>).
+   * Whether the mapped element is known: {@code map_func}'s return reaches the element field, or
+   * its return instructions are found.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
-   * @param index The tuple index whose stores to find.
+   * @return {@code true} iff the mapped element is known.
+   */
+  private boolean knowsMappedElement(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
+    return (elementPTS != null && !elementPTS.isEmpty())
+        || !getCallbackReturnValueNumbers(builder).isEmpty();
+  }
+
+  /**
+   * The values {@code map_func} returns at the given path of its element: the points-to set of the
+   * component the path reaches, or, for a single selector, the values the callback stores there.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set, possibly empty, and the stored values, possibly empty.
+   */
+  private Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> getMappedElementComponent(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    OrdinalSet<InstanceKey> component =
+        selectComponent(builder, getMappedElementPointsToSet(builder), path);
+    Set<Pair<CGNode, Integer>> stored =
+        path.size() == 1
+            ? getMappedElementComponentValueNumbers(builder, path.get(0))
+            : Collections.emptySet();
+    return Pair.make(component == null ? OrdinalSet.empty() : component, stored);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A mapped dataset's element is {@code map_func}'s return, so a path reaches a
+   *     component of that return, not of the receiver's element. The receiver answers only when the
+   *     return is not known at all.
+   */
+  @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (!this.knowsMappedElement(builder)) return super.resolvesPath(builder, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
+        this.getMappedElementComponent(builder, path);
+    return !component.fst.isEmpty() || !component.snd.isEmpty();
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The shapes of the values {@code map_func} returns at the path, or an unknown shape
+   *     when they do not resolve; the receiver's when the return is not known at all.
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (!this.knowsMappedElement(builder)) return super.getShapesForPath(builder, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
+        this.getMappedElementComponent(builder, path);
+    if (!component.fst.isEmpty()) {
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, component.fst);
+      if (shapes != null && !shapes.isEmpty()) return shapes;
+    }
+    Set<List<Dimension<?>>> ssaShapes = HashSetFactory.make();
+    for (Pair<CGNode, Integer> value : component.snd) {
+      Set<List<Dimension<?>>> shapes = this.getShapes(builder, value.fst, value.snd);
+      if (shapes == null) return null;
+      ssaShapes.addAll(shapes);
+    }
+    return ssaShapes.isEmpty() ? null : ssaShapes;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The dtypes of the values {@code map_func} returns at the path, or an unknown dtype
+   *     when they do not resolve; the receiver's when the return is not known at all.
+   */
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (!this.knowsMappedElement(builder)) return super.getDTypesForPath(builder, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
+        this.getMappedElementComponent(builder, path);
+    if (!component.fst.isEmpty()) {
+      Set<DType> dtypes = this.getDTypesOfValue(builder, component.fst);
+      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+    }
+    Set<DType> ssaDTypes = EnumSet.noneOf(DType.class);
+    for (Pair<CGNode, Integer> value : component.snd) {
+      Set<DType> dtypes = this.getDTypes(builder, value.fst, value.snd);
+      if (dtypes != null) ssaDTypes.addAll(dtypes);
+    }
+    return ssaDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ssaDTypes;
+  }
+
+  /**
+   * Finds the SSA values stored into the given field of the mapped element, per containing node:
+   * for each container allocation flowing out of {@code map_func}, locates its allocation's
+   * definition and the instructions storing the field on it, and returns the stored value numbers.
+   * This recovers computed members (binary-op results and other allocation-less values) whose
+   * points-to sets are empty (<a href="https://github.com/wala/ML/issues/688">wala/ML#688</a>).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param selector The tuple index or the dict key whose stores to find.
    * @return The (node, value number) pairs stored into the field; empty if none resolve.
    */
   private Set<Pair<CGNode, Integer>> getMappedElementComponentValueNumbers(
-      PropagationCallGraphBuilder builder, int index) {
+      PropagationCallGraphBuilder builder, Object selector) {
     Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
     Set<Pair<CGNode, Integer>> allocations = HashSetFactory.make();
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
@@ -412,14 +506,14 @@ public class DatasetMapGenerator extends DatasetGenerator {
           allocations.add(Pair.make(returnValue.fst, returnValue.snd));
       }
 
-    String fieldName = String.valueOf(index);
+    String fieldName = String.valueOf(selector);
     for (Pair<CGNode, Integer> allocation : allocations) {
       CGNode node = allocation.fst;
       IR ir = node.getIR();
       if (ir == null) continue;
       int allocVn = allocation.snd;
 
-      // Find the stores into `<field index>` on that allocation.
+      // Find the stores into the field on that allocation.
       for (SSAInstruction inst : ir.getInstructions()) {
         if (inst instanceof SSAPutInstruction put
             && !put.isStatic()
@@ -433,7 +527,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
           // points-to set; check both, mirroring TensorGeneratorFactory.constantMemberEquals.
           if ((symbolTable.isConstant(memberVn)
                   && fieldName.equals(String.valueOf(symbolTable.getConstantValue(memberVn))))
-              || TensorGeneratorFactory.constantMemberEquals(node, memberVn, index, builder))
+              || (selector instanceof Integer index
+                  && TensorGeneratorFactory.constantMemberEquals(node, memberVn, index, builder)))
             ret.add(Pair.make(node, write.getValue()));
         }
       }

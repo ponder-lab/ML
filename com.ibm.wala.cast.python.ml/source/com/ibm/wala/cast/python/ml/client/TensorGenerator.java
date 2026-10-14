@@ -11090,6 +11090,8 @@ public abstract class TensorGenerator {
       return new SoftmaxCrossEntropy(node);
     } else if (type.equals(TensorFlowTypes.CAST.getDeclaringClass())) {
       return new Cast(node);
+    } else if (type.equals(TensorFlowTypes.NUMPY_FUNCTION.getDeclaringClass())) {
+      return new NumpyFunction(node);
     } else if (type.equals(TensorFlowTypes.READ_FILE.getDeclaringClass())) {
       return new ReadFile(node);
     } else if (type.equals(TensorFlowTypes.DECODE_JPEG.getDeclaringClass())) {

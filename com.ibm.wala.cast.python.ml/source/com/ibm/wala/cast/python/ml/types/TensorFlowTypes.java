@@ -2141,6 +2141,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String CAST_SIGNATURE = "tf.cast()";
 
+  /** https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/numpy_function. */
+  public static final MethodReference NUMPY_FUNCTION =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/numpy_function")),
+          AstMethodReference.fnSelector);
+
+  private static final String NUMPY_FUNCTION_SIGNATURE = "tf.numpy_function()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/io/read_file. */
   public static final MethodReference READ_FILE =
       MethodReference.findOrCreate(
@@ -2819,6 +2829,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GREATER.getDeclaringClass(), GREATER_SIGNATURE),
           Map.entry(GREATER_EQUAL.getDeclaringClass(), GREATER_EQUAL_SIGNATURE),
           Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),
+          Map.entry(NUMPY_FUNCTION.getDeclaringClass(), NUMPY_FUNCTION_SIGNATURE),
           Map.entry(READ_FILE.getDeclaringClass(), READ_FILE_SIGNATURE),
           Map.entry(DECODE_JPEG.getDeclaringClass(), DECODE_JPEG_SIGNATURE),
           Map.entry(

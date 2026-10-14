@@ -1031,6 +1031,9 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/py_function -->
         <new def="py_function" class="Ltensorflow/functions/py_function"/>
         <putfield class="LRoot" field="py_function" fieldType="LRoot" ref="x" value="py_function"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/numpy_function -->
+        <new def="numpy_function" class="Ltensorflow/functions/numpy_function"/>
+        <putfield class="LRoot" field="numpy_function" fieldType="LRoot" ref="x" value="numpy_function"/>
         <new def="constant" class="Ltensorflow/functions/constant"/>
         <putfield class="LRoot" field="constant" fieldType="LRoot" ref="x" value="constant"/>
         <putfield class="LRoot" field="constant" fieldType="LRoot" ref="constant_op" value="constant"/>
@@ -2559,6 +2562,13 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/py_function. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <!-- TODO: Call `func` per https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/py_function#returns -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self func inp Tout name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="numpy_function" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/numpy_function. Allocates the result, whose dtype `Tout` states (`NumpyFunction`). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self func inp Tout stateful name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
