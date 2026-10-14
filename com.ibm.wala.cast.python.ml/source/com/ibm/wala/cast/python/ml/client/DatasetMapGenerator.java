@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -20,6 +21,8 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
@@ -373,8 +376,10 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   /**
    * Whether {@code map_func} returns its input unchanged: every return is one of the callback's
-   * parameters, and the callback writes no property of it. The mapped element is then the
-   * receiver's element, so the receiver answers a path into it.
+   * parameters, and nothing in the callback could change it, neither a write of one of its
+   * properties nor a call it is passed to or whose method it supplies, such as {@code
+   * e.update(...)}. The mapped element is then the receiver's element, so the receiver answers a
+   * path into it.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
    * @return {@code true} iff the callback has a return and each one passes its input through.
@@ -385,12 +390,24 @@ public class DatasetMapGenerator extends DatasetGenerator {
     for (Pair<CGNode, Integer> returnValue : returns) {
       IR ir = returnValue.fst.getIR();
       if (ir == null || !ir.getSymbolTable().isParameter(returnValue.snd)) return false;
+      int input = returnValue.snd;
+      // The values read off the input, any of which may be a method of it.
+      Set<Integer> readOffInput = HashSetFactory.make();
       for (SSAInstruction instruction : ir.getInstructions())
-        if ((instruction instanceof AstPropertyWrite write
-                && write.getObjectRef() == returnValue.snd)
+        if ((instruction instanceof AstPropertyRead read && read.getObjectRef() == input)
+            || (instruction instanceof SSAGetInstruction get
+                && !get.isStatic()
+                && get.getRef() == input)) readOffInput.add(instruction.getDef());
+      for (SSAInstruction instruction : ir.getInstructions()) {
+        if ((instruction instanceof AstPropertyWrite write && write.getObjectRef() == input)
             || (instruction instanceof SSAPutInstruction put
                 && !put.isStatic()
-                && put.getRef() == returnValue.snd)) return false;
+                && put.getRef() == input)) return false;
+        if (instruction instanceof SSAAbstractInvokeInstruction invoke)
+          for (int i = 0; i < invoke.getNumberOfUses(); i++)
+            if (invoke.getUse(i) == input || (i == 0 && readOffInput.contains(invoke.getUse(i))))
+              return false;
+      }
     }
     return true;
   }
