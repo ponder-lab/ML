@@ -211,4 +211,19 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(INT_32, 2, 3))));
   }
+
+  /**
+   * A class of its own whose body assigns the same attribute name a {@code bool} dataset: its
+   * element is that dataset's, and it reaches no other class's read.
+   */
+  @Test
+  public void testUnrelatedClassAttributeLoader()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_enumerate_class_attribute.py",
+        "unrelated_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2, 3))));
+  }
 }

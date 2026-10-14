@@ -73,6 +73,43 @@ class Derived(Base):
         return inherited_sink(self.table)
 
 
+def alias_sink(x):
+    return x
+
+
+def lambda_sink(x):
+    return x
+
+
+def property_sink(x):
+    return x
+
+
+def scaled(self, x):
+    return alias_sink(self)
+
+
+def getter(self):
+    return tf.ones([4])
+
+
+class Bound:
+    """Class-body attributes bound to functions and a property: Python binds them on the read."""
+
+    act = scaled
+    f = lambda self, x: lambda_sink(self)
+    p = property(getter)
+
+    def use(self, t):
+        self.act(t)
+        self.f(t)
+        return property_sink(self.p)
+
+
+alias_sink(None)
+lambda_sink(None)
+assert Bound().use(tf.ones([2])).shape == (4,)
+
 assert Shadow().use().shape == (2,)
 assert Override().use().shape == (2,)
 assert class_read_sink(Constants.base).shape == (4,)

@@ -57,4 +57,30 @@ public class TestClassAttributeReads extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "inherited_sink", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 5))));
   }
+
+  /**
+   * A class-body attribute bound to a module function: Python binds the function on the read, so
+   * the instance is its first argument. The attribute is not bound on the instance, so the call
+   * reaches nothing, as before, rather than the function with the call's argument as the instance.
+   */
+  @Test
+  public void testFunctionAlias() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "alias_sink", 0, 0, Map.of());
+  }
+
+  /** A class-body attribute bound to a lambda, as for a function alias. */
+  @Test
+  public void testLambda() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "lambda_sink", 0, 0, Map.of());
+  }
+
+  /**
+   * A class-body attribute bound to a property: Python reads the getter's value, a {@code float32}
+   * of shape {@code (4,)}. The attribute is not bound on the instance, so the read reaches nothing,
+   * as before, rather than the property object.
+   */
+  @Test
+  public void testProperty() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "property_sink", 0, 0, Map.of());
+  }
 }
