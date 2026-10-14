@@ -395,6 +395,7 @@ public abstract class TensorGenerator {
     // entries never expire on their own; a shard running several whole-project analyses in one JVM
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
+    FIELD_PUT_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
   }
