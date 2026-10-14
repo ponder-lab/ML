@@ -21,6 +21,8 @@ import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.ir.translator.AstTranslator;
+import com.ibm.wala.cast.ir.translator.ExposedNamesCollector;
+import com.ibm.wala.cast.ir.translator.PythonExposedNamesCollector;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorCallSiteReference;
@@ -1666,6 +1668,23 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    * invoke carries no other keyword, so a keyword on one means a filter.
    */
   public static final String COMPREHENSION_FILTER_KEYWORD_PREFIX = "filter";
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote As the base translation, with the Python exposed-names pass, which also finds the
+   *     names a comprehension reads from its enclosing function (<a
+   *     href="https://github.com/wala/ML/issues/1066">wala/ML#1066</a>).
+   */
+  @Override
+  public void translate(CAstEntity N, WalkContext context) {
+    ExposedNamesCollector collector = new PythonExposedNamesCollector();
+    collector.run(N);
+    if (this.liftDeclarationsForLexicalScoping()) collector.run(N);
+    this.entity2ExposedNames = collector.getEntity2ExposedNames();
+    this.entity2WrittenNames = collector.getEntity2WrittenNames();
+    this.walkEntities(N, context);
+  }
 
   @Override
   protected boolean doVisit(CAstNode n, WalkContext context, CAstVisitor<WalkContext> visitor) {

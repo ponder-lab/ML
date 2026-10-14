@@ -1617,18 +1617,16 @@ public class TestConstructors extends AbstractTensorTest {
   /**
    * {@link #testReaderChainMergedDtype()} with the {@code tolist()} hop removed, isolating the
    * unmodeled ndarray {@code tolist} method from the generator-yield/unpack and merge-rebase hops
-   * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
-   *
-   * <p>TODO: Flip to a positive guard when <a
-   * href="https://github.com/wala/ML/issues/805">wala/ML#805</a> lands; see {@link
-   * #testReaderChainMergedDtype()}.
+   * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>). The merged value resolves
+   * since the frame enclosing the reader's comprehension writes the names the comprehension reads
+   * (<a href="https://github.com/wala/ML/issues/1066">wala/ML#1066</a>).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testReaderChainMergedDtype2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
