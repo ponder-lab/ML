@@ -372,6 +372,30 @@ public class DatasetMapGenerator extends DatasetGenerator {
   }
 
   /**
+   * Whether {@code map_func} returns its input unchanged: every return is one of the callback's
+   * parameters, and the callback writes no property of it. The mapped element is then the
+   * receiver's element, so the receiver answers a path into it.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @return {@code true} iff the callback has a return and each one passes its input through.
+   */
+  private boolean returnsInputUnchanged(PropagationCallGraphBuilder builder) {
+    Set<Pair<CGNode, Integer>> returns = getCallbackReturnValueNumbers(builder);
+    if (returns.isEmpty()) return false;
+    for (Pair<CGNode, Integer> returnValue : returns) {
+      IR ir = returnValue.fst.getIR();
+      if (ir == null || !ir.getSymbolTable().isParameter(returnValue.snd)) return false;
+      for (SSAInstruction instruction : ir.getInstructions())
+        if ((instruction instanceof AstPropertyWrite write
+                && write.getObjectRef() == returnValue.snd)
+            || (instruction instanceof SSAPutInstruction put
+                && !put.isStatic()
+                && put.getRef() == returnValue.snd)) return false;
+    }
+    return true;
+  }
+
+  /**
    * Whether the mapped element is known: {@code map_func}'s return reaches the element field, or
    * its return instructions are found.
    *
@@ -420,11 +444,12 @@ public class DatasetMapGenerator extends DatasetGenerator {
    *
    * @implNote A mapped dataset's element is {@code map_func}'s return, so a path reaches a
    *     component of that return, not of the receiver's element. The receiver answers only when the
-   *     return is not known at all.
+   *     return is not known at all, or is the callback's input passed through unchanged.
    */
   @Override
   public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (!this.knowsMappedElement(builder)) return super.resolvesPath(builder, path);
+    if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
+      return super.resolvesPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
     return !component.fst.isEmpty() || !component.snd.isEmpty();
@@ -434,12 +459,14 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * {@inheritDoc}
    *
    * @implNote The union of the shapes of the values {@code map_func} returns at the path, unknown
-   *     when any of them is; the receiver's when the return is not known at all.
+   *     when any of them is; the receiver's when the return is not known at all or is the input
+   *     passed through unchanged.
    */
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
-    if (!this.knowsMappedElement(builder)) return super.getShapesForPath(builder, path);
+    if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
+      return super.getShapesForPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -460,11 +487,13 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * {@inheritDoc}
    *
    * @implNote The union of the dtypes of the values {@code map_func} returns at the path, unknown
-   *     when any of them is; the receiver's when the return is not known at all.
+   *     when any of them is; the receiver's when the return is not known at all or is the input
+   *     passed through unchanged.
    */
   @Override
   public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (!this.knowsMappedElement(builder)) return super.getDTypesForPath(builder, path);
+    if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
+      return super.getDTypesForPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
     Set<DType> ret = EnumSet.noneOf(DType.class);
