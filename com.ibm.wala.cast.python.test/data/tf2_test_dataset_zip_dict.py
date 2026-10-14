@@ -3,6 +3,8 @@
 # dict of datasets selected by key.
 import tensorflow as tf
 
+FROM_RANGE = len("range") > 3
+
 
 def tuple_sink(x):
     return x
@@ -21,6 +23,10 @@ def named_label_sink(x):
 
 
 def batched_sink(x):
+    return x
+
+
+def either_sink(x):
     return x
 
 
@@ -55,3 +61,16 @@ for element in tf.data.Dataset.zip(
 for element in tf.data.Dataset.zip((features(), labels())).batch(2):
     batched_sink(element[0]["a"])
     assert element[0]["a"].dtype == tf.float32 and element[0]["a"].shape == (2, 3)
+
+# A zip whose argument is either of two tuples, whose first datasets differ in dtype: the first
+# component is either dataset's.
+if FROM_RANGE:
+    pair = (tf.data.Dataset.range(4), tf.data.Dataset.range(4))
+else:
+    pair = (
+        tf.data.Dataset.from_tensor_slices(tf.ones((4, 2), dtype=tf.float32)),
+        tf.data.Dataset.range(4),
+    )
+for element in tf.data.Dataset.zip(pair):
+    either_sink(element[0])
+    assert element[0].dtype == tf.int64

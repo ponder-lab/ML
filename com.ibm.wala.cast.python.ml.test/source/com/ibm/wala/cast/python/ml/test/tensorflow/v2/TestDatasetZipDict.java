@@ -64,4 +64,19 @@ public class TestDatasetZipDict extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 2, 3),
                 new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))))));
   }
+
+  /**
+   * A zip whose argument is either of two tuples, whose first datasets differ in dtype: the first
+   * component is either dataset's, not the first tuple's alone.
+   */
+  @Test
+  public void testEitherTupleOfDatasets()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "either_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64), TensorType.of(FLOAT_32, 2))));
+  }
 }
