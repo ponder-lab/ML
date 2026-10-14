@@ -183,7 +183,12 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getTensorTypes(builder);
     Set<TensorType> ret = HashSetFactory.make();
-    for (TensorGenerator dataset : this.datasets) ret.addAll(dataset.getTensorTypes(builder));
+    for (TensorGenerator dataset : this.datasets) {
+      Set<TensorType> types = dataset.getTensorTypes(builder);
+      // A dataset whose element is of unknown type makes the joined element's unknown.
+      if (types == null) return null;
+      ret.addAll(types);
+    }
     return ret;
   }
 
