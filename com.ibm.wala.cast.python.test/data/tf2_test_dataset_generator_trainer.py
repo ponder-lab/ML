@@ -61,3 +61,48 @@ class Trainer:
 
 results = Trainer(AudioData().create()).train()
 assert results[0].dtype == tf.float32 and results[0].shape == (2, 6, 1)
+
+
+def base_trainer_sink(x):
+    return x * 2.0
+
+
+class BaseTrainer:
+    def __init__(self):
+        self.train_data_loader = None
+        self._strategy = tf.distribute.OneDeviceStrategy(device="/cpu:0")
+
+    def set_train_data_loader(self, train_dataset):
+        self.train_data_loader = train_dataset
+
+    def fit(self, train_data_loader):
+        self.set_train_data_loader(train_data_loader)
+        self.train_data_loader = self._strategy.experimental_distribute_dataset(
+            self.train_data_loader
+        )
+        return self.run()
+
+    def run(self):
+        results = []
+        for steps, batch in enumerate(self.train_data_loader, 1):
+            results.append(self._train_step(batch))
+        return results
+
+    def _train_step(self, batch):
+        self.one_step_forward = tf.function(
+            self._one_step_forward,
+            input_signature=[self.train_data_loader.element_spec],
+        )
+        return self.one_step_forward(batch)
+
+    def _one_step_forward(self, batch):
+        return self._strategy.run(self.per_replica, args=(batch,))
+
+
+class AudioTrainer(BaseTrainer):
+    def per_replica(self, batch):
+        return base_trainer_sink(tf.expand_dims(batch["audios"], -1))
+
+
+results = AudioTrainer().fit(AudioData().create())
+assert results[0].dtype == tf.float32 and results[0].shape == (2, 6, 1)

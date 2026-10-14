@@ -73,4 +73,36 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_enumerate_field_dataset.py", "local_sink", 1, 2, Map.of(2, Set.of(BATCH_3)));
   }
+
+  /**
+   * A key whose {@code padded_shapes} entry cannot be read: its shape is unknown, not the upstream
+   * component's, which the padding may change.
+   */
+  @Test
+  public void testUnreadPaddedShape() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "unread_padding_sink", 1, 2, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A trainer whose loader attribute is written three times, as a common base trainer writes it:
+   * {@code None} at construction, the dataset a setter is passed, and the distributed dataset made
+   * from the attribute's own value. The element of the enumerated loader is any of the datasets
+   * written, so it is their join.
+   */
+  @Test
+  public void testBaseTrainerLoader() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_generator_trainer.py",
+        "base_trainer_sink",
+        1,
+        2,
+        Map.of(2, EXPANDED_BATCH));
+  }
+
+  /** The dtypes and shapes from a dict of specs, the {@code output_signature} form. */
+  @Test
+  public void testOutputSignatureDict()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "signature_sink", 1, 2, Map.of(2, EXPANDED_BATCH));
+  }
 }
