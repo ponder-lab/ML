@@ -1541,6 +1541,10 @@ public class TensorGeneratorFactory {
    * calls that made it. A write of {@code None} makes nothing to read through, so it contributes
    * none.
    *
+   * <p>Known gap: a write of the attribute on the class, rather than on an instance, is not among
+   * an instance's writes, so the calls it stores are missed, and the join over the rest may leave
+   * out a value the read yields.
+   *
    * @param node The node holding the read.
    * @param def The value's definition.
    * @param builder The propagation call graph builder.
@@ -1576,7 +1580,7 @@ public class TensorGeneratorFactory {
       // A write that stores the attribute's own value back, through a call returning its
       // argument unchanged, as `self.loader = strategy.experimental_distribute_dataset(
       // self.loader)` does, stores no value the other writes do not.
-      if (rewritesAttribute(writer.fst, writer.snd, name, builder)) continue;
+      if (rewritesAttribute(writer.fst, writer.snd, name, receivers, builder)) continue;
       PointsToSetVariable value =
           getPointsToSetVariable(heapModel.getPointerKeyForLocal(writer.fst, writer.snd), builder);
       if (value == null) return null;
@@ -1594,17 +1598,24 @@ public class TensorGeneratorFactory {
 
   /**
    * Whether a value is the result of a call that returns one of its arguments unchanged, where that
-   * argument is a read of the given attribute: the call stores back what the attribute held.
+   * argument is a read of the given attribute on the same instances: the call stores back what the
+   * attribute held. A read of the attribute on another object brings that object's values, which
+   * this attribute's writes need not hold.
    *
    * @param node The node holding the value.
    * @param vn The value.
    * @param name The attribute.
+   * @param receivers The instances whose attribute is written.
    * @param builder The propagation call graph builder.
    * @return {@code true} iff every callee returns a parameter, and the argument bound to it is a
-   *     read of {@code name}.
+   *     read of {@code name} on an object that may be only one of {@code receivers}.
    */
   private static boolean rewritesAttribute(
-      CGNode node, int vn, String name, PropagationCallGraphBuilder builder) {
+      CGNode node,
+      int vn,
+      String name,
+      Set<InstanceKey> receivers,
+      PropagationCallGraphBuilder builder) {
     if (!(node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call)) return false;
     Set<CGNode> callees = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
     if (callees.isEmpty()) return false;
@@ -1622,13 +1633,23 @@ public class TensorGeneratorFactory {
       if (returned == null || returned - 1 >= call.getNumberOfUses()) return false;
       SSAInstruction argumentDef = node.getDU().getDef(call.getUse(returned - 1));
       String read;
+      int object;
       if (argumentDef instanceof PythonPropertyRead propertyRead
-          && node.getIR().getSymbolTable().isStringConstant(propertyRead.getMemberRef()))
+          && node.getIR().getSymbolTable().isStringConstant(propertyRead.getMemberRef())) {
         read = node.getIR().getSymbolTable().getStringValue(propertyRead.getMemberRef());
-      else if (argumentDef instanceof SSAGetInstruction get && !get.isStatic())
+        object = propertyRead.getObjectRef();
+      } else if (argumentDef instanceof SSAGetInstruction get && !get.isStatic()) {
         read = get.getDeclaredField().getName().toString();
-      else return false;
+        object = get.getRef();
+      } else return false;
       if (!name.equals(read)) return false;
+      OrdinalSet<InstanceKey> objects =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(
+                  builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, object));
+      if (objects == null || objects.isEmpty()) return false;
+      for (InstanceKey ik : objects) if (!receivers.contains(ik)) return false;
     }
     return true;
   }
