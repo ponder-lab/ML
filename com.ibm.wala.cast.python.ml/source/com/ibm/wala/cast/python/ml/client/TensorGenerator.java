@@ -93,6 +93,7 @@ import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -394,6 +395,7 @@ public abstract class TensorGenerator {
     // entries never expire on their own; a shard running several whole-project analyses in one JVM
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
+    FIELD_PUT_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
   }
@@ -6155,6 +6157,49 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * The points-to set of the component a path of selectors reaches within a structure (<a
+   * href="https://github.com/wala/ML/issues/993">wala/ML#993</a>): an {@link Integer} selects a
+   * tuple's field by index and a {@link String} a dict's field by key, each applied to every
+   * container the previous step reached.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param root The structure's points-to set.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set, or {@code null} when a step reaches nothing.
+   */
+  protected static OrdinalSet<InstanceKey> selectComponent(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> root, List<Object> path) {
+    OrdinalSet<InstanceKey> current = root;
+    for (Object selector : path) {
+      if (current == null || current.isEmpty()) return null;
+      OrdinalSet<InstanceKey> next = null;
+      for (InstanceKey ik : current) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin == null) continue;
+        TypeReference type = asin.concreteType().getReference();
+        String fieldName;
+        if (selector instanceof Integer index && type.equals(PythonTypes.tuple))
+          fieldName = index.toString();
+        else if (selector instanceof String key && type.equals(PythonTypes.dict)) fieldName = key;
+        else continue;
+        IField f =
+            builder
+                .getClassHierarchy()
+                .resolveField(
+                    FieldReference.findOrCreate(Root, Atom.findOrCreateAsciiAtom(fieldName), Root));
+        if (f == null) continue;
+        PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+        if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
+        OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+        if (fieldPts == null) continue;
+        next = next == null ? fieldPts : OrdinalSet.unify(next, fieldPts);
+      }
+      current = next;
+    }
+    return current;
+  }
+
+  /**
    * Returns the possible dtypes of the tensor returned by this generator.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
@@ -8135,7 +8180,7 @@ public abstract class TensorGenerator {
    * @param attributeName The attribute.
    * @return The writes, possibly empty, or {@code null} when the set is not determinable.
    */
-  private static List<Pair<CGNode, Integer>> attributeWriters(
+  static List<Pair<CGNode, Integer>> attributeWriters(
       PropagationCallGraphBuilder builder, Set<InstanceKey> receivers, String attributeName) {
     Map<Pair<Set<InstanceKey>, String>, List<Pair<CGNode, Integer>>> cache =
         ATTRIBUTE_WRITERS_CACHE.computeIfAbsent(
@@ -8157,6 +8202,83 @@ public abstract class TensorGenerator {
           writers.add(Pair.make(site.node(), site.value()));
     cache.put(key, writers);
     return writers;
+  }
+
+  /** A field write: an instruction putting a value into a named field of an object. */
+  private record FieldPutSite(CGNode node, int object, int value, TypeReference declaringClass) {}
+
+  /** The field writes in the final call graph by field name, one scan per builder. */
+  private static final Map<PropagationCallGraphBuilder, Map<String, List<FieldPutSite>>>
+      FIELD_PUT_INDEX = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The field writes of the attribute that the given instances' reads of it may see, as {@code
+   * (node, value)} pairs: a write into the field of an object that may be one of the instances, and
+   * a write into the field of the instances' class or a class it inherits from, as a class body's
+   * assignment is, which an instance reads unless it shadows it. Property writes are {@link
+   * #attributeWriters}'.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph is scanned.
+   * @param receivers The instances the read's object may be.
+   * @param attributeName The attribute.
+   * @return The writes, possibly empty.
+   */
+  static List<Pair<CGNode, Integer>> fieldWriters(
+      PropagationCallGraphBuilder builder, Set<InstanceKey> receivers, String attributeName) {
+    Map<String, List<FieldPutSite>> index =
+        FIELD_PUT_INDEX.computeIfAbsent(
+            builder,
+            b -> {
+              Map<String, List<FieldPutSite>> byName = new HashMap<>();
+              for (CGNode candidate : b.getCallGraph()) {
+                IR ir = candidate.getIR();
+                if (ir == null) continue;
+                for (SSAInstruction inst : ir.getInstructions())
+                  if (inst instanceof SSAPutInstruction put && !put.isStatic())
+                    byName
+                        .computeIfAbsent(
+                            put.getDeclaredField().getName().toString(), k -> new ArrayList<>())
+                        .add(
+                            new FieldPutSite(
+                                candidate,
+                                put.getRef(),
+                                put.getVal(),
+                                put.getDeclaredField().getDeclaringClass()));
+              }
+              return byName;
+            });
+    // A Python instance is allocated as an object in its class's constructor, so its class is the
+    // constructor's declaring class as well as its own type. The walk stops below `object` and the
+    // root, which declare the fields of every module, import and instance alike: matching them
+    // would take every write of the name in the program as this one's.
+    Set<TypeReference> classes = HashSetFactory.make();
+    for (InstanceKey receiver : receivers) {
+      addProgramClasses(receiver.concreteType(), classes);
+      AllocationSiteInNode site = getAllocationSiteInNode(receiver);
+      if (site != null) addProgramClasses(site.getNode().getMethod().getDeclaringClass(), classes);
+    }
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    List<Pair<CGNode, Integer>> writers = new ArrayList<>();
+    for (FieldPutSite site : index.getOrDefault(attributeName, Collections.emptyList()))
+      if (classes.contains(site.declaringClass())
+          || mayPointTo(pa, site.node(), site.object(), receivers))
+        writers.add(Pair.make(site.node(), site.value()));
+    return writers;
+  }
+
+  /**
+   * Adds a class and the classes it inherits from, stopping at {@code object} and the root.
+   *
+   * @param start The class.
+   * @param classes The classes, which gains these.
+   */
+  private static void addProgramClasses(IClass start, Set<TypeReference> classes) {
+    for (IClass c = start; c != null; c = c.getSuperclass()) {
+      TypeName name = c.getReference().getName();
+      if (name.equals(PythonTypes.object.getName()) || name.equals(PythonTypes.rootTypeName))
+        return;
+      classes.add(c.getReference());
+    }
   }
 
   /**

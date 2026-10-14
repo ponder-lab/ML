@@ -120,6 +120,43 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
   }
 
   /**
+   * {@inheritDoc}
+   *
+   * @implNote A path reaching an entry of the {@code padded_shapes} argument, which mirrors the
+   *     element's structure, gives that entry, padded against the upstream component's shapes and
+   *     batched, or an unknown shape when the entry cannot be read. A path reaching no entry
+   *     batches the upstream component's shapes.
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    OrdinalSet<InstanceKey> component =
+        selectComponent(
+            builder,
+            this.getArgumentPointsToSet(
+                builder,
+                PaddedParameters.PADDED_SHAPES.getIndex(),
+                PaddedParameters.PADDED_SHAPES.getName()),
+            path);
+    if (component != null && !component.isEmpty()) {
+      Set<List<Dimension<?>>> padded;
+      try {
+        padded = this.getShapesFromShapeArgument(builder, component);
+      } catch (IllegalArgumentException e) {
+        padded = null;
+      }
+      // An entry that cannot be read leaves the shape unknown: the padding may change the
+      // upstream component's, so falling back to it would claim a shape the batch does not have.
+      if (padded == null || padded.isEmpty()) return null;
+      TensorGenerator receiver = this.getReceiverGenerator(builder);
+      Set<List<Dimension<?>>> upstream =
+          receiver instanceof TupleElementProvider tep ? tep.getShapesForPath(builder, path) : null;
+      return this.applyBatching(padToLongest(padded, upstream), builder);
+    }
+    return super.getShapesForPath(builder, path);
+  }
+
+  /**
    * Resolves the {@code pad to the longest element in the batch} entries of a {@code padded_shapes}
    * argument (<a href="https://github.com/wala/ML/issues/810">wala/ML#810</a>).
    *
@@ -141,11 +178,24 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
   private Set<List<Dimension<?>>> padToLongest(
       Set<List<Dimension<?>>> elementShapes, PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> receiverPTS = this.getReceiverPTS(builder);
-    Set<List<Dimension<?>>> upstream =
+    return padToLongest(
+        elementShapes,
         receiverPTS == null || receiverPTS.isEmpty()
             ? null
-            : this.getShapesOfValue(builder, receiverPTS);
+            : this.getShapesOfValue(builder, receiverPTS));
+  }
 
+  /**
+   * Resolves the {@code pad to the longest element in the batch} entries of a {@code padded_shapes}
+   * argument against given upstream element shapes, as {@link #padToLongest(Set,
+   * PropagationCallGraphBuilder)} does against the whole element's.
+   *
+   * @param elementShapes The element shapes as read from the argument.
+   * @param upstream The upstream element shapes, or {@code null} when they did not resolve.
+   * @return The same shapes with every negative extent resolved.
+   */
+  private static Set<List<Dimension<?>>> padToLongest(
+      Set<List<Dimension<?>>> elementShapes, Set<List<Dimension<?>>> upstream) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     for (List<Dimension<?>> shape : elementShapes) {
