@@ -85,6 +85,15 @@ def property_sink(x):
     return x
 
 
+def compiled_sink(x):
+    return x
+
+
+def _step(self, x):
+    compiled_sink(self)
+    return x
+
+
 def scaled(self, x):
     return alias_sink(self)
 
@@ -99,15 +108,18 @@ class Bound:
     act = scaled
     f = lambda self, x: lambda_sink(self)
     p = property(getter)
+    step = tf.function(_step)
 
     def use(self, t):
         self.act(t)
         self.f(t)
+        self.step(t)
         return property_sink(self.p)
 
 
 alias_sink(None)
 lambda_sink(None)
+compiled_sink(None)
 assert Bound().use(tf.ones([2])).shape == (4,)
 
 assert Shadow().use().shape == (2,)

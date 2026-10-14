@@ -83,4 +83,13 @@ public class TestClassAttributeReads extends AbstractTensorTest {
   public void testProperty() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "property_sink", 0, 0, Map.of());
   }
+
+  /**
+   * A class-body attribute bound to {@code tf.function} of a function: the compiled function binds
+   * to the instance on the read, as the function would, so it is not bound on the instance either.
+   */
+  @Test
+  public void testCompiledFunction() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "compiled_sink", 0, 0, Map.of());
+  }
 }
