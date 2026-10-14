@@ -1427,8 +1427,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   /** Whether {@link #solve} has completed at least once; gates the post-solve accessors. */
   private boolean solved;
 
-  /** The memoized post-solve coercion report; inputs are frozen once {@link #solved} is set. */
-  private Map<PointerKey, AppliedDTypeCoercion> appliedDTypeCoercions;
+  /**
+   * The memoized post-solve coercion report; inputs are frozen once {@link #solved} is set.
+   * Volatile, since a client may read the report from several threads at once: each computes the
+   * same report from the frozen inputs, and none sees another's before it is complete.
+   */
+  private volatile Map<PointerKey, AppliedDTypeCoercion> appliedDTypeCoercions;
 
   /**
    * Constructs the tensor type dataflow analysis over the PA assignment graph.
