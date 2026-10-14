@@ -106,3 +106,30 @@ class AudioTrainer(BaseTrainer):
 
 results = AudioTrainer().fit(AudioData().create())
 assert results[0].dtype == tf.float32 and results[0].shape == (2, 6, 1)
+
+
+def copier_sink(x):
+    return x
+
+
+class Holder:
+    def __init__(self):
+        self.loader = tf.data.Dataset.from_tensor_slices(
+            tf.ones([4, 3], dtype=tf.int32)
+        ).batch(2)
+
+
+class Copier:
+    def __init__(self, holder, own):
+        self._strategy = tf.distribute.OneDeviceStrategy(device="/cpu:0")
+        self.loader = own
+        if holder is not None:
+            self.loader = self._strategy.experimental_distribute_dataset(holder.loader)
+
+    def run(self):
+        for step, element in enumerate(self.loader, 1):
+            copier_sink(element)
+
+
+Copier(None, tf.data.Dataset.from_tensor_slices(tf.ones([4, 3])).batch(2)).run()
+Copier(Holder(), tf.data.Dataset.from_tensor_slices(tf.ones([4, 3])).batch(2)).run()
