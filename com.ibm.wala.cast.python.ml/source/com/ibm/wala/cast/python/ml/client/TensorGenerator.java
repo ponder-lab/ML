@@ -6155,6 +6155,49 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * The points-to set of the component a path of selectors reaches within a structure (<a
+   * href="https://github.com/wala/ML/issues/993">wala/ML#993</a>): an {@link Integer} selects a
+   * tuple's field by index and a {@link String} a dict's field by key, each applied to every
+   * container the previous step reached.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param root The structure's points-to set.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set, or {@code null} when a step reaches nothing.
+   */
+  protected static OrdinalSet<InstanceKey> selectComponent(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> root, List<Object> path) {
+    OrdinalSet<InstanceKey> current = root;
+    for (Object selector : path) {
+      if (current == null || current.isEmpty()) return null;
+      OrdinalSet<InstanceKey> next = null;
+      for (InstanceKey ik : current) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin == null) continue;
+        TypeReference type = asin.concreteType().getReference();
+        String fieldName;
+        if (selector instanceof Integer index && type.equals(PythonTypes.tuple))
+          fieldName = index.toString();
+        else if (selector instanceof String key && type.equals(PythonTypes.dict)) fieldName = key;
+        else continue;
+        IField f =
+            builder
+                .getClassHierarchy()
+                .resolveField(
+                    FieldReference.findOrCreate(Root, Atom.findOrCreateAsciiAtom(fieldName), Root));
+        if (f == null) continue;
+        PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+        if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
+        OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+        if (fieldPts == null) continue;
+        next = next == null ? fieldPts : OrdinalSet.unify(next, fieldPts);
+      }
+      current = next;
+    }
+    return current;
+  }
+
+  /**
    * Returns the possible dtypes of the tensor returned by this generator.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
@@ -8135,7 +8178,7 @@ public abstract class TensorGenerator {
    * @param attributeName The attribute.
    * @return The writes, possibly empty, or {@code null} when the set is not determinable.
    */
-  private static List<Pair<CGNode, Integer>> attributeWriters(
+  static List<Pair<CGNode, Integer>> attributeWriters(
       PropagationCallGraphBuilder builder, Set<InstanceKey> receivers, String attributeName) {
     Map<Pair<Set<InstanceKey>, String>, List<Pair<CGNode, Integer>>> cache =
         ATTRIBUTE_WRITERS_CACHE.computeIfAbsent(

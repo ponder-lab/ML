@@ -268,6 +268,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.HeapModel;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -281,6 +282,7 @@ import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
@@ -1532,6 +1534,57 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The one call that made every value an attribute read may yield: the read's attribute is found
+   * among the writes on the instances its object may be, and each written value is traced back to
+   * the calls that made it.
+   *
+   * @param node The node holding the read.
+   * @param def The value's definition.
+   * @param builder The propagation call graph builder.
+   * @return The variable of the one making call, or {@code null} when {@code def} is not an
+   *     attribute read with a constant name, its writes are not determinable, or they trace back to
+   *     no call or to several.
+   */
+  private static PointsToSetVariable attributeCreator(
+      CGNode node, SSAInstruction def, PropagationCallGraphBuilder builder) {
+    int object;
+    String name;
+    if (def instanceof PythonPropertyRead read) {
+      SymbolTable symbolTable = node.getIR().getSymbolTable();
+      if (!symbolTable.isStringConstant(read.getMemberRef())) return null;
+      object = read.getObjectRef();
+      name = symbolTable.getStringValue(read.getMemberRef());
+    } else if (def instanceof SSAGetInstruction get && !get.isStatic()) {
+      object = get.getRef();
+      name = get.getDeclaredField().getName().toString();
+    } else return null;
+    HeapModel heapModel = builder.getPointerAnalysis().getHeapModel();
+    Set<InstanceKey> receivers = HashSetFactory.make();
+    for (InstanceKey ik :
+        builder.getPointerAnalysis().getPointsToSet(heapModel.getPointerKeyForLocal(node, object)))
+      receivers.add(ik);
+    if (receivers.isEmpty()) return null;
+    List<Pair<CGNode, Integer>> writers =
+        TensorGenerator.attributeWriters(builder, receivers, name);
+    if (writers == null || writers.isEmpty()) return null;
+    Set<PointsToSetVariable> creators = HashSetFactory.make();
+    for (Pair<CGNode, Integer> writer : writers) {
+      PointsToSetVariable value =
+          getPointsToSetVariable(heapModel.getPointerKeyForLocal(writer.fst, writer.snd), builder);
+      if (value == null) return null;
+      for (PointsToSetVariable creator : findCreators(value, builder)) {
+        SSAInstruction creatorDef =
+            creator.getPointerKey() instanceof LocalPointerKey lpk
+                ? lpk.getNode().getDU().getDef(lpk.getValueNumber())
+                : null;
+        if (!(creatorDef instanceof SSAAbstractInvokeInstruction)) return null;
+        creators.add(creator);
+      }
+    }
+    return creators.size() == 1 ? creators.iterator().next() : null;
+  }
+
+  /**
    * Recursive-call helper for {@link #getGenerator(PointsToSetVariable,
    * PropagationCallGraphBuilder)} that swallows {@link IllegalArgumentException} and returns {@code
    * null} instead. Used at the inner walk sites that recurse into containers, return values, and
@@ -1915,6 +1968,14 @@ public class TensorGeneratorFactory {
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+            // An iterable read off an object's attribute, as `enumerate(self.loader)` reads a
+            // dataset a trainer holds, is defined by the read, not by the call that made it, and
+            // the assignment graph does not cross the field. Follow the attribute's writes to the
+            // calls that made the values they store, and take that call when it is the only one:
+            // several would each give their own element.
+            PointsToSetVariable written =
+                attributeCreator(node, node.getDU().getDef(iterableVn), builder);
+            if (written != null) iterableSrc = written;
             return (iterableSrc != null)
                 ? new EnumerateGenerator(source, tryGetGenerator(iterableSrc, builder, visited))
                 : null;

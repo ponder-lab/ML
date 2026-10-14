@@ -459,6 +459,77 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   }
 
   /**
+   * The component a path of selectors reaches within one of the structure arguments, each of which
+   * mirrors the element's structure: a dict of dtypes, shapes or specs gives each key's own.
+   *
+   * @param builder The propagation call graph builder.
+   * @param parameter The structure argument.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set, or {@code null} when the argument is absent or the path
+   *     reaches nothing in it.
+   */
+  private OrdinalSet<InstanceKey> component(
+      PropagationCallGraphBuilder builder, Parameters parameter, List<Object> path) {
+    OrdinalSet<InstanceKey> component =
+        selectComponent(
+            builder,
+            this.getArgumentPointsToSet(builder, parameter.getIndex(), parameter.getName()),
+            path);
+    return component == null || component.isEmpty() ? null : component;
+  }
+
+  @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer) return this.yieldsTuple(builder);
+    return this.component(builder, Parameters.OUTPUT_SIGNATURE, path) != null
+        || this.component(builder, Parameters.OUTPUT_TYPES, path) != null;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A path reaching a spec in the {@code output_signature} gives the spec's shape, and
+   *     one reaching an entry of the legacy {@code output_shapes} gives that entry. Without either
+   *     the component's shape is unknown, as the runtime treats it.
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getShapesForIndex(builder, index);
+    for (Parameters parameter : List.of(Parameters.OUTPUT_SIGNATURE, Parameters.OUTPUT_SHAPES)) {
+      OrdinalSet<InstanceKey> component = this.component(builder, parameter, path);
+      if (component == null) continue;
+      try {
+        return this.getShapesFromShapeArgument(builder, component);
+      } catch (IllegalArgumentException e) {
+        // An entry that is no shape form: the component's shape is unknown.
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A path reaching a spec in the {@code output_signature} gives the spec's dtype, and
+   *     one reaching an entry of the legacy {@code output_types} gives that dtype.
+   */
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getDTypesForIndex(builder, index);
+    for (Parameters parameter : List.of(Parameters.OUTPUT_SIGNATURE, Parameters.OUTPUT_TYPES)) {
+      OrdinalSet<InstanceKey> component = this.component(builder, parameter, path);
+      if (component == null) continue;
+      Set<DType> dtypes = this.getDTypesFromDTypeArgument(builder, component);
+      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+    }
+    return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
    * {@inheritDoc}
    *
    * @implNote This implementation retrieves the tensor types of the constituent element at the

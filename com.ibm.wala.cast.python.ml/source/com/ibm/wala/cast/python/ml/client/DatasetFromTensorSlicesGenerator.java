@@ -25,7 +25,6 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -378,36 +377,11 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
    */
   private OrdinalSet<InstanceKey> componentPointsToSet(
       PropagationCallGraphBuilder builder, List<Object> path) {
-    OrdinalSet<InstanceKey> current =
+    return selectComponent(
+        builder,
         this.getArgumentPointsToSet(
-            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
-    for (Object selector : path) {
-      if (current == null || current.isEmpty()) return null;
-      OrdinalSet<InstanceKey> next = null;
-      for (InstanceKey ik : current) {
-        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin == null) continue;
-        TypeReference type = asin.concreteType().getReference();
-        String fieldName;
-        if (selector instanceof Integer index && type.equals(tuple)) fieldName = index.toString();
-        else if (selector instanceof String key && type.equals(dict)) fieldName = key;
-        else continue;
-        IField f =
-            builder
-                .getClassHierarchy()
-                .resolveField(
-                    FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldName), Root));
-        if (f == null) continue;
-        OrdinalSet<InstanceKey> fieldPts =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
-        if (fieldPts == null) continue;
-        next = next == null ? fieldPts : OrdinalSet.unify(next, fieldPts);
-      }
-      current = next;
-    }
-    return current;
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName()),
+        path);
   }
 
   @Override
