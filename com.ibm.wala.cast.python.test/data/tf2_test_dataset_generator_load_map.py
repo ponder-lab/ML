@@ -17,6 +17,10 @@ def local_sink(x):
     return x * 2.0
 
 
+def built_sink(x):
+    return x * 2.0
+
+
 def load_audio(name):
     return np.ones(5 + len(name), dtype=np.float32)
 
@@ -104,3 +108,23 @@ local_results = []
 for steps, batch in enumerate(AudioMelData().create(), 1):
     local_results.append(local_sink(tf.expand_dims(batch["audios"], -1)))
 assert local_results[0].dtype == tf.float32 and local_results[0].shape == (2, 7, 1)
+
+
+def load_by_call(items):
+    audio = tf.numpy_function(load_audio, [items["audio_files"]], tf.float32)
+    return dict(utt_ids=items["utt_ids"], audios=audio, audio_lengths=len(audio))
+
+
+built = tf.data.Dataset.from_generator(
+    AudioMelData().generator,
+    output_types=AudioMelData().get_output_dtypes(),
+    args=(AudioMelData().get_args()),
+)
+built = built.map(load_by_call)
+built = built.padded_batch(
+    2, padded_shapes={"utt_ids": [], "audios": [None], "audio_lengths": []}
+)
+built_results = []
+for steps, batch in enumerate(built, 1):
+    built_results.append(built_sink(tf.expand_dims(batch["audios"], -1)))
+assert built_results[0].dtype == tf.float32 and built_results[0].shape == (2, 7, 1)

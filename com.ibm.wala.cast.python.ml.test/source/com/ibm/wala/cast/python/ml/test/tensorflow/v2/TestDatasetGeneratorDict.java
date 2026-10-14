@@ -276,4 +276,27 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(LOAD_MAP_FILE, "local_sink", 1, 2, Map.of(2, EXPANDED_BATCH));
   }
+
+  /**
+   * A key of a dict the map function builds by calling {@code dict}, whose keys the analysis does
+   * not read: the key's shape is its own {@code padded_shapes} entry, not the union of every entry,
+   * and its dtype, which the built dict would give, is unknown.
+   */
+  @Test
+  public void testLoadingMapBuiltDict()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "built_sink",
+        1,
+        2,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    UNKNOWN, asList(new NumericDim(2), DynamicDim.INSTANCE, new NumericDim(1))),
+                new TensorType(
+                    UNKNOWN,
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(1))))));
+  }
 }
