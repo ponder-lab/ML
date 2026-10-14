@@ -9,11 +9,17 @@ import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
 import org.junit.Test;
 
 /**
@@ -37,6 +43,12 @@ public class TestSummaryClassShells extends TestPythonMLCallGraphShape {
 
   /** The canonical {@code TypeName} string of the {@code tf.keras.Model} instance type. */
   private static final String MODEL = "Ltensorflow/keras/models/Model";
+
+  /** The canonical {@code TypeName} string of the {@code tf.test.TestCase} summary shell. */
+  private static final String TEST_CASE = "Ltensorflow/test/TestCase";
+
+  /** The fixture subclassing {@code tf.test.TestCase}. */
+  private static final String TEST_CASE_FILE = "tf2_test_testcase_shell.py";
 
   /** The {@code TypeName} string of Python's {@code object}. */
   private static final String OBJECT = PythonTypes.object.getName().toString();
@@ -99,6 +111,123 @@ public class TestSummaryClassShells extends TestPythonMLCallGraphShape {
   public void testModelSubclassSuperclassFromImport()
       throws ClassHierarchyException, CancelException, IOException {
     checkSuperclassChain("tf2_test_model_subclass2.py", "MyModel", MODEL, OBJECT);
+  }
+
+  /**
+   * A subclass of {@code tf.test.TestCase} has the {@code TestCase} summary shell as its
+   * superclass, rather than {@code object} (<a
+   * href="https://github.com/wala/ML/issues/571">wala/ML#571</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built
+   * @throws CancelException if the analysis is canceled
+   * @throws IOException if the test file cannot be read
+   */
+  @Test
+  public void testTestCaseSubclassSuperclass()
+      throws ClassHierarchyException, CancelException, IOException {
+    checkSuperclassChain(TEST_CASE_FILE, "T", TEST_CASE, OBJECT);
+  }
+
+  /**
+   * The call of an inherited {@code TestCase} method, {@code self.evaluate(x)}, reaches the shell's
+   * method.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built
+   * @throws CancelException if the analysis is canceled
+   * @throws IOException if the test file cannot be read
+   */
+  @Test
+  public void testTestCaseInheritedEvaluate()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertTrue(targetsOf(TEST_CASE_FILE, "T/evaluates").stream().anyMatch(this::isTestCase));
+  }
+
+  /**
+   * The call of an inherited {@code TestCase} assertion, {@code self.assertAllClose(x, ...)},
+   * reaches the shell's method.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built
+   * @throws CancelException if the analysis is canceled
+   * @throws IOException if the test file cannot be read
+   */
+  @Test
+  public void testTestCaseInheritedAssertion()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertTrue(targetsOf(TEST_CASE_FILE, "T/asserts_close").stream().anyMatch(this::isTestCase));
+  }
+
+  /**
+   * A {@code TestCase} subclass overriding {@code evaluate} calls its override, not the shell's.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built
+   * @throws CancelException if the analysis is canceled
+   * @throws IOException if the test file cannot be read
+   */
+  @Test
+  public void testTestCaseOverride() throws ClassHierarchyException, CancelException, IOException {
+    Set<String> targets = targetsOf(TEST_CASE_FILE, "V/evaluates");
+    assertTrue(targets.toString(), targets.stream().anyMatch(t -> t.endsWith("/V/evaluate")));
+    assertTrue(targets.toString(), targets.stream().noneMatch(this::isTestCase));
+  }
+
+  /**
+   * Control: a subclass of {@code unittest.TestCase} calls its own {@code evaluate}, and nothing of
+   * the {@code tf.test.TestCase} shell.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built
+   * @throws CancelException if the analysis is canceled
+   * @throws IOException if the test file cannot be read
+   */
+  @Test
+  public void testUnittestTestCaseControl()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<String> targets = targetsOf(TEST_CASE_FILE, "U/evaluates");
+    assertTrue(targets.toString(), targets.stream().anyMatch(t -> t.endsWith("/U/evaluate")));
+    assertTrue(targets.toString(), targets.stream().noneMatch(this::isTestCase));
+  }
+
+  /**
+   * Whether a call target's declaring class is the {@code TestCase} shell or one of its methods.
+   *
+   * @param target A target's declaring class name.
+   * @return {@code true} iff it is the shell's.
+   */
+  private boolean isTestCase(String target) {
+    return target.startsWith(TEST_CASE);
+  }
+
+  /**
+   * The declaring class names of the call targets of a function, and of their own targets, which a
+   * method call reaches through its dispatch trampoline.
+   *
+   * @param filename The fixture.
+   * @param function The function, as the tail of its declaring class name, such as {@code
+   *     T/evaluates}.
+   * @return The targets' declaring class names, two calls deep.
+   * @throws ClassHierarchyException if the class hierarchy cannot be built
+   * @throws CancelException if the analysis is canceled
+   * @throws IOException if the test file cannot be read
+   */
+  private Set<String> targetsOf(String filename, String function)
+      throws ClassHierarchyException, CancelException, IOException {
+    PythonAnalysisEngine<TensorTypeAnalysis> engine = makeEngine(filename);
+    PropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    Set<String> ret = new HashSet<>();
+    boolean reached = false;
+    for (CGNode node : cg) {
+      if (!node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + function))
+        continue;
+      reached = true;
+      for (Iterator<CGNode> it = cg.getSuccNodes(node); it.hasNext(); ) {
+        CGNode target = it.next();
+        ret.add(target.getMethod().getDeclaringClass().getName().toString());
+        for (Iterator<CGNode> it2 = cg.getSuccNodes(target); it2.hasNext(); )
+          ret.add(it2.next().getMethod().getDeclaringClass().getName().toString());
+      }
+    }
+    assertTrue(function + " is not in the call graph", reached);
+    return ret;
   }
 
   /**
