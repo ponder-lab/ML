@@ -23,6 +23,9 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_dataset_generator_dict.py";
 
+  /** A dataset of file names whose maps load them into a dict of arrays. */
+  private static final String LOAD_MAP_FILE = "tf2_test_dataset_generator_load_map.py";
+
   /**
    * A padded batch of 1-D {@code float32} values, expanded to rank 3: a full batch of two, or a
    * last, partial one.
@@ -225,5 +228,52 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(BOOL, 2, 3))));
+  }
+
+  /**
+   * A dataset whose {@code from_generator} element holds file names, whose {@code map} loads them
+   * into a new dict of arrays and a second {@code map} rebuilds that dict, padded and batched, and
+   * read by key in a trainer: the key is typed from the mapped dict, padded by its own {@code
+   * padded_shapes} entry. Before, the key read was the union of every entry of {@code
+   * padded_shapes}, of unknown dtype.
+   */
+  @Test
+  public void testLoadingMapKey() throws ClassHierarchyException, CancelException, IOException {
+    test(LOAD_MAP_FILE, "load_sink", 1, 2, Map.of(2, EXPANDED_BATCH));
+  }
+
+  /** Another key of the same batch, padded to two axes. */
+  @Test
+  public void testLoadingMapOtherKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        LOAD_MAP_FILE,
+        "mels_sink",
+        1,
+        2,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        DynamicDim.INSTANCE,
+                        new NumericDim(80),
+                        new NumericDim(1))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new SymbolicDim("?"),
+                        DynamicDim.INSTANCE,
+                        new NumericDim(80),
+                        new NumericDim(1))))));
+  }
+
+  /** The same key, read from a batch the dataset is enumerated into directly. */
+  @Test
+  public void testLoadingMapKeyEnumerated()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(LOAD_MAP_FILE, "local_sink", 1, 2, Map.of(2, EXPANDED_BATCH));
   }
 }
