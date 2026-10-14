@@ -3948,6 +3948,62 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/test">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/test/TestCase. Declaring a `super` materializes `TestCase` as a class shell, so a source subclass such as `class T(tf.test.TestCase)` resolves its base to this type instead of falling back to `object`, and its calls of the inherited methods below have targets (wala/ML#571). Each body returns nothing: `evaluate` returns NumPy values, which are not tensors, and the assertions return `None`, so none returns a value the analysis types. -->
+      <class name="TestCase" super="Lobject">
+        <method name="evaluate" descriptor="()LRoot;" numArgs="3" paramNames="func self tensors">
+          <return/>
+        </method>
+        <method name="assertAllClose" descriptor="()LRoot;" numArgs="7" paramNames="func self a b rtol atol msg">
+          <return/>
+        </method>
+        <method name="assertNotAllClose" descriptor="()LRoot;" numArgs="7" paramNames="func self a b rtol atol msg">
+          <return/>
+        </method>
+        <method name="assertAllCloseAccordingToType" descriptor="()LRoot;" numArgs="13" paramNames="func self a b rtol atol float_rtol float_atol half_rtol half_atol bfloat16_rtol bfloat16_atol msg">
+          <return/>
+        </method>
+        <method name="assertAllEqual" descriptor="()LRoot;" numArgs="5" paramNames="func self a b msg">
+          <return/>
+        </method>
+        <method name="assertNotAllEqual" descriptor="()LRoot;" numArgs="5" paramNames="func self a b msg">
+          <return/>
+        </method>
+        <method name="assertAllGreater" descriptor="()LRoot;" numArgs="4" paramNames="func self a comparison_target">
+          <return/>
+        </method>
+        <method name="assertAllLess" descriptor="()LRoot;" numArgs="4" paramNames="func self a comparison_target">
+          <return/>
+        </method>
+        <method name="assertAllGreaterEqual" descriptor="()LRoot;" numArgs="4" paramNames="func self a comparison_target">
+          <return/>
+        </method>
+        <method name="assertAllLessEqual" descriptor="()LRoot;" numArgs="4" paramNames="func self a comparison_target">
+          <return/>
+        </method>
+        <method name="assertAllInRange" descriptor="()LRoot;" numArgs="7" paramNames="func self target lower_bound upper_bound open_lower_bound open_upper_bound">
+          <return/>
+        </method>
+        <method name="assertAllInSet" descriptor="()LRoot;" numArgs="4" paramNames="func self target expected_set">
+          <return/>
+        </method>
+        <method name="assertNear" descriptor="()LRoot;" numArgs="6" paramNames="func self f1 f2 err msg">
+          <return/>
+        </method>
+        <method name="assertArrayNear" descriptor="()LRoot;" numArgs="6" paramNames="func self farray1 farray2 err msg">
+          <return/>
+        </method>
+        <method name="assertNDArrayNear" descriptor="()LRoot;" numArgs="6" paramNames="func self ndarray1 ndarray2 err msg">
+          <return/>
+        </method>
+        <method name="assertDTypeEqual" descriptor="()LRoot;" numArgs="4" paramNames="func self target expected_dtype">
+          <return/>
+        </method>
+        <method name="assertDictEqual" descriptor="()LRoot;" numArgs="5" paramNames="func self a b msg">
+          <return/>
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/keras/layers">
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
       <class name="Layer" super="Lobject">
