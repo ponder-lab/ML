@@ -82,6 +82,16 @@ public class TestDatasetDictElement extends AbstractTensorTest {
   }
 
   /**
+   * A dict dataset through a {@code map} whose function replaces a component of its element by a
+   * call ({@code dict.update}) before returning it: the component is not its source's, so it is
+   * unknown rather than the source's {@code int32}.
+   */
+  @Test
+  public void testMappedUpdated() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_updated", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
    * A function fed dict elements of two different datasets by two callers: each call is its own
    * context, so each resolves its own dataset's element and the sink sees both components
    * (measured).

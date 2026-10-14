@@ -98,6 +98,10 @@ def consume_mapped(x):
     pass
 
 
+def consume_updated(x):
+    pass
+
+
 def consume_two_datasets(x):
     pass
 
@@ -121,6 +125,20 @@ for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}
 ):
     consume_mapped(element["ids"])
     assert element["ids"].shape == (3,) and element["ids"].dtype == tf.int32
+
+
+# A dict dataset through a `map` whose function replaces a component of its element by a call
+# before returning it: the component is no longer its source's.
+def cast_ids(e):
+    e.update({"ids": tf.cast(e["ids"], tf.float32)})
+    return e
+
+
+for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}).map(
+    cast_ids
+):
+    consume_updated(element["ids"])
+    assert element["ids"].shape == (3,) and element["ids"].dtype == tf.float32
 
 
 # A function fed dict elements of two different datasets by two callers: each call is its own
