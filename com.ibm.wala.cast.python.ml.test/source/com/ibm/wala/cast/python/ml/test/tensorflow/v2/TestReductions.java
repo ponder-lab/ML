@@ -8,6 +8,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_1_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT32;
@@ -776,30 +777,26 @@ public class TestReductions extends AbstractTensorTest {
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
-  /**
-   * {@code tf.math.is_nan} has no summary, so its result is not a tensor here. At run time it is a
-   * {@code (2, 2) bool} tensor.
-   *
-   * <p>TODO: Expect {@code (2, 2) bool} once <a
-   * href="https://github.com/wala/ML/issues/1076">wala/ML#1076</a> is fixed.
-   */
+  /** {@code tf.math.is_nan} is a {@code bool} tensor of its argument's shape (wala/ML#1076). */
   @Test
   public void testIsNan()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reduce_any_is_nan.py", "nan_sink", 0, 0);
+    test("tf2_test_reduce_any_is_nan.py", "nan_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
   }
 
   /**
-   * {@code tf.reduce_any} has no summary, so its result is not a tensor here. At run time it is a
-   * scalar {@code bool}.
-   *
-   * <p>TODO: Expect a scalar {@code bool} once <a
-   * href="https://github.com/wala/ML/issues/1076">wala/ML#1076</a> is fixed.
+   * {@code tf.reduce_any} reduces over every axis by default to a scalar {@code bool}, as {@code
+   * tf.reduce_all} does in {@link #testReduceAllOfComparison()} (wala/ML#1076).
    */
   @Test
   public void testReduceAny()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reduce_any_is_nan.py", "any_sink", 0, 0);
+    test(
+        "tf2_test_reduce_any_is_nan.py",
+        "any_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
   }
 
   /**
@@ -815,5 +812,125 @@ public class TestReductions extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * The {@code tf.math.reduce_any} spelling is the same function as {@code tf.reduce_any}. The
+   * result is {@code bool} (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyMathAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "math_any_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * {@code tf.reduce_any} over {@code axis=1} drops that axis. The result is {@code bool}
+   * (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyKeywordAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "axis_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2))));
+  }
+
+  /**
+   * {@code tf.reduce_any} reads a positional axis as the keyword one. The result is {@code bool}
+   * (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyPositionalAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "positional_axis_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2))));
+  }
+
+  /**
+   * {@code tf.reduce_any} counts a negative axis from the end. The result is {@code bool}
+   * (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyNegativeAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "negative_axis_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2))));
+  }
+
+  /**
+   * {@code tf.reduce_any} over a list of every axis is a scalar. The result is {@code bool}
+   * (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyAxisList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "axis_list_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * {@code tf.reduce_any} with {@code keepdims=True} keeps the reduced axis as {@code 1}. The
+   * result is {@code bool} (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyKeepdims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "keepdims_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2, 1))));
+  }
+
+  /**
+   * {@code tf.reduce_any} over every axis with {@code keepdims=True} keeps each as {@code 1}. The
+   * result is {@code bool} (wala/ML#1076).
+   */
+  @Test
+  public void testReduceAnyKeepdimsAllAxes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "keepdims_all_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 1, 1))));
+  }
+
+  /**
+   * {@code tf.math.is_nan} is {@code bool} whatever its argument's floating dtype, here {@code
+   * float64} (wala/ML#1076).
+   */
+  @Test
+  public void testIsNanOfFloat64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_forms.py",
+        "float64_nan_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2, 3))));
   }
 }
