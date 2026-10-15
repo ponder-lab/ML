@@ -1,4 +1,5 @@
 # Test for https://github.com/wala/ML/issues/1074.
+import numpy as np
 import tensorflow as tf
 
 
@@ -129,6 +130,34 @@ def unmodeled_sink(y):
     return y
 
 
+def optional_sink(y):
+    assert y.shape == (2, 3)
+    assert y.dtype == tf.bool
+    return y
+
+
+def mixed_sink(y):
+    assert isinstance(y, bool) or y.dtype == tf.bool
+    return y
+
+
+def numpy_sink(y):
+    assert y.shape == (2, 3)
+    assert y.dtype == np.bool_
+    return y
+
+
+def identity_sink(y):
+    assert isinstance(y, bool)
+    return y
+
+
+def dynamic_shape_sink(y):
+    assert y.shape == ()
+    assert y.dtype == tf.bool
+    return y
+
+
 class Box:
     pass
 
@@ -136,6 +165,15 @@ class Box:
 class Identity(tf.keras.layers.Layer):
     def call(self, inputs):
         return inputs
+
+
+def optional(mask=None):
+    if mask is not None:
+        optional_sink(mask > 0.0)
+
+
+def mixed(a):
+    mixed_sink(a == a)
 
 
 def f(x, b, v, i, n, xs, mode):
@@ -163,6 +201,13 @@ def f(x, b, v, i, n, xs, mode):
     string_sink(mode == "train")
     layer_sink(Identity()(x) > 0.0)
     unmodeled_sink(tf.math.bessel_i0e(x) > 0.0)
+    optional()
+    optional(x)
+    mixed(Box())
+    mixed(x)
+    numpy_sink(np.ones((2, 3)) > 0)
+    identity_sink(x is b)
+    dynamic_shape_sink(tf.shape(x)[0] == 2)
 
 
 f(

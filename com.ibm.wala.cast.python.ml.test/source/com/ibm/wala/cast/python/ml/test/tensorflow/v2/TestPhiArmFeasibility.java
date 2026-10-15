@@ -87,4 +87,49 @@ public class TestPhiArmFeasibility extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FILE, "consume_shared", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
   }
+
+  /**
+   * A chained comparison {@code 0 < self.m < 3} over a field bound to {@code 5} is false at run
+   * time, so the sink receives the {@code else} arm's {@code (2,)}. The front end lowers the chain
+   * as a disjunction of its links, so the guard folds to true and the live arm is dropped as dead,
+   * leaving the {@code (2, 6)} of the arm that does not run.
+   *
+   * <p>TODO: Expect {@code (2,)} once <a
+   * href="https://github.com/wala/ML/issues/1079">wala/ML#1079</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testChainedComparisonGuard()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_chained_comparison_guard.py",
+        "consume_chained",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_6_FLOAT32)));
+  }
+
+  /**
+   * The control for {@link #testChainedComparisonGuard()}: the same guard written as a conjunction
+   * of its links folds to false, so the sink receives the {@code else} arm's {@code (2,)} alone.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testConjunctionGuard()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_chained_comparison_guard.py",
+        "consume_split",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
 }
