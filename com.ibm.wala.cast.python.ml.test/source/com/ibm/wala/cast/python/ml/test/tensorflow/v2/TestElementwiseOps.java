@@ -2252,4 +2252,33 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 1))));
   }
+
+  /**
+   * A Python comparison operator on a tensor yields no tensor: the binary-operator dispatch maps
+   * only the arithmetic operators to a generator, so the comparison's result is never seeded. At
+   * run time it is a scalar {@code bool} tensor.
+   *
+   * <p>TODO: Expect a scalar {@code bool} once <a
+   * href="https://github.com/wala/ML/issues/1074">wala/ML#1074</a> is fixed.
+   */
+  @Test
+  public void testComparisonOperator()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operator.py", "operator_sink", 0, 0);
+  }
+
+  /**
+   * The control for {@link #testComparisonOperator()}: the same comparison written as {@code
+   * tf.greater} is a scalar {@code bool}.
+   */
+  @Test
+  public void testComparisonCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operator.py",
+        "api_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
 }
