@@ -158,6 +158,21 @@ def dynamic_shape_sink(y):
     return y
 
 
+def element_shape_sink(y):
+    assert isinstance(y, bool)
+    return y
+
+
+def element_dtype_sink(y):
+    assert isinstance(y, bool)
+    return y
+
+
+def element_dim_sink(y):
+    assert isinstance(y, bool)
+    return y
+
+
 class Box:
     pass
 
@@ -174,6 +189,12 @@ def optional(mask=None):
 
 def mixed(a):
     mixed_sink(a == a)
+
+
+def element(a):
+    element_shape_sink(a.shape == (3,))
+    element_dtype_sink(a.dtype == tf.float32)
+    element_dim_sink(a.shape[0] == 3)
 
 
 def f(x, b, v, i, n, xs, mode):
@@ -208,6 +229,8 @@ def f(x, b, v, i, n, xs, mode):
     numpy_sink(np.ones((2, 3)) > 0)
     identity_sink(x is b)
     dynamic_shape_sink(tf.shape(x)[0] == 2)
+    first, second = tf.unstack(x)
+    element(first)
 
 
 f(

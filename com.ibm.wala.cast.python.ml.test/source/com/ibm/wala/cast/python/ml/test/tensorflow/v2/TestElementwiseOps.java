@@ -2610,4 +2610,37 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
   }
+
+  /**
+   * {@code a.shape == (3,)} on a parameter bound to an element of a {@code tf.unstack} is a Python
+   * {@code bool}, not a tensor. The attribute read resolves the element's generator, so it is
+   * excluded from the gate's evidence by its name (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorElementShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "element_shape_sink", 0, 0);
+  }
+
+  /**
+   * {@code a.dtype == tf.float32} on a parameter bound to an element of a {@code tf.unstack} is a
+   * Python {@code bool}, not a tensor. The attribute read resolves the element's generator, so it
+   * is excluded from the gate's evidence by its name (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorElementDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "element_dtype_sink", 0, 0);
+  }
+
+  /**
+   * {@code a.shape[0] == 3} on a parameter bound to an element of a {@code tf.unstack} is a Python
+   * {@code bool}, not a tensor. The attribute read resolves the element's generator, so it is
+   * excluded from the gate's evidence by its name (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorElementDimension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "element_dim_sink", 0, 0);
+  }
 }

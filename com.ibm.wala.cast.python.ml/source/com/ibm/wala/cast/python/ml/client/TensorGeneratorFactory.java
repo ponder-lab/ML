@@ -1805,10 +1805,17 @@ public class TensorGeneratorFactory {
    * <p>It is when an operand is {@code None}: TensorFlow answers {@code t == None} with {@code
    * False}, not a tensor, and the front end lowers {@code t is None} and {@code t is not None} as
    * {@code ==} and {@code !=}. Otherwise it is when no operand has tensor evidence, as {@link
-   * #isBinopWithoutTensorOperand} decides for the arithmetic operators, except that an allocation
-   * in an operand's points-to set counts only when it lies in a tensor-library namespace. Comparing
-   * two objects of the program's own classes is common, and unlike arithmetic on them gives a
-   * Python {@code bool}.
+   * #isBinopWithoutTensorOperand} decides for the arithmetic operators, with three differences,
+   * each for a comparison that is common and gives a Python {@code bool}:
+   *
+   * <ul>
+   *   <li>An allocation in an operand's points-to set counts only when it lies in a tensor-library
+   *       namespace, so comparing two objects of the program's own classes is not typed.
+   *   <li>A {@code tf.DType} or {@code tf.TensorShape} allocation does not count, so {@code x.dtype
+   *       == tf.float32} is not typed.
+   *   <li>An operand read from a tensor's non-tensor attribute ({@link #readsNonTensorAttribute})
+   *       does not count, so {@code a.shape == (3, 4)} is not typed.
+   * </ul>
    *
    * @param source The comparison's result.
    * @param builder The propagation call graph builder.
@@ -1828,9 +1835,41 @@ public class TensorGeneratorFactory {
     SymbolTable symbolTable = node.getIR().getSymbolTable();
     for (int i = 0; i < def.getNumberOfUses(); i++)
       if (symbolTable.isNullConstant(def.getUse(i))) return true;
-    for (int i = 0; i < def.getNumberOfUses(); i++)
-      if (operandHasTensorEvidence(def.getUse(i), node, builder, visited, true)) return false;
+    for (int i = 0; i < def.getNumberOfUses(); i++) {
+      int operandVn = def.getUse(i);
+      if (readsNonTensorAttribute(builder, node, operandVn, NON_TENSOR_ATTRIBUTE_READ_HOPS))
+        continue;
+      if (operandHasTensorEvidence(operandVn, node, builder, visited, true)) return false;
+    }
     return true;
+  }
+
+  /** How many property reads {@link #readsNonTensorAttribute} follows toward the receiver. */
+  private static final int NON_TENSOR_ATTRIBUTE_READ_HOPS = 4;
+
+  /**
+   * Whether a value is read, directly or through further reads on the result, from one of a
+   * tensor's attributes that are not tensors ({@link #NON_TENSOR_ATTRIBUTES}): {@code a.shape},
+   * {@code a.dtype}, or {@code a.shape[0]}.
+   *
+   * <p>Such a value is no evidence of a tensor operand for a comparison, whatever its receiver is
+   * (wala/ML#1074). The structural check in {@link #operandHasTensorEvidence} does not see this: it
+   * resolves a generator for {@code a.shape} when {@code a} is an element of a {@code tf.unstack},
+   * and so typed an assertion's {@code a.shape == (3, 4)} as a {@code bool} tensor.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number.
+   * @param hops How many reads to follow toward the receiver.
+   * @return {@code true} iff a read within {@code hops} names a non-tensor attribute.
+   */
+  private static boolean readsNonTensorAttribute(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, int hops) {
+    if (hops == 0) return false;
+    if (!(node.getDU().getDef(vn) instanceof PythonPropertyRead read)) return false;
+    String name = TensorGenerator.resolvePropertyName(builder, node, read);
+    if (name != null && isNonTensorAttribute(name)) return true;
+    return readsNonTensorAttribute(builder, node, read.getObjectRef(), hops - 1);
   }
 
   /**
@@ -2019,6 +2058,10 @@ public class TensorGeneratorFactory {
       if (libraryAllocationsOnly) {
         TypeReference allocated = allocatedType(ik);
         if (allocated == null || !isTensorLibraryType(allocated)) continue;
+        // A dtype or a static shape is a library object but not a tensor: comparing one, as in
+        // `x.dtype == tf.float32`, gives a Python `bool` (wala/ML#1074).
+        if (allocated.equals(TensorFlowTypes.D_TYPE)
+            || allocated.equals(TensorFlowTypes.TENSOR_SHAPE)) continue;
       }
       return true;
     }

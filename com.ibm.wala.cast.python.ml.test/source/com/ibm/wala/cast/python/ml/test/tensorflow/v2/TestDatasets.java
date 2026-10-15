@@ -2177,7 +2177,9 @@ public class TestDatasets extends AbstractTensorTest {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    *     <p>The local count excludes the {@code enumerate(targets)} iterator object, pinned
-   *     non-tensor since wala/ML#732; the element and its TensorFlow uses stay typed.
+   *     non-tensor since wala/ML#732; the element and its TensorFlow uses stay typed. It includes
+   *     the {@code tar > 0} condition of {@code tf.where}, a {@code bool} tensor since comparison
+   *     operators were typed (wala/ML#1074).
    */
   @Test
   public void testTuckerTargetConvert()
@@ -2195,7 +2197,7 @@ public class TestDatasets extends AbstractTensorTest {
         "TuckERLoader.target_convert",
         "tucker_proj",
         1,
-        6,
+        7,
         Map.of(3, Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
   }
 
