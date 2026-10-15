@@ -1096,6 +1096,24 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String REDUCE_ALL_SIGNATURE = "tf.reduce_all()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_any. */
+  public static final MethodReference REDUCE_ANY =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_any")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_ANY_SIGNATURE = "tf.reduce_any()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/is_nan. */
+  public static final MethodReference IS_NAN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/is_nan")),
+          AstMethodReference.fnSelector);
+
+  private static final String IS_NAN_SIGNATURE = "tf.math.is_nan()";
+
   public static final MethodReference MODEL =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -2723,6 +2741,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(UNSORTED_SEGMENT_MAX.getDeclaringClass(), UNSORTED_SEGMENT_MAX_SIGNATURE),
           Map.entry(UNSORTED_SEGMENT_MEAN.getDeclaringClass(), UNSORTED_SEGMENT_MEAN_SIGNATURE),
           Map.entry(REDUCE_ALL.getDeclaringClass(), REDUCE_ALL_SIGNATURE),
+          Map.entry(REDUCE_ANY.getDeclaringClass(), REDUCE_ANY_SIGNATURE),
+          Map.entry(IS_NAN.getDeclaringClass(), IS_NAN_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),
           Map.entry(SEQUENTIAL.getDeclaringClass(), SEQUENTIAL_SIGNATURE),

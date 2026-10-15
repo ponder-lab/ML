@@ -125,6 +125,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IS_NAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.KERAS_APPLICATION_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.KERAS_CONCATENATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
@@ -170,6 +171,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RECIPROCAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_ALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_ANY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_LOGSUMEXP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
@@ -595,6 +597,10 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(ReduceLogSumExp::new, ReduceLogSumExp::new);
     if (isType(type, REDUCE_ALL.getDeclaringClass()))
       return anchor.makeGenerator(ReduceAll::new, ReduceAll::new);
+    if (isType(type, REDUCE_ANY.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceAny::new, ReduceAny::new);
+    if (isType(type, IS_NAN.getDeclaringClass()))
+      return anchor.makeGenerator(IsNan::new, IsNan::new);
     if (isType(type, REDUCE_SUM.getDeclaringClass()))
       return anchor.makeGenerator(ReduceSum::new, ReduceSum::new);
 

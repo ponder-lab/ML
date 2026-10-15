@@ -953,6 +953,15 @@
         <putfield class="LRoot" field="reduce_all" fieldType="LRoot" ref="x" value="reduce_all"/>
         <putfield class="LRoot" field="reduce_all" fieldType="LRoot" ref="math" value="reduce_all"/>
         <putfield class="LRoot" field="reduce_all" fieldType="LRoot" ref="math_ops" value="reduce_all"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_any -->
+        <new def="reduce_any" class="Ltensorflow/math/reduce_any"/>
+        <putfield class="LRoot" field="reduce_any" fieldType="LRoot" ref="x" value="reduce_any"/>
+        <putfield class="LRoot" field="reduce_any" fieldType="LRoot" ref="math" value="reduce_any"/>
+        <putfield class="LRoot" field="reduce_any" fieldType="LRoot" ref="math_ops" value="reduce_any"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/is_nan. TensorFlow 2 has no top-level `tf.is_nan`. -->
+        <new def="is_nan" class="Ltensorflow/math/is_nan"/>
+        <putfield class="LRoot" field="is_nan" fieldType="LRoot" ref="math" value="is_nan"/>
+        <putfield class="LRoot" field="is_nan" fieldType="LRoot" ref="math_ops" value="is_nan"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_prod -->
         <new def="reduce_prod" class="Ltensorflow/math/reduce_prod"/>
         <putfield class="LRoot" field="reduce_prod" fieldType="LRoot" ref="x" value="reduce_prod"/>
@@ -1681,6 +1690,20 @@
       <class name="reduce_all" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_all. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `ReduceAll` generator (wala/ML#449 Tier 3); the `convert_to_tensor` chain preserved input's shape, but reductions collapse dims along `axis`. Shape logic lives in `ReduceMean`'s axis/keepdims handling, which `ReduceAll` reuses by inheritance; dtype is always `BOOL`. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="reduce_any" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_any. `<new>+<return>` paired with the `ReduceAny` generator, which reduces as `reduce_all` does: over every axis by default, over `axis` when given, keeping the reduced axes with `keepdims=True`; dtype is always `BOOL` (wala/ML#1076). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="is_nan" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/is_nan. `<new>+<return>` paired with the `IsNan` generator: the shape is `x`'s and the dtype is `BOOL` (wala/ML#1076). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
