@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
@@ -10,6 +11,7 @@ import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import org.junit.Test;
 
@@ -38,7 +40,26 @@ public class TestDictComprehensionAllocation extends TestPythonMLCallGraphShape 
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     CallGraph cg = builder.makeCallGraph(builder.getOptions());
 
+    // The comprehension's call reaches `consume`, so its absence below is the allocation's.
+    assertTrue("The comprehension's function calls no `consume`.", calls(cg, "built", "consume"));
     assertEquals(Set.of("literal:Ldict"), parameterAllocations(builder, cg, "consume"));
+  }
+
+  /**
+   * Whether a named function has a node calling a node of another.
+   *
+   * @param cg The call graph.
+   * @param caller The calling function's name.
+   * @param callee The called function's name.
+   * @return {@code true} iff some node of {@code callee} has a predecessor node of {@code caller}.
+   */
+  private static boolean calls(CallGraph cg, String caller, String callee) {
+    for (CGNode node : cg) {
+      if (!node.getMethod().getSignature().contains("." + callee + ".")) continue;
+      for (Iterator<CGNode> preds = cg.getPredNodes(node); preds.hasNext(); )
+        if (preds.next().getMethod().getSignature().contains("." + caller + ".")) return true;
+    }
+    return false;
   }
 
   /**
