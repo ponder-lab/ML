@@ -1848,9 +1848,20 @@ public class TensorGeneratorFactory {
   private static final int NON_TENSOR_ATTRIBUTE_READ_HOPS = 4;
 
   /**
+   * A tensor's attributes whose values, and everything reachable from them, are never tensors: a
+   * {@code TensorShape}, a {@code DType}, a string or an integer. A subset of {@link
+   * #NON_TENSOR_ATTRIBUTES}, which also holds {@code op}, {@code graph} and {@code consumers}:
+   * those are not tensors themselves, but a read further down can be one ({@code t.op.outputs[0]},
+   * or a program's own {@code self.graph.adj}), so {@link #readsNonTensorAttribute} must not stop
+   * on them.
+   */
+  private static final Set<String> NON_TENSOR_VALUE_ATTRIBUTES =
+      Set.of("shape", "dtype", "name", "device", "value_index");
+
+  /**
    * Whether a value is read, directly or through further reads on the result, from one of a
-   * tensor's attributes that are not tensors ({@link #NON_TENSOR_ATTRIBUTES}): {@code a.shape},
-   * {@code a.dtype}, or {@code a.shape[0]}.
+   * tensor's attributes whose values are never tensors ({@link #NON_TENSOR_VALUE_ATTRIBUTES}):
+   * {@code a.shape}, {@code a.dtype}, or {@code a.shape[0]}.
    *
    * <p>Such a value is no evidence of a tensor operand for a comparison, whatever its receiver is
    * (wala/ML#1074). The structural check in {@link #operandHasTensorEvidence} does not see this: it
@@ -1861,14 +1872,14 @@ public class TensorGeneratorFactory {
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number.
    * @param hops How many reads to follow toward the receiver.
-   * @return {@code true} iff a read within {@code hops} names a non-tensor attribute.
+   * @return {@code true} iff a read within {@code hops} names such an attribute.
    */
   private static boolean readsNonTensorAttribute(
       PropagationCallGraphBuilder builder, CGNode node, int vn, int hops) {
     if (hops == 0) return false;
     if (!(node.getDU().getDef(vn) instanceof PythonPropertyRead read)) return false;
     String name = TensorGenerator.resolvePropertyName(builder, node, read);
-    if (name != null && isNonTensorAttribute(name)) return true;
+    if (name != null && NON_TENSOR_VALUE_ATTRIBUTES.contains(name)) return true;
     return readsNonTensorAttribute(builder, node, read.getObjectRef(), hops - 1);
   }
 

@@ -173,8 +173,24 @@ def element_dim_sink(y):
     return y
 
 
+def graph_field_sink(y):
+    assert y.shape == (2, 3)
+    assert y.dtype == tf.bool
+    return y
+
+
 class Box:
     pass
+
+
+class Graph:
+    def __init__(self, adj):
+        self.adj = adj
+
+
+class Holder:
+    def __init__(self, graph):
+        self.graph = graph
 
 
 class Identity(tf.keras.layers.Layer):
@@ -195,6 +211,10 @@ def element(a):
     element_shape_sink(a.shape == (3,))
     element_dtype_sink(a.dtype == tf.float32)
     element_dim_sink(a.shape[0] == 3)
+
+
+def holder_graph(h):
+    graph_field_sink(h.graph.adj > 0.0)
 
 
 def f(x, b, v, i, n, xs, mode):
@@ -231,6 +251,7 @@ def f(x, b, v, i, n, xs, mode):
     dynamic_shape_sink(tf.shape(x)[0] == 2)
     first, second = tf.unstack(x)
     element(first)
+    holder_graph(Holder(Graph(x)))
 
 
 f(

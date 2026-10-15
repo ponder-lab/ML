@@ -2643,4 +2643,21 @@ public class TestElementwiseOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_comparison_operators.py", "element_dim_sink", 0, 0);
   }
+
+  /**
+   * A comparison on a tensor read through a program's own {@code graph} attribute, {@code
+   * h.graph.adj > 0.0}, is a {@code bool} tensor: {@code graph} names a tensor's graph too, but
+   * unlike {@code shape} or {@code dtype} its value can hold tensors, so the attribute exclusion
+   * does not stop on it (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorGraphAttributeField()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "graph_field_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
 }
