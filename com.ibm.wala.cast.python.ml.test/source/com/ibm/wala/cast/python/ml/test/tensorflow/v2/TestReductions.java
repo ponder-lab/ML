@@ -775,4 +775,45 @@ public class TestReductions extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
+
+  /**
+   * {@code tf.math.is_nan} has no summary, so its result is not a tensor here. At run time it is a
+   * {@code (2, 2) bool} tensor.
+   *
+   * <p>TODO: Expect {@code (2, 2) bool} once <a
+   * href="https://github.com/wala/ML/issues/1076">wala/ML#1076</a> is fixed.
+   */
+  @Test
+  public void testIsNan()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_any_is_nan.py", "nan_sink", 0, 0);
+  }
+
+  /**
+   * {@code tf.reduce_any} has no summary, so its result is not a tensor here. At run time it is a
+   * scalar {@code bool}.
+   *
+   * <p>TODO: Expect a scalar {@code bool} once <a
+   * href="https://github.com/wala/ML/issues/1076">wala/ML#1076</a> is fixed.
+   */
+  @Test
+  public void testReduceAny()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_any_is_nan.py", "any_sink", 0, 0);
+  }
+
+  /**
+   * The control for {@link #testIsNan()} and {@link #testReduceAny()}: the modeled {@code
+   * tf.reduce_all} of a comparison is a scalar {@code bool}.
+   */
+  @Test
+  public void testReduceAllOfComparison()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reduce_any_is_nan.py",
+        "all_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
 }
