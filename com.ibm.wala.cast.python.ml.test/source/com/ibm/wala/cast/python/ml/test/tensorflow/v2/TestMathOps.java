@@ -79,11 +79,15 @@ public class TestMathOps extends AbstractTensorTest {
    * more intermediate of the nucleus-sampling arithmetic now registers as an unknown-typed tensor
    * where it previously carried nothing at all, audited value by value against the pre-change dump
    * (the other twelve entries are identical).
+   *
+   * <p>The count rose from fifteen to sixteen when comparison operators were typed (wala/ML#1074):
+   * the {@code logits < min_values} condition of the closing {@code tf.where} is a {@code bool}
+   * tensor, as at run time.
    */
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 15, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 16, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**

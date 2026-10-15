@@ -4676,7 +4676,7 @@ public abstract class TensorGenerator {
    * @param read The property read.
    * @return The member name, or {@code null} when it is not a resolvable string constant.
    */
-  private static String resolvePropertyName(
+  static String resolvePropertyName(
       PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     for (InstanceKey ik :

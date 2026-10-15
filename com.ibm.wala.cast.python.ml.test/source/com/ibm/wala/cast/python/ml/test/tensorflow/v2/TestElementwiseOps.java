@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT32;
@@ -2254,17 +2255,18 @@ public class TestElementwiseOps extends AbstractTensorTest {
   }
 
   /**
-   * A Python comparison operator on a tensor yields no tensor: the binary-operator dispatch maps
-   * only the arithmetic operators to a generator, so the comparison's result is never seeded. At
-   * run time it is a scalar {@code bool} tensor.
-   *
-   * <p>TODO: Expect a scalar {@code bool} once <a
-   * href="https://github.com/wala/ML/issues/1074">wala/ML#1074</a> is fixed.
+   * A Python comparison operator on a tensor is typed as the corresponding call is: a scalar {@code
+   * bool} here, as {@link #testComparisonCall()}'s {@code tf.greater} is (wala/ML#1074).
    */
   @Test
   public void testComparisonOperator()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_comparison_operator.py", "operator_sink", 0, 0);
+    test(
+        "tf2_test_comparison_operator.py",
+        "operator_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
   }
 
   /**
@@ -2280,5 +2282,382 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * {@code x == b} on a {@code (2, 3)} tensor and a {@code (3,)} tensor is their broadcast shape,
+   * with dtype {@code bool}, as the corresponding call is (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "eq_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code x != b} on a {@code (2, 3)} tensor and a {@code (3,)} tensor is their broadcast shape,
+   * with dtype {@code bool}, as the corresponding call is (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorNotEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "ne_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code x < b} on a {@code (2, 3)} tensor and a {@code (3,)} tensor is their broadcast shape,
+   * with dtype {@code bool}, as the corresponding call is (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorLess()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "lt_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code x <= b} on a {@code (2, 3)} tensor and a {@code (3,)} tensor is their broadcast shape,
+   * with dtype {@code bool}, as the corresponding call is (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorLessEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "le_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code x > b} on a {@code (2, 3)} tensor and a {@code (3,)} tensor is their broadcast shape,
+   * with dtype {@code bool}, as the corresponding call is (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorGreater()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "gt_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code x >= b} on a {@code (2, 3)} tensor and a {@code (3,)} tensor is their broadcast shape,
+   * with dtype {@code bool}, as the corresponding call is (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorGreaterEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "ge_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * A Python scalar on the left of a comparison with a scalar tensor, {@code 0.0 < s}, gives a
+   * scalar {@code bool} (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorScalarLeft()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "scalar_left_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * A Python scalar on the right of a comparison with a scalar tensor, {@code s > 0.0}, gives a
+   * scalar {@code bool} (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorScalarRight()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "scalar_right_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * A comparison of a {@code tf.Variable} with a tensor gives a {@code bool} tensor of their
+   * broadcast shape (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorVariable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "variable_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * A chained comparison, {@code 0.0 < s < 100.0}, gives a scalar {@code bool}: the front end
+   * lowers it through a conditional, whose comparison branch is typed (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorChained()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "chained_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * A comparison whose tensor operand is a user layer's call result, typed by dataflow alone, gives
+   * a {@code bool} tensor of the operand's shape (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorLayerResult()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py", "layer_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * A comparison whose tensor operand comes from an unmodeled call, {@code tf.math.bessel_i0e}, is
+   * not a tensor here, though it is a {@code (2, 3) bool} tensor at run time. Nothing says the
+   * operand is a tensor, so the comparison is gated as an arithmetic operator on it is
+   * (wala/ML#451): the result is not a tensor rather than one of unknown shape, since a call into a
+   * tensor library can also return a Python value (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorUnmodeledOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "unmodeled_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of two Python {@code int}s is a Python {@code bool}, not a tensor. The sink is
+   * reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorInts()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "int_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of a {@code len} with a literal is a Python {@code bool}, not a tensor. The sink
+   * is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorLen()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "len_sink", 0, 0);
+  }
+
+  /**
+   * A tensor compared with {@code None} by {@code ==} is a Python {@code bool}: TensorFlow answers
+   * {@code False} without a tensor. The sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorEqualNone()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "eq_none_sink", 0, 0);
+  }
+
+  /**
+   * A tensor compared with {@code None} by {@code !=} is a Python {@code bool}, not a tensor. The
+   * sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorNotEqualNone()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "ne_none_sink", 0, 0);
+  }
+
+  /**
+   * An identity test {@code x is None} on a tensor is a Python {@code bool}. The front end lowers
+   * {@code is} as {@code ==}, so this rests on the {@code None} operand. The sink is reached with
+   * no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorIsNone()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "is_none_sink", 0, 0);
+  }
+
+  /**
+   * An identity test {@code x is not None} on a tensor is a Python {@code bool}, lowered as {@code
+   * !=}. The sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorIsNotNone()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "is_not_none_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of two plain objects is a Python {@code bool}, not a tensor. The sink is reached
+   * with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorObjects()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "object_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of a tensor's {@code dtype} with {@code tf.float32} is a Python {@code bool}, not
+   * a tensor. The sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "dtype_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of a tensor's {@code shape} with a tuple is a Python {@code bool}, not a tensor.
+   * The sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "shape_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of one of a tensor's static dimensions with a literal is a Python {@code bool},
+   * not a tensor. The sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorDimension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "dim_sink", 0, 0);
+  }
+
+  /**
+   * A comparison of a string parameter with a string literal is a Python {@code bool}, not a
+   * tensor. The sink is reached with no tensor parameter (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorString()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "string_sink", 0, 0);
+  }
+
+  /**
+   * A comparison on an optional parameter whose points-to set holds both {@code None} and a tensor
+   * is a {@code bool} tensor: the {@code None} decline applies to a literal {@code None} operand,
+   * not to an operand that may also be {@code None} (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorOptionalOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "optional_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * A comparison on a parameter whose points-to set holds both an object of the program's own class
+   * and a tensor is a {@code bool} tensor for the tensor: one tensor-library allocation is evidence
+   * enough (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorMixedOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py", "mixed_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * A comparison on a NumPy array is typed as one on a tensor is, as the arithmetic operators on an
+   * array are: a {@code (2, 3) bool} array (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorNumpyOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py", "numpy_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * An identity test {@code x is b} on two tensors is a Python {@code bool}, but the front end
+   * lowers {@code is} as {@code ==}, so it is typed as the broadcast comparison here.
+   *
+   * <p>TODO: Expect no tensor once <a
+   * href="https://github.com/wala/ML/issues/1078">wala/ML#1078</a> is fixed.
+   */
+  @Test
+  public void testComparisonOperatorIdentityOfTensors()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "identity_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * A comparison of a {@code tf.shape} element with a literal is a scalar {@code bool} tensor, as
+   * at run time, although {@code tf.shape}'s own result is not typed (wala/ML#943, wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorDynamicShapeElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "dynamic_shape_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * {@code a.shape == (3,)} on a parameter bound to an element of a {@code tf.unstack} is a Python
+   * {@code bool}, not a tensor. The attribute read resolves the element's generator, so it is
+   * excluded from the gate's evidence by its name (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorElementShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "element_shape_sink", 0, 0);
+  }
+
+  /**
+   * {@code a.dtype == tf.float32} on a parameter bound to an element of a {@code tf.unstack} is a
+   * Python {@code bool}, not a tensor. The attribute read resolves the element's generator, so it
+   * is excluded from the gate's evidence by its name (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorElementDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "element_dtype_sink", 0, 0);
+  }
+
+  /**
+   * {@code a.shape[0] == 3} on a parameter bound to an element of a {@code tf.unstack} is a Python
+   * {@code bool}, not a tensor. The attribute read resolves the element's generator, so it is
+   * excluded from the gate's evidence by its name (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorElementDimension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_operators.py", "element_dim_sink", 0, 0);
+  }
+
+  /**
+   * A comparison on a tensor read through a program's own {@code graph} attribute, {@code
+   * h.graph.adj > 0.0}, is a {@code bool} tensor: {@code graph} names a tensor's graph too, but
+   * unlike {@code shape} or {@code dtype} its value can hold tensors, so the attribute exclusion
+   * does not stop on it (wala/ML#1074).
+   */
+  @Test
+  public void testComparisonOperatorGraphAttributeField()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_operators.py",
+        "graph_field_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_BOOL)));
   }
 }
