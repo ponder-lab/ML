@@ -24,25 +24,22 @@ import org.junit.Test;
 public class TestDictComprehensionAllocation extends TestPythonMLCallGraphShape {
 
   /**
-   * The parameter points to the literal's {@code dict} allocation only: the comprehension allocates
-   * a class whose name does not resolve, so it has no instance key and its dict never reaches the
-   * parameter.
-   *
-   * <p>TODO: Expect the comprehension's {@code dict} allocation too once <a
-   * href="https://github.com/wala/ML/issues/1075">wala/ML#1075</a> is fixed.
+   * The parameter points to both dicts' allocations: the comprehension allocates a {@code dict}, as
+   * the literal does (<a href="https://github.com/wala/ML/issues/1075">wala/ML#1075</a>).
    *
    * @throws Exception On analysis failure.
    */
   @Test
-  public void testComprehensionDictHasNoAllocation() throws Exception {
+  public void testComprehensionDictIsAllocated() throws Exception {
     PythonTensorAnalysisEngine engine =
         (PythonTensorAnalysisEngine) makeEngine("tf2_test_dict_comprehension_allocation.py");
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     CallGraph cg = builder.makeCallGraph(builder.getOptions());
 
-    // The comprehension's call reaches `consume`, so its absence below is the allocation's.
+    // The comprehension's call reaches `consume`, so the parameter can receive its dict.
     assertTrue("The comprehension's function calls no `consume`.", calls(cg, "built", "consume"));
-    assertEquals(Set.of("literal:Ldict"), parameterAllocations(builder, cg, "consume"));
+    assertEquals(
+        Set.of("built:Ldict", "literal:Ldict"), parameterAllocations(builder, cg, "consume"));
   }
 
   /**
