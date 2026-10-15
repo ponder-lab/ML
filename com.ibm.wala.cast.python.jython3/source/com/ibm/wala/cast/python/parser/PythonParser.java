@@ -1584,7 +1584,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           Ast.makeNode(
               CAstNode.DECL_STMT,
               Ast.makeConstant(new CAstSymbolImpl(dictName, PythonCAstToIRTranslator.Any)),
-              Ast.makeNode(CAstNode.NEW, Ast.makeConstant(PythonTypes.dict))),
+              Ast.makeNode(CAstNode.NEW, Ast.makeConstant("dict"))),
           doGenerators(arg0.getInternalGenerators(), body),
           Ast.makeNode(CAstNode.VAR, Ast.makeConstant(dictName)));
     }
