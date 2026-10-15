@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- tqdm model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="tqdm" allocatable="true">
+      <method name="import" static="true" descriptor="()Ltqdm;">
+        <new def="x" class="Ltqdm"/>
+        <new def="tqdm" class="Ltqdm/functions/tqdm"/>
+        <putfield class="LRoot" field="tqdm" fieldType="LRoot" ref="x" value="tqdm"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="tqdm/functions">
+      <!-- https://tqdm.github.io/docs/tqdm/ -->
+      <!-- `tqdm(iterable, desc=..., total=..., ...)` is a progress bar that yields the elements of the iterable it wraps, so iterating it is iterating the iterable. It is modelled as the iterable itself, as `copy.copy` is modelled as its argument: a loop over a wrapped dataset, such as `enumerate(tqdm(loader))`, then reads the dataset's elements. The bar's own methods (`update`, `set_description`, `close`) are not modelled, so calls of them on the result have no target, as before. Options passed by keyword are ignored. -->
+      <class name="tqdm" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self iterable desc total">
+          <return value="iterable"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
