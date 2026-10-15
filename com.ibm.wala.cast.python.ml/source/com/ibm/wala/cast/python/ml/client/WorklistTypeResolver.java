@@ -25,11 +25,14 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -114,6 +117,27 @@ final class WorklistTypeResolver {
 
   /** Forward edges, for the SCC promotion pass. */
   private final Map<Object, Set<Object>> reads = HashMapFactory.make();
+
+  /**
+   * A check a bound evaluation must pass at convergence (wala/ML#1071), with the queries whose
+   * evaluations rely on it.
+   *
+   * @param check Whether the converged dependency graph shows the binding applied as required.
+   * @param roots The queries to re-evaluate when the check fails.
+   */
+  private record BindingCheck(Predicate<WorklistTypeResolver> check, Set<Object> roots) {}
+
+  /**
+   * The registered binding checks, keyed by binding, in registration order so validation is
+   * deterministic.
+   */
+  private final Map<Object, BindingCheck> bindingChecks = new LinkedHashMap<>();
+
+  /** The bindings whose check failed: their evaluations decline (wala/ML#1071). */
+  private final Set<Object> declinedBindings = HashSetFactory.make();
+
+  /** Whether a check was registered since the last validation. */
+  private boolean bindingChecksPending;
 
   /** Per-query value versions: the number of state changes; absent means 0 (never written). */
   private final Map<Object, Integer> versions = HashMapFactory.make();
@@ -594,6 +618,77 @@ final class WorklistTypeResolver {
   }
 
   /**
+   * Registers a check a bound evaluation must pass once the iteration converges (wala/ML#1071).
+   * Deciding at convergence rather than per evaluation makes the outcome a property of the
+   * fixpoint, not of the order queries happened to evaluate in.
+   *
+   * @param binding The binding the check guards.
+   * @param check Whether the converged dependency graph shows the binding applied as required.
+   * @param root A query whose evaluation relies on the binding, re-evaluated if the check fails.
+   */
+  void registerBindingCheck(Object binding, Predicate<WorklistTypeResolver> check, Object root) {
+    BindingCheck registered =
+        this.bindingChecks.computeIfAbsent(
+            binding, b -> new BindingCheck(check, new LinkedHashSet<>()));
+    if (registered.roots().add(root)) this.bindingChecksPending = true;
+  }
+
+  /**
+   * Whether a binding's check failed, so that evaluations relying on it decline.
+   *
+   * @param binding The binding.
+   * @return {@code true} iff the binding was declined.
+   */
+  boolean isBindingDeclined(Object binding) {
+    return this.declinedBindings.contains(binding);
+  }
+
+  /**
+   * The registered queries memoized under a binding (wala/ML#1071).
+   *
+   * @param binding The binding.
+   * @return The queries wrapped with it.
+   */
+  Set<Object> boundQueries(Object binding) {
+    Set<Object> ret = new LinkedHashSet<>();
+    for (Object key : this.transfers.keySet())
+      if (key instanceof TensorGenerator.BoundKey bound && bound.binding().equals(binding))
+        ret.add(key);
+    return ret;
+  }
+
+  /**
+   * The queries a query's evaluations read.
+   *
+   * @param key The query.
+   * @return Its forward dependency edges; empty when it read none or was never evaluated.
+   */
+  Set<Object> readsOf(Object key) {
+    return Collections.unmodifiableSet(this.reads.getOrDefault(key, Collections.emptySet()));
+  }
+
+  /**
+   * Runs the registered binding checks against the converged dependency graph. A failed check
+   * declines its binding and re-evaluates the queries relying on it, whose declined evaluation
+   * joins in the unknown-marked element.
+   *
+   * @return {@code true} iff a binding was declined, so the iteration must continue.
+   */
+  private boolean validateBindings() {
+    this.bindingChecksPending = false;
+    boolean declined = false;
+    for (Map.Entry<Object, BindingCheck> entry : this.bindingChecks.entrySet()) {
+      if (this.declinedBindings.contains(entry.getKey())) continue;
+      if (entry.getValue().check().test(this)) continue;
+      this.declinedBindings.add(entry.getKey());
+      LOGGER.fine(() -> "Declined binding " + entry.getKey() + " (wala/ML#1071).");
+      for (Object root : entry.getValue().roots()) this.enqueue(root);
+      declined = true;
+    }
+    return declined;
+  }
+
+  /**
    * Reads a query's current value from inside another query's evaluation: records the edge,
    * registers and schedules the dependency on first sight, and returns the state value or the
    * kind-appropriate bottom without recursing.
@@ -780,12 +875,16 @@ final class WorklistTypeResolver {
     // value came from a single inline evaluation and is already final, so skip the iteration and
     // (Tarjan-priced) promotion entirely. This is what makes repeated demands (the second seeding
     // pass) effectively free.
-    if (this.worklist.isEmpty() && !this.cycleSeen && this.settlementRequested.isEmpty()) return;
+    if (this.worklist.isEmpty()
+        && !this.cycleSeen
+        && this.settlementRequested.isEmpty()
+        && !this.bindingChecksPending) return;
     boolean moved;
     do {
       this.iterate();
       moved = this.enqueueStaleReaders();
       if (!moved) moved = this.cycleSeen && this.promotePureCycles();
+      if (!moved) moved = this.validateBindings();
     } while (moved);
     if (this.cycleSeen || !this.settlementRequested.isEmpty()) this.canonicalize();
     this.cycleSeen = false;

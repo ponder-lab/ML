@@ -532,7 +532,7 @@ public class NpArray extends TensorGenerator {
       Set<DType> viaChain;
       if (engine == null) viaChain = getDTypes(builder, getNode(), sourceVn);
       else {
-        Object key = Pair.make("nparray-content-chain", pk);
+        Object key = this.boundKey(Pair.make("nparray-content-chain", pk));
         java.util.function.Supplier<Object> transfer =
             () -> getDTypes(builder, getNode(), sourceVn);
         viaChain =

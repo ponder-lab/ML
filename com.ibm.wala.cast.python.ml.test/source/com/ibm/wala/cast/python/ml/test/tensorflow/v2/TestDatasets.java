@@ -2783,12 +2783,11 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
-   * A dict built by a comprehension over a dataset element's {@code items()} keeps none of its
-   * keys, so the key read in {@code losses} resolves nothing and {@code sink} receives a tensor of
-   * unknown shape and dtype. At run time it is {@code (1, 3, 1) float32}.
-   *
-   * <p>TODO: Expect {@code (1, 3, 1) float32} once <a
-   * href="https://github.com/wala/ML/issues/1071">wala/ML#1071</a> is fixed.
+   * A key read of a dict built by a comprehension over a dataset element's {@code items()} reads
+   * the value the comprehension writes under that key, re-derived from the element's component at
+   * the key (<a href="https://github.com/wala/ML/issues/1071">wala/ML#1071</a>). At run time {@code
+   * sink} receives {@code (1, 3, 1) float32}. The leading axis is the slice {@code v[i : i + 1]} of
+   * a loop-carried {@code i}, whose length the analysis does not fold, so it is unresolved.
    */
   @Test
   public void testDictComprehensionOverItems()
@@ -2798,7 +2797,12 @@ public class TestDatasets extends AbstractTensorTest {
         "sink",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new NumericDim(3), new NumericDim(1))))));
   }
 
   /**
