@@ -593,4 +593,69 @@ public class WorklistTypeResolverTest {
       System.clearProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
     }
   }
+
+  /**
+   * A binding check that fails at convergence declines a bound root that already settled typed
+   * (wala/ML#1071): the root re-evaluates to the unknown-marked element, which the join keeps as an
+   * unknown remainder beside the typed members, so the root's legacy view collapses to ⊤, and a
+   * query reading the root takes the change. The decline must not keep the prior answer.
+   */
+  @Test
+  public void testFailedBindingCheckDeclinesSettledShapes() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    ShapeResult typed = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(3))));
+    Supplier<Object> root =
+        () -> {
+          engine.registerBindingCheck("binding", resolver -> false, "root");
+          return engine.isBindingDeclined("binding") ? ShapeResult.unknown() : typed;
+        };
+
+    ShapeResult reader =
+        (ShapeResult) engine.demand("reader", () -> engine.read("root", root, true), true);
+
+    assertTrue("The binding was not declined.", engine.isBindingDeclined("binding"));
+    ShapeResult settled = (ShapeResult) engine.demand("root", root, true);
+    assertEquals(typed.members(), settled.members());
+    assertTrue("The decline left no unknown remainder.", settled.hasUnknown());
+    assertNull("The declined root's legacy view is not ⊤.", settled.toLegacy());
+    assertEquals("The root's reader did not take the decline.", settled, reader);
+  }
+
+  /**
+   * The dtype counterpart: a root that settled {@code float32} and then declines joins in {@link
+   * DType#UNKNOWN}, which the engine's dtype join absorbs, so the root and its reader read unknown
+   * rather than the prior set (wala/ML#1071).
+   */
+  @Test
+  public void testFailedBindingCheckDeclinesSettledDTypes() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    Supplier<Object> root =
+        () -> {
+          engine.registerBindingCheck("binding", resolver -> false, "root");
+          return engine.isBindingDeclined("binding")
+              ? EnumSet.of(DType.UNKNOWN)
+              : EnumSet.of(DType.FLOAT32);
+        };
+
+    Object reader = engine.demand("reader", () -> engine.read("root", root, false), false);
+
+    assertTrue("The binding was not declined.", engine.isBindingDeclined("binding"));
+    assertEquals(EnumSet.of(DType.UNKNOWN), engine.demand("root", root, false));
+    assertEquals(EnumSet.of(DType.UNKNOWN), reader);
+  }
+
+  /** A binding check that passes declines nothing, and the root keeps its typed answer. */
+  @Test
+  public void testPassingBindingCheckKeepsShapes() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    ShapeResult typed = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(3))));
+    Supplier<Object> root =
+        () -> {
+          engine.registerBindingCheck("binding", resolver -> true, "root");
+          return engine.isBindingDeclined("binding") ? ShapeResult.unknown() : typed;
+        };
+
+    assertEquals(typed, engine.demand("reader", () -> engine.read("root", root, true), true));
+    assertTrue("The binding was declined.", !engine.isBindingDeclined("binding"));
+  }
 }

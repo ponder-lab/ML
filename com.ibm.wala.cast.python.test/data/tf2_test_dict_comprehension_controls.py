@@ -74,6 +74,21 @@ def cyclic_sink(x):
     return x
 
 
+def nested_sink(x):
+    check(x, (1, 3, 1), tf.float32)
+    return x
+
+
+def shared_audios_sink(x):
+    check(x, (1, 3, 1), tf.float32)
+    return x
+
+
+def shared_ids_sink(x):
+    check(x, (1, 3, 1), tf.float32)
+    return x
+
+
 def two_keys(batch):
     direct_sink(tf.expand_dims(batch["audios"], -1))
     sliced = {k: v[0:1] for k, v in batch.items()}
@@ -100,6 +115,19 @@ def filtered(batch):
 def key_dependent(batch):
     chosen = {k: (v if k == "audios" else v[0:1]) for k, v in batch.items()}
     key_dependent_sink(tf.expand_dims(chosen["audios"], -1))
+
+
+def nested(batch):
+    other = {k: v[0:1] for k, v in batch.items()}
+    summed = {k: v[0:1] + other["audios"] for k, v in batch.items() if k == "audios"}
+    nested_sink(tf.expand_dims(summed["audios"], -1))
+
+
+def shared(batch):
+    other = {k: v[0:1] for k, v in batch.items()}
+    copies = {k: other["audios"] for k, v in batch.items()}
+    shared_audios_sink(tf.expand_dims(copies["audios"], -1))
+    shared_ids_sink(tf.expand_dims(copies["ids"], -1))
 
 
 def cyclic(batch):
@@ -147,6 +175,8 @@ for batch in records:
     points_to(batch)
     stacked(batch)
     cyclic(batch)
+    nested(batch)
+    shared(batch)
 
 unknown_keys(["audios"], [tf.ones((2, 3), dtype=tf.float32)])
 keywords(audios=tf.ones((2, 3), dtype=tf.float32))

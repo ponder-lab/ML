@@ -223,4 +223,36 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FIXTURE, "cyclic_sink", 1, 1, Map.of(2, Set.of(AUDIOS)));
   }
+
+  /**
+   * A written value that reads another comprehension dict's key puts a comprehension read inside a
+   * bound derivation; the inner read resolves under its own binding.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNestedRead()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "nested_sink", 1, 1, Map.of(2, Set.of(AUDIOS_SLICED)));
+  }
+
+  /**
+   * Two keys of one comprehension whose written value is the same read of another comprehension
+   * dict reach that read under two different bindings. Neither may be cut as a recursion of the
+   * other, or answered with the other's result.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSharedNestedRead()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "shared_audios_sink", 1, 1, Map.of(2, Set.of(AUDIOS_SLICED)));
+    test(FIXTURE, "shared_ids_sink", 1, 1, Map.of(2, Set.of(AUDIOS_SLICED)));
+  }
 }
