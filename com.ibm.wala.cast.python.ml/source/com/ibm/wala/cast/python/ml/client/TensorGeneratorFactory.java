@@ -259,6 +259,7 @@ import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
@@ -1535,6 +1536,31 @@ public class TensorGeneratorFactory {
     return null;
   }
 
+  /** The type of {@code tqdm.tqdm}, as {@code tqdm.xml} summarizes it. */
+  private static final TypeReference TQDM =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Ltqdm/functions/tqdm"));
+
+  /**
+   * The iterable a progress bar wraps, when a value is a {@code tqdm(iterable, ...)} call: the bar
+   * yields the elements of the iterable, so iterating it is iterating the iterable.
+   *
+   * @param node The node holding the value.
+   * @param vn The value.
+   * @param builder The propagation call graph builder.
+   * @return The wrapped iterable's value number, or {@code vn} when the value is not such a call.
+   */
+  private static int progressBarIterable(CGNode node, int vn, PropagationCallGraphBuilder builder) {
+    if (!(node.getDU().getDef(vn) instanceof PythonInvokeInstruction call)) return vn;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (targets.isEmpty()) return vn;
+    for (CGNode target : targets)
+      if (!target.getMethod().getReference().getDeclaringClass().equals(TQDM)) return vn;
+    int iterable =
+        call.getNumberOfPositionalParameters() > 1 ? call.getUse(1) : call.getUse("iterable");
+    return iterable > 0 ? iterable : vn;
+  }
+
   /**
    * The calls that made the values an attribute read may yield: the read's attribute is found among
    * the writes that the instances its object may be can see, and each written value is traced back
@@ -2035,7 +2061,9 @@ public class TensorGeneratorFactory {
               .getReference()
               .getDeclaringClass()
               .equals(PythonTypes.ENUMERATE_BUILTIN)) {
-            int iterableVn = call.getUse(1);
+            // A progress bar wrapping the iterable, `enumerate(tqdm(loader))`, yields the
+            // iterable's elements, so the iterable is read through it.
+            int iterableVn = progressBarIterable(node, call.getUse(1), builder);
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
