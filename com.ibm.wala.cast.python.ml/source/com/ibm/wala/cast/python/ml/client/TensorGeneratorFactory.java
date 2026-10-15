@@ -253,6 +253,7 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
+import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
@@ -427,12 +428,31 @@ public class TensorGeneratorFactory {
           return MULTIPLY.getDeclaringClass();
         } else if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV) {
           return DIVIDE.getDeclaringClass();
+        } else if (binOp.getOperator() instanceof CAstBinaryOp) {
+          // A comparison operator is the corresponding comparison call (wala/ML#1074). The front
+          // end lowers `is` and `is not` as `==` and `!=` too; the comparison arm declines those on
+          // `None`, and on operands that are not tensors.
+          switch ((CAstBinaryOp) binOp.getOperator()) {
+            case EQ:
+              return EQUAL.getDeclaringClass();
+            case NE:
+              return NOT_EQUAL.getDeclaringClass();
+            case LT:
+              return LESS.getDeclaringClass();
+            case LE:
+              return LESS_EQUAL.getDeclaringClass();
+            case GT:
+              return GREATER.getDeclaringClass();
+            case GE:
+              return GREATER_EQUAL.getDeclaringClass();
+            default:
+              break;
+          }
         }
         // TODO: Handle other operators:
         // - Modulo (%): tf.math.mod (IBinaryOpInstruction.Operator.REM)
         // - Power (**): tf.math.pow
         // - Bitwise (&, |, ^): tf.bitwise operations
-        // - Comparison (==, !=, <, >): tf.equal, etc. (SSAComparisonInstruction)
         // - Unary (-, ~, abs): tf.negative, etc. (SSAUnaryOpInstruction)
       }
       return lpk.getNode().getMethod().getDeclaringClass().getReference();
@@ -603,8 +623,22 @@ public class TensorGeneratorFactory {
         || isType(type, LESS.getDeclaringClass())
         || isType(type, LESS_EQUAL.getDeclaringClass())
         || isType(type, GREATER.getDeclaringClass())
-        || isType(type, GREATER_EQUAL.getDeclaringClass()))
+        || isType(type, GREATER_EQUAL.getDeclaringClass())) {
+      // A comparison operator, as opposed to the call, gives a Python `bool` on operands that are
+      // not tensors, such as `i < n` on Python ints or `x is None` (wala/ML#1074). The call's
+      // result is not an operator's, so the gate passes it.
+      if (anchor instanceof GeneratorAnchor.SourceAnchor sourceAnchor
+          && isComparisonWithoutTensorOperand(
+              sourceAnchor.source(), sourceAnchor.builder(), sourceAnchor.visited())) {
+        LOGGER.fine(
+            () ->
+                "Rejecting ComparisonOperation dispatch — no tensor operand. source="
+                    + describe(sourceAnchor.source()));
+        throw new IllegalArgumentException(
+            "Comparison with no tensor operand: " + describe(sourceAnchor.source()) + ".");
+      }
       return anchor.makeGenerator(ComparisonOperation::new, ComparisonOperation::new);
+    }
 
     if (isType(type, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(type, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
@@ -1759,8 +1793,43 @@ public class TensorGeneratorFactory {
     if (!(def instanceof SSABinaryOpInstruction)) return false;
     for (int i = 0; i < def.getNumberOfUses(); i++) {
       int operandVn = def.getUse(i);
-      if (operandHasTensorEvidence(operandVn, node, builder, visited)) return false;
+      if (operandHasTensorEvidence(operandVn, node, builder, visited, false)) return false;
     }
+    return true;
+  }
+
+  /**
+   * Whether a comparison operator's result is a Python {@code bool} rather than a tensor
+   * (wala/ML#1074).
+   *
+   * <p>It is when an operand is {@code None}: TensorFlow answers {@code t == None} with {@code
+   * False}, not a tensor, and the front end lowers {@code t is None} and {@code t is not None} as
+   * {@code ==} and {@code !=}. Otherwise it is when no operand has tensor evidence, as {@link
+   * #isBinopWithoutTensorOperand} decides for the arithmetic operators, except that an allocation
+   * in an operand's points-to set counts only when it lies in a tensor-library namespace. Comparing
+   * two objects of the program's own classes is common, and unlike arithmetic on them gives a
+   * Python {@code bool}.
+   *
+   * @param source The comparison's result.
+   * @param builder The propagation call graph builder.
+   * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}.
+   * @return {@code true} iff {@code source} is defined by a binary operation whose result is not a
+   *     tensor by the above.
+   */
+  private static boolean isComparisonWithoutTensorOperand(
+      PointsToSetVariable source,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey)) return false;
+    LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
+    CGNode node = lpk.getNode();
+    SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
+    if (!(def instanceof SSABinaryOpInstruction)) return false;
+    SymbolTable symbolTable = node.getIR().getSymbolTable();
+    for (int i = 0; i < def.getNumberOfUses(); i++)
+      if (symbolTable.isNullConstant(def.getUse(i))) return true;
+    for (int i = 0; i < def.getNumberOfUses(); i++)
+      if (operandHasTensorEvidence(def.getUse(i), node, builder, visited, true)) return false;
     return true;
   }
 
@@ -1840,9 +1909,7 @@ public class TensorGeneratorFactory {
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(key)) {
       TypeReference type = allocatedType(ik);
       if (type == null) continue; // A constant or an abstract key names no library object.
-      String typeName = type.getName().toString();
-      for (String root : TENSOR_LIBRARY_TYPE_ROOTS)
-        if (typeName.equals(root) || typeName.startsWith(root + "/")) return true;
+      if (isTensorLibraryType(type)) return true;
     }
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof PythonPropertyRead read)
@@ -1850,6 +1917,20 @@ public class TensorGeneratorFactory {
     if (def instanceof AstLexicalRead)
       for (Pair<CGNode, Integer> definer : TensorGenerator.lexicalDefiners(builder, node, vn))
         if (chainRootsAtTensorLibrary(definer.fst, definer.snd, builder, hops - 1)) return true;
+    return false;
+  }
+
+  /**
+   * Whether a type lies in one of the modeled tensor-library namespaces ({@link
+   * #TENSOR_LIBRARY_TYPE_ROOTS}).
+   *
+   * @param type The type.
+   * @return {@code true} iff the type's name is a library root or lies under one.
+   */
+  private static boolean isTensorLibraryType(TypeReference type) {
+    String typeName = type.getName().toString();
+    for (String root : TENSOR_LIBRARY_TYPE_ROOTS)
+      if (typeName.equals(root) || typeName.startsWith(root + "/")) return true;
     return false;
   }
 
@@ -1875,13 +1956,16 @@ public class TensorGeneratorFactory {
    * @param node The {@link CGNode} containing the binop.
    * @param builder The propagation call graph builder.
    * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}.
+   * @param libraryAllocationsOnly Whether an allocation in the operand's points-to set counts only
+   *     when it lies in a tensor-library namespace, rather than whenever it is not a constant.
    * @return {@code true} if the operand has tensor evidence; {@code false} otherwise.
    */
   private static boolean operandHasTensorEvidence(
       int operandVn,
       CGNode node,
       PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      Set<PointsToSetVariable> visited,
+      boolean libraryAllocationsOnly) {
     // Python literal constant in the IR symbol table (e.g. `1` in `n - 1`,
     // `2.0` in `input * 2.0`) — not a tensor on its own. The companion operand
     // is what carries any tensor evidence. Check this BEFORE PTS-based
@@ -1931,6 +2015,10 @@ public class TensorGeneratorFactory {
         // internal: a binop over it is sparse-matrix algebra, not a tensor op. Only its dense
         // `dot` product boundary is typed (`SparseMatrixDot`).
         if (allocated.equals(ScipyTypes.SPARSE_MATRIX_TYPE)) continue;
+      }
+      if (libraryAllocationsOnly) {
+        TypeReference allocated = allocatedType(ik);
+        if (allocated == null || !isTensorLibraryType(allocated)) continue;
       }
       return true;
     }
