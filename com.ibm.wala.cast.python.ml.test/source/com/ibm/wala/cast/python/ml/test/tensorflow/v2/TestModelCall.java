@@ -2671,4 +2671,40 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 8))));
   }
+
+  /**
+   * A layer called in a loop over a list of layers receives its own output: the loop variable
+   * points to every layer at once, so the carried value takes each call's result and passes it to
+   * the next iteration's call, which may dispatch to the same layer. At run time {@code Pad.call}
+   * receives only the activation's {@code (2, 5, 4) float32}; the analysis adds the pad's own
+   * {@code (2, 7, 4)}.
+   *
+   * <p>TODO: Expect {@code (2, 5, 4) float32} alone once <a
+   * href="https://github.com/wala/ML/issues/1073">wala/ML#1073</a> is fixed.
+   */
+  @Test
+  public void testLayerLoopFeedsLayerItsOwnOutput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_loop_feedback.py",
+        "Pad.call",
+        1,
+        2,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 5, 4), TensorType.of(FLOAT_32, 2, 7, 4))));
+  }
+
+  /**
+   * The control for {@link #testLayerLoopFeedsLayerItsOwnOutput()}: the same two layers called in
+   * sequence give the pad only the activation's output.
+   */
+  @Test
+  public void testUnrolledLayersFeedPadOnlyTheActivation()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_loop_feedback.py",
+        "UnrolledPad.call",
+        1,
+        2,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 5, 4))));
+  }
 }
