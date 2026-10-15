@@ -292,7 +292,7 @@ public class DenseCall extends TensorGenerator {
     // any other engine cycle.
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     if (engine != null) {
-      Object key = Pair.make("dense-input-shapes", self);
+      Object key = this.boundKey(Pair.make("dense-input-shapes", self));
       java.util.function.Supplier<Object> transfer =
           () -> ShapeResult.fromLegacy(this.computeInputShapes(builder));
       ShapeResult diverted =

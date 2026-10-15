@@ -2349,6 +2349,14 @@ public class TensorGeneratorFactory {
           }
         }
 
+        // A constant-key read of a dict built by a comprehension over `items()` re-derives the
+        // value written under the key (wala/ML#1071). Before the guard below, since a locally
+        // built dict's pointer key is often implicit.
+        DictComprehensionComponent.Read comprehensionRead =
+            DictComprehensionComponent.recognizeRead(node, propRead, builder);
+        if (comprehensionRead != null)
+          return new DictComprehensionComponent(source, comprehensionRead);
+
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = getPointsToSetVariable(objKey, builder);

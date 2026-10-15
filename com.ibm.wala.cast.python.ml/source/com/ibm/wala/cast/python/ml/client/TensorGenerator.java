@@ -187,7 +187,7 @@ public abstract class TensorGenerator {
    * @param generator The generator whose evaluation is keyed.
    * @return The concrete class paired with the anchor identity.
    */
-  private static Object evaluationKey(TensorGenerator generator) {
+  static Object evaluationKey(TensorGenerator generator) {
     Object anchorId =
         generator.getSource() != null
             ? generator.getSource().getPointerKey()
@@ -262,7 +262,7 @@ public abstract class TensorGenerator {
     // engine occurs only for direct generator use outside one (e.g. unit tests) and computes
     // unmemoized.
     if (engine == null) return generator.getShapeResult(builder);
-    Object key = Pair.make("shape-eval", evaluationKey(generator));
+    Object key = generator.boundKey(Pair.make("shape-eval", evaluationKey(generator)));
     java.util.function.Supplier<Object> transfer = () -> generator.getShapeResult(builder);
     return (ShapeResult)
         (engine.isEvaluating()
@@ -282,7 +282,7 @@ public abstract class TensorGenerator {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null) return generator.getDTypes(builder);
-    Object key = Pair.make("dtype-eval", evaluationKey(generator));
+    Object key = generator.boundKey(Pair.make("dtype-eval", evaluationKey(generator)));
     java.util.function.Supplier<Object> transfer = () -> generator.getDTypes(builder);
     @SuppressWarnings("unchecked")
     Set<DType> diverted =
@@ -299,8 +299,7 @@ public abstract class TensorGenerator {
    * (wala/ML#712). The chase scans the whole call graph, so uncached re-runs are quadratic on large
    * analyses; the {@link Optional} payload caches the negative result too.
    */
-  private static final Map<
-          PropagationCallGraphBuilder, Map<Pair<IClass, String>, Optional<Dimension<?>>>>
+  private static final Map<PropagationCallGraphBuilder, Map<Object, Optional<Dimension<?>>>>
       STORED_ATTRIBUTE_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
@@ -310,7 +309,7 @@ public abstract class TensorGenerator {
    * the {@link Optional} payload caches the negative result too.
    */
   private static final Map<
-          PropagationCallGraphBuilder, Map<IClass, Optional<Set<List<Dimension<?>>>>>>
+          PropagationCallGraphBuilder, Map<Object, Optional<Set<List<Dimension<?>>>>>>
       BUILD_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
@@ -395,6 +394,7 @@ public abstract class TensorGenerator {
     // entries never expire on their own; a shard running several whole-project analyses in one JVM
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
+    DictComprehensionComponent.clearComprehensions(builder);
     FIELD_PUT_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
@@ -458,6 +458,199 @@ public abstract class TensorGenerator {
    */
   protected ComposedArguments getComposedArguments() {
     return this.composedArguments;
+  }
+
+  /**
+   * A value read as one component of another (<a
+   * href="https://github.com/wala/ML/issues/1071">wala/ML#1071</a>): within the derivations of a
+   * generator carrying this binding, value {@code valueNumber} of {@code node} reads as the
+   * component at {@code path} of value {@code sourceValueNumber} of {@code sourceNode}, instead of
+   * as its own points-to set.
+   *
+   * <p>A dict comprehension over {@code items()} binds its value variable to the join of every
+   * value of the iterated dict, so the value it stores under a key is derived from all of them. A
+   * read of one key re-derives the stored value with the value variable bound to that key's
+   * component alone.
+   *
+   * @param node The node whose value is bound.
+   * @param valueNumber The bound value.
+   * @param sourceNode The node defining the value whose component the bound value reads as.
+   * @param sourceValueNumber The value whose component the bound value reads as.
+   * @param path The component's path, as in {@link TupleElementProvider#resolvesPath}.
+   */
+  record ValueBinding(
+      CGNode node, int valueNumber, CGNode sourceNode, int sourceValueNumber, List<Object> path) {
+
+    /**
+     * Whether this binding rebinds the given value.
+     *
+     * @param node The node defining the value.
+     * @param valueNumber The value.
+     * @return {@code true} iff the value is the bound one.
+     */
+    boolean binds(CGNode node, int valueNumber) {
+      return this.valueNumber == valueNumber && this.node.equals(node);
+    }
+  }
+
+  /**
+   * A memo key evaluated under a {@link ValueBinding} (wala/ML#1071). A bound evaluation can differ
+   * from the unbound one with the same key, and from the evaluation under another binding, so every
+   * memoized query a bound generator issues is wrapped, and none is shared across bindings. Unbound
+   * keys are left as they are.
+   *
+   * @param binding The binding in force.
+   * @param key The unbound key.
+   */
+  record BoundKey(ValueBinding binding, Object key) {}
+
+  /**
+   * The value binding in force, or {@code null} when this generator reads every value as its own.
+   */
+  private ValueBinding valueBinding;
+
+  /**
+   * Binds a value for this generator's derivations (wala/ML#1071). Set only on a generator
+   * constructed for a bound evaluation, before it is evaluated.
+   *
+   * @param binding The binding.
+   */
+  void bindValue(ValueBinding binding) {
+    this.valueBinding = binding;
+  }
+
+  /**
+   * The value binding in force.
+   *
+   * @return The binding, or {@code null} when none is.
+   */
+  ValueBinding getValueBinding() {
+    return this.valueBinding;
+  }
+
+  /**
+   * Passes this generator's value binding, if any, to a generator it evaluates.
+   *
+   * @param <G> The generator's type.
+   * @param generator The generator to evaluate.
+   * @return The same generator.
+   */
+  <G extends TensorGenerator> G inheritBinding(G generator) {
+    TensorGenerator inheriting = generator;
+    if (this.valueBinding != null && inheriting != null && inheriting.valueBinding == null)
+      inheriting.valueBinding = this.valueBinding;
+    return generator;
+  }
+
+  /**
+   * The memo key for a query this generator issues: the key itself when no binding is in force,
+   * else the key wrapped with the binding.
+   *
+   * @param key The unbound key.
+   * @return The key to memoize under.
+   */
+  Object boundKey(Object key) {
+    return this.valueBinding == null ? key : new BoundKey(this.valueBinding, key);
+  }
+
+  /**
+   * The value a value-number query reads, for a key {@link
+   * #getShapeResult(PropagationCallGraphBuilder, CGNode, int, boolean)} or {@link
+   * #getDTypes(PropagationCallGraphBuilder, CGNode, int)} memoizes under, unwrapped of any binding.
+   *
+   * @param key A memo key.
+   * @return The queried node and value number, or {@code null} when the key is no value query.
+   */
+  static Pair<CGNode, Integer> valueQueryOf(Object key) {
+    Object inner = key instanceof BoundKey bound ? bound.key() : key;
+    if (inner instanceof ShapeQuery query) return Pair.make(query.node(), query.valueNumber());
+    if (inner instanceof Pair<?, ?> pair
+        && pair.fst instanceof CGNode node
+        && pair.snd instanceof Integer valueNumber) return Pair.make(node, valueNumber);
+    return null;
+  }
+
+  /**
+   * The shapes of the bound value under this generator's binding: those of the source's component
+   * at the binding's path (wala/ML#1071). A component stored in the source's own instance fields
+   * reads from there; one a generator models without storing, such as a dataset element's, reads
+   * through that generator's path API. The source is read unbound, since it lies outside the
+   * derivation the binding applies to.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param exact Whether an unresolvable member marks the unknown remainder rather than dropping.
+   * @return The component's shapes, or unknown when the component does not resolve.
+   */
+  private ShapeResult boundShapeResult(PropagationCallGraphBuilder builder, boolean exact) {
+    ValueBinding binding = this.valueBinding;
+    OrdinalSet<InstanceKey> component = boundComponentPointsToSet(builder, binding);
+    if (component != null && !component.isEmpty())
+      return this.getShapeResultOfValue(builder, component, exact);
+    TupleElementProvider provider = boundComponentProvider(builder, binding);
+    if (provider != null)
+      return ShapeResult.fromLegacy(provider.getShapesForPath(builder, binding.path()));
+    return ShapeResult.unknown();
+  }
+
+  /**
+   * Dtype counterpart of {@link #boundShapeResult(PropagationCallGraphBuilder, boolean)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @return The component's dtypes, or {@link DType#UNKNOWN} when the component does not resolve.
+   */
+  private Set<DType> boundDTypes(PropagationCallGraphBuilder builder) {
+    ValueBinding binding = this.valueBinding;
+    OrdinalSet<InstanceKey> component = boundComponentPointsToSet(builder, binding);
+    if (component != null && !component.isEmpty()) return this.getDTypesOfValue(builder, component);
+    TupleElementProvider provider = boundComponentProvider(builder, binding);
+    if (provider != null) return provider.getDTypesForPath(builder, binding.path());
+    return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
+   * The points-to set of the binding's component, read off the source's instance fields.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param binding The binding.
+   * @return The component's points-to set, or {@code null} when the source stores none at the path.
+   */
+  static OrdinalSet<InstanceKey> boundComponentPointsToSet(
+      PropagationCallGraphBuilder builder, ValueBinding binding) {
+    PointerKey sourceKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(binding.sourceNode(), binding.sourceValueNumber());
+    return selectComponent(
+        builder, builder.getPointerAnalysis().getPointsToSet(sourceKey), binding.path());
+  }
+
+  /**
+   * The generator modeling the binding's source, when it answers reads of the binding's path.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param binding The binding.
+   * @return The source's path provider, or {@code null} when it has none resolving the path.
+   */
+  static TupleElementProvider boundComponentProvider(
+      PropagationCallGraphBuilder builder, ValueBinding binding) {
+    PointerKey sourceKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(binding.sourceNode(), binding.sourceValueNumber());
+    if (builder.getPropagationSystem().isImplicit(sourceKey)) return null;
+    PointsToSetVariable source = builder.getPropagationSystem().findOrCreatePointsToSet(sourceKey);
+    TensorGenerator generator;
+    try {
+      generator = TensorGeneratorFactory.getGenerator(source, builder);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    return generator instanceof TupleElementProvider provider
+            && provider.resolvesPath(builder, binding.path())
+        ? provider
+        : null;
   }
 
   /**
@@ -1490,10 +1683,11 @@ public abstract class TensorGenerator {
     // class, so it is memoized per class. A sentinel is seeded before computing: the contract's
     // literal resolution can re-enter the seed through the shape machinery, and the sentinel
     // floors the re-entry to "no contract" (sound) instead of recursing.
-    Map<IClass, Optional<Set<List<Dimension<?>>>>> cache =
+    Map<Object, Optional<Set<List<Dimension<?>>>>> cache =
         BUILD_CONTRACT_CACHE.computeIfAbsent(
             builder, b -> Collections.synchronizedMap(new HashMap<>()));
-    IClass key = node.getMethod().getDeclaringClass();
+    // A bound resolution (wala/ML#1071) can differ, so it is memoized apart.
+    Object key = this.boundKey(node.getMethod().getDeclaringClass());
     Optional<Set<List<Dimension<?>>>> memo = cache.get(key);
     if (memo == null) {
       cache.put(key, Optional.empty());
@@ -1685,10 +1879,11 @@ public abstract class TensorGenerator {
       // A user Python object allocates as `Lobject` inside its class's synthetic constructor, so
       // the class identity lives in the allocating node's declaring class.
       IClass pythonClass = asin.getNode().getMethod().getDeclaringClass();
-      Map<Pair<IClass, String>, Optional<Dimension<?>>> cache =
+      Map<Object, Optional<Dimension<?>>> cache =
           STORED_ATTRIBUTE_CACHE.computeIfAbsent(
               builder, b -> Collections.synchronizedMap(new HashMap<>()));
-      Pair<IClass, String> key = Pair.make(pythonClass, attributeName);
+      // A bound chase (wala/ML#1071) can resolve differently, so it is memoized apart.
+      Object key = this.boundKey(Pair.make(pythonClass, attributeName));
       Optional<Dimension<?>> memo = cache.get(key);
       if (memo == null) {
         // Seed an empty sentinel before computing: the chase can re-enter itself on the same key
@@ -2791,16 +2986,47 @@ public abstract class TensorGenerator {
    */
   protected ShapeResult getShapeResult(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
-    ShapeQuery key = new ShapeQuery(node, valueNumber, exact);
+    Object key = this.boundKey(new ShapeQuery(node, valueNumber, exact));
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    boolean bound = this.valueBinding != null && this.valueBinding.binds(node, valueNumber);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
-    if (engine == null) return computeShapes(builder, node, valueNumber, exact);
+    if (engine == null)
+      return bound
+          ? this.boundShapeResult(builder, exact)
+          : computeShapes(builder, node, valueNumber, exact);
     java.util.function.Supplier<Object> transfer =
-        () -> computeShapes(builder, node, valueNumber, exact);
+        bound
+            ? () -> this.boundShapeResult(builder, exact)
+            : () -> computeShapes(builder, node, valueNumber, exact);
     return (ShapeResult)
         (engine.isEvaluating()
             ? engine.read(key, transfer, true)
             : engine.demand(key, transfer, true));
+  }
+
+  /**
+   * The generator of a value that is a constant-key read of a dict built by a comprehension over
+   * {@code items()} (wala/ML#1071), carrying this generator's binding, if any.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number to resolve.
+   * @return The read's generator, or {@code null} when the value is no such read.
+   */
+  private TensorGenerator comprehensionReadGenerator(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    if (node.getDU() == null
+        || !(node.getDU().getDef(valueNumber) instanceof PythonPropertyRead read)) return null;
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    if (builder.getPropagationSystem().isImplicit(pk)) return null;
+    PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+    DictComprehensionComponent.Read recognized =
+        DictComprehensionComponent.recognizeRead(node, read, builder);
+    if (recognized == null) return null;
+    TensorGenerator generator = new DictComprehensionComponent(var, recognized);
+    if (this.isSameOperation(generator)) return null;
+    return this.inheritBinding(generator);
   }
 
   /**
@@ -2842,7 +3068,7 @@ public abstract class TensorGenerator {
 
     TensorGenerator generator;
     try {
-      generator = TensorGeneratorFactory.getGenerator(var, builder);
+      generator = this.inheritBinding(TensorGeneratorFactory.getGenerator(var, builder));
     } catch (IllegalArgumentException e) {
       return null;
     }
@@ -3063,6 +3289,11 @@ public abstract class TensorGenerator {
     ShapeResult fromSubscript = this.shapeResultOfSubscript(builder, node, valueNumber, exact);
     if (fromSubscript != null) return fromSubscript;
 
+    // A key read of a comprehension-built dict re-derives the value written under the key, ahead
+    // of the points-to set, which joins the values written under every key (wala/ML#1071).
+    TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
+    if (comprehensionRead != null) return memoizedShapeResult(builder, comprehensionRead);
+
     ShapeResult partial = null;
     if (!valuePointsToSet.isEmpty()) {
       ShapeResult fromValue = this.getShapeResultOfValue(builder, valuePointsToSet, exact);
@@ -3257,7 +3488,8 @@ public abstract class TensorGenerator {
       }
     } else if (var != null) {
       try {
-        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        TensorGenerator generator =
+            this.inheritBinding(TensorGeneratorFactory.getGenerator(var, builder));
         // Recurse into the generator as long as it does not model the *same operation* as `this`
         // (same class in the same method). Comparing classes alone blocked an
         // `ElementWiseOperation` from recursing into a different method's `ElementWiseOperation`
@@ -5055,7 +5287,7 @@ public abstract class TensorGenerator {
     for (PointsToSetVariable creator : creators) {
       TensorGenerator generator;
       try {
-        generator = TensorGeneratorFactory.getGenerator(creator, builder);
+        generator = this.inheritBinding(TensorGeneratorFactory.getGenerator(creator, builder));
       } catch (IllegalArgumentException e) {
         generator = null;
       }
@@ -5090,7 +5322,7 @@ public abstract class TensorGenerator {
     for (PointsToSetVariable creator : creators) {
       TensorGenerator generator;
       try {
-        generator = TensorGeneratorFactory.getGenerator(creator, builder);
+        generator = this.inheritBinding(TensorGeneratorFactory.getGenerator(creator, builder));
       } catch (IllegalArgumentException e) {
         generator = null;
       }
@@ -5213,7 +5445,7 @@ public abstract class TensorGenerator {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null) return this.getShapeResultOfValue(builder, elementPointsToSet, exact);
-    Object key = Pair.make("element-shapes", Pair.make(elementKey, exact));
+    Object key = this.boundKey(Pair.make("element-shapes", Pair.make(elementKey, exact)));
     java.util.function.Supplier<Object> transfer =
         () -> this.getShapeResultOfValue(builder, elementPointsToSet, exact);
     return (ShapeResult)
@@ -5811,7 +6043,8 @@ public abstract class TensorGenerator {
           var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
         }
         try {
-          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          TensorGenerator generator =
+              this.inheritBinding(TensorGeneratorFactory.getGenerator(var, builder));
           if (generator != null && !this.isSameOperation(generator)) {
             ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
             ret.addAll(generatorShapes.members());
@@ -5923,7 +6156,7 @@ public abstract class TensorGenerator {
     // the query at an edge-free ⊥ invisible to promotion and canonicalization. The guards are
     // recursion breaks, and engine reads never recurse, so the transfer runs unguarded; the
     // self-read participates as an ordinary cycle edge that converges from the acyclic base.
-    Object key = Pair.make("shape-delegation", Pair.make(asin, exact));
+    Object key = this.boundKey(Pair.make("shape-delegation", Pair.make(asin, exact)));
     java.util.function.Supplier<Object> transfer =
         () -> this.doGetShapeResultFromTensor(builder, asin, exact, false);
     return (ShapeResult)
@@ -6023,7 +6256,7 @@ public abstract class TensorGenerator {
         return ShapeResult.unknown();
       TensorGenerator generator;
       try {
-        generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
+        generator = this.inheritBinding(TensorGeneratorFactory.getGenerator(sliceSource, builder));
       } catch (IllegalArgumentException e) {
         // Not expected: the source was verified to be a slice call's result, which the factory
         // always dispatches. Kept as a decline to ⊤ because the factory's contract is its own.
@@ -6050,7 +6283,8 @@ public abstract class TensorGenerator {
         // variable to read. The branch that tried was dead code and is deleted (wala/ML#930); if
         // WALA or the builder changes that rule, this is the place a definition-variable fallback
         // would return to.
-        TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
+        TensorGenerator generator =
+            this.inheritBinding(createManualGenerator(readDataNode, asin, builder));
 
         if (generator != null) {
           // Self-recursion: this manual generator is reading an allocation made in its own node (a
@@ -6124,10 +6358,11 @@ public abstract class TensorGenerator {
         }
 
         // Try to create a manual generator for the caller (doNode) first.
-        TensorGenerator generator = createManualGenerator(doNode, builder);
+        TensorGenerator generator = this.inheritBinding(createManualGenerator(doNode, builder));
         if (generator == null) {
           try {
-            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+            generator =
+                this.inheritBinding(TensorGeneratorFactory.getGenerator(defSource, builder));
           } catch (IllegalArgumentException e) {
             // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
             LOGGER.log(Level.FINE, "Delegating shape inference: factory IAE for " + defSource, e);
@@ -6652,11 +6887,14 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> getDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
-    Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
+    Object key = this.boundKey(Pair.make(node, valueNumber));
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    boolean bound = this.valueBinding != null && this.valueBinding.binds(node, valueNumber);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
-    if (engine == null) return computeDTypes(builder, node, valueNumber);
-    java.util.function.Supplier<Object> transfer = () -> computeDTypes(builder, node, valueNumber);
+    if (engine == null)
+      return bound ? this.boundDTypes(builder) : computeDTypes(builder, node, valueNumber);
+    java.util.function.Supplier<Object> transfer =
+        bound ? () -> this.boundDTypes(builder) : () -> computeDTypes(builder, node, valueNumber);
     @SuppressWarnings("unchecked")
     Set<DType> diverted =
         (Set<DType>)
@@ -6668,6 +6906,10 @@ public abstract class TensorGenerator {
 
   private Set<DType> computeDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    // See the comprehension-read bypass in computeShapes (wala/ML#1071).
+    TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
+    if (comprehensionRead != null) return memoizedDTypes(builder, comprehensionRead);
+
     // wala/ML#570: a property read of a NamedTuple/object field (e.g. `inputs.node_embeddings`)
     // often has no usable points-to set at the read site when the object was constructed in a
     // caller and threaded in as a parameter. Resolve its dtype by reading the named field off the
@@ -6707,7 +6949,8 @@ public abstract class TensorGenerator {
       if (viaCreators != null) return viaCreators;
     } else if (var != null) {
       try {
-        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        TensorGenerator generator =
+            this.inheritBinding(TensorGeneratorFactory.getGenerator(var, builder));
         // Unlike the shape path's evaluation-identity guard (wala/ML#739), this guard stays
         // class-based: the dtype axis's legacy ⊥ convention makes a cyclically-converged or
         // mid-cycle evaluation read as "not a tensor" at seeding, so widening the recursion here
@@ -7021,7 +7264,8 @@ public abstract class TensorGenerator {
           var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
         }
         try {
-          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          TensorGenerator generator =
+              this.inheritBinding(TensorGeneratorFactory.getGenerator(var, builder));
           // Class-based like the other dtype-path guard; see `computeDTypes` on why the
           // evaluation-identity comparison (wala/ML#739) stays shape-only.
           if (generator != null && !generator.getClass().equals(this.getClass())) {
@@ -7066,7 +7310,7 @@ public abstract class TensorGenerator {
     // composing unknown-dtype twins of otherwise-resolved members (the wala/ML#753 round-6
     // measurement); the shared-query first-sighting hazard stands for the shape side only.
     if (engine == null) return this.doGetDTypesFromTensor(builder, asin, true);
-    Object key = Pair.make("dtype-delegation", asin);
+    Object key = this.boundKey(Pair.make("dtype-delegation", asin));
     java.util.function.Supplier<Object> transfer =
         () -> this.doGetDTypesFromTensor(builder, asin, true);
     @SuppressWarnings("unchecked")
@@ -7111,7 +7355,7 @@ public abstract class TensorGenerator {
         return ret;
       TensorGenerator generator;
       try {
-        generator = TensorGeneratorFactory.getGenerator(sliceSource, builder);
+        generator = this.inheritBinding(TensorGeneratorFactory.getGenerator(sliceSource, builder));
       } catch (IllegalArgumentException e) {
         // Not expected (the shape twin explains); a decline to ⊤.
         LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + sliceSource, e);
@@ -7136,7 +7380,8 @@ public abstract class TensorGenerator {
         // variable to read. The branch that tried was dead code and is deleted (wala/ML#930); if
         // WALA or the builder changes that rule, this is the place a definition-variable fallback
         // would return to.
-        TensorGenerator generator = createManualGenerator(readDataNode, asin, builder);
+        TensorGenerator generator =
+            this.inheritBinding(createManualGenerator(readDataNode, asin, builder));
 
         if (generator != null) {
           // Self-recursion: the self-referential member contributes NOTHING to the dtype union, not
@@ -7191,10 +7436,11 @@ public abstract class TensorGenerator {
         }
 
         // Try to create a manual generator for the caller (doNode) first.
-        TensorGenerator generator = createManualGenerator(doNode, builder);
+        TensorGenerator generator = this.inheritBinding(createManualGenerator(doNode, builder));
         if (generator == null) {
           try {
-            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+            generator =
+                this.inheritBinding(TensorGeneratorFactory.getGenerator(defSource, builder));
           } catch (IllegalArgumentException e) {
             // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
             LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + defSource, e);
@@ -8020,7 +8266,7 @@ public abstract class TensorGenerator {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null) return this.getShapeResultOfShapeVector(builder, node, vn, visited);
-    Object key = Pair.make("shape-vector", Pair.make(node, vn));
+    Object key = this.boundKey(Pair.make("shape-vector", Pair.make(node, vn)));
     java.util.function.Supplier<Object> transfer =
         () -> this.getShapeResultOfShapeVector(builder, node, vn, HashSetFactory.make());
     return (ShapeResult)
