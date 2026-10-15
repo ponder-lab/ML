@@ -20,13 +20,20 @@ import org.junit.Test;
  * and overflows the stack. The analysis runs on a thread with a 512 KB stack, as in {@link
  * TestBlockFeasibilityDepth}, which keeps the chain short enough to overflow quickly.
  *
+ * <p>Where the overflow begins is not fixed: measured on one machine, the same stack overflowed at
+ * 500 steps in one JVM and not in another, and at 600 steps and beyond in every run, at 512 KB and
+ * at 2 MB. So the chain is twice the length that failed to overflow. A longer one would add margin
+ * but cost time: at 2,000 steps the analysis takes about 22 seconds against about 5 at 1,000. The
+ * stack cannot shrink instead, since at 128 KB the thread overflows loading classes before the
+ * analysis starts, which the check on the overflow's frames rejects.
+ *
  * <p>TODO: Expect the analysis to complete once <a
  * href="https://github.com/wala/ML/issues/982">wala/ML#982</a> is fixed.
  */
 public class TestBinopChainDepth extends AbstractTensorTest {
 
   /** The number of steps in the chain. */
-  private static final int STEPS = 500;
+  private static final int STEPS = 1000;
 
   /**
    * The analysis thread's requested stack size, in bytes. A {@link Thread} stack size is a request
