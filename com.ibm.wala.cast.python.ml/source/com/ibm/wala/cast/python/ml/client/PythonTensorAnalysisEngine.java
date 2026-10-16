@@ -1221,13 +1221,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * of the call graph, whose definition is one of the six comparison operators, or a φ of such
    * values ({@code a > 0 and b < 1}, which the front end lowers to a φ of the operand Python
    * selects, and a chained comparison). A φ gets an edge, in this copy of the flow graph, from each
-   * operand that has a node, so it holds the join of their types; an operand that is no comparison,
-   * such as a constant, contributes none. The operand of a negation, {@code not (t > 0)}, gets its
-   * node too, but the negation does not: Python's {@code not} of a tensor is a Python {@code bool},
-   * whatever a tracing rewrite makes of it. Each node is keyed on its calling node and value
-   * number, so contexts stay apart, and they are added after {@link #pruneListOperationOnlyNodes},
-   * which therefore cannot remove them. The pointer analysis is unchanged: the variables are not
-   * registered with the propagation system.
+   * operand that has a node, whether a new comparison node or one the graph already held, so it
+   * holds the join of their types; an operand with no node, such as a constant, contributes none.
+   * The operand of a negation, {@code not (t > 0)}, gets its node too, but the negation does not:
+   * Python's {@code not} of a tensor is a Python {@code bool}, whatever a tracing rewrite makes of
+   * it. Each node is keyed on its calling node and value number, so contexts stay apart, and they
+   * are added after {@link #pruneListOperationOnlyNodes}, which therefore cannot remove them. The
+   * pointer analysis is unchanged: the variables are not registered with the propagation system.
    *
    * @param builder The builder whose call graph and heap model name the values.
    * @param dataflow The duplicated flow graph to extend.
