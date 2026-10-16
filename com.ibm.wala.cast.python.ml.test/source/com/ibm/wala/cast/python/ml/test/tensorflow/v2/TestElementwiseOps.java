@@ -33,7 +33,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_RAGGED_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_INT32_UNKNOWN_SHAPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_32_FLOAT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UINT_8;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
@@ -2664,73 +2663,83 @@ public class TestElementwiseOps extends AbstractTensorTest {
   }
 
   /**
-   * {@code type(x) == tf.Tensor} passed to a sink is a Python {@code bool}, but it is typed as a
-   * {@code bool} tensor here: the class object {@code tf.Tensor} is a library allocation, which the
-   * gate takes as tensor evidence.
-   *
-   * <p>TODO: Expect no tensor once <a
-   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   * {@code type(x) == tf.Tensor} passed to a sink is a Python {@code bool}, not a tensor: the class
+   * object {@code tf.Tensor} is a library allocation but no tensor value (wala/ML#1084).
    */
   @Test
   public void testComparisonGateType()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_comparison_gate_sinks.py",
-        "type_sink",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+    test("tf2_test_comparison_gate_sinks.py", "type_sink", 0, 0);
   }
 
   /**
-   * {@code x.ndim == 2} passed to a sink is a Python {@code bool}, but it is typed as a {@code
-   * bool} tensor here: a generator resolves for the {@code ndim} read, which the gate does not
-   * exclude.
-   *
-   * <p>TODO: Expect no tensor once <a
-   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   * {@code x.ndim == 2} passed to a sink is a Python {@code bool}, not a tensor: {@code ndim} is an
+   * attribute whose value is never a tensor (wala/ML#1084).
    */
   @Test
   public void testComparisonGateNdim()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_comparison_gate_sinks.py", "ndim_sink", 1, 1, Map.of(2, Set.of(TENSOR_3_BOOL)));
+    test("tf2_test_comparison_gate_sinks.py", "ndim_sink", 0, 0);
   }
 
   /**
-   * {@code x.shape.as_list()[1:] == [3]} passed to a sink is a Python {@code bool}, but it is typed
-   * as a {@code bool} tensor here: a generator resolves for the slice of {@code as_list()}'s
-   * result.
-   *
-   * <p>TODO: Expect no tensor once <a
-   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   * {@code x.shape.as_list()[1:] == [3]} passed to a sink is a Python {@code bool}, not a tensor: a
+   * slice of a method's result on {@code shape} is no tensor either (wala/ML#1084).
    */
   @Test
   public void testComparisonGateAsList()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_comparison_gate_sinks.py",
-        "as_list_sink",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+    test("tf2_test_comparison_gate_sinks.py", "as_list_sink", 0, 0);
   }
 
   /**
-   * {@code empty() == {}} passed to a sink is a Python {@code bool}, but it is typed as a {@code
-   * bool} tensor here: the dictionary literal's pointer key is implicit, which the gate takes as
-   * tensor evidence.
-   *
-   * <p>TODO: Expect no tensor once <a
-   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   * {@code empty() == {}} passed to a sink is a Python {@code bool}, not a tensor: a dictionary
+   * literal is no tensor evidence (wala/ML#1084).
    */
   @Test
   public void testComparisonGateDictLiteral()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_gate_sinks.py", "dict_sink", 0, 0);
+  }
+
+  /**
+   * {@code x[0] > 0.0}, a comparison of a tensor's element read, stays a {@code (3,) bool} tensor:
+   * the attribute exclusion does not reach element reads (wala/ML#1084).
+   */
+  @Test
+  public void testComparisonGateElementControl()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_comparison_gate_sinks.py",
-        "dict_sink",
+        "element_sink",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+        Map.of(2, Set.of(TENSOR_3_BOOL)));
+  }
+
+  /**
+   * {@code tf.zeros(x.shape) == 0.0} stays a {@code (2, 3) bool} tensor: the attribute walk follows
+   * a method call's receiver, never a call's arguments (wala/ML#1084).
+   */
+  @Test
+  public void testComparisonGateCallArgumentControl()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_gate_sinks.py",
+        "zeros_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code x == [1.0, 2.0, 3.0]}, a tensor compared with a list literal, stays a {@code (2, 3)
+   * bool} tensor: the literal is no evidence, but the tensor operand is (wala/ML#1084).
+   */
+  @Test
+  public void testComparisonGateListLiteralControl()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_gate_sinks.py", "list_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
   }
 }
