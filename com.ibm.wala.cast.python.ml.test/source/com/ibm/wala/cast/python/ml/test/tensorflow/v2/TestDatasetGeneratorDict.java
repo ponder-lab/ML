@@ -400,4 +400,61 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(DICT_MAP_FILE, "consume_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
   }
+
+  /**
+   * The batch a map function is given when the batched dataset's elements are dicts: batching a
+   * dict batches each key, so the batch is a dict as well.
+   */
+  @Test
+  public void testMapBatchedDictParameter()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "load_batched", 0, 2);
+  }
+
+  /** A key of a batched dict, read in the map function. */
+  @Test
+  public void testMapBatchedDictKey() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        DICT_MAP_FILE,
+        "consume_batched_mels",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /** As {@link #testMapBatchedDictParameter()}, with {@code padded_batch}. */
+  @Test
+  public void testMapPaddedDictParameter()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "load_padded", 0, 2);
+  }
+
+  /** A key of a padded batch of dicts, shaped by its {@code padded_shapes} entry. */
+  @Test
+  public void testMapPaddedDictKey() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        DICT_MAP_FILE,
+        "consume_padded_mels",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * The batch a trainer's step is given, iterated from a dataset whose dict elements pass through
+   * {@code filter}, {@code padded_batch} and {@code prefetch}, is a dict and not a tensor. The
+   * transformations read an element that is not a tensor as one whose type did not resolve, so the
+   * batch is typed as a tensor of the padded shapes with an unknown dtype.
+   *
+   * <p>TODO: Not a tensor once https://github.com/wala/ML/issues/1093 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testTrainerStepDictBatch()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_dataset_generator_trainer.py", "BaseTrainer._train_step", 0, 2);
+  }
 }
