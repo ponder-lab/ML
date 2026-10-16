@@ -1306,18 +1306,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return existing;
   }
 
-  /** The types the summaries allocate for a tensor value, as opposed to a library object. */
-  private static final Set<TypeReference> TENSOR_VALUE_TYPES =
-      Set.of(
-          TensorFlowTypes.TENSOR_TYPE,
-          TensorFlowTypes.VARIABLES_VARIABLE,
-          TensorFlowTypes.SPARSE_TENSOR_TYPE,
-          TensorFlowTypes.NDARRAY_TYPE,
-          NumpyTypes.NDARRAY_TYPE);
-
   /**
    * Whether a condition-only comparison has an operand whose points-to set holds a tensor value, an
-   * allocation of one of {@link #TENSOR_VALUE_TYPES}.
+   * allocation of one of {@link TensorGeneratorFactory#TENSOR_VALUE_TYPES}.
    *
    * <p>A condition-only comparison is added to the graph only on this evidence, which is narrower
    * than the factory's comparison gate. The gate takes any allocation in a tensor library's
@@ -1357,7 +1348,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 : instance instanceof ConcreteTypeKey concrete
                     ? concrete.type().getReference()
                     : null;
-        if (allocated != null && TENSOR_VALUE_TYPES.contains(allocated)) return true;
+        if (allocated != null && TensorGeneratorFactory.TENSOR_VALUE_TYPES.contains(allocated))
+          return true;
       }
     }
     return false;

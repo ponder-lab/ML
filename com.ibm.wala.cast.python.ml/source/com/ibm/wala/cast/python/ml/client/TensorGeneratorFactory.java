@@ -328,7 +328,21 @@ public class TensorGeneratorFactory {
 
   /** Attributes of `tf.Tensor` that do not represent tensor elements. */
   private static final Set<String> NON_TENSOR_ATTRIBUTES =
-      Set.of("value_index", "dtype", "shape", "name", "graph", "op", "device", "consumers");
+      Set.of("value_index", "dtype", "shape", "ndim", "name", "graph", "op", "device", "consumers");
+
+  /**
+   * The types the summaries allocate for a tensor value, as opposed to another library object: a
+   * class or function object, a dataset, a model, a dtype or a static shape. A comparison counts an
+   * allocation in an operand's points-to set as evidence of a tensor only when it is of one of
+   * these (wala/ML#1074, wala/ML#1084).
+   */
+  static final Set<TypeReference> TENSOR_VALUE_TYPES =
+      Set.of(
+          TensorFlowTypes.TENSOR_TYPE,
+          TensorFlowTypes.VARIABLES_VARIABLE,
+          TensorFlowTypes.SPARSE_TENSOR_TYPE,
+          TensorFlowTypes.NDARRAY_TYPE,
+          NumpyTypes.NDARRAY_TYPE);
 
   /**
    * Whether a called function is one of the methods of a {@code tf.TensorArray} that read tensors
@@ -1862,7 +1876,7 @@ public class TensorGeneratorFactory {
    * on them.
    */
   private static final Set<String> NON_TENSOR_VALUE_ATTRIBUTES =
-      Set.of("shape", "dtype", "name", "device", "value_index");
+      Set.of("shape", "dtype", "ndim", "name", "device", "value_index");
 
   /**
    * Whether a value is read, directly or through further reads on the result, from one of a
@@ -1883,7 +1897,24 @@ public class TensorGeneratorFactory {
   private static boolean readsNonTensorAttribute(
       PropagationCallGraphBuilder builder, CGNode node, int vn, int hops) {
     if (hops == 0) return false;
-    if (!(node.getDU().getDef(vn) instanceof PythonPropertyRead read)) return false;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof PythonInvokeInstruction call && call.getNumberOfUses() > 0) {
+      // A method call's result is read off its receiver, as in `a.shape.as_list()`, and the
+      // `slice` builtin's off the sequence it slices, as in `a.shape.as_list()[1:]`; the call's
+      // other arguments are not followed, so `tf.zeros(a.shape)` is no such read (wala/ML#1084).
+      SSAInstruction callee = node.getDU().getDef(call.getUse(0));
+      // The receiver, not the method's own name: `tf.shape(x)` calls a function named `shape` off
+      // the module, which is no read of a tensor's `shape`.
+      if (callee instanceof PythonPropertyRead method)
+        return readsNonTensorAttribute(builder, node, method.getObjectRef(), hops - 1);
+      if (callee instanceof AstLexicalRead lexical
+          && lexical.getAccessCount() == 1
+          && "slice".equals(lexical.getAccess(0).getName().fst)
+          && call.getNumberOfUses() > 1)
+        return readsNonTensorAttribute(builder, node, call.getUse(1), hops - 1);
+      return false;
+    }
+    if (!(def instanceof PythonPropertyRead read)) return false;
     String name = TensorGenerator.resolvePropertyName(builder, node, read);
     if (name != null && NON_TENSOR_VALUE_ATTRIBUTES.contains(name)) return true;
     return readsNonTensorAttribute(builder, node, read.getObjectRef(), hops - 1);
@@ -2046,6 +2077,9 @@ public class TensorGeneratorFactory {
     if (operandDef instanceof SSANewInstruction) {
       TypeReference allocated = ((SSANewInstruction) operandDef).getConcreteType();
       if (allocated.equals(PythonTypes.list) || allocated.equals(PythonTypes.tuple)) return false;
+      // For a comparison, any literal that is no tensor value, such as the `{}` of `d == {}`, is no
+      // evidence, although its key is implicit (wala/ML#1084).
+      if (libraryAllocationsOnly && !TENSOR_VALUE_TYPES.contains(allocated)) return false;
     }
     // Implicit pointer keys flag values whose PTS hasn't been materialised by
     // the propagation system — most commonly summary-method returns. Treat
@@ -2073,12 +2107,11 @@ public class TensorGeneratorFactory {
         if (allocated.equals(ScipyTypes.SPARSE_MATRIX_TYPE)) continue;
       }
       if (libraryAllocationsOnly) {
+        // Only a tensor value counts. A library object that is not one, such as the class object
+        // `tf.Tensor` in `type(x) == tf.Tensor`, a dtype in `x.dtype == tf.float32` or a static
+        // shape, gives a Python `bool` (wala/ML#1074, wala/ML#1084).
         TypeReference allocated = allocatedType(ik);
-        if (allocated == null || !isTensorLibraryType(allocated)) continue;
-        // A dtype or a static shape is a library object but not a tensor: comparing one, as in
-        // `x.dtype == tf.float32`, gives a Python `bool` (wala/ML#1074).
-        if (allocated.equals(TensorFlowTypes.D_TYPE)
-            || allocated.equals(TensorFlowTypes.TENSOR_SHAPE)) continue;
+        if (allocated == null || !TENSOR_VALUE_TYPES.contains(allocated)) continue;
       }
       return true;
     }
