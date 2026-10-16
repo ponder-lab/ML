@@ -1,13 +1,30 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.collections.HashMapFactory;
+import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
@@ -461,5 +478,114 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
   public void testTrainerStepDictBatch()
       throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_dataset_generator_trainer.py", "BaseTrainer._train_step", 0, 2);
+  }
+
+  /**
+   * The dict a map function is given is a {@code dict} whose keys hold their declared tensors (<a
+   * href="https://github.com/wala/ML/issues/1088">wala/ML#1088</a>), so a client that looks for
+   * tensors inside a container parameter finds them. Before, the parameter pointed only to the
+   * receiver dataset, so the parameter held neither a tensor nor a container of tensors.
+   */
+  @Test
+  public void testMapDictParameterContainer()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        Map.of(
+            "mels", Set.of(new TensorType(FLOAT_32, null)),
+            "utt_ids", Set.of(new TensorType(STRING, null))),
+        dictParameterFieldTypes(DICT_MAP_FILE, "load"));
+  }
+
+  /**
+   * As {@link #testMapDictParameterContainer()}, for a dict an {@code output_signature} declares.
+   */
+  @Test
+  public void testMapSignatureDictParameterContainer()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        Map.of("x", Set.of(TensorType.of(FLOAT_32, 2))),
+        dictParameterFieldTypes(DICT_MAP_FILE, "load_signed"));
+  }
+
+  /** As {@link #testMapDictParameterContainer()}, for a batch of dicts. */
+  @Test
+  public void testMapBatchedDictParameterContainer()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        Map.of("mels", Set.of(new TensorType(FLOAT_32, null))),
+        dictParameterFieldTypes(DICT_MAP_FILE, "load_batched"));
+  }
+
+  /** As {@link #testMapDictParameterContainer()}, for a padded batch of dicts. */
+  @Test
+  public void testMapPaddedDictParameterContainer()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        Map.of(
+            "mels",
+            Set.of(
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))),
+        dictParameterFieldTypes(DICT_MAP_FILE, "load_padded"));
+  }
+
+  /**
+   * A control: the element of a dataset of tensors is a tensor, so the map function's parameter is
+   * typed as one and holds no container of tensors.
+   */
+  @Test
+  public void testMapTensorParameter()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "load_scalar", 1, 2, Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /** The control of {@link #testMapTensorParameter()}, on the container side. */
+  @Test
+  public void testMapTensorParameterContainer()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Map.of(), dictParameterFieldTypes(DICT_MAP_FILE, "load_scalar"));
+  }
+
+  /**
+   * Runs the analysis on a fixture and collects, for each {@code dict} the first parameter of a
+   * function points to in any of its nodes, the tensor types on the dict's fields, by field name.
+   *
+   * @param filename The Python fixture to analyze.
+   * @param functionName The function whose parameter is read.
+   * @return The types on the fields of the parameter's dicts, by field name.
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  private Map<String, Set<TensorType>> dictParameterFieldTypes(String filename, String functionName)
+      throws ClassHierarchyException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, emptyList(), filename);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+    String signature = "script " + filename + "." + functionName + ".do()LRoot;";
+    Set<InstanceKey> dicts = HashSetFactory.make();
+    boolean reached = false;
+    for (CGNode node : cg) {
+      if (!node.getMethod().getSignature().equals(signature)) continue;
+      reached = true;
+      // The first parameter after the function object itself.
+      PointerKey param = builder.getPointerKeyForLocal(node, node.getIR().getParameter(1));
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(param))
+        if (ik instanceof AllocationSiteInNode allocation
+            && allocation.concreteType().getReference().equals(PythonTypes.dict)) dicts.add(ik);
+    }
+    assertTrue("Function must exist in call graph.", reached);
+
+    Map<String, Set<TensorType>> ret = HashMapFactory.make();
+    for (Pair<PointerKey, TensorVariable> pair : analysis) {
+      if (!(pair.fst instanceof InstanceFieldKey fieldKey)) continue;
+      if (!dicts.contains(fieldKey.getInstanceKey())) continue;
+      ret.computeIfAbsent(fieldKey.getField().getName().toString(), k -> HashSetFactory.make())
+          .addAll(pair.snd.getTypes());
+    }
+    return ret;
   }
 }

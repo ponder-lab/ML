@@ -109,3 +109,20 @@ padded = padded.map(lambda batch: load_padded(batch))
 
 for element in padded:
     pass
+
+
+def gen_scalars():
+    yield 1.0
+
+
+def load_scalar(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.dtype == tf.float32
+    return x + 1.0
+
+
+scalars = tf.data.Dataset.from_generator(gen_scalars, output_types=tf.float32)
+scalars = scalars.map(lambda x: load_scalar(x))
+
+for element in scalars:
+    pass
