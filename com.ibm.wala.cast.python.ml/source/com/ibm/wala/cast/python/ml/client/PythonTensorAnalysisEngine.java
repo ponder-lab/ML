@@ -11,6 +11,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_FUNCTIONS
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.sanitize;
 
 import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
@@ -57,6 +58,7 @@ import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.HeapModel;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -237,6 +239,48 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * because the base engine consumes its path without keeping it.
    */
   private List<File> sidecarSearchPath;
+
+  /**
+   * Seeds each key a map function reads from the {@code dict} {@code map} hands it (wala/ML#1088).
+   * The summary of {@code tf.data.Dataset.map} gives the function an argument pointing to both the
+   * receiver dataset and a fresh {@code dict}; a key read in the function is then a field of that
+   * {@code dict}, typed here as the key's component of the receiver's element. A field whose key
+   * the element's structure does not resolve, such as any field of a dataset whose element is no
+   * dict, is left untyped, so the {@code dict} holds tensors exactly when the element is a dict of
+   * them.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param dataflow The analysis's dataflow graph.
+   * @param init The initial tensor-type seeding map.
+   * @param initOrigins The initial origin seeding map.
+   */
+  private static void seedMapDictElementFields(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins) {
+    for (PointsToSetVariable var : dataflow) {
+      if (!(var.getPointerKey() instanceof InstanceFieldKey fieldKey)) continue;
+      if (!(fieldKey.getInstanceKey() instanceof AllocationSiteInNode allocation)) continue;
+      if (!allocation.concreteType().getReference().equals(PythonTypes.dict)) continue;
+      CGNode node = allocation.getNode();
+      if (!sanitize(node.getMethod().getDeclaringClass().getReference())
+          .equals(TensorFlowTypes.DATASET_MAP_TYPE)) continue;
+      // The summary's first parameter is the receiver dataset.
+      PointerKey receiver = builder.getPointerKeyForLocal(node, node.getIR().getParameter(0));
+      DatasetIteratorElementGenerator element =
+          new DatasetIteratorElementGenerator(
+              node,
+              DatasetIteratorElementGenerator.datasetsIn(
+                  builder.getPointerAnalysis().getPointsToSet(receiver), builder));
+      List<Object> path = List.of(fieldKey.getField().getName().toString());
+      if (!element.resolvesPath(builder, path)) continue;
+      Set<TensorType> types = element.getTensorTypesForPath(builder, path);
+      LOGGER.fine(() -> "Seeding map dict element field " + fieldKey + " with " + types + ".");
+      init.put(var, HashSetFactory.make(types));
+      initOrigins.put(var, EnumSet.of(TensorOrigin.TENSORFLOW));
+    }
+  }
 
   /**
    * Seeds user-supplied type annotations from the project's sidecar (wala/ML#370). Fill-only and
@@ -3502,6 +3546,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // `tf.compat.v1.placeholder` is a TensorFlow API (wala/ML#724).
         initOrigins.put(e.getKey(), EnumSet.of(TensorOrigin.TENSORFLOW));
       }
+
+      seedMapDictElementFields(builder, dataflow, init, initOrigins);
 
       this.seedTypeAnnotationSidecarEntries(builder, dataflow, init, initOrigins);
 
