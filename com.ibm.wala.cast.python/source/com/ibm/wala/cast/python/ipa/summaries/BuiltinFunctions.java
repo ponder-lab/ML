@@ -214,6 +214,47 @@ public class BuiltinFunctions {
   }
 
   /**
+   * Builds the summary for {@code reversed}: a freshly-allocated list whose element is an element
+   * of the argument, read the way {@link #enumerateSummary} reads it. Iterating the result then
+   * binds the loop variable to the argument's elements, and the summary iterates its argument, as
+   * {@code reversed} does at run time (<a
+   * href="https://github.com/wala/ML/issues/1099">wala/ML#1099</a>). The order the elements come in
+   * is not modeled.
+   *
+   * @param cls The builtin function class whose summary this is.
+   * @param name The builtin's name ({@code reversed}).
+   * @return The populated summary.
+   */
+  private static IMethod reversedSummary(IClass cls, String name) {
+    TypeReference type = builtinFunction(name);
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int container = 11;
+    int nullKey = 12;
+    int zero = 13;
+    int elementKey = 14;
+    int element = 15;
+    int idx = 0;
+
+    x.addStatement(
+        factory.NewInstruction(idx++, container, NewSiteReference.make(0, PythonTypes.list)));
+    x.addConstant(nullKey, new ConstantValue(null));
+    x.addConstant(zero, new ConstantValue(0));
+
+    // The element of the reversed argument, read the way `enumerate` reads it.
+    x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, 2, nullKey));
+    x.addStatement(factory.PropertyRead(idx++, element, 2, elementKey));
+    x.addStatement(factory.PropertyWrite(idx++, container, zero, element));
+    // The iteration protocol (wala/ML#1010); see `zipSummary`.
+    idx = protocolElement(x, factory, idx, 2, container, zero, 16);
+    x.addStatement(factory.ReturnInstruction(idx++, container, false));
+
+    return new PythonSummarizedFunction(ref, x, cls);
+  }
+
+  /**
    * Adds to a summary the iteration-protocol read of one argument's element (wala/ML#1010): {@code
    * arg.__iter__()} then {@code .__next__()} on its result, each a call of the bound method value,
    * with the yield written into the given field of the given tuple. Eight value numbers from {@code
@@ -480,17 +521,21 @@ public class BuiltinFunctions {
                       // argument; see `enumerateSummary` (wala/ML#826).
                       : name.equals("enumerate")
                           ? enumerateSummary(this, name)
-                          // `next` must read the yields accumulated on a generator object; see
-                          // `nextSummary` (wala/ML#696).
-                          : name.equals("next")
-                              ? nextSummary(this, name)
-                              // `iter` must carry its argument's generator content through the
-                              // fresh
-                              // iterator so that `next(iter(gen()))` recovers the yields; see
-                              // `iterSummary` (wala/ML#698).
-                              : name.equals("iter")
-                                  ? iterSummary(this, name)
-                                  : typeSummary(this, name, returnedType);
+                          // `reversed` must iterate its argument and return a list of its
+                          // elements; see `reversedSummary` (wala/ML#1099).
+                          : name.equals("reversed")
+                              ? reversedSummary(this, name)
+                              // `next` must read the yields accumulated on a generator object; see
+                              // `nextSummary` (wala/ML#696).
+                              : name.equals("next")
+                                  ? nextSummary(this, name)
+                                  // `iter` must carry its argument's generator content through the
+                                  // fresh
+                                  // iterator so that `next(iter(gen()))` recovers the yields; see
+                                  // `iterSummary` (wala/ML#698).
+                                  : name.equals("iter")
+                                      ? iterSummary(this, name)
+                                      : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {
@@ -682,6 +727,7 @@ public class BuiltinFunctions {
     builtinFunctions.put("len", Either.forLeft(TypeReference.Int));
     builtinFunctions.put("list", Either.forLeft(PythonTypes.list));
     builtinFunctions.put("range", Either.forLeft(PythonTypes.list));
+    builtinFunctions.put("reversed", Either.forLeft(PythonTypes.list));
     builtinFunctions.put("sorted", Either.forLeft(PythonTypes.list));
     builtinFunctions.put("str", Either.forLeft(PythonTypes.string));
     builtinFunctions.put("sum", Either.forLeft(TypeReference.Int));

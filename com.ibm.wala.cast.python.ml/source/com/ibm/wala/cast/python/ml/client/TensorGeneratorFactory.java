@@ -2276,6 +2276,23 @@ public class TensorGeneratorFactory {
             return new EnumerateGenerator(source, underlying);
           }
 
+          // If we're calling `reversed`, the result holds the collection's elements in reverse
+          // order, so for their types it is the collection itself (wala/ML#1099): a loop over it
+          // iterates it through `iter` as it would the collection.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(PythonTypes.REVERSED_BUILTIN)) {
+            PointerKey iterableKey =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(node, call.getUse(1));
+            PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+            return iterableSrc != null ? tryGetGenerator(iterableSrc, builder, visited) : null;
+          }
+
           // If we're calling `iter`, the result is an iterator over the collection.
           if (callee
               .getMethod()
