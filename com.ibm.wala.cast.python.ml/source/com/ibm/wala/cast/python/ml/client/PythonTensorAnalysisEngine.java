@@ -1273,7 +1273,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PointsToSetVariable existing = byKey.get(key);
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof SSABinaryOpInstruction binop && isComparison(binop.getOperator())) {
-      if (existing != null) return existing;
+      if (existing != null || !comparesTensorValue(builder, node, binop)) return existing;
       PointsToSetVariable variable = new PointsToSetVariable(key);
       dataflow.addNode(variable);
       byKey.put(key, variable);
@@ -1304,6 +1304,56 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       return variable;
     }
     return existing;
+  }
+
+  /** The types the summaries allocate for a tensor value, as opposed to a library object. */
+  private static final Set<TypeReference> TENSOR_VALUE_TYPES =
+      Set.of(
+          TensorFlowTypes.TENSOR_TYPE,
+          TensorFlowTypes.VARIABLES_VARIABLE,
+          TensorFlowTypes.SPARSE_TENSOR_TYPE,
+          TensorFlowTypes.NDARRAY_TYPE,
+          NumpyTypes.NDARRAY_TYPE);
+
+  /**
+   * Whether a condition-only comparison has an operand whose points-to set holds a tensor value, an
+   * allocation of one of {@link #TENSOR_VALUE_TYPES}.
+   *
+   * <p>A condition-only comparison is added to the graph only on this evidence, which is narrower
+   * than the factory's comparison gate. The gate takes any allocation in a tensor library's
+   * namespace, a dispatched generator or an implicit key as evidence, so it also accepts a {@code
+   * tf.Graph}, a class object such as {@code tf.Tensor}, a dictionary literal, or an operand that a
+   * generator already types although it is a Python value, such as {@code x.shape.as_list()}. A
+   * comparison that only a condition tests was never a node, so those readings had never applied to
+   * it, and an {@code assert type(a) == tf.Tensor} or an {@code assert labels.ndim == 2} would now
+   * read as a tensor. Its operands would also become nodes, through the comparison's broadcast type
+   * feed. A comparison of a value that reaches only through dataflow, with no allocation, is
+   * therefore not added (wala/ML#1074).
+   *
+   * @param builder The builder whose pointer analysis holds the operands' points-to sets.
+   * @param node The node whose IR holds the comparison.
+   * @param comparison The comparison.
+   * @return {@code true} iff an operand may be a tensor value by its points-to set.
+   */
+  private static boolean comparesTensorValue(
+      PropagationCallGraphBuilder builder, CGNode node, SSABinaryOpInstruction comparison) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    for (int i = 0; i < comparison.getNumberOfUses(); i++) {
+      if (node.getIR().getSymbolTable().isConstant(comparison.getUse(i))) continue;
+      PointerKey key =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, comparison.getUse(i));
+      if (builder.getPropagationSystem().isImplicit(key)) continue;
+      for (InstanceKey instance : pointerAnalysis.getPointsToSet(key)) {
+        TypeReference allocated =
+            instance instanceof AllocationSiteInNode site
+                ? site.concreteType().getReference()
+                : instance instanceof ConcreteTypeKey concrete
+                    ? concrete.type().getReference()
+                    : null;
+        if (allocated != null && TENSOR_VALUE_TYPES.contains(allocated)) return true;
+      }
+    }
+    return false;
   }
 
   /**

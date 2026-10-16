@@ -127,6 +127,27 @@ def if_constant_flag(x, n):
     return x + 1.0
 
 
+def assert_type(x):
+    assert type(x) != tf.Variable
+    return x
+
+
+def assert_ndim(x):
+    assert x.ndim == 2
+    return x
+
+
+def assert_as_list(x):
+    assert x.shape.as_list()[1:] == [3]
+    return x
+
+
+def if_dict(x, d):
+    if d == {}:
+        return None
+    return x + 1.0
+
+
 t = tf.ones((2, 3))
 if_greater(t)
 if_less_equal(t)
@@ -148,3 +169,7 @@ if_chained(t)
 if_mixed_and(t, 1)
 if_flag_or_false(t, 1)
 if_constant_flag(t, 1)
+assert_type(t)
+assert_ndim(t)
+assert_as_list(t)
+if_dict(t, {})

@@ -291,6 +291,10 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * <p>Both image parameters are inferred concretely—shape and dtype—as {@code (256, 256, 3)
    * float32}, flowing from the {@code tf.constant(np.ones(...))} call site.
    *
+   * <p>The local count rose from five to six when a comparison that only a condition tests was
+   * typed (wala/ML#1074): the guard {@code tf.random.uniform(()) > 0.5} is a scalar {@code bool}
+   * tensor, as at run time.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -303,7 +307,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_random_jitter.py",
         "random_jitter",
         2,
-        5,
+        6,
         Map.of(2, Set.of(TENSOR_256_256_3_FLOAT32), 3, Set.of(TENSOR_256_256_3_FLOAT32)));
   }
 
@@ -315,6 +319,10 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * the data files, not the program, so a concrete extent here would be fabricated and unknown rank
    * loses the rank the chain proves. Distinct from ⊤ and from any generator fallback, so the probe
    * measures the chain.
+   *
+   * <p>The local count rose from five to six when a comparison that only a condition tests was
+   * typed (wala/ML#1074): the guard {@code tf.random.uniform(()) > 0.5} is a scalar {@code bool}
+   * tensor, as at run time.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -328,7 +336,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_pix2pix_load.py",
         "random_jitter",
         2,
-        5,
+        6,
         Map.of(
             2,
             Set.of(

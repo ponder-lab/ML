@@ -437,4 +437,53 @@ public class TestBranchComparisons extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "comprehension_filter.filter2", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
+
+  /**
+   * {@code assert type(x) != tf.Variable} compares a type with a class object, a library allocation
+   * that is no tensor value, and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertType() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_type"));
+  }
+
+  /**
+   * {@code assert x.ndim == 2} compares a Python {@code int} and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertNdim() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_ndim"));
+  }
+
+  /**
+   * {@code assert x.shape.as_list()[1:] == [3]} compares Python lists and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertAsList() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_as_list"));
+  }
+
+  /**
+   * {@code if d == {}:} compares dictionaries and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfDict() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_dict"));
+  }
 }
