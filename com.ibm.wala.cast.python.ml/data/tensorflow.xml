@@ -4179,6 +4179,12 @@
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="constraint" arg1="wt" numArgs="2" def="constrained"/>
           <return value="w"/>
         </method>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#add_loss. Registering a loss appends it to the layer's `_losses`, which `Layer.losses` and the training step read back, so the call writes to the layer: a mod-ref query over a `call` that registers a loss, or over an enclosing layer's `call` that calls it, sees the write (wala/ML#1095). The method returns `None`, which a fresh object stands for, as in `Model.compile`. -->
+        <method name="add_loss" descriptor="()LRoot;" numArgs="3" paramNames="func self losses">
+          <putfield class="LRoot" field="_losses" fieldType="LRoot" ref="self" value="losses"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
       </class>
       <class name="Input" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self shape batch_size name dtype sparse tensor ragged type_spec">
