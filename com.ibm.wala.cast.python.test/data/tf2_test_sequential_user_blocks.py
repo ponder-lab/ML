@@ -2,10 +2,10 @@ import tensorflow as tf
 
 # wala/ML#832: a `Sequential` whose LIST elements are USER Model subclasses. The blocks are the
 # pyramid subject's residual block copied near-verbatim; the driver holds them in a constructor
-# literal so the list reads whole, and what is exercised is the body fold: each block's `call` is
-# never invoked, so its transform must come from walking the body itself. The shortcut attribute
-# is path-insensitively BOTH construction branches (a projection stage and an identity lambda),
-# and only the broadcast-coherent member pairs with the residual add.
+# literal so the list reads whole, and what is exercised is the body fold: the model's result is
+# not read off its call of each block, so each block's transform comes from walking the body.
+# The shortcut attribute is path-insensitively BOTH construction branches (a projection stage and
+# an identity lambda), and only the broadcast-coherent member pairs with the residual add.
 
 
 def consume_stack(x):

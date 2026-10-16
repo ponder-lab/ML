@@ -58,9 +58,11 @@ import java.util.logging.Logger;
  * supplies the missing piece: each layer's own transform, applied in list order to the running
  * shape, starting from the shapes of the value the model was called with.
  *
- * <p>The layers are constructed but never called, so no layer has a {@code __call__} node of its
- * own to dispatch on. The fold names each layer's call type from its instance type and anchors the
- * generator at this model call, supplying the receiver and the input directly ({@link
+ * <p>The model's summary calls its layers, which gives each one a call-graph node and an input, but
+ * those calls are not the chain: a layer the list holds without a position is called on the join of
+ * every layer's output, and the summary's result is allocated rather than read off the last call.
+ * So the fold does not dispatch on them. It names each layer's call type from its instance type and
+ * anchors the generator at this model call, supplying the receiver and the input directly ({@link
  * TensorGenerator.ComposedArguments}). That keeps every layer's transform in the one place it
  * already lives rather than restating it here.
  *

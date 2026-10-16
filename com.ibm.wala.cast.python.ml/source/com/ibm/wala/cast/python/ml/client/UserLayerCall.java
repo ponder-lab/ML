@@ -47,10 +47,10 @@ import java.util.logging.Logger;
 
 /**
  * A composed transform for a layer that is a USER class: a {@code tf.keras.Model} or layer subclass
- * held in a {@code Sequential}'s list, whose {@code call} body is never invoked (the model's
- * summary allocates its result without calling anything), so the body has no call-graph node and
- * neither the dispatch table nor the dataflow can type it (<a
- * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+ * held in a {@code Sequential}'s list. The model's summary calls the body, but on the join of every
+ * layer's output when the list keeps no positions, and the summary's result is allocated rather
+ * than read off that call, so neither the dispatch table nor the dataflow types the body's result
+ * as the chain's next value (<a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
  *
  * <p>This is deliberately NOT a general interpreter. It is the fold's own discipline applied one
  * level down: the body's IR is obtained without a call-graph node, and the walk follows the def-use
