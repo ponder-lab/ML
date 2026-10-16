@@ -1638,6 +1638,19 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String UNSTACK_SIGNATURE = "tf.unstack()";
 
+  /**
+   * The element {@code tf.map_fn} passes its {@code fn}, modeled as a call in the summary
+   * (wala/ML#942).
+   */
+  public static final MethodReference MAP_FN_ELEMENT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/map_fn_element")),
+          AstMethodReference.fnSelector);
+
+  private static final String MAP_FN_ELEMENT_SIGNATURE = "tf.map_fn() element";
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
   public static final MethodReference EXTRACT_PATCHES =
       MethodReference.findOrCreate(
@@ -2803,6 +2816,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(REVERSE_SEQUENCE.getDeclaringClass(), REVERSE_SEQUENCE_SIGNATURE),
           Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
           Map.entry(UNSTACK.getDeclaringClass(), UNSTACK_SIGNATURE),
+          Map.entry(MAP_FN_ELEMENT.getDeclaringClass(), MAP_FN_ELEMENT_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass(), RANDOM_FLIP_LEFT_RIGHT_SIGNATURE),
           Map.entry(ADJUST_CONTRAST.getDeclaringClass(), ADJUST_CONTRAST_SIGNATURE),

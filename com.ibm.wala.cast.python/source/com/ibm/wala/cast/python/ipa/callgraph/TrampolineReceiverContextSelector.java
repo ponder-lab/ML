@@ -513,8 +513,41 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
           () -> "Keying summary " + callee + " handed a function object on caller: " + caller);
       return new CallerSiteContext(caller, site);
     }
+    // A summary body called from a summary node keyed on its calling node, as the rule above keys
+    // one, is keyed on that node in turn. Keyed on the site alone, one callee node served every
+    // such node, and the arguments they pass merged in it: `tf.map_fn` produces the element it
+    // calls its function with by a call to a helper summary, so two `map_fn` calls with distinct
+    // `elems` shared one helper node, and each function received the other's rows
+    // (wala/ML#942). A recursive chain keeps the base key, as the caller-pair rule does.
+    if (isSummaryBody(callee)
+        && isSummaryBody(caller.getMethod())
+        && caller.getContext() instanceof CallerSiteContext
+        && !chainsThroughCallerSites(caller, callee)) {
+      LOGGER.fine(() -> "Keying summary " + callee + " on caller-keyed summary node: " + caller);
+      return new CallerSiteContext(caller, site);
+    }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
+  }
+
+  /**
+   * Returns whether a callee is already on the chain of calling nodes that {@link
+   * CallerSiteContext}s link a caller to, or the chain reaches {@link #MAX_CALLER_PAIR_DEPTH}, so
+   * keying the callee on the caller would grow one context per recursive call.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @param callee The method being called.
+   * @return {@code true} iff the callee is on the chain, or the chain reaches the backstop.
+   */
+  private static boolean chainsThroughCallerSites(CGNode caller, IMethod callee) {
+    int depth = 0;
+    CGNode node = caller;
+    while (true) {
+      if (node.getMethod().equals(callee)) return true;
+      if (!(node.getContext() instanceof CallerSiteContext keyed)) return false;
+      if (++depth >= MAX_CALLER_PAIR_DEPTH) return true; // Fail closed at the backstop.
+      node = keyed.getCaller();
+    }
   }
 
   /**
