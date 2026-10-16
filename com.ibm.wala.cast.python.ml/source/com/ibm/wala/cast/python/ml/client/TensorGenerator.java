@@ -418,10 +418,11 @@ public abstract class TensorGenerator {
    * model's forward chain (<a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>), or
    * {@code null} for every ordinary anchoring.
    *
-   * <p>A layer in a {@code Sequential}'s list is constructed but never called: the model's summary
-   * allocates its result in one step, so there is no {@code __call__} node whose arguments name the
-   * layer instance and the value flowing into it. The fold supplies both explicitly, and the
-   * layer's own generator then computes its transform through its ordinary body.
+   * <p>A layer in a {@code Sequential}'s list is called by the model's summary, but on the join of
+   * every layer's output when the list keeps no positions, and the summary allocates its result in
+   * one step, so no {@code __call__} node's arguments name the layer instance and the value flowing
+   * into it IN ORDER. The fold supplies both explicitly, and the layer's own generator then
+   * computes its transform through its ordinary body.
    *
    * @param receiver The layer instance the transform reads its configuration off, standing in for
    *     the {@code self} argument.
@@ -11156,9 +11157,9 @@ public abstract class TensorGenerator {
    * <p>The two coincide for producer delegation, where the node IS the operation's allocating
    * synthetic. They come apart for a {@code Sequential} composition (<a
    * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>), where a layer in the model's
-   * list has no call node of its own: the fold names the layer's {@code __call__} type explicitly
-   * and anchors it at the model call being composed, so the layer's own transform runs without a
-   * call site to hang it on.
+   * list has no call node carrying its own place in the chain: the fold names the layer's {@code
+   * __call__} type explicitly and anchors it at the model call being composed, so the layer's own
+   * transform runs without a call site to hang it on.
    *
    * <p>Separating the type from the node keeps that fold on the SAME dispatch table as every other
    * anchoring rather than opening a second one keyed on layer classes. A second table would drift
