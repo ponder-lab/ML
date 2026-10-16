@@ -15,6 +15,7 @@ import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,6 +47,12 @@ public class TestBranchComparisons extends AbstractTensorTest {
    * instruction order, from one analysis of {@link #FILE}.
    */
   private static Map<String, List<Set<TensorType>>> branchConditionTypes;
+
+  /**
+   * The types of the operands of the negations that conditions test, by function name and in
+   * instruction order, from the same analysis.
+   */
+  private static Map<String, List<Set<TensorType>>> negatedOperandTypes;
 
   /**
    * Returns, for each conditional branch or assertion in the named function in instruction order,
@@ -81,6 +88,7 @@ public class TestBranchComparisons extends AbstractTensorTest {
           });
 
       Map<String, List<Set<TensorType>>> result = new HashMap<>();
+      Map<String, List<Set<TensorType>>> negatedResult = new HashMap<>();
       String prefix = "script " + FILE + ".";
       String suffix = ".do()LRoot;";
       for (CGNode node : callGraph) {
@@ -91,7 +99,17 @@ public class TestBranchComparisons extends AbstractTensorTest {
             || signature.length() <= prefix.length() + suffix.length()) continue;
         String name = signature.substring(prefix.length(), signature.length() - suffix.length());
         List<Set<TensorType>> branches = new ArrayList<>();
+        List<Set<TensorType>> negated = new ArrayList<>();
         for (SSAInstruction instruction : node.getIR().getInstructions()) {
+          if ((instruction instanceof SSAConditionalBranchInstruction
+                  || instruction instanceof AstAssertInstruction)
+              && node.getDU().getDef(instruction.getUse(0))
+                  instanceof SSAUnaryOpInstruction negation)
+            negated.add(
+                new HashSet<>(
+                    types
+                        .getOrDefault(node, Map.of())
+                        .getOrDefault(negation.getUse(0), emptySet())));
           if (instruction instanceof SSAConditionalBranchInstruction
               || instruction instanceof AstAssertInstruction)
             branches.add(
@@ -100,6 +118,13 @@ public class TestBranchComparisons extends AbstractTensorTest {
                         .getOrDefault(node, Map.of())
                         .getOrDefault(instruction.getUse(0), emptySet())));
         }
+        negatedResult.merge(
+            name,
+            negated,
+            (a, b) -> {
+              for (int i = 0; i < a.size() && i < b.size(); i++) a.get(i).addAll(b.get(i));
+              return a;
+            });
         result.merge(
             name,
             branches,
@@ -109,6 +134,7 @@ public class TestBranchComparisons extends AbstractTensorTest {
             });
       }
       branchConditionTypes = result;
+      negatedOperandTypes = negatedResult;
       LOGGER.fine(() -> "Branch condition types: " + result + ".");
     }
     List<Set<TensorType>> branches = branchConditionTypes.get(functionName);
@@ -327,12 +353,10 @@ public class TestBranchComparisons extends AbstractTensorTest {
   }
 
   /**
-   * {@code if not (t > 0.0):} tests the negation of a comparison, which is not typed. At run time
-   * {@code not} of a tensor is a Python {@code bool}, while AutoGraph converts it to {@code
-   * tf.logical_not}, a {@code bool} tensor, under tracing, so which to answer is open.
-   *
-   * <p>TODO: Decide the negation's type under <a
-   * href="https://github.com/wala/ML/issues/1074">wala/ML#1074</a>.
+   * {@code if not (t > 0.0):} tests the negation of a comparison, and the negation is not typed:
+   * Python's {@code not} of a tensor is its truth value, a Python {@code bool}. AutoGraph rewrites
+   * it to {@code tf.logical_not} under tracing, but that is a tracing question for a consumer
+   * reading through the negation to its operand, which {@link #testIfNotComparison()} types.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -341,6 +365,62 @@ public class TestBranchComparisons extends AbstractTensorTest {
   @Test
   public void testIfNot() throws ClassHierarchyException, CancelException, IOException {
     assertEquals(emptySet(), conditionTypes("if_not"));
+  }
+
+  /**
+   * The comparison under {@code if not (t > 0.0):} is a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfNotComparison() throws ClassHierarchyException, CancelException, IOException {
+    branchConditionTypes("if_not");
+    assertEquals(List.of(Set.of(SCALAR_TENSOR_OF_BOOL)), negatedOperandTypes.get("if_not"));
+  }
+
+  /**
+   * In {@code if n > 0 and t > 0.0:}, the first condition, on a Python {@code int}, tests no
+   * tensor, and the second, a φ of that comparison and the tensor comparison, tests the join: a
+   * scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfMixedAnd() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        List.of(emptySet(), Set.of(SCALAR_TENSOR_OF_BOOL)), branchConditionTypes("if_mixed_and"));
+  }
+
+  /**
+   * A flag that is {@code False} or a tensor comparison, a φ of a constant and a comparison, tests
+   * the comparison's scalar {@code bool}; the constant contributes nothing.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfFlagOrFalse() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        List.of(emptySet(), Set.of(SCALAR_TENSOR_OF_BOOL)),
+        branchConditionTypes("if_flag_or_false"));
+  }
+
+  /**
+   * A flag that is {@code True} or {@code False}, a φ of constants alone, tests no tensor, and
+   * neither does the {@code n > 0} that chooses between them.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfConstantFlag() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(List.of(emptySet(), emptySet()), branchConditionTypes("if_constant_flag"));
   }
 
   /**

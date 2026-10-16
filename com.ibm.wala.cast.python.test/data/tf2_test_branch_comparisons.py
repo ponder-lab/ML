@@ -105,6 +105,28 @@ def if_chained(x):
     return x + 1.0
 
 
+def if_mixed_and(x, n):
+    if n > 0 and tf.reduce_sum(x) > 0.0:
+        return None
+    return x + 1.0
+
+
+def if_flag_or_false(x, n):
+    flag = False
+    if n > 0:
+        flag = tf.reduce_sum(x) > 0.0
+    if flag:
+        return None
+    return x + 1.0
+
+
+def if_constant_flag(x, n):
+    flag = True if n > 0 else False
+    if flag:
+        return None
+    return x + 1.0
+
+
 t = tf.ones((2, 3))
 if_greater(t)
 if_less_equal(t)
@@ -123,3 +145,6 @@ if_not(t)
 ternary(t)
 comprehension_filter([tf.constant(1.0), tf.constant(-1.0)])
 if_chained(t)
+if_mixed_and(t, 1)
+if_flag_or_false(t, 1)
+if_constant_flag(t, 1)

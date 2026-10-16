@@ -84,6 +84,7 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
@@ -1219,11 +1220,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * <p>The criterion is syntactic: a value tested by a conditional branch or an assertion in a node
    * of the call graph, whose definition is one of the six comparison operators, or a φ of such
    * values ({@code a > 0 and b < 1}, which the front end lowers to a φ of the operand Python
-   * selects, and a chained comparison). A φ gets an edge from each operand, so it holds the join of
-   * their types. Each node is keyed on its calling node and value number, so contexts stay apart,
-   * and they are added after {@link #pruneListOperationOnlyNodes}, which therefore cannot remove
-   * them. The pointer analysis is unchanged: the variables are not registered with the propagation
-   * system.
+   * selects, and a chained comparison). A φ gets an edge, in this copy of the flow graph, from each
+   * operand that has a node, so it holds the join of their types; an operand that is no comparison,
+   * such as a constant, contributes none. The operand of a negation, {@code not (t > 0)}, gets its
+   * node too, but the negation does not: Python's {@code not} of a tensor is a Python {@code bool},
+   * whatever a tracing rewrite makes of it. Each node is keyed on its calling node and value
+   * number, so contexts stay apart, and they are added after {@link #pruneListOperationOnlyNodes},
+   * which therefore cannot remove them. The pointer analysis is unchanged: the variables are not
+   * registered with the propagation system.
    *
    * @param builder The builder whose call graph and heap model name the values.
    * @param dataflow The duplicated flow graph to extend.
@@ -1274,6 +1278,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       dataflow.addNode(variable);
       byKey.put(key, variable);
       return variable;
+    }
+    if (def instanceof SSAUnaryOpInstruction negation && hops > 0) {
+      // `not (t > 0)`: the comparison is a tensor, so it gets its node, while the negation is
+      // Python's truth test of it, a Python `bool`, so it gets none.
+      addCondition(builder, dataflow, byKey, node, negation.getUse(0), hops - 1);
+      return existing;
     }
     if (def instanceof SSAPhiInstruction phi && hops > 0) {
       List<PointsToSetVariable> operands = new ArrayList<>();
