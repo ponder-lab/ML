@@ -89,7 +89,9 @@ public class TestLayerAddLoss extends AbstractTensorTest {
         if (!(key instanceof InstanceFieldKey field)) continue;
         InstanceKey instance = field.getInstanceKey();
         if (!(instance instanceof AllocationSiteInNode allocation)) continue;
-        String type = allocation.concreteType().getName().toString();
+        // A program instance's concrete type is a plain object; its class is the constructor that
+        // allocates it.
+        String type = allocation.getNode().getMethod().getDeclaringClass().getName().toString();
         if (!type.startsWith(prefix)) continue;
         ret.add(type.substring(prefix.length()) + "." + field.getField().getName());
       }
