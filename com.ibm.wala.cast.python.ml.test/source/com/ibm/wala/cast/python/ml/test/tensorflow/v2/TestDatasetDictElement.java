@@ -83,12 +83,13 @@ public class TestDatasetDictElement extends AbstractTensorTest {
 
   /**
    * A dict dataset through a {@code map} whose function replaces a component of its element by a
-   * call ({@code dict.update}) before returning it: the component is not its source's, so it is
-   * unknown rather than the source's {@code int32}.
+   * call ({@code dict.update}) before returning it: the component is the {@code float32} cast the
+   * call writes, not its source's {@code int32}. The update writes into the {@code dict} the
+   * function is given (wala/ML#1088); before, it wrote into nothing, and the component was unknown.
    */
   @Test
   public void testMappedUpdated() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_updated", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+    test(FILE, "consume_updated", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
   }
 
   /**

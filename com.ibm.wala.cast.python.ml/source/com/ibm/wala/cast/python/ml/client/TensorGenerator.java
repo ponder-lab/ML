@@ -11304,6 +11304,11 @@ public abstract class TensorGenerator {
       return new Cifar10InputData(node, Cifar10InputData.X_TEST_SHAPE);
     } else if (type.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
       return new Cifar10InputData(node, Cifar10InputData.Y_TEST_SHAPE);
+    } else if (type.equals(TensorFlowTypes.MAP_ARGUMENT_TYPE)) {
+      // The receiver dataset joined with a fresh `dict`, the argument `map` passes its function:
+      // neither allocation is a tensor, and a key the function reads is seeded on the `dict`'s
+      // field instead (wala/ML#1088).
+      return null;
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

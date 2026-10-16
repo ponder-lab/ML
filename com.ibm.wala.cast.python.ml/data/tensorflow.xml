@@ -2584,6 +2584,17 @@
           <return value="elems"/>
         </method>
       </class>
+      <class name="map_argument" allocatable="true">
+        <!-- The argument `tf.data.Dataset.map` passes its `map_func` (wala/ML#1088): the receiver dataset joined with a fresh `dict`. A dataset whose element is a dict hands `map_func` a dict, so a key the function reads is a field of the `dict`, which the analysis types from the receiver's element structure; for a dataset of any other element, no field of the `dict` is typed. Both allocations reach the result through the holder's one field, since a summary cannot join two values otherwise. They are allocated here rather than in `map`, whose allocations are typed as the mapped dataset, and no generator types this node's. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
+          <new def="element_dict" class="Ldict"/>
+          <new def="holder" class="Ltensorflow/functions/map_argument"/>
+          <putfield class="LRoot" field="argument" fieldType="LRoot" ref="holder" value="dataset"/>
+          <putfield class="LRoot" field="argument" fieldType="LRoot" ref="holder" value="element_dict"/>
+          <getfield class="LRoot" field="argument" fieldType="LRoot" ref="holder" def="argument"/>
+          <return value="argument"/>
+        </method>
+      </class>
       <class name="map_fn_element" allocatable="true">
         <!-- The element `tf.map_fn` passes its `fn`: `elems` unstacked along its leading dimension (wala/ML#942). -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self elems">
@@ -4591,8 +4602,6 @@
         </method>
       </class>
       <!-- A dataset element and its components; `<new>` targets only, typed by their generators from the `dataset` field their allocator writes (wala/ML#1010). -->
-      <!-- The holder through which `map` joins the argument it hands map_func; `<new>` target only (wala/ML#1088). -->
-      <class name="map_argument" allocatable="true"></class>
       <class name="element" allocatable="true"></class>
       <class name="element_0" allocatable="true"></class>
       <class name="element_1" allocatable="true"></class>
@@ -4958,12 +4967,9 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#map -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self map_func num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- The argument map_func is given points to the receiver dataset and to a fresh `dict`. A dataset whose element is a dict hands map_func a dict, so a key the function reads is a field of the `dict`, and the analysis types that field from the receiver's element structure; for a dataset of any other element, no field of the `dict` is typed (wala/ML#1088). Both allocations reach the argument through the holder's one field, since a summary cannot join two values otherwise. -->
-          <new def="element_dict" class="Ldict"/>
-          <new def="argument_holder" class="Ltensorflow/data/map_argument"/>
-          <putfield class="LRoot" field="argument" fieldType="LRoot" ref="argument_holder" value="self"/>
-          <putfield class="LRoot" field="argument" fieldType="LRoot" ref="argument_holder" value="element_dict"/>
-          <getfield class="LRoot" field="argument" fieldType="LRoot" ref="argument_holder" def="argument"/>
+          <!-- The argument map_func is given, from `map_argument`: the receiver dataset joined with a fresh `dict` (wala/ML#1088). -->
+          <new def="argument_fn" class="Ltensorflow/functions/map_argument"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="argument_fn" arg1="self" numArgs="2" def="argument"/>
           <!-- Invoke map_func on that argument so it enters the call graph and its parameter resolves to the upstream element type (typing a dataset-valued variable yields its element type), then store map_func's return as this dataset's `element`. The `DatasetMapGenerator` reads `element` so a mapped dataset's element type is map_func's return, not the receiver's. wala/ML#506. -->
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="map_func" arg1="argument" numArgs="2" def="mapped_element"/>
           <putfield class="LRoot" field="element" fieldType="LRoot" ref="x" value="mapped_element"/>

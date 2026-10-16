@@ -242,12 +242,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /**
    * Seeds each key a map function reads from the {@code dict} {@code map} hands it (wala/ML#1088).
-   * The summary of {@code tf.data.Dataset.map} gives the function an argument pointing to both the
-   * receiver dataset and a fresh {@code dict}; a key read in the function is then a field of that
-   * {@code dict}, typed here as the key's component of the receiver's element. A field whose key
-   * the element's structure does not resolve, such as any field of a dataset whose element is no
-   * dict, is left untyped, so the {@code dict} holds tensors exactly when the element is a dict of
-   * them.
+   * The summary of {@code tf.data.Dataset.map} gives the function an argument, from the {@code
+   * map_argument} summary, pointing to both the receiver dataset and a fresh {@code dict}; a key
+   * read in the function is then a field of that {@code dict}, typed here as the key's component of
+   * the receiver's element. A field whose key the element's structure does not resolve, such as any
+   * field of a dataset whose element is no dict, is left untyped, so the {@code dict} holds tensors
+   * exactly when the element is a dict of them.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param dataflow The analysis's dataflow graph.
@@ -265,9 +265,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!allocation.concreteType().getReference().equals(PythonTypes.dict)) continue;
       CGNode node = allocation.getNode();
       if (!sanitize(node.getMethod().getDeclaringClass().getReference())
-          .equals(TensorFlowTypes.DATASET_MAP_TYPE)) continue;
-      // The summary's first parameter is the receiver dataset.
-      PointerKey receiver = builder.getPointerKeyForLocal(node, node.getIR().getParameter(0));
+          .equals(TensorFlowTypes.MAP_ARGUMENT_TYPE)) continue;
+      // The summary's parameters are its function object and the receiver dataset.
+      PointerKey receiver = builder.getPointerKeyForLocal(node, node.getIR().getParameter(1));
       DatasetIteratorElementGenerator element =
           new DatasetIteratorElementGenerator(
               node,
