@@ -4167,6 +4167,7 @@
       </class>
     </package>
     <package name="tensorflow/keras/layers">
+      <!-- Each built-in layer below declares `Layer` as its superclass, which opts it in to class-shell materialization (wala/WALA#1957) as `Layer`'s own `super` does, so a program class such as `class BatchNormalization(tf.keras.layers.BatchNormalization)` resolves its base through the built-in layer to `Layer` instead of falling back to `object` (wala/ML#1098). The shells carry their classes' method references (wala/ML#106), so the built-in layers' own `__call__` and `call` bodies keep serving their instances. `Input` is a function, not a layer class, so it declares none. -->
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
       <class name="Layer" super="Lobject">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#add_weight. The universal Keras weight-creation API: user layers call `self.add_weight(...)` (typically in `build`, wala/ML#595) to create their kernels. Modeled as a fresh dense tensor; the `AddWeight` generator consumes the call's `shape` and `dtype` arguments (wala/ML#667). The shell carries this method's reference (wala/ML#106), and source subclasses wire it through their synthesized constructors, so `self.add_weight` dispatches on any `Layer` subclass instance (wala/ML#618). -->
@@ -4185,7 +4186,7 @@
           <return value="x"/>
         </method>
       </class>
-      <class name="Dense" allocatable="true">
+      <class name="Dense" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4198,7 +4199,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Conv1D" allocatable="true">
+      <class name="Conv1D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv1D#__call__. The output type is computed by `Conv1DCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4209,7 +4210,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Conv2D" allocatable="true">
+      <class name="Conv2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2D#__call__ -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4221,7 +4222,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Flatten" allocatable="true">
+      <class name="Flatten" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Flatten#__call__ -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4232,7 +4233,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="BatchNormalization" allocatable="true">
+      <class name="BatchNormalization" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4243,7 +4244,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="ReLU" allocatable="true">
+      <class name="ReLU" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/ReLU#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4254,7 +4255,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="LeakyReLU" allocatable="true">
+      <class name="LeakyReLU" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/LeakyReLU#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4265,7 +4266,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Softmax" allocatable="true">
+      <class name="Softmax" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Softmax#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4276,7 +4277,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Masking" allocatable="true">
+      <class name="Masking" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Masking#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4287,7 +4288,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Activation" allocatable="true">
+      <class name="Activation" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Activation#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4298,7 +4299,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="GlobalAveragePooling1D" allocatable="true">
+      <class name="GlobalAveragePooling1D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalAveragePooling1D. The output type is computed by `GlobalAveragePooling1DCall` (wala/ML#670). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4309,7 +4310,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="MaxPool2D" allocatable="true">
+      <class name="MaxPool2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/MaxPool2D. The output type is computed by `Pooling2DCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4320,7 +4321,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="AveragePooling2D" allocatable="true">
+      <class name="AveragePooling2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/AveragePooling2D. The output type is computed by `Pooling2DCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4331,7 +4332,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Conv2DTranspose" allocatable="true">
+      <class name="Conv2DTranspose" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2DTranspose. The output type is computed by `Conv2DTransposeCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4342,7 +4343,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="ZeroPadding2D" allocatable="true">
+      <class name="ZeroPadding2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/ZeroPadding2D. The output type is computed by `ZeroPadding2DCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4353,7 +4354,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="GlobalMaxPooling1D" allocatable="true">
+      <class name="GlobalMaxPooling1D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D. The output type is computed by `GlobalMaxPoolingCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4364,7 +4365,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="GlobalMaxPooling2D" allocatable="true">
+      <class name="GlobalMaxPooling2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool2D. The output type is computed by `GlobalMaxPoolingCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4375,7 +4376,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="LSTM" allocatable="true">
+      <class name="LSTM" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTM. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4386,7 +4387,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="GRU" allocatable="true">
+      <class name="GRU" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRU. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4397,7 +4398,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="SimpleRNN" allocatable="true">
+      <class name="SimpleRNN" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNN. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4408,7 +4409,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="RNN" allocatable="true">
+      <class name="RNN" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/RNN (wala/ML#973). The call invokes the cell once, on a fresh step tensor (`rnn_step`: the input without its time axis) and the initial state wrapped in a list, as the layer does per step; the result is a fresh sequence tensor (`rnn_sequence`: the cell output's dtype, with the time axis reinserted when `return_sequences` is true), never the cell's step output passed through, which would carry the step's rank. The result is `[output, new_state]`, the `return_state=True` form: a summary cannot choose the bare output that `return_state=False` returns, so that form stays unmodeled. Batch-major inputs only. -->
         <method name="__call__" descriptor="()LRoot;" numArgs="7" paramNames="func self inputs initial_state mask training constants">
           <getfield class="LRoot" field="cell" fieldType="LRoot" ref="self" def="cell"/>
@@ -4443,7 +4444,7 @@
           <return value="res"/>
         </method>
       </class>
-      <class name="Bidirectional" allocatable="true">
+      <class name="Bidirectional" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4454,7 +4455,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Concatenate" allocatable="true">
+      <class name="Concatenate" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate. The output type is computed by `ConcatenateCall`, which walks the `inputs` list and sums the extents along the stored axis (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -4484,7 +4485,7 @@
           <return value="out"/>
         </method>
       </class>
-      <class name="Dropout" allocatable="true">
+      <class name="Dropout" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <return value="inputs"/>
         </method>
@@ -4492,7 +4493,7 @@
           <return value="inputs"/>
         </method>
       </class>
-      <class name="LayerNormalization" allocatable="true">
+      <class name="LayerNormalization" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- Typing-wise identity: normalization preserves both shape and dtype, so the call is a genuine pass-through, mirroring `Dropout` (wala/ML#711). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <return value="inputs"/>
