@@ -23,6 +23,26 @@ public class TestReversed extends AbstractTensorTest {
     test(FILE, "scale_reversed", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  /**
+   * The {@code reversed} object itself is no tensor: only a loop over it reads its argument's
+   * elements, so a function handed {@code reversed(y)} is reached with no tensor parameter.
+   */
+  @Test
+  public void testReversedObject() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "take_reversed", 0, 0);
+  }
+
+  /**
+   * In the loop's own function, the {@code reversed(y)} object is not one of its tensors: the loop
+   * reads {@code y}'s elements through it, but the object, a list iterator at run time, is no
+   * tensor. Typing the call's result as {@code y} instead would add it to the tensors counted here.
+   */
+  @Test
+  public void testReversedLoopLocals()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "reversed_param", 1, 6, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   /** Over a list of tensors, the loop variable is one of the list's tensors. */
   @Test
   public void testReversedList() throws ClassHierarchyException, CancelException, IOException {

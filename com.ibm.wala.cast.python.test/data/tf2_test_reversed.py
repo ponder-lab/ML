@@ -14,6 +14,11 @@ def scale_reversed_list(t):
     return t * 2.0
 
 
+def take_reversed(r):
+    assert not isinstance(r, tf.Tensor)
+    return list(r)
+
+
 def reversed_param(y):
     total = 0.0
     for e in reversed(y):
@@ -30,3 +35,4 @@ def reversed_list(a, b):
 
 assert float(reversed_param(tf.constant([1.0, 2.0, 3.0]))) == 12.0
 assert float(tf.reduce_sum(reversed_list(tf.ones([3]), tf.ones([3])))) == 12.0
+assert len(take_reversed(reversed(tf.constant([1.0, 2.0, 3.0])))) == 3
