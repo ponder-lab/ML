@@ -638,19 +638,39 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
                   + yVn
                   + " dtypes="
                   + yDTypes);
-      return yDTypes == null || yDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : yDTypes;
+      return resultDTypes(builder, yDTypes);
     }
 
     Set<DType> xDTypes = this.getOperandDTypes(builder, xVn);
     if (yVn > 0) xDTypes = this.broadcastingMemberDTypes(builder, xVn, yVn, xDTypes);
     LOGGER.fine("ElementWiseOperation getDefaultDTypes dtypes: " + xDTypes);
-    // An element-wise op always produces a tensor. If operand resolution returned ⊥ (empty set)
-    // or null, that represents "unable to resolve the operand's dtype," not "not a tensor." Emit
-    // ⊤ (UNKNOWN) so `TensorTypeAnalysis` still tracks the result — otherwise chained ops like
-    // `layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, ...), ...))` silently lose tensor
-    // identification across the chain even though every step is demonstrably a tensor producer.
-    if (xDTypes == null || xDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-    return xDTypes;
+    return resultDTypes(builder, xDTypes);
+  }
+
+  /**
+   * The dtypes of a result whose dtype follows an operand's: the operand's dtypes when they
+   * resolve, and otherwise unknown. An element-wise op always produces a tensor, so an operand read
+   * of ⊥ (empty) or {@code null} means "unable to resolve the operand's dtype," not "not a tensor,"
+   * and the result is ⊤ ({@link DType#UNKNOWN}) so {@link
+   * com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis} still tracks it; otherwise chained ops
+   * like {@code tf.nn.sigmoid(tf.add(tf.matmul(x, w), b))} lose tensor identification across the
+   * chain although every step is a tensor producer.
+   *
+   * <p>An empty read that is not final is the exception (wala/ML#1094): a loop-carried operand,
+   * such as {@code xs} in {@code xs += block(x)}, is read while its own cycle is still converging,
+   * so its first read is empty although a later one is not. Unknown there would be a member the
+   * later dtypes cannot displace, since the dtype join absorbs into unknown, so the result is ⊥
+   * instead and {@link #isObservationFinal} schedules the query to be recomputed against the
+   * settled state, where an operand that is still empty gives unknown.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param dtypes The dtypes of the operand the result's dtype follows.
+   * @return The dtypes of the result.
+   */
+  private static Set<DType> resultDTypes(PropagationCallGraphBuilder builder, Set<DType> dtypes) {
+    if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+    if (dtypes != null && !isObservationFinal(builder)) return EnumSet.noneOf(DType.class);
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   /**
@@ -735,7 +755,8 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
                 + operandVn
                 + " dtypes="
                 + operandDTypes);
-    if (operandDTypes == null || operandDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    if (operandDTypes == null || operandDTypes.isEmpty())
+      return resultDTypes(builder, operandDTypes);
 
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (DType operandDType : operandDTypes)
