@@ -486,4 +486,47 @@ public class TestBranchComparisons extends AbstractTensorTest {
   public void testIfDict() throws ClassHierarchyException, CancelException, IOException {
     assertEquals(emptySet(), conditionTypes("if_dict"));
   }
+
+  /**
+   * A comparison of a user layer's call result, {@code if Doubler()(x) > 0.0:}, tests a scalar
+   * {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfLayerResult() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("if_layer_result"));
+  }
+
+  /**
+   * A comparison of a tensor read off an attribute, {@code if self.t > 0.0:}, tests a scalar {@code
+   * bool}, although the field read's pointer key may be implicit.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfAttribute() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("Threshold.if_attribute"));
+  }
+
+  /**
+   * A comparison of a dataset's element, {@code for b in ds: if b > 0.0:}, is a scalar {@code bool}
+   * at run time but tests no tensor here: the element's points-to set holds no tensor allocation,
+   * so the comparison is not added to the dataflow graph. The first condition is the loop's own.
+   *
+   * <p>TODO: Expect a scalar {@code bool} for the second condition once <a
+   * href="https://github.com/wala/ML/issues/1086">wala/ML#1086</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfDatasetElement() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(List.of(emptySet(), emptySet()), branchConditionTypes("if_dataset_element"));
+  }
 }

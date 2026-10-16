@@ -1342,6 +1342,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (node.getIR().getSymbolTable().isConstant(comparison.getUse(i))) continue;
       PointerKey key =
           pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, comparison.getUse(i));
+      // An implicit key is one WALA's builder leaves unmaterialized: a local defined by a constant
+      // or a `new`, which in a program's own code is a literal, or a value with no use the
+      // builder deems interesting, such as a field read or a φ that only this comparison reads.
+      // The first kind holds no tensor value. The second kind can, and is skipped all the same
+      // rather than materialized after the pointer analysis has converged; a tensor field read in
+      // a condition is still typed in the tests, by another route, but nothing shows that every
+      // such operand is (wala/ML#1086).
       if (builder.getPropagationSystem().isImplicit(key)) continue;
       for (InstanceKey instance : pointerAnalysis.getPointsToSet(key)) {
         TypeReference allocated =

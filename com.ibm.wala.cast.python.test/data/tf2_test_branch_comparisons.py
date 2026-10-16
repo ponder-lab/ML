@@ -148,6 +148,34 @@ def if_dict(x, d):
     return x + 1.0
 
 
+class Doubler(tf.keras.layers.Layer):
+    def call(self, inputs):
+        return inputs * 2.0
+
+
+def if_layer_result(x):
+    if Doubler()(x) > 0.0:
+        return None
+    return x + 1.0
+
+
+def if_dataset_element(ds):
+    for b in ds:
+        if b > 0.0:
+            return None
+    return ds
+
+
+class Threshold:
+    def __init__(self):
+        self.t = tf.ones(())
+
+    def if_attribute(self, x):
+        if self.t > 0.0:
+            return None
+        return x + 1.0
+
+
 t = tf.ones((2, 3))
 if_greater(t)
 if_less_equal(t)
@@ -173,3 +201,6 @@ assert_type(t)
 assert_ndim(t)
 assert_as_list(t)
 if_dict(t, {})
+if_layer_result(tf.ones(()))
+if_dataset_element(tf.data.Dataset.from_tensor_slices(tf.ones((4,))))
+Threshold().if_attribute(t)
