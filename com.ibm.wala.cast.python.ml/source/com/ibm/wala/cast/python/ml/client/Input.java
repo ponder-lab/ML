@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -14,6 +15,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -273,5 +275,19 @@ public class Input extends TensorTypeAllocator {
 
   protected String getTypeSpecParameterName() {
     return Parameters.TYPE_SPEC.getName();
+  }
+
+  /**
+   * Returns the provenance of the modeled value: {@code tf.keras.Input} produces a Keras symbolic
+   * tensor, a {@code KerasTensor}, which the Functional API carries through the layer applications
+   * and operations applied to it, so the value carries {@link TensorOrigin#KERAS_SYMBOLIC} beside
+   * the TensorFlow origin (wala/ML#1101).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#TENSORFLOW} and {@link TensorOrigin#KERAS_SYMBOLIC}.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.TENSORFLOW, TensorOrigin.KERAS_SYMBOLIC);
   }
 }

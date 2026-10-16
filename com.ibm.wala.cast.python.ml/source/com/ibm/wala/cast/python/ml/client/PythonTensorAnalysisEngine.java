@@ -3263,6 +3263,69 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * The flow-graph edges that carry only the provenance markers (wala/ML#1101), added to {@code
+   * dataflow}: from each argument of a live call whose every target is a TensorFlow summary to the
+   * call's result, where no edge joins them already. The result of such a call is typed by the
+   * call's own generator, so no state edge reaches it from the arguments, yet an operation or layer
+   * applied to a Keras symbolic tensor yields one. A call in a decidably dead block contributes no
+   * edge, as it contributes no binding.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param dataflow The analysis's dataflow graph, gaining the edges.
+   * @param flowVarsByKey The dataflow graph's variables, by pointer key.
+   * @param heapModel The heap model.
+   * @return Each destination mapped to the sources of its marker edges.
+   */
+  private static Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointerKey, PointsToSetVariable> flowVarsByKey,
+      HeapModel heapModel) {
+    Map<PointsToSetVariable, Set<PointsToSetVariable>> ret = HashMapFactory.make();
+    for (CGNode node : builder.getCallGraph()) {
+      IR ir = node.getIR();
+      if (ir == null) continue;
+      for (ISSABasicBlock block : ir.getControlFlowGraph()) {
+        if (Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block)))
+          continue;
+        for (SSAInstruction inst : block) {
+          if (!(inst instanceof SSAAbstractInvokeInstruction call) || !call.hasDef()) continue;
+          Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+          if (targets.isEmpty()
+              || !targets.stream().allMatch(PythonTensorAnalysisEngine::isTensorFlowSummary))
+            continue;
+          PointsToSetVariable result =
+              flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getDef()));
+          if (result == null) continue;
+          // Use 0 is the callee itself.
+          for (int i = 1; i < call.getNumberOfUses(); i++) {
+            PointsToSetVariable argument =
+                flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getUse(i)));
+            if (argument == null || argument == result || dataflow.hasEdge(argument, result))
+              continue;
+            dataflow.addEdge(argument, result);
+            ret.computeIfAbsent(result, k -> HashSetFactory.make()).add(argument);
+          }
+        }
+      }
+    }
+    LOGGER.fine(() -> "Marker edges: " + ret.values().stream().mapToInt(Set::size).sum() + ".");
+    return ret;
+  }
+
+  /**
+   * Whether a call-graph node is a TensorFlow summary or a trampoline into one, by the namespace of
+   * its declaring class (wala/ML#1101).
+   *
+   * @param node The node.
+   * @return Whether the node's class is in the TensorFlow namespace.
+   */
+  private static boolean isTensorFlowSummary(CGNode node) {
+    String name = node.getMethod().getDeclaringClass().getName().toString();
+    return name.startsWith("Ltensorflow/") || name.startsWith("L$tensorflow/");
+  }
+
+  /**
    * The argument bindings a call site induces in the dataflow graph: its positional argument {@code
    * i} flows into parameter {@code i + 1} of each possible callee (the builder's calling
    * constraints bind positionally; a keyword call binds through its trampoline, whose parameters
@@ -4147,6 +4210,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       int callCount = callSuppressions;
       LOGGER.fine(() -> "Dead-call-site suppressed argument and result edges: " + callCount);
 
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges =
+          markerEdges(builder, dataflow, flowVarsByKey, heapModel);
+
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
               dataflow,
@@ -4164,6 +4230,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               computeDTypeCasts,
               dtypeCoercions,
               iterationProducts,
+              markerEdges,
               errorLog);
 
       tt.solve(new NullProgressMonitor());
