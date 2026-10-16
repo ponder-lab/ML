@@ -421,7 +421,7 @@ public abstract class TensorGenerator {
    * <p>A layer in a {@code Sequential}'s list is called by the model's summary, but on the join of
    * every layer's output when the list keeps no positions, and the summary allocates its result in
    * one step, so no {@code __call__} node's arguments name the layer instance and the value flowing
-   * into it IN ORDER. The fold supplies both explicitly, and the layer's own generator then
+   * into it in order. The fold supplies both explicitly, and the layer's own generator then
    * computes its transform through its ordinary body.
    *
    * @param receiver The layer instance the transform reads its configuration off, standing in for

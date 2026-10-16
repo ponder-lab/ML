@@ -135,4 +135,20 @@ public class TestSequentialLayerCall extends AbstractTensorTest {
   public void testStagesStack() throws ClassHierarchyException, CancelException, IOException {
     test(STAGES_FILE, "TFResidualStack.call", 1, 6, Map.of(3, STAGES_JOIN));
   }
+
+  /**
+   * A layer at a literal position past the summary's unroll is not called, so its {@code call} is
+   * not in the call graph.
+   *
+   * <p>TODO: Called once https://github.com/wala/ML/issues/1089 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testPastUnroll() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_layer_call_long.py",
+        "Last.call",
+        1,
+        2,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
 }
