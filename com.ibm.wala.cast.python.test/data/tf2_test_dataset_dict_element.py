@@ -129,7 +129,12 @@ for element in tf.data.Dataset.from_tensor_slices({"ids": ids, "length": length}
 
 # A dict dataset through a `map` whose function replaces a component of its element by a call
 # before returning it: the component is no longer its source's.
+def read_ids(ids):
+    assert ids.shape == (3,) and ids.dtype == tf.int32
+
+
 def cast_ids(e):
+    read_ids(e["ids"])
     e.update({"ids": tf.cast(e["ids"], tf.float32)})
     return e
 
