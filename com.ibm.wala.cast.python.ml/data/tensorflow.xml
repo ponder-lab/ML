@@ -2575,10 +2575,20 @@
         </method>
       </class>
       <class name="map_fn" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/map_fn -->
-        <!-- TODO: Call `map_fn()` on each of the elements of `elems`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/map_fn. Invokes `fn` on an element of `elems`, as `Dataset.map` invokes its `map_func`, so the callback has a call-graph node and its parameter the element's type (wala/ML#942). The element is the result of a call to `map_fn_element`, whose `MapFnElement` generator removes the leading dimension of `elems`. -->
+        <!-- TODO: Return the stacked results of `fn` rather than `elems`. -->
         <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self fn elems dtype parallel_iterations back_prop swap_memory infer_shape name fn_output_signature">
+          <new def="element_fn" class="Ltensorflow/functions/map_fn_element"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="element_fn" arg1="elems" numArgs="2" def="element"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="fn" arg1="element" numArgs="2" def="fn_result"/>
           <return value="elems"/>
+        </method>
+      </class>
+      <class name="map_fn_element" allocatable="true">
+        <!-- The element `tf.map_fn` passes its `fn`: `elems` unstacked along its leading dimension (wala/ML#942). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self elems">
+          <new def="element" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="element"/>
         </method>
       </class>
       <class name="py_function" allocatable="true">

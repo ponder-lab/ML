@@ -136,6 +136,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LIST_FILES_DATAS
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG1P;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAP_FN_ELEMENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATRIX_TRANSPOSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAXIMUM;
@@ -2942,6 +2943,8 @@ public class TensorGeneratorFactory {
       return new ReverseSequence(source);
     else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);
     else if (isType(calledFunction, UNSTACK.getDeclaringClass())) return new Unstack(source);
+    else if (isType(calledFunction, MAP_FN_ELEMENT.getDeclaringClass()))
+      return new MapFnElement(source);
     else if (isType(calledFunction, SQUARE.getDeclaringClass())) return new Square(source);
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
