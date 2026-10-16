@@ -126,3 +126,22 @@ scalars = scalars.map(lambda x: load_scalar(x))
 
 for element in scalars:
     pass
+
+
+def load_row(x):
+    assert isinstance(x, tf.Tensor)
+    consume_first(x[0])
+    return x
+
+
+def consume_first(v):
+    assert v.shape == ()
+    assert v.dtype == tf.float32
+    return v
+
+
+rows = tf.data.Dataset.from_tensor_slices(tf.ones([3, 4]))
+rows = rows.map(lambda x: load_row(x))
+
+for element in rows:
+    pass

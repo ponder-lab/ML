@@ -539,20 +539,50 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
     test(DICT_MAP_FILE, "load_scalar", 1, 2, Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
   }
 
-  /** The control of {@link #testMapTensorParameter()}, on the container side. */
+  /**
+   * The control of {@link #testMapTensorParameter()}, on the container side: no field of the {@code
+   * dict} beside the receiver holds a tensor.
+   */
   @Test
   public void testMapTensorParameterContainer()
       throws ClassHierarchyException, CancelException, IOException {
-    assertEquals(Map.of(), dictParameterFieldTypes(DICT_MAP_FILE, "load_scalar"));
+    Map<String, Set<TensorType>> fields = dictParameterFieldTypes(DICT_MAP_FILE, "load_scalar");
+    assertTrue(
+        "No field holds a tensor: " + fields, fields.values().stream().allMatch(Set::isEmpty));
+  }
+
+  /**
+   * A control that reads a key on an element that is no dict: the map function over a dataset of
+   * rank-1 tensors subscripts its parameter, so the {@code dict} beside the receiver has a field
+   * {@code "0"}, and the element's structure resolves no such key, so the field holds no tensor.
+   * The subscript itself is typed from the receiver.
+   */
+  @Test
+  public void testMapTensorParameterKeyReadContainer()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, Set<TensorType>> fields = dictParameterFieldTypes(DICT_MAP_FILE, "load_row");
+    assertEquals(
+        "The subscript reads field \"0\", which holds no tensor.", Set.of(), fields.get("0"));
+    assertTrue(
+        "No field holds a tensor: " + fields, fields.values().stream().allMatch(Set::isEmpty));
+  }
+
+  /** The subscript {@link #testMapTensorParameterKeyReadContainer()} reads, a row's first value. */
+  @Test
+  public void testMapTensorParameterKeyRead()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "consume_first", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   /**
    * Runs the analysis on a fixture and collects, for each {@code dict} the first parameter of a
-   * function points to in any of its nodes, the tensor types on the dict's fields, by field name.
+   * function points to in any of its nodes, the tensor types on the dict's fields, by field name. A
+   * field the pointer analysis has but no tensor reaches maps to the empty set.
    *
    * @param filename The Python fixture to analyze.
    * @param functionName The function whose parameter is read.
-   * @return The types on the fields of the parameter's dicts, by field name.
+   * @return The types on the fields of the parameter's dicts, by field name, empty for a field
+   *     holding no tensor.
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
@@ -580,6 +610,11 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
     assertTrue("Function must exist in call graph.", reached);
 
     Map<String, Set<TensorType>> ret = HashMapFactory.make();
+    // Every field the pointer analysis has for the dicts, so a field that exists but holds no
+    // tensor reads as an empty set rather than as absent.
+    for (PointerKey key : builder.getPointerAnalysis().getPointerKeys())
+      if (key instanceof InstanceFieldKey fieldKey && dicts.contains(fieldKey.getInstanceKey()))
+        ret.computeIfAbsent(fieldKey.getField().getName().toString(), k -> HashSetFactory.make());
     for (Pair<PointerKey, TensorVariable> pair : analysis) {
       if (!(pair.fst instanceof InstanceFieldKey fieldKey)) continue;
       if (!dicts.contains(fieldKey.getInstanceKey())) continue;
