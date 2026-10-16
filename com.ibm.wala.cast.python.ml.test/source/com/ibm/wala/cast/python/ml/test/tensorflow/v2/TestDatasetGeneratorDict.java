@@ -540,31 +540,36 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
   }
 
   /**
-   * The control of {@link #testMapTensorParameter()}, on the container side: no field of the {@code
-   * dict} beside the receiver holds a tensor.
+   * The control of {@link #testMapTensorParameter()}, on the container side: the element is no
+   * dict, so the parameter points to no {@code dict}.
    */
   @Test
   public void testMapTensorParameterContainer()
       throws ClassHierarchyException, CancelException, IOException {
-    Map<String, Set<TensorType>> fields = dictParameterFieldTypes(DICT_MAP_FILE, "load_scalar");
-    assertTrue(
-        "No field holds a tensor: " + fields, fields.values().stream().allMatch(Set::isEmpty));
+    assertEquals(Set.of(), this.parameterDicts(DICT_MAP_FILE, "load_scalar").dicts());
   }
 
   /**
    * A control that reads a key on an element that is no dict: the map function over a dataset of
-   * rank-1 tensors subscripts its parameter, so the {@code dict} beside the receiver has a field
-   * {@code "0"}, and the element's structure resolves no such key, so the field holds no tensor.
-   * The subscript itself is typed from the receiver.
+   * rank-1 tensors subscripts its parameter, which points to no {@code dict}, so the subscript
+   * creates no field of one. The subscript itself is typed from the receiver.
    */
   @Test
   public void testMapTensorParameterKeyReadContainer()
       throws ClassHierarchyException, CancelException, IOException {
-    Map<String, Set<TensorType>> fields = dictParameterFieldTypes(DICT_MAP_FILE, "load_row");
-    assertEquals(
-        "The subscript reads field \"0\", which holds no tensor.", Set.of(), fields.get("0"));
-    assertTrue(
-        "No field holds a tensor: " + fields, fields.values().stream().allMatch(Set::isEmpty));
+    assertEquals(Set.of(), this.parameterDicts(DICT_MAP_FILE, "load_row").dicts());
+  }
+
+  /**
+   * A map function over a dataset of rank-1 tensors that iterates its parameter: the element is a
+   * tensor, so the parameter points to no {@code dict}. A client that reads a container allocation
+   * in a parameter's points-to set as an iterated collection would otherwise not refuse the
+   * iteration of a tensor (wala/ML#1088).
+   */
+  @Test
+  public void testMapTensorParameterIterated()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(), this.parameterDicts(DICT_MAP_FILE, "iterate_element").dicts());
   }
 
   /** The subscript {@link #testMapTensorParameterKeyReadContainer()} reads, a row's first value. */
@@ -588,6 +593,31 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
    * @throws IOException if the input fixture cannot be read.
    */
   private Map<String, Set<TensorType>> dictParameterFieldTypes(String filename, String functionName)
+      throws ClassHierarchyException, CancelException, IOException {
+    return this.parameterDicts(filename, functionName).fields();
+  }
+
+  /**
+   * The {@code dict}s the first parameter of a function points to in any of its nodes, and the
+   * tensor types on their fields by field name, empty for a field holding no tensor.
+   *
+   * @param dicts The dicts.
+   * @param fields The types on their fields.
+   */
+  private record ParameterDicts(Set<InstanceKey> dicts, Map<String, Set<TensorType>> fields) {}
+
+  /**
+   * Runs the analysis on a fixture and collects the {@code dict}s the first parameter of a function
+   * points to, with their fields' tensor types.
+   *
+   * @param filename The Python fixture to analyze.
+   * @param functionName The function whose parameter is read.
+   * @return The dicts and their fields' types.
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  private ParameterDicts parameterDicts(String filename, String functionName)
       throws ClassHierarchyException, CancelException, IOException {
     PythonTensorAnalysisEngine engine =
         makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, emptyList(), filename);
@@ -621,6 +651,6 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
       ret.computeIfAbsent(fieldKey.getField().getName().toString(), k -> HashSetFactory.make())
           .addAll(pair.snd.getTypes());
     }
-    return ret;
+    return new ParameterDicts(dicts, ret);
   }
 }
