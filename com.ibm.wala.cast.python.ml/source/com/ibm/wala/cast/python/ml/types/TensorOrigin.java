@@ -33,6 +33,16 @@ public enum TensorOrigin {
    */
   ANNOTATION,
 
+  /**
+   * The value is a Keras symbolic tensor (wala/ML#1101): the {@code KerasTensor} that {@code
+   * tf.keras.Input} produces and that the Functional API passes through layer applications and
+   * TensorFlow operations. At run time it is not a {@code tf.Tensor}, and APIs such as {@code
+   * tf.function} refuse it, so a client must tell it from an eager tensor of the same type. Like
+   * {@link #ANNOTATION}, it is a marker that crosses parameter boundaries: a parameter carries it
+   * exactly when some call passes the function a symbolic Keras value.
+   */
+  KERAS_SYMBOLIC,
+
   /** The value is an ndarray produced by a numpy operation. */
   NUMPY,
 
