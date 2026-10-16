@@ -17,6 +17,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_RAGGED_RAGGED_INT32;
@@ -32,6 +33,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_RAGGED_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_INT32_UNKNOWN_SHAPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_32_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UINT_8;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
@@ -2659,5 +2661,76 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_2_3_BOOL)));
+  }
+
+  /**
+   * {@code type(x) == tf.Tensor} passed to a sink is a Python {@code bool}, but it is typed as a
+   * {@code bool} tensor here: the class object {@code tf.Tensor} is a library allocation, which the
+   * gate takes as tensor evidence.
+   *
+   * <p>TODO: Expect no tensor once <a
+   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   */
+  @Test
+  public void testComparisonGateType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_gate_sinks.py",
+        "type_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+  }
+
+  /**
+   * {@code x.ndim == 2} passed to a sink is a Python {@code bool}, but it is typed as a {@code
+   * bool} tensor here: a generator resolves for the {@code ndim} read, which the gate does not
+   * exclude.
+   *
+   * <p>TODO: Expect no tensor once <a
+   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   */
+  @Test
+  public void testComparisonGateNdim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_comparison_gate_sinks.py", "ndim_sink", 1, 1, Map.of(2, Set.of(TENSOR_3_BOOL)));
+  }
+
+  /**
+   * {@code x.shape.as_list()[1:] == [3]} passed to a sink is a Python {@code bool}, but it is typed
+   * as a {@code bool} tensor here: a generator resolves for the slice of {@code as_list()}'s
+   * result.
+   *
+   * <p>TODO: Expect no tensor once <a
+   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   */
+  @Test
+  public void testComparisonGateAsList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_gate_sinks.py",
+        "as_list_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+  }
+
+  /**
+   * {@code empty() == {}} passed to a sink is a Python {@code bool}, but it is typed as a {@code
+   * bool} tensor here: the dictionary literal's pointer key is implicit, which the gate takes as
+   * tensor evidence.
+   *
+   * <p>TODO: Expect no tensor once <a
+   * href="https://github.com/wala/ML/issues/1084">wala/ML#1084</a> is fixed.
+   */
+  @Test
+  public void testComparisonGateDictLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_comparison_gate_sinks.py",
+        "dict_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
   }
 }

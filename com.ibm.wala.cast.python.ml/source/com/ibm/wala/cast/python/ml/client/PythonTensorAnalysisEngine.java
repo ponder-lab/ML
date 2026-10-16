@@ -69,6 +69,7 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IConditionalBranchInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
@@ -83,6 +84,7 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
@@ -1199,6 +1201,189 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         () ->
             "wala/ML#960 list-operation-only nodes pruned from the dataflow graph: "
                 + pruned.size());
+  }
+
+  /** How many φs {@link #addCondition} follows from a condition toward its comparisons. */
+  private static final int CONDITION_PHI_HOPS = 4;
+
+  /**
+   * Adds to the dataflow graph, as nodes of their own, the comparison results that a conditional
+   * branch or an {@code assert} tests and that the graph lacks (wala/ML#1074).
+   *
+   * <p>The graph is the pointer analysis's flow graph, and a comparison result takes part in no
+   * points-to constraint, so it is a node there only when it flows on, into a call or another
+   * variable. One that only an {@code if}, a {@code while} or an {@code assert} tests is no node,
+   * so it was never a dataflow source, and a consumer asking whether the branch tests a tensor read
+   * nothing. As a node it is a source like any comparison, and the factory's comparison gate types
+   * it or declines it.
+   *
+   * <p>The criterion is syntactic: a value tested by a conditional branch or an assertion in a node
+   * of the call graph, whose definition is one of the six comparison operators, or a φ of such
+   * values ({@code a > 0 and b < 1}, which the front end lowers to a φ of the operand Python
+   * selects, and a chained comparison). A φ gets an edge, in this copy of the flow graph, from each
+   * operand that has a node, whether a new comparison node or one the graph already held, so it
+   * holds the join of their types; an operand with no node, such as a constant, contributes none.
+   * The operand of a negation, {@code not (t > 0)}, gets its node too, but the negation does not:
+   * Python's {@code not} of a tensor is a Python {@code bool}, whatever a tracing rewrite makes of
+   * it. Each node is keyed on its calling node and value number, so contexts stay apart, and they
+   * are added after {@link #pruneListOperationOnlyNodes}, which therefore cannot remove them. The
+   * pointer analysis is unchanged: the variables are not registered with the propagation system.
+   *
+   * @param builder The builder whose call graph and heap model name the values.
+   * @param dataflow The duplicated flow graph to extend.
+   */
+  private static void addConditionOnlyComparisons(
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
+    Map<PointerKey, PointsToSetVariable> byKey = HashMapFactory.make();
+    for (PointsToSetVariable v : dataflow) byKey.put(v.getPointerKey(), v);
+    int before = byKey.size();
+    for (CGNode node : builder.getCallGraph()) {
+      IR ir = node.getIR();
+      if (ir == null) continue;
+      for (SSAInstruction instruction : ir.getInstructions())
+        if (instruction instanceof SSAConditionalBranchInstruction
+            || instruction instanceof AstAssertInstruction)
+          addCondition(builder, dataflow, byKey, node, instruction.getUse(0), CONDITION_PHI_HOPS);
+    }
+    int added = byKey.size() - before;
+    LOGGER.fine(
+        () -> "wala/ML#1074 condition-only comparisons added to the dataflow graph: " + added);
+  }
+
+  /**
+   * Gives a tested value its node in the dataflow graph when it is a comparison or a φ of
+   * comparisons, as {@link #addConditionOnlyComparisons} describes.
+   *
+   * @param builder The builder whose heap model names the value.
+   * @param dataflow The duplicated flow graph to extend.
+   * @param byKey The graph's nodes by pointer key, updated with the nodes added.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @param hops How many more φs to follow.
+   * @return The value's node, or {@code null} when it has none and is not such a value.
+   */
+  private static PointsToSetVariable addCondition(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointerKey, PointsToSetVariable> byKey,
+      CGNode node,
+      int vn,
+      int hops) {
+    PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    PointsToSetVariable existing = byKey.get(key);
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction binop && isComparison(binop.getOperator())) {
+      if (existing != null || !comparesTensorValue(builder, node, binop)) return existing;
+      PointsToSetVariable variable = new PointsToSetVariable(key);
+      dataflow.addNode(variable);
+      byKey.put(key, variable);
+      return variable;
+    }
+    if (def instanceof SSAUnaryOpInstruction negation && hops > 0) {
+      // `not (t > 0)`: the comparison is a tensor, so it gets its node, while the negation is
+      // Python's truth test of it, a Python `bool`, so it gets none.
+      addCondition(builder, dataflow, byKey, node, negation.getUse(0), hops - 1);
+      return existing;
+    }
+    if (def instanceof SSAPhiInstruction phi && hops > 0) {
+      List<PointsToSetVariable> operands = new ArrayList<>();
+      for (int i = 0; i < phi.getNumberOfUses(); i++) {
+        PointsToSetVariable operand =
+            addCondition(builder, dataflow, byKey, node, phi.getUse(i), hops - 1);
+        if (operand != null) operands.add(operand);
+      }
+      if (operands.isEmpty()) return existing;
+      PointsToSetVariable variable = existing;
+      if (variable == null) {
+        variable = new PointsToSetVariable(key);
+        dataflow.addNode(variable);
+        byKey.put(key, variable);
+      }
+      for (PointsToSetVariable operand : operands)
+        if (!dataflow.hasEdge(operand, variable)) dataflow.addEdge(operand, variable);
+      return variable;
+    }
+    return existing;
+  }
+
+  /** The types the summaries allocate for a tensor value, as opposed to a library object. */
+  private static final Set<TypeReference> TENSOR_VALUE_TYPES =
+      Set.of(
+          TensorFlowTypes.TENSOR_TYPE,
+          TensorFlowTypes.VARIABLES_VARIABLE,
+          TensorFlowTypes.SPARSE_TENSOR_TYPE,
+          TensorFlowTypes.NDARRAY_TYPE,
+          NumpyTypes.NDARRAY_TYPE);
+
+  /**
+   * Whether a condition-only comparison has an operand whose points-to set holds a tensor value, an
+   * allocation of one of {@link #TENSOR_VALUE_TYPES}.
+   *
+   * <p>A condition-only comparison is added to the graph only on this evidence, which is narrower
+   * than the factory's comparison gate. The gate takes any allocation in a tensor library's
+   * namespace, a dispatched generator or an implicit key as evidence, so it also accepts a {@code
+   * tf.Graph}, a class object such as {@code tf.Tensor}, a dictionary literal, or an operand that a
+   * generator already types although it is a Python value, such as {@code x.shape.as_list()}. A
+   * comparison that only a condition tests was never a node, so those readings had never applied to
+   * it, and an {@code assert type(a) == tf.Tensor} or an {@code assert labels.ndim == 2} would now
+   * read as a tensor. Its operands would also become nodes, through the comparison's broadcast type
+   * feed. A comparison of a value that reaches only through dataflow, with no allocation, is
+   * therefore not added (wala/ML#1074).
+   *
+   * @param builder The builder whose pointer analysis holds the operands' points-to sets.
+   * @param node The node whose IR holds the comparison.
+   * @param comparison The comparison.
+   * @return {@code true} iff an operand may be a tensor value by its points-to set.
+   */
+  private static boolean comparesTensorValue(
+      PropagationCallGraphBuilder builder, CGNode node, SSABinaryOpInstruction comparison) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    for (int i = 0; i < comparison.getNumberOfUses(); i++) {
+      if (node.getIR().getSymbolTable().isConstant(comparison.getUse(i))) continue;
+      PointerKey key =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, comparison.getUse(i));
+      // An implicit key is one WALA's builder leaves unmaterialized: a local defined by a constant
+      // or a `new`, which in a program's own code is a literal, or a value with no use the
+      // builder deems interesting, such as a field read or a φ that only this comparison reads.
+      // The first kind holds no tensor value. The second kind can, and is skipped all the same
+      // rather than materialized after the pointer analysis has converged; a tensor field read in
+      // a condition is still typed in the tests, by another route, but nothing shows that every
+      // such operand is (wala/ML#1086).
+      if (builder.getPropagationSystem().isImplicit(key)) continue;
+      for (InstanceKey instance : pointerAnalysis.getPointsToSet(key)) {
+        TypeReference allocated =
+            instance instanceof AllocationSiteInNode site
+                ? site.concreteType().getReference()
+                : instance instanceof ConcreteTypeKey concrete
+                    ? concrete.type().getReference()
+                    : null;
+        if (allocated != null && TENSOR_VALUE_TYPES.contains(allocated)) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Whether a binary operator is one of Python's six comparison operators, which the front end
+   * lowers to {@link CAstBinaryOp}s.
+   *
+   * @param operator The operator.
+   * @return {@code true} iff it is {@code ==}, {@code !=}, {@code <}, {@code <=}, {@code >} or
+   *     {@code >=}.
+   */
+  private static boolean isComparison(IBinaryOpInstruction.IOperator operator) {
+    if (!(operator instanceof CAstBinaryOp binaryOp)) return false;
+    switch (binaryOp) {
+      case EQ:
+      case NE:
+      case LT:
+      case LE:
+      case GT:
+      case GE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
@@ -3273,6 +3458,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           SlowSparseNumberedGraph.duplicate(
               builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
       pruneListOperationOnlyNodes(builder, dataflow);
+      addConditionOnlyComparisons(builder, dataflow);
 
       Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 

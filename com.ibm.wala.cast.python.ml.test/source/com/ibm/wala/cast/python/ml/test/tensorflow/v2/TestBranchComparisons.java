@@ -1,0 +1,532 @@
+package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
+
+import static java.util.Collections.emptySet;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+
+import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
+import com.ibm.wala.util.CancelException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Logger;
+import org.junit.Test;
+
+/**
+ * Tests that a comparison whose only use is a condition is typed (<a
+ * href="https://github.com/wala/ML/issues/1074">wala/ML#1074</a>).
+ *
+ * <p>A comparison passed to a call takes part in a points-to constraint, which makes it a node of
+ * the tensor dataflow graph, but one that only an {@code if}, a {@code while} or an {@code assert}
+ * tests does not. So each test reads the type of the value a function's first conditional branch
+ * tests, rather than of a sink's parameter, which would itself put the comparison in the graph.
+ */
+public class TestBranchComparisons extends AbstractTensorTest {
+
+  private static final Logger LOGGER = Logger.getLogger(TestBranchComparisons.class.getName());
+
+  private static final String FILE = "tf2_test_branch_comparisons.py";
+
+  /**
+   * The types of the values the conditional branches and assertions test, by function name and in
+   * instruction order, from one analysis of {@link #FILE}.
+   */
+  private static Map<String, List<Set<TensorType>>> branchConditionTypes;
+
+  /**
+   * The types of the operands of the negations that conditions test, by function name and in
+   * instruction order, from the same analysis.
+   */
+  private static Map<String, List<Set<TensorType>>> negatedOperandTypes;
+
+  /**
+   * Returns, for each conditional branch or assertion in the named function in instruction order,
+   * the union over contexts of the types of the value it tests.
+   *
+   * @param functionName The function's name, qualified by its enclosing functions.
+   * @return The types per branch, each empty when the value is not a tensor.
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  private List<Set<TensorType>> branchConditionTypes(String functionName)
+      throws ClassHierarchyException, CancelException, IOException {
+    if (branchConditionTypes == null) {
+      PythonTensorAnalysisEngine engine =
+          makeEngine(
+              PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH,
+              this.getPathFiles(null),
+              new String[] {FILE});
+      PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+      CallGraph callGraph = builder.makeCallGraph(builder.getOptions());
+      TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+      // Indexed by node and value number, as a consumer reading a branch's operand looks it up.
+      Map<CGNode, Map<Integer, Set<TensorType>>> types = new HashMap<>();
+      analysis.forEach(
+          pair -> {
+            if (pair.fst instanceof LocalPointerKey key && pair.snd.getTypes() != null)
+              types
+                  .computeIfAbsent(key.getNode(), n -> new HashMap<>())
+                  .computeIfAbsent(key.getValueNumber(), v -> new HashSet<>())
+                  .addAll(pair.snd.getTypes());
+          });
+
+      Map<String, List<Set<TensorType>>> result = new HashMap<>();
+      Map<String, List<Set<TensorType>>> negatedResult = new HashMap<>();
+      String prefix = "script " + FILE + ".";
+      String suffix = ".do()LRoot;";
+      for (CGNode node : callGraph) {
+        String signature = node.getMethod().getSignature();
+        // The script's own body is named by the prefix alone and holds no function.
+        if (!signature.startsWith(prefix)
+            || !signature.endsWith(suffix)
+            || signature.length() <= prefix.length() + suffix.length()) continue;
+        String name = signature.substring(prefix.length(), signature.length() - suffix.length());
+        List<Set<TensorType>> branches = new ArrayList<>();
+        List<Set<TensorType>> negated = new ArrayList<>();
+        for (SSAInstruction instruction : node.getIR().getInstructions()) {
+          if ((instruction instanceof SSAConditionalBranchInstruction
+                  || instruction instanceof AstAssertInstruction)
+              && node.getDU().getDef(instruction.getUse(0))
+                  instanceof SSAUnaryOpInstruction negation)
+            negated.add(
+                new HashSet<>(
+                    types
+                        .getOrDefault(node, Map.of())
+                        .getOrDefault(negation.getUse(0), emptySet())));
+          if (instruction instanceof SSAConditionalBranchInstruction
+              || instruction instanceof AstAssertInstruction)
+            branches.add(
+                new HashSet<>(
+                    types
+                        .getOrDefault(node, Map.of())
+                        .getOrDefault(instruction.getUse(0), emptySet())));
+        }
+        negatedResult.merge(
+            name,
+            negated,
+            (a, b) -> {
+              for (int i = 0; i < a.size() && i < b.size(); i++) a.get(i).addAll(b.get(i));
+              return a;
+            });
+        result.merge(
+            name,
+            branches,
+            (a, b) -> {
+              for (int i = 0; i < a.size() && i < b.size(); i++) a.get(i).addAll(b.get(i));
+              return a;
+            });
+      }
+      branchConditionTypes = result;
+      negatedOperandTypes = negatedResult;
+      LOGGER.fine(() -> "Branch condition types: " + result + ".");
+    }
+    List<Set<TensorType>> branches = branchConditionTypes.get(functionName);
+    assertFalse(
+        "Function "
+            + functionName
+            + " must have a condition in the call graph; found "
+            + branchConditionTypes.keySet()
+            + ".",
+        branches == null || branches.isEmpty());
+    return branches;
+  }
+
+  /**
+   * Returns the types of the value the first conditional branch or assertion in the named function
+   * tests.
+   *
+   * @param functionName The function's name, qualified by its enclosing functions.
+   * @return The types, empty when the value is not a tensor.
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  private Set<TensorType> conditionTypes(String functionName)
+      throws ClassHierarchyException, CancelException, IOException {
+    return branchConditionTypes(functionName).get(0);
+  }
+
+  /**
+   * {@code if tf.reduce_sum(x) > 0.0: return None} tests a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfGreater() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("if_greater"));
+  }
+
+  /**
+   * {@code if tf.reduce_sum(x) <= 0.0:} with no {@code else}, merging {@code None} with a tensor,
+   * tests a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfLessEqual() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("if_less_equal"));
+  }
+
+  /**
+   * {@code while tf.reduce_sum(x) > 0.0:} tests a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWhileGreater() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("while_greater"));
+  }
+
+  /**
+   * {@code assert tf.reduce_sum(x) > 0.0} tests a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertGreater() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("assert_greater"));
+  }
+
+  /**
+   * A nested function's {@code if} on a comparison of the enclosing function's tensor tests a
+   * scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedFunction() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("nested.inner"));
+  }
+
+  /**
+   * A {@code tf.while_loop} body's {@code if} on a comparison of a loop variable tests a scalar
+   * {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWhileLoopBody() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("loop_body"));
+  }
+
+  /**
+   * {@code if n > 0} on a Python {@code int} tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfInt() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_int"));
+  }
+
+  /**
+   * {@code if len(xs) > 0} tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfLen() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_len"));
+  }
+
+  /**
+   * {@code if x is None} on a tensor tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfIsNone() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_is_none"));
+  }
+
+  /**
+   * {@code assert x.shape == (2, 3)} tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertShape() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_shape"));
+  }
+
+  /**
+   * {@code assert x.dtype == tf.float32} tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertDtype() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_dtype"));
+  }
+
+  /**
+   * {@code if x.shape[0] == 2} tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfDimension() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_dimension"));
+  }
+
+  /**
+   * Both conditions of {@code if a > 0.0 and b < 2.0:} test a scalar {@code bool}: the first tests
+   * the left comparison, and the second the φ of the operand {@code and} selects.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfAnd() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        List.of(Set.of(SCALAR_TENSOR_OF_BOOL), Set.of(SCALAR_TENSOR_OF_BOOL)),
+        branchConditionTypes("if_and"));
+  }
+
+  /**
+   * Both conditions of the chained {@code if 0.0 < s < 100.0:} test a scalar {@code bool}, whatever
+   * the lowering's disjunction (wala/ML#1079) selects.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfChained() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        List.of(Set.of(SCALAR_TENSOR_OF_BOOL), Set.of(SCALAR_TENSOR_OF_BOOL)),
+        branchConditionTypes("if_chained"));
+  }
+
+  /**
+   * {@code u if t > 0.0 else v} tests a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTernary() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("ternary"));
+  }
+
+  /**
+   * {@code if not (t > 0.0):} tests the negation of a comparison, and the negation is not typed:
+   * Python's {@code not} of a tensor is its truth value, a Python {@code bool}. AutoGraph rewrites
+   * it to {@code tf.logical_not} under tracing, but that is a tracing question for a consumer
+   * reading through the negation to its operand, which {@link #testIfNotComparison()} types.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfNot() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_not"));
+  }
+
+  /**
+   * The comparison under {@code if not (t > 0.0):} is a scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfNotComparison() throws ClassHierarchyException, CancelException, IOException {
+    branchConditionTypes("if_not");
+    assertEquals(List.of(Set.of(SCALAR_TENSOR_OF_BOOL)), negatedOperandTypes.get("if_not"));
+  }
+
+  /**
+   * In {@code if n > 0 and t > 0.0:}, the first condition, on a Python {@code int}, tests no
+   * tensor, and the second, a φ of that comparison and the tensor comparison, tests the join: a
+   * scalar {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfMixedAnd() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        List.of(emptySet(), Set.of(SCALAR_TENSOR_OF_BOOL)), branchConditionTypes("if_mixed_and"));
+  }
+
+  /**
+   * A flag that is {@code False} or a tensor comparison, a φ of a constant and a comparison, tests
+   * the comparison's scalar {@code bool}; the constant contributes nothing.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfFlagOrFalse() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(
+        List.of(emptySet(), Set.of(SCALAR_TENSOR_OF_BOOL)),
+        branchConditionTypes("if_flag_or_false"));
+  }
+
+  /**
+   * A flag that is {@code True} or {@code False}, a φ of constants alone, tests no tensor, and
+   * neither does the {@code n > 0} that chooses between them.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfConstantFlag() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(List.of(emptySet(), emptySet()), branchConditionTypes("if_constant_flag"));
+  }
+
+  /**
+   * A comprehension's filter {@code if y > 0.0} lowers to a function returning the comparison, not
+   * to a branch, and the returned comparison is typed through its return: the filter's parameter is
+   * a scalar {@code float32} and its one local tensor the {@code bool} comparison.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testComprehensionFilter()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "comprehension_filter.filter2", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * {@code assert type(x) != tf.Variable} compares a type with a class object, a library allocation
+   * that is no tensor value, and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertType() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_type"));
+  }
+
+  /**
+   * {@code assert x.ndim == 2} compares a Python {@code int} and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertNdim() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_ndim"));
+  }
+
+  /**
+   * {@code assert x.shape.as_list()[1:] == [3]} compares Python lists and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAssertAsList() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("assert_as_list"));
+  }
+
+  /**
+   * {@code if d == {}:} compares dictionaries and tests no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfDict() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(emptySet(), conditionTypes("if_dict"));
+  }
+
+  /**
+   * A comparison of a user layer's call result, {@code if Doubler()(x) > 0.0:}, tests a scalar
+   * {@code bool}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfLayerResult() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("if_layer_result"));
+  }
+
+  /**
+   * A comparison of a tensor read off an attribute, {@code if self.t > 0.0:}, tests a scalar {@code
+   * bool}, although the field read's pointer key may be implicit.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfAttribute() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(SCALAR_TENSOR_OF_BOOL), conditionTypes("Threshold.if_attribute"));
+  }
+
+  /**
+   * A comparison of a dataset's element, {@code for b in ds: if b > 0.0:}, is a scalar {@code bool}
+   * at run time but tests no tensor here: the element's points-to set holds no tensor allocation,
+   * so the comparison is not added to the dataflow graph. The first condition is the loop's own.
+   *
+   * <p>TODO: Expect a scalar {@code bool} for the second condition once <a
+   * href="https://github.com/wala/ML/issues/1086">wala/ML#1086</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIfDatasetElement() throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(List.of(emptySet(), emptySet()), branchConditionTypes("if_dataset_element"));
+  }
+}

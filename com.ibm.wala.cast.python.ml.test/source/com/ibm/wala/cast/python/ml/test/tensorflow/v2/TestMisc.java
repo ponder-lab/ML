@@ -289,6 +289,10 @@ public class TestMisc extends AbstractTensorTest {
    * value number, deduplicated across calling contexts (wala/ML#371, Option 2) &mdash; so the
    * parameter's two contexts collapse and the count is 2 ({@code vn=2} and {@code vn=10}), not the
    * three {@code (CGNode, vn)} entries the analysis registers.
+   *
+   * <p>The count rose from two to three when a comparison that only a condition tests was typed
+   * (wala/ML#1074): the guard {@code n > 0} on the {@code int32} tensor {@code n} is a scalar
+   * {@code bool} tensor, as at run time.
    */
   @Test
   public void testRecursionTensorOnly()
@@ -297,7 +301,7 @@ public class TestMisc extends AbstractTensorTest {
         "tf2_test_recursion_tensor_only.py",
         "recursive_fn",
         1,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
