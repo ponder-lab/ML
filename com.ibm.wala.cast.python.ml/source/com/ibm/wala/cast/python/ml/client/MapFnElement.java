@@ -1,11 +1,21 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -38,14 +48,39 @@ public class MapFnElement extends PassThroughUnaryTensorGenerator {
   }
 
   /**
+   * Whether {@code elems} is a structure, a tuple or a list, rather than a tensor. Given a
+   * structure, {@code map_fn} unstacks each of its components and passes {@code fn} the same
+   * structure of rows, which is not a tensor.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @return {@code true} iff every allocation {@code elems} points to is a tuple or a list.
+   */
+  private boolean elemsIsStructure(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pts =
+        this.getArgumentPointsToSet(
+            builder, this.getInputParameterPosition(), this.getInputParameterName());
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) return false;
+      TypeReference type = asin.concreteType().getReference();
+      if (!type.equals(tuple) && !type.equals(list)) return false;
+    }
+    return true;
+  }
+
+  /**
    * Derives the element's shape from the {@code elems} shape by removing its leading dimension.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
-   * @return The element shapes, or {@code null} (⊤) when the {@code elems} shape is unknown or some
-   *     member is a scalar.
+   * @return The element shapes, {@code null} (⊤) when the {@code elems} shape is unknown or some
+   *     member is a scalar, or the empty set (⊥) when {@code elems} is a structure.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // TODO: Type the structure's components (https://github.com/wala/ML/issues/1092).
+    if (this.elemsIsStructure(builder)) return Collections.emptySet();
+
     Set<List<Dimension<?>>> inputShapes = super.getDefaultShapes(builder);
     if (inputShapes == null || inputShapes.isEmpty()) return inputShapes;
 
@@ -55,6 +90,19 @@ public class MapFnElement extends PassThroughUnaryTensorGenerator {
       ret.add(new ArrayList<>(input.subList(1, input.size())));
     }
     return ret;
+  }
+
+  /**
+   * The element's dtypes are the {@code elems} dtypes, unless {@code elems} is a structure, whose
+   * rows are not a tensor.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @return The element dtypes, or the empty set (⊥) when {@code elems} is a structure.
+   */
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    if (this.elemsIsStructure(builder)) return Collections.emptySet();
+    return super.getDefaultDTypes(builder);
   }
 
   /**
