@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -283,6 +284,9 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // A dict-structured element is a dict, no tensor; its keys are read through the path reads.
+    if (this.declaresDictElement(builder)) return Collections.emptySet();
+
     // Strategy 1: Check output_signature.
     // This is the modern way to specify output properties in from_generator.
     OrdinalSet<InstanceKey> outputSignaturePts =
@@ -562,6 +566,9 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // A dict-structured element is a dict, no tensor; its keys are read through the path reads.
+    if (this.declaresDictElement(builder)) return Collections.emptySet();
+
     // Strategy 1: Check output_signature.
     // This is the modern way to specify output properties in from_generator.
     OrdinalSet<InstanceKey> outputSignaturePts =
@@ -629,5 +636,29 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     // return `DType.UNKNOWN` (⊤) rather than `emptySet()` (⊥/not-a-tensor), so downstream
     // analysis preserves the "this is a tensor source" signal. See wala/ML#408.
     return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
+   * Whether the element structure this dataset declares is a dict: every allocation passed as
+   * {@code output_signature}, or else as the legacy {@code output_types}, is a dict (wala/ML#1088).
+   * Such an element is a dict whose values are the tensors, so the element itself is no tensor;
+   * each key's value is typed by {@link #getShapesForPath} and {@link #getDTypesForPath}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @return {@code true} iff the declaring argument's points-to set is nonempty and holds dicts
+   *     only.
+   */
+  private boolean declaresDictElement(PropagationCallGraphBuilder builder) {
+    for (Parameters parameter : List.of(Parameters.OUTPUT_SIGNATURE, Parameters.OUTPUT_TYPES)) {
+      OrdinalSet<InstanceKey> pts =
+          this.getArgumentPointsToSet(builder, parameter.getIndex(), parameter.getName());
+      if (pts == null || pts.isEmpty()) continue;
+      for (InstanceKey ik : pts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin == null || !asin.concreteType().getReference().equals(dict)) return false;
+      }
+      return true;
+    }
+    return false;
   }
 }
