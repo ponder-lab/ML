@@ -52,12 +52,15 @@ public class TestBuiltinLayerSubclass extends AbstractTensorTest {
 
   /**
    * A subclass of {@code Dense} that overrides {@code call}: its instances run the override, so the
-   * override's input is the tensor the instance is called with.
+   * override's input is the tensor the instance is called with. The override's {@code
+   * super().call(inputs)} resolves to {@code Dense}'s {@code call} through the built-in layer's
+   * class shell, so its result is a tensor as well; before, the superclass was {@code object}, the
+   * call resolved to nothing, and the input was the override's only tensor.
    */
   @Test
   public void testDenseSubclassOverride()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "Scaled.call", 1, 1, Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+    test(FILE, "Scaled.call", 1, 2, Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }
 
   /**
