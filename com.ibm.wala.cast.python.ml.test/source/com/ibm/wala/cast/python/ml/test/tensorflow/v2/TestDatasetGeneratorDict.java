@@ -361,4 +361,43 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
             Set.of(
                 TensorType.of(INT_32, 2), new TensorType(INT_32, asList(new SymbolicDim("?"))))));
   }
+
+  /** A dataset of dicts whose map function passes each key's value on (wala/ML#1088). */
+  private static final String DICT_MAP_FILE = "tf2_test_dataset_from_generator_dict_map.py";
+
+  /**
+   * The dict a map function is given is no tensor, though its values are (<a
+   * href="https://github.com/wala/ML/issues/1088">wala/ML#1088</a>). Before, it was typed as one
+   * tensor of the declared dtypes' join.
+   */
+  @Test
+  public void testMapDictParameter() throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "load", 0, 4);
+  }
+
+  /** A {@code float32} key of the dict, read in the map function. */
+  @Test
+  public void testMapDictFloatKey() throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "consume_mels", 1, 1, Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /** A {@code string} key of the dict, read in the map function. */
+  @Test
+  public void testMapDictStringKey() throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "consume_ids", 1, 1, Map.of(2, Set.of(new TensorType(STRING, null))));
+  }
+
+  /** The dict a map function is given when an {@code output_signature} dict declares it. */
+  @Test
+  public void testMapSignatureDictParameter()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "load_signed", 0, 2);
+  }
+
+  /** A key of the dict an {@code output_signature} dict declares, with its spec's shape. */
+  @Test
+  public void testMapSignatureDictKey()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(DICT_MAP_FILE, "consume_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
 }
