@@ -450,6 +450,11 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
    * transformations read an element that is not a tensor as one whose type did not resolve, so the
    * batch is typed as a tensor of the padded shapes with an unknown dtype.
    *
+   * <p>The step has three tensor variables today, one of them the batch parameter: expecting three,
+   * the assertion that fails is the tensor-parameter count, one where none is expected. The two
+   * expected here are those three less the parameter, derived rather than measured with the
+   * parameter untyped.
+   *
    * <p>TODO: Not a tensor once https://github.com/wala/ML/issues/1093 is fixed.
    */
   @Test(expected = AssertionError.class)
