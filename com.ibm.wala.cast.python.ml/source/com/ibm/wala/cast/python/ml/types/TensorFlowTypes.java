@@ -1651,6 +1651,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MAP_FN_ELEMENT_SIGNATURE = "tf.map_fn() element";
 
+  /**
+   * The summary that builds the argument {@code tf.data.Dataset.map} passes its function: the
+   * receiver dataset joined with a fresh {@code dict} (wala/ML#1088). Its allocations have no
+   * generator.
+   */
+  public static final TypeReference MAP_ARGUMENT_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/map_argument"));
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
   public static final MethodReference EXTRACT_PATCHES =
       MethodReference.findOrCreate(

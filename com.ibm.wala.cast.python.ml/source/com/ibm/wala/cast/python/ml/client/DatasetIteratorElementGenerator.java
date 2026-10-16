@@ -145,14 +145,30 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
               .getPointerAnalysis()
               .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field));
       if (held == null) continue;
-      for (InstanceKey ik : held) {
-        AllocationSiteInNode dataset = getAllocationSiteInNode(ik);
-        if (dataset == null) continue;
-        TensorGenerator generator = datasetGenerator(dataset, builder);
-        if (generator != null && !ret.contains(generator)) ret.add(generator);
-      }
+      for (TensorGenerator generator : datasetsIn(held, builder))
+        if (!ret.contains(generator)) ret.add(generator);
     }
     LOGGER.fine(() -> "Dataset element's dataset generators: " + ret + ".");
+    return ret;
+  }
+
+  /**
+   * The generators of the datasets among some instances (wala/ML#1088); an instance that is no
+   * allocation, or a dataset without a generator, contributes nothing.
+   *
+   * @param instances The instances, such as a points-to set holding datasets.
+   * @param builder The propagation call graph builder.
+   * @return The dataset generators, in instance order, without duplicates.
+   */
+  static List<TensorGenerator> datasetsIn(
+      Iterable<InstanceKey> instances, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (InstanceKey ik : instances) {
+      AllocationSiteInNode dataset = getAllocationSiteInNode(ik);
+      if (dataset == null) continue;
+      TensorGenerator generator = datasetGenerator(dataset, builder);
+      if (generator != null && !ret.contains(generator)) ret.add(generator);
+    }
     return ret;
   }
 

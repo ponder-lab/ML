@@ -69,6 +69,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
@@ -326,6 +327,32 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         attributes == null ? Collections.emptyMap() : Map.copyOf(attributes);
   }
 
+  /**
+   * An allocation that happens only when a value the allocating method reads from a field may be of
+   * the allocation's own type (wala/ML#1088): a summary cannot branch on a value's type, so the
+   * builder decides it from the points-to set of the read.
+   *
+   * @param conditionField The field whose read the allocation depends on.
+   * @param type The allocated type, which the read must be able to hold.
+   */
+  public record ConditionalAllocation(String conditionField, TypeReference type) {}
+
+  /**
+   * The conditional allocations, by the summary class whose method allocates (wala/ML#1088); see
+   * {@link ConditionalAllocation}. Empty by default, so a client that names none sees no change.
+   */
+  private Map<TypeReference, ConditionalAllocation> conditionalAllocations = Collections.emptyMap();
+
+  /**
+   * Names the conditional allocations (wala/ML#1088); see {@link ConditionalAllocation}.
+   *
+   * @param allocations Each summary class mapped to the allocation its method makes conditionally.
+   */
+  public void setConditionalAllocations(Map<TypeReference, ConditionalAllocation> allocations) {
+    this.conditionalAllocations =
+        allocations == null ? Collections.emptyMap() : Map.copyOf(allocations);
+  }
+
   /** The classes already decided by {@link #declaresIterationProtocol}. */
   private final Map<IClass, Boolean> iterationProtocolClasses = HashMapFactory.make();
 
@@ -553,6 +580,66 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public Iterator<PointerKey> getPointerKeysForReflectedFieldWrite(InstanceKey I, InstanceKey F) {
       if (isNoneConstant(I)) return Collections.emptyIterator();
       return super.getPointerKeysForReflectedFieldWrite(I, F);
+    }
+
+    /**
+     * The conditional allocation an allocation is, if any (wala/ML#1088): an allocation of the
+     * named type in a method of a class with a {@link ConditionalAllocation}.
+     *
+     * @param instruction The allocation.
+     * @return The conditional allocation, or {@code null} for an ordinary one.
+     */
+    private ConditionalAllocation conditionalAllocation(SSANewInstruction instruction) {
+      ConditionalAllocation conditional =
+          getBuilder()
+              .conditionalAllocations
+              .get(node.getMethod().getDeclaringClass().getReference());
+      return conditional != null && conditional.type().equals(instruction.getConcreteType())
+          ? conditional
+          : null;
+    }
+
+    /**
+     * Allocates conditionally where a {@link ConditionalAllocation} names the allocation
+     * (wala/ML#1088): the instance reaches the allocation's result only once the value the method
+     * reads from the condition field may be of the allocated type. A method that reads no such
+     * field never allocates it.
+     *
+     * @param instruction The allocation.
+     */
+    @Override
+    public void visitNew(SSANewInstruction instruction) {
+      ConditionalAllocation conditional = conditionalAllocation(instruction);
+      if (conditional == null) {
+        super.visitNew(instruction);
+        return;
+      }
+      InstanceKey instance = getInstanceKeyForAllocation(instruction.getNewSite());
+      if (instance == null) return;
+      for (SSAInstruction read : ir.getInstructions())
+        if (read instanceof SSAGetInstruction get
+            && get.getDeclaredField().getName().toString().equals(conditional.conditionField())) {
+          logger.fine(
+              () -> "Allocating " + instance + " in " + node + " only if its condition holds.");
+          system.newSideEffect(
+              new ConditionalAllocationOperator(
+                  system,
+                  getPointerKeyForLocal(instruction.getDef()),
+                  instance,
+                  conditional.type()),
+              getPointerKeyForLocal(get.getDef()));
+        }
+    }
+
+    /**
+     * A conditional allocation's result has no invariant contents (wala/ML#1088): it is empty until
+     * its condition holds, so its uses read its points-to set.
+     */
+    @Override
+    protected boolean contentsAreInvariant(SymbolTable symbolTable, DefUse du, int valueNumber) {
+      if (du.getDef(valueNumber) instanceof SSANewInstruction allocation
+          && conditionalAllocation(allocation) != null) return false;
+      return super.contentsAreInvariant(symbolTable, du, valueNumber);
     }
 
     /**
@@ -2585,6 +2672,67 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "dict " + kind + " at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Adds a conditional allocation's instance to its result once the condition read may hold an
+   * instance of the allocated type (wala/ML#1088); see {@link ConditionalAllocation}.
+   */
+  private static final class ConditionalAllocationOperator
+      extends UnaryOperator<PointsToSetVariable> {
+    private final PropagationSystem system;
+    private final PointerKey result;
+    private final InstanceKey instance;
+    private final TypeReference type;
+
+    private ConditionalAllocationOperator(
+        PropagationSystem system, PointerKey result, InstanceKey instance, TypeReference type) {
+      this.system = system;
+      this.result = result;
+      this.instance = instance;
+      this.type = type;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable l, PointsToSetVariable condition) {
+      if (condition.getValue() == null) return NOT_CHANGED;
+      boolean[] holds = {false};
+      condition
+          .getValue()
+          .foreach(
+              i -> {
+                IClass klass = system.getInstanceKey(i).concreteType();
+                if (klass != null && klass.getReference().equals(type)) holds[0] = true;
+              });
+      logger.finer(
+          () ->
+              "Conditional allocation of "
+                  + instance
+                  + ": condition holds "
+                  + holds[0]
+                  + " over "
+                  + condition.getValue().size()
+                  + " instance(s).");
+      if (holds[0]) system.newConstraint(result, instance);
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return result.hashCode() * 31 + instance.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ConditionalAllocationOperator other
+          && other.result.equals(result)
+          && other.instance.equals(instance);
+    }
+
+    @Override
+    public String toString() {
+      return "conditional allocation of " + instance + " into " + result;
     }
   }
 

@@ -109,3 +109,57 @@ padded = padded.map(lambda batch: load_padded(batch))
 
 for element in padded:
     pass
+
+
+def gen_scalars():
+    yield 1.0
+
+
+def load_scalar(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.dtype == tf.float32
+    return x + 1.0
+
+
+scalars = tf.data.Dataset.from_generator(gen_scalars, output_types=tf.float32)
+scalars = scalars.map(lambda x: load_scalar(x))
+
+for element in scalars:
+    pass
+
+
+def load_row(x):
+    assert isinstance(x, tf.Tensor)
+    consume_first(x[0])
+    return x
+
+
+def consume_first(v):
+    assert v.shape == ()
+    assert v.dtype == tf.float32
+    return v
+
+
+rows = tf.data.Dataset.from_tensor_slices(tf.ones([3, 4]))
+rows = rows.map(lambda x: load_row(x))
+
+for element in rows:
+    pass
+
+
+def iterate_element(x):
+    for e in x:
+        consume_iterated(e)
+    return x
+
+
+def consume_iterated(e):
+    assert e.shape == ()
+    return e
+
+
+iterated = tf.data.Dataset.from_tensor_slices(tf.ones([3, 4]))
+iterated = iterated.map(lambda x: iterate_element(x))
+
+for element in iterated:
+    pass

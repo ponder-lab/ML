@@ -2584,6 +2584,20 @@
           <return value="elems"/>
         </method>
       </class>
+      <class name="map_argument" allocatable="true">
+        <!-- The argument `tf.data.Dataset.map` passes its `map_func` (wala/ML#1088): what `map` passes as its receiver, joined with a fresh `dict` when the receiver's element is a dict. The `dict` is allocated only when the element structure the receiver carries may be a dict, which the builder decides from the structure read's points-to set (a conditional allocation the tensor analysis names), since a summary cannot branch on a value's type; a key the function reads is then a field of the `dict`, which the analysis types from the receiver's element structure. Both values reach the result through the holder's one field, since a summary cannot join two values otherwise. They are allocated here rather than in `map`, whose allocations are typed as the mapped dataset, and no generator types this node's. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="dataset" def="structure"/>
+          <new def="element_dict" class="Ldict"/>
+          <new def="holder" class="Ltensorflow/functions/map_argument"/>
+          <!-- A use of the structure read, without which the read has no points-to set of its own for the conditional allocation to depend on. -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="holder" value="structure"/>
+          <putfield class="LRoot" field="argument" fieldType="LRoot" ref="holder" value="dataset"/>
+          <putfield class="LRoot" field="argument" fieldType="LRoot" ref="holder" value="element_dict"/>
+          <getfield class="LRoot" field="argument" fieldType="LRoot" ref="holder" def="argument"/>
+          <return value="argument"/>
+        </method>
+      </class>
       <class name="map_fn_element" allocatable="true">
         <!-- The element `tf.map_fn` passes its `fn`: `elems` unstacked along its leading dimension (wala/ML#942). -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self elems">
@@ -4685,6 +4699,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#shuffle -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -4712,6 +4728,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4719,6 +4746,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#batch -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size drop_remainder num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -4746,6 +4775,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4753,6 +4793,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#padded_batch — modeled like `batch` (a fresh Dataset carrying the chainable transform fields); shape inference reuses `DatasetBatchGenerator`. The field-init block is duplicated per the structural reason documented on `batch.do`. wala/ML#623. -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size padded_shapes padding_values drop_remainder name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -4779,6 +4821,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4786,6 +4839,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#repeat -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -4813,6 +4868,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4820,6 +4886,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#prefetch -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self buffer_size name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -4847,6 +4915,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4888,6 +4967,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#with_options -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self options name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -4915,6 +4996,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4922,6 +5014,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#take -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -4949,6 +5043,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -4956,8 +5061,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#map -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self map_func num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- Invoke map_func on the receiver dataset so it enters the call graph and its parameter resolves to the upstream element type (typing a dataset-valued variable yields its element type), then store map_func's return as this dataset's `element`. The `DatasetMapGenerator` reads `element` so a mapped dataset's element type is map_func's return, not the receiver's. wala/ML#506. -->
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="map_func" arg1="self" numArgs="2" def="mapped_element"/>
+          <!-- The argument map_func is given, from `map_argument`: the receiver dataset joined with a fresh `dict` (wala/ML#1088). -->
+          <new def="argument_fn" class="Ltensorflow/functions/map_argument"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="argument_fn" arg1="self" numArgs="2" def="argument"/>
+          <!-- Invoke map_func on that argument so it enters the call graph and its parameter resolves to the upstream element type (typing a dataset-valued variable yields its element type), then store map_func's return as this dataset's `element`. The `DatasetMapGenerator` reads `element` so a mapped dataset's element type is map_func's return, not the receiver's. wala/ML#506. -->
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="map_func" arg1="argument" numArgs="2" def="mapped_element"/>
           <putfield class="LRoot" field="element" fieldType="LRoot" ref="x" value="mapped_element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
@@ -4986,6 +5094,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the function's return. -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="mapped_element"/>
           <return value="x"/>
         </method>
       </class>
@@ -4993,6 +5112,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#filter -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5020,6 +5141,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -5027,6 +5159,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5054,6 +5188,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>
@@ -5131,6 +5276,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the structure of `tensors`. -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="tensors"/>
           <return value="x"/>
         </method>
       </class>
@@ -5165,6 +5321,17 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the structure of `tensors`. -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="tensors"/>
           <return value="x"/>
         </method>
       </class>
@@ -5304,6 +5471,27 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the declared one. -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="output_signature"/>
           <return value="x"/>
         </method>
       </class>
