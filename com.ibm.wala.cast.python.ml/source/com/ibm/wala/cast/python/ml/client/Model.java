@@ -90,13 +90,13 @@ public class Model extends TensorGenerator {
   }
 
   /** The prefix of the types of the Keras layers' summaries. */
-  private static final String KERAS_LAYERS_PREFIX = "Ltensorflow/keras/layers/";
+  static final String KERAS_LAYERS_PREFIX = "Ltensorflow/keras/layers/";
 
   /**
    * The Keras layers that hold no weights, so a model's weights need nothing from them
    * (wala/ML#1123).
    */
-  private static final Set<String> WEIGHTLESS_LAYERS =
+  static final Set<String> WEIGHTLESS_LAYERS =
       Set.of(
           "Activation",
           "Add",
