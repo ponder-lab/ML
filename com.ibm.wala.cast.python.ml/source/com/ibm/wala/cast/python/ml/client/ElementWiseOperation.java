@@ -275,6 +275,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   @Override
   protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
     if (this.source == null) return this.getManualShapeResult(builder);
+    if (this.concatenatesPythonStrings(builder)) return ShapeResult.bottom();
     int xVn = this.getXArgumentValueNumber(builder);
     if (xVn <= 0) return ShapeResult.unknown();
     Set<List<Dimension<?>>> xShapes = this.getOperandShapes(builder, xVn);
@@ -518,6 +519,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    if (this.concatenatesPythonStrings(builder)) return Collections.emptySet();
     // The resulting shape is the broadcasted shape of the shapes of x and y.
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
@@ -611,6 +613,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     int yVn = this.getYArgumentValueNumber(builder);
     LOGGER.fine("ElementWiseOperation getDefaultDTypes xVn: " + xVn + ", yVn: " + yVn);
     if (xVn <= 0) return EnumSet.of(DType.UNKNOWN);
+    if (this.concatenatesPythonStrings(builder)) return Collections.emptySet();
 
     // Type promotion for scalar-literal operands. Check for literals BEFORE calling
     // getOperandDTypes on the literal's own value number, to avoid short-circuiting via
@@ -1130,6 +1133,61 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
                 + " in "
                 + describe(node)
                 + ".");
+  }
+
+  /**
+   * Whether this operation's operands are both Python strings, so the operation is a string
+   * concatenation rather than a tensor operation and its result is no tensor (wala/ML#1103). A
+   * Python {@code str} contributes a {@code string} dtype and a scalar shape when an operand is
+   * read as a tensor, so without this a {@code +} over a directory literal and a file name read
+   * from a file reads as a scalar string tensor. A string tensor beside a Python string keeps the
+   * tensor reading, since the tensor operand is no Python string.
+   *
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff both operands are shown to be Python strings.
+   */
+  private boolean concatenatesPythonStrings(PropagationCallGraphBuilder builder) {
+    if (this.source == null) return false;
+    int xVn = this.getXArgumentValueNumber(builder);
+    int yVn = this.getYArgumentValueNumber(builder);
+    boolean ret =
+        xVn > 0
+            && yVn > 0
+            && this.isPythonString(builder, xVn, 0)
+            && this.isPythonString(builder, yVn, 0);
+    if (ret)
+      LOGGER.fine(() -> "A concatenation of Python strings is no tensor: " + describe(this.source));
+    return ret;
+  }
+
+  /**
+   * Whether a value is shown to be a Python string (wala/ML#1103): a string literal, a value whose
+   * points-to set holds only Python {@code str} constants, or a binary operation over Python
+   * strings. A value that allocates anything, or whose points-to set is empty and that no literal
+   * or operation defines, is not a string by this test.
+   *
+   * @param builder The propagation call graph builder.
+   * @param vn The value number.
+   * @param depth The binary-operation nesting already descended.
+   * @return {@code true} iff the value is shown to be a Python string.
+   */
+  private boolean isPythonString(PropagationCallGraphBuilder builder, int vn, int depth) {
+    if (vn <= 0 || depth > 8) return false;
+    CGNode node = this.getNode();
+    if (node.getIR().getSymbolTable().isStringConstant(vn)) return true;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction binop) {
+      for (int i = 0; i < binop.getNumberOfUses(); i++)
+        if (!this.isPythonString(builder, binop.getUse(i), depth + 1)) return false;
+      return true;
+    }
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts)
+      if (!(ik instanceof ConstantKey<?> constant) || !(constant.getValue() instanceof String))
+        return false;
+    return true;
   }
 
   /**
