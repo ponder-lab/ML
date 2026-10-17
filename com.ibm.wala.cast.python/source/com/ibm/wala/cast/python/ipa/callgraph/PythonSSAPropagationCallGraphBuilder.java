@@ -338,17 +338,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public record ConditionalAllocation(String conditionField, TypeReference type) {}
 
   /**
-   * The conditional allocations, by the summary class whose method allocates (wala/ML#1088); see
-   * {@link ConditionalAllocation}. Empty by default, so a client that names none sees no change.
+   * The conditional allocations, by the summary class whose method allocates (wala/ML#1088,
+   * wala/ML#464); see {@link ConditionalAllocation}. A class may name several, each of a distinct
+   * type. Empty by default, so a client that names none sees no change.
    */
-  private Map<TypeReference, ConditionalAllocation> conditionalAllocations = Collections.emptyMap();
+  private Map<TypeReference, List<ConditionalAllocation>> conditionalAllocations =
+      Collections.emptyMap();
 
   /**
-   * Names the conditional allocations (wala/ML#1088); see {@link ConditionalAllocation}.
+   * Names the conditional allocations (wala/ML#1088, wala/ML#464); see {@link
+   * ConditionalAllocation}.
    *
-   * @param allocations Each summary class mapped to the allocation its method makes conditionally.
+   * @param allocations Each summary class mapped to the allocations its method makes conditionally,
+   *     each of a distinct type.
    */
-  public void setConditionalAllocations(Map<TypeReference, ConditionalAllocation> allocations) {
+  public void setConditionalAllocations(
+      Map<TypeReference, List<ConditionalAllocation>> allocations) {
     this.conditionalAllocations =
         allocations == null ? Collections.emptyMap() : Map.copyOf(allocations);
   }
@@ -590,13 +595,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @return The conditional allocation, or {@code null} for an ordinary one.
      */
     private ConditionalAllocation conditionalAllocation(SSANewInstruction instruction) {
-      ConditionalAllocation conditional =
+      List<ConditionalAllocation> conditionals =
           getBuilder()
               .conditionalAllocations
               .get(node.getMethod().getDeclaringClass().getReference());
-      return conditional != null && conditional.type().equals(instruction.getConcreteType())
-          ? conditional
-          : null;
+      if (conditionals == null) return null;
+      for (ConditionalAllocation conditional : conditionals)
+        if (conditional.type().equals(instruction.getConcreteType())) return conditional;
+      return null;
     }
 
     /**

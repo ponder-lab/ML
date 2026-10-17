@@ -927,11 +927,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // The `dict` that `tf.data.Dataset.map` hands its function beside the receiver exists only when
     // the receiver's element structure may be a dict, so a map function over a dataset of any other
     // element sees no container (wala/ML#1088).
+    // `tf.GradientTape.gradient` returns a list of gradients for a list of sources, and a tuple
+    // for a tuple, so its result holds the container exactly when `sources` may be one
+    // (wala/ML#464).
     builder.setConditionalAllocations(
         Map.of(
             TensorFlowTypes.MAP_ARGUMENT_TYPE,
-            new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
-                "element_structure", PythonTypes.dict)));
+            List.of(
+                new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                    "element_structure", PythonTypes.dict)),
+            TensorFlowTypes.GRADIENT.getDeclaringClass(),
+            List.of(
+                new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                    "sources", PythonTypes.list),
+                new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                    "sources", PythonTypes.tuple))));
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     builder.setFreshArrayAttributes(Map.of(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_ATTRIBUTES));
