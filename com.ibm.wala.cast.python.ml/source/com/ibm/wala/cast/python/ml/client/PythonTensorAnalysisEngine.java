@@ -3326,11 +3326,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /**
    * The flow-graph edges that carry only the provenance markers (wala/ML#1101), added to {@code
-   * dataflow}: from each argument of a live call whose every target is a TensorFlow summary to the
-   * call's result, where no edge joins them already. The result of such a call is typed by the
-   * call's own generator, so no state edge reaches it from the arguments, yet an operation or layer
-   * applied to a Keras symbolic tensor yields one. A call in a decidably dead block contributes no
-   * edge, as it contributes no binding.
+   * dataflow}: from each argument of a live call whose every target is a TensorFlow summary, or
+   * whose every target is a Keras {@code call} body (wala/ML#1109), to the call's result, where no
+   * edge joins them already. The result of such a call is typed by the call's own generator, so no
+   * state edge reaches it from the arguments, yet an operation or layer applied to a Keras symbolic
+   * tensor yields one. A call in a decidably dead block contributes no edge, as it contributes no
+   * binding.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param dataflow The analysis's dataflow graph, gaining the edges.
@@ -3354,7 +3355,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           if (!(inst instanceof SSAAbstractInvokeInstruction call) || !call.hasDef()) continue;
           Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
           if (targets.isEmpty()
-              || !targets.stream().allMatch(PythonTensorAnalysisEngine::isTensorFlowSummary))
+              || !(targets.stream().allMatch(PythonTensorAnalysisEngine::isTensorFlowSummary)
+                  || targets.stream().allMatch(PythonTensorAnalysisEngine::isKerasCallBody)))
             continue;
           PointsToSetVariable result =
               flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, call.getDef()));
@@ -3373,6 +3375,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
     LOGGER.fine(() -> "Marker edges: " + ret.values().stream().mapToInt(Set::size).sum() + ".");
     return ret;
+  }
+
+  /**
+   * Whether a call-graph node is a Keras {@code call} body or a trampoline into one, by the name of
+   * its declaring class, as the Keras call input destinations are recognized (wala/ML#821).
+   * Applying a layer whose {@code call} the program defines is such a call: {@code Layer.__call__}
+   * runs the body on a graph tensor it makes for a Keras symbolic input, so the symbolic fact does
+   * not enter the body, and the application's result is a Keras symbolic tensor (wala/ML#1109).
+   *
+   * @param node The node.
+   * @return Whether the node's class is a Keras {@code call} method's.
+   */
+  private static boolean isKerasCallBody(CGNode node) {
+    return node.getMethod()
+        .getDeclaringClass()
+        .getName()
+        .toString()
+        .endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS);
   }
 
   /**

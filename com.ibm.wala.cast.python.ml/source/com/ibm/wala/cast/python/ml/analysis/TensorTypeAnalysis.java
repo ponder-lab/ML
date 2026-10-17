@@ -288,9 +288,23 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @return Whether {@code lhs}'s origins changed.
    */
   private static boolean crossMarkers(TensorVariable lhs, TensorVariable rhs) {
+    return crossMarkers(lhs, rhs, MARKERS);
+  }
+
+  /**
+   * Crosses the given provenance markers from an inflow value into a destination, as {@link
+   * #crossMarkers(TensorVariable, TensorVariable)} crosses all of them.
+   *
+   * @param lhs The destination variable.
+   * @param rhs The inflow variable.
+   * @param markers The markers that cross.
+   * @return Whether {@code lhs}'s origins changed.
+   */
+  private static boolean crossMarkers(
+      TensorVariable lhs, TensorVariable rhs, Set<TensorOrigin> markers) {
     if (rhs == null || rhs.origins == null) return false;
     boolean changed = false;
-    for (TensorOrigin marker : MARKERS)
+    for (TensorOrigin marker : markers)
       if (rhs.origins.contains(marker)) changed |= lhs.origins.add(marker);
     return changed;
   }
@@ -440,6 +454,17 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   static final class ComputeDTypeCastOp extends UnaryOperator<TensorVariable> {
     static final ComputeDTypeCastOp INSTANCE = new ComputeDTypeCastOp();
 
+    /**
+     * The provenance markers that cross into a Keras {@code call} body's input: {@link
+     * TensorOrigin#ANNOTATION} only, since the body receives a graph tensor where the caller holds
+     * a Keras symbolic one (wala/ML#1109).
+     *
+     * <p>TODO: A direct {@code layer.call(x)} bypasses {@code Layer.__call__}, so its input keeps
+     * the marker, but the destination alone does not tell it from an application; see
+     * https://github.com/wala/ML/issues/1114.
+     */
+    private static final Set<TensorOrigin> CALL_INPUT_MARKERS = EnumSet.of(TensorOrigin.ANNOTATION);
+
     /** The compute dtype of a layer under the default policy. */
     private static final DType COMPUTE_DTYPE = DType.FLOAT32;
 
@@ -455,7 +480,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         if (changed) lhs.state = HashSetFactory.make();
         for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
       }
-      changed |= crossMarkers(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
+      // wala/ML#901: the annotation provenance crosses the parameter boundary. A Keras symbolic
+      // argument does not reach `call` as one: `Layer.__call__` runs `call` on a graph tensor it
+      // makes for the symbolic input, and the application's result, not `call`'s parameter, is the
+      // symbolic tensor (wala/ML#1109).
+      changed |= crossMarkers(lhs, rhs, CALL_INPUT_MARKERS);
       return changed ? CHANGED : NOT_CHANGED;
     }
 
