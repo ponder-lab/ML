@@ -1333,9 +1333,9 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   /**
    * Whether a value is drawn by iterating a {@code range(...)} call (wala/ML#1083), and so is an
    * integer. A {@code for} loop draws it as {@code next(iter(range(...)))}; a comprehension's body
-   * reads it as a property of the call's result whose member is a key an {@link
-   * EachElementGetInstruction} draws from that same object. Every call must target its builtin
-   * alone.
+   * reads it as a property of the iterated object whose member is a key an {@link
+   * EachElementGetInstruction} draws from that same object, where the object is the call's result
+   * in every caller. Every call must target its builtin alone.
    *
    * @param builder The propagation call graph builder.
    * @param node The frame whose IR holds the value.
@@ -1353,8 +1353,43 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
         && node.getDU().getDef(next.getUse(1)) instanceof SSAAbstractInvokeInstruction iter
         && callsOnlyBuiltin(builder, node, iter, ITER_BUILTIN_TYPE_NAME)) range = iter.getUse(1);
     else return false;
-    return node.getDU().getDef(range) instanceof SSAAbstractInvokeInstruction call
-        && callsOnlyBuiltin(builder, node, call, RANGE_BUILTIN_TYPE_NAME);
+    return isRangeCall(builder, node, range, 0, HashSetFactory.make());
+  }
+
+  /**
+   * Whether a value is the result of a call to the {@code range} builtin alone (wala/ML#1083). A
+   * comprehension's body iterates its synthesized function's parameter, so a parameter is followed
+   * into every caller, and each caller's argument must be such a call.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame whose IR holds the value.
+   * @param vn The value number.
+   * @param depth The recursion depth, bounded.
+   * @param parameters The parameters already followed into their callers.
+   * @return {@code true} iff the value is a {@code range(...)} result in every caller.
+   */
+  private static boolean isRangeCall(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      int depth,
+      Set<Pair<CGNode, Integer>> parameters) {
+    if (vn <= 0 || depth > 8 || node.getIR() == null) return false;
+    if (node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call)
+      return callsOnlyBuiltin(builder, node, call, RANGE_BUILTIN_TYPE_NAME);
+    if (!isParameterVn(node, vn) || !parameters.add(Pair.make(node, vn))) return false;
+    int position = parameterPosition(node, vn);
+    if (position < 0) return false;
+    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); )
+      if (it.next().getIR() == null) return false;
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> callers = getCallerInvokes(builder, node);
+    if (callers.isEmpty()) return false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> caller : callers) {
+      int argument = callerArgumentValueNumber(caller.snd, position);
+      if (argument <= 0 || !isRangeCall(builder, caller.fst, argument, depth + 1, parameters))
+        return false;
+    }
+    return true;
   }
 
   /**
