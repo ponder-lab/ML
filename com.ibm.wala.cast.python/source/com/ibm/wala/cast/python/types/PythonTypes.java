@@ -141,6 +141,10 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference ITER_BUILTIN =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/iter"));
 
+  /** The {@code reversed} builtin (wala/ML#1099). */
+  public static final TypeReference REVERSED_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/reversed"));
+
   public static final TypeReference NEXT_BUILTIN =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/next"));
 

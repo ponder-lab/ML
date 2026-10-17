@@ -1225,11 +1225,12 @@ public class TensorGeneratorFactory {
       return null;
     for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, iterCall.getCallSite()))
       if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.ITER_BUILTIN))
+        // An iterator over `reversed(y)` yields the elements of `y` (wala/ML#1099).
         return getPointsToSetVariable(
             builder
                 .getPointerAnalysis()
                 .getHeapModel()
-                .getPointerKeyForLocal(node, iterCall.getUse(1)),
+                .getPointerKeyForLocal(node, reversedIterable(node, iterCall.getUse(1), builder)),
             builder);
     return null;
   }
@@ -1313,7 +1314,8 @@ public class TensorGeneratorFactory {
                 builder
                     .getPointerAnalysis()
                     .getHeapModel()
-                    .getPointerKeyForLocal(node, iterCall.getUse(1)));
+                    .getPointerKeyForLocal(
+                        node, reversedIterable(node, iterCall.getUse(1), builder)));
     if (pts == null || pts.isEmpty()) return false;
     IClassHierarchy cha = builder.getClassHierarchy();
     for (InstanceKey ik : pts) {
@@ -1614,6 +1616,29 @@ public class TensorGeneratorFactory {
     int iterable =
         call.getNumberOfPositionalParameters() > 1 ? call.getUse(1) : call.getUse("iterable");
     return iterable > 0 ? iterable : vn;
+  }
+
+  /**
+   * The iterable a {@code reversed(iterable)} call reverses, when a value is such a call
+   * (wala/ML#1099): iterating the result is iterating the iterable, in the other order. Only the
+   * iteration reads through the call; the {@code reversed} object itself is no tensor.
+   *
+   * @param node The node holding the value.
+   * @param vn The value.
+   * @param builder The propagation call graph builder.
+   * @return The reversed iterable's value number, or {@code vn} when the value is not such a call.
+   */
+  private static int reversedIterable(CGNode node, int vn, PropagationCallGraphBuilder builder) {
+    if (!(node.getDU().getDef(vn) instanceof PythonInvokeInstruction call)) return vn;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (targets.isEmpty()) return vn;
+    for (CGNode target : targets)
+      if (!target
+          .getMethod()
+          .getReference()
+          .getDeclaringClass()
+          .equals(PythonTypes.REVERSED_BUILTIN)) return vn;
+    return call.getNumberOfPositionalParameters() > 1 ? call.getUse(1) : vn;
   }
 
   /**
@@ -2282,7 +2307,8 @@ public class TensorGeneratorFactory {
               .getReference()
               .getDeclaringClass()
               .equals(PythonTypes.ITER_BUILTIN)) {
-            int iterableVn = call.getUse(1);
+            // An iterator over `reversed(y)` yields the elements of `y` (wala/ML#1099).
+            int iterableVn = reversedIterable(node, call.getUse(1), builder);
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
