@@ -6444,8 +6444,24 @@
       <class name="gfile" allocatable="true"/>
     </package>
     <package name="tensorflow/io/gfile">
-      <!-- An open file of `tf.io.gfile.GFile`. A `with` statement binds the file itself, so its methods are fields of this object (wala/ML#1080). -->
-      <class name="file" allocatable="true"/>
+      <!-- An open file of `tf.io.gfile.GFile`. A `with` statement binds the file itself, so its methods are fields of this object (wala/ML#1080). Iterating it, `for line in f`, goes through `__iter__` and its iterator's `__next__`, as a dataset's does (wala/ML#1010), so the loop binds a line rather than the file's method objects, and each line read is a read of the file system. -->
+      <class name="file" allocatable="true">
+        <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <new def="it" class="Ltensorflow/io/gfile/lines"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="it" value="module"/>
+          <return value="it"/>
+        </method>
+      </class>
+      <!-- The iterator over an open file's lines. Its `__next__` reads the module's `files` field, the file system, and returns its own `result` field, which nothing writes, so a line has no points-to set, as the file's contents are not modeled (wala/ML#1080). -->
+      <class name="lines" allocatable="true">
+        <method name="__next__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/io/gfile/functions">
       <!-- https://www.tensorflow.org/api_docs/python/tf/io/gfile/GFile. Opening a file reads the module's `files` field, the file system, and the open file's `read`, `readline` and `readlines` read it while `write` writes it, so a mod-ref query sees a function's file I/O, such as counting a file's lines (wala/ML#1080). The contents are not modeled: each method returns its own `result` field, which nothing writes, so a result has no points-to set, as before. -->
@@ -6454,6 +6470,7 @@
           <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
           <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
           <new def="file" class="Ltensorflow/io/gfile/file"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="file" value="module"/>
           <new def="read" class="Ltensorflow/io/gfile/functions/read"/>
           <putfield class="LRoot" field="module" fieldType="LRoot" ref="read" value="module"/>
           <putfield class="LRoot" field="read" fieldType="LRoot" ref="file" value="read"/>
