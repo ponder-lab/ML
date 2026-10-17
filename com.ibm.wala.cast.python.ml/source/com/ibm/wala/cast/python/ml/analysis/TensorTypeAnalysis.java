@@ -459,9 +459,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
      * TensorOrigin#ANNOTATION} only, since the body receives a graph tensor where the caller holds
      * a Keras symbolic one (wala/ML#1109).
      *
-     * <p>TODO: A direct {@code layer.call(x)} bypasses {@code Layer.__call__}, so its input keeps
-     * the marker, but the destination alone does not tell it from an application; see
-     * https://github.com/wala/ML/issues/1114.
+     * <p>A direct {@code layer.call(x)} bypasses {@code Layer.__call__}, so its input keeps the
+     * marker and its dtype. Its body is keyed on the {@code call} method object rather than the
+     * layer instance, and the engine leaves such a body's input out of this transfer's destinations
+     * (wala/ML#1114).
      */
     private static final Set<TensorOrigin> CALL_INPUT_MARKERS = EnumSet.of(TensorOrigin.ANNOTATION);
 

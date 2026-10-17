@@ -51,6 +51,7 @@ import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.ContextSelector;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.impl.ContextInsensitiveSelector;
@@ -3378,6 +3379,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether a Keras {@code call} body's node was reached by invoking the {@code call} method
+   * itself, {@code layer.call(x)}, rather than by applying the layer, {@code layer(x)}
+   * (wala/ML#1114). The dispatch keys the body on its receiver: an application's is the layer
+   * instance, and a direct invocation's is the bound {@code call} method object. A direct
+   * invocation bypasses {@code Layer.__call__}, so its input is neither cast to the compute dtype
+   * nor made a graph tensor.
+   *
+   * @param node The {@code call} body's node.
+   * @return Whether the node's receiver is a {@code call} method object.
+   */
+  private static boolean isDirectlyInvoked(CGNode node) {
+    if (!(node.getContext().get(ContextKey.RECEIVER) instanceof InstanceKey receiver)) return false;
+    IClass type = receiver.concreteType();
+    if (type == null) return false;
+    String name = type.getName().toString();
+    return name.startsWith("L$")
+        && name.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS);
+  }
+
+  /**
    * Whether a call-graph node is a Keras {@code call} body or a trampoline into one, by the name of
    * its declaring class, as the Keras call input destinations are recognized (wala/ML#821).
    * Applying a layer whose {@code call} the program defines is such a call: {@code Layer.__call__}
@@ -3963,8 +3984,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (owner.getIR().getParameter(2) != lpk.getValueNumber()) continue;
         String declaringClass =
             owner.getMethod().getDeclaringClass().getReference().getName().toString();
-        if (declaringClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS))
-          computeDTypeCasts.add(v);
+        if (declaringClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+            && !isDirectlyInvoked(owner)) computeDTypeCasts.add(v);
       }
       LOGGER.fine(() -> "wala/ML#821 Keras call input destinations: " + computeDTypeCasts.size());
 
