@@ -2910,9 +2910,14 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           }
           return notePosition(Ast.makeNode(CAstNode.CALL, cs), arg0);
         } else {
+          // The third child marks the reference as a subscript, which an attribute's otherwise
+          // identical reference lacks (wala/ML#1100).
           return notePosition(
               Ast.makeNode(
-                  CAstNode.OBJECT_REF, acceptOrNull(arg0.getInternalValue()), acceptOrNull(s)),
+                  CAstNode.OBJECT_REF,
+                  acceptOrNull(arg0.getInternalValue()),
+                  acceptOrNull(s),
+                  Ast.makeConstant(PythonCAstToIRTranslator.SUBSCRIPT_MARKER)),
               1,
               arg0,
               s);
