@@ -47,6 +47,20 @@ def consume_keyword(x):
     return x
 
 
+def make(cls, n):
+    return cls(n)
+
+
+def consume_made_six(x):
+    assert x.shape == (2, 6) and x.dtype == tf.float32
+    return x
+
+
+def consume_made_seven(x):
+    assert x.shape == (2, 7) and x.dtype == tf.float32
+    return x
+
+
 def consume_sized(x):
     assert x.shape == (2, 4) and x.dtype == tf.float32
     return x
@@ -56,4 +70,6 @@ consume_frozen(Frozen()(tf.random.normal([2, 3])))
 consume_plain(Plain()(tf.random.normal([2, 3])))
 consume_wider(Wider(4)(tf.random.normal([2, 3])))
 consume_keyword(Wider(use_bias=False, units=5)(tf.random.normal([2, 3])))
+consume_made_six(make(Wider, 6)(tf.random.normal([2, 3])))
+consume_made_seven(make(Wider, 7)(tf.random.normal([2, 3])))
 consume_sized(Sized(4)(tf.random.normal([2, 3])))

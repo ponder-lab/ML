@@ -233,8 +233,8 @@ public class DenseCall extends TensorGenerator {
    * @param self The layer instance.
    * @param sizeName The name of the built-in layer's size parameter.
    * @return The sizes, empty when the instance is not of a program class or when the class or a
-   *     program base declares {@code __init__}, or {@code null} when a call passes no readable size
-   *     or one that does not resolve to an integer.
+   *     program base declares {@code __init__}, or {@code null} when a call is not the program's
+   *     own, passes no readable size, or passes one that does not resolve to an integer.
    */
   private static Set<Long> unitsFromInheritedConstructor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode self, String sizeName) {
@@ -254,6 +254,10 @@ public class DenseCall extends TensorGenerator {
     Set<Long> ret = new HashSet<>();
     for (Pair<CGNode, SSAAbstractInvokeInstruction> caller :
         getCallerInvokes(builder, constructor)) {
+      // Only a program's own call passes the constructor's arguments in their written order; a
+      // synthetic caller, such as a dispatch trampoline or a library summary, may put something
+      // else in that slot.
+      if (caller.fst.getMethod().isSynthetic()) return null;
       // The class object is the call's first positional use, and the first argument its second.
       if (!(caller.snd instanceof PythonInvokeInstruction call)) return null;
       int size;

@@ -58,6 +58,19 @@ public class TestBuiltinLayerSubclassApply extends AbstractTensorTest {
   }
 
   /**
+   * The same subclass constructed through a program factory, {@code make(cls, n)}, with two
+   * different sizes: the factory's {@code cls(n)} is the constructor's one call, and its size is
+   * the factory's parameter, so each application gets the join of both sizes rather than one size
+   * alone.
+   */
+  @Test
+  public void testFactoryJoinsSizes() throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorType> joined = Set.of(TensorType.of(FLOAT_32, 2, 6), TensorType.of(FLOAT_32, 2, 7));
+    test(FILE, "consume_made_six", 1, 1, Map.of(2, joined));
+    test(FILE, "consume_made_seven", 1, 1, Map.of(2, joined));
+  }
+
+  /**
    * A subclass of {@code Dense} that defines {@code __init__} and passes the size on through {@code
    * super().__init__(n)}: {@code Dense}'s transform of the input. The size is not read through the
    * {@code super().__init__} call, and an unread size gives the input's own shape.
