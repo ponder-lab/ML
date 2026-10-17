@@ -554,8 +554,9 @@ public class SequentialCall extends ModelCall {
    * (units,)} and a kernel of {@code (input_dim, units)}, where {@code input_dim} is the previous
    * layer's units when that layer is a {@code Dense}. Otherwise, as for the first layer, it is the
    * width of what the layer is fed, a fixed size at run time that the list does not determine, so
-   * it is {@link UnresolvedDim}. A layer of any other class may have weights the list does not
-   * give, so a list holding one declines.
+   * it is {@link UnresolvedDim}. A layer that holds no weights adds none (wala/ML#1123), and leaves
+   * that width unresolved unless it keeps its input's last axis. A layer of any other class may
+   * have weights the list does not give, so a list holding one declines.
    *
    * @param builder The propagation call graph builder.
    * @param model The model's allocation, in its {@code Sequential.do} constructor node.
@@ -575,6 +576,14 @@ public class SequentialCall extends ModelCall {
       Set<Long> previousUnits = null;
       for (InstanceKey layer : chain) {
         TensorGenerator generator = reader.dispatchLayer(builder, layer);
+        // A layer that holds no weights adds none, and one that keeps the width of its input's
+        // last axis, as a dropout or an activation does, leaves the next kernel's input width as it
+        // was (wala/ML#1123).
+        String weightless = weightlessLayerName(layer);
+        if (weightless != null) {
+          if (!WIDTH_PRESERVING_LAYERS.contains(weightless)) previousUnits = null;
+          continue;
+        }
         // A layer of another class may have weights the list does not give, as a convolution's
         // kernel, so the model's weights are then not the `Dense` layers' alone. Its generator may
         // still extend `DenseCall`, as the convolution and recurrent calls do, whose `units` are
@@ -601,6 +610,40 @@ public class SequentialCall extends ModelCall {
       }
     }
     return ret;
+  }
+
+  /**
+   * The weightless layers that keep the width of their input's last axis (wala/ML#1123), so a
+   * {@code Dense} layer after one has the width of the layer before it as its kernel's input width.
+   */
+  private static final Set<String> WIDTH_PRESERVING_LAYERS =
+      Set.of(
+          "Activation",
+          "Dropout",
+          "GaussianDropout",
+          "GaussianNoise",
+          "LeakyReLU",
+          "Masking",
+          "ReLU",
+          "Softmax",
+          "SpatialDropout1D",
+          "SpatialDropout2D",
+          "SpatialDropout3D");
+
+  /**
+   * The class of a Keras layer instance that holds no weights, as {@link Model#WEIGHTLESS_LAYERS}
+   * names them (wala/ML#1123).
+   *
+   * @param layer The layer instance.
+   * @return The layer's class name, or {@code null} when it is not such a layer.
+   */
+  private static String weightlessLayerName(InstanceKey layer) {
+    AllocationSiteInNode allocation = getAllocationSiteInNode(layer);
+    if (allocation == null) return null;
+    String type = allocation.concreteType().getName().toString();
+    if (!type.startsWith(Model.KERAS_LAYERS_PREFIX)) return null;
+    String name = type.substring(Model.KERAS_LAYERS_PREFIX.length());
+    return Model.WEIGHTLESS_LAYERS.contains(name) ? name : null;
   }
 
   /**
