@@ -12,6 +12,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -543,6 +544,61 @@ public class SequentialCall extends ModelCall {
     }
 
     return new Composition(runningShapes, runningDTypes);
+  }
+
+  /**
+   * The shapes of a {@code Sequential} model's weights, from its layer list (wala/ML#832's weights
+   * half). The functional model's weights come from walking back from its {@code outputs}, which a
+   * {@code Sequential} constructor does not take; its layers are in the list the forward fold
+   * already reads, so this folds the same chains. A {@code Dense} layer has a bias of {@code
+   * (units,)} and a kernel of {@code (input_dim, units)}, where {@code input_dim} is the previous
+   * layer's units when that layer is a {@code Dense}. Otherwise, as for the first layer, it is the
+   * width of what the layer is fed, a fixed size at run time that the list does not determine, so
+   * it is {@link UnresolvedDim}. A layer of another class contributes no weights here, as on the
+   * functional path, and leaves the next kernel's input width unresolved.
+   *
+   * @param builder The propagation call graph builder.
+   * @param model The model's allocation, in its {@code Sequential.do} constructor node.
+   * @return The weights' shapes, or {@code null} when the model's layers cannot be read whole or a
+   *     {@code Dense} layer's units do not resolve.
+   */
+  static Set<List<Dimension<?>>> getWeightShapes(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode model) {
+    CGNode constructorNode = model.getNode();
+    IR ir = constructorNode.getIR();
+    if (ir == null || LAYERS_PARAMETER_IR_INDEX >= ir.getNumberOfParameters()) return null;
+    SequentialCall reader = new SequentialCall(constructorNode);
+    List<List<InstanceKey>> chains = reader.getChainsOfModel(builder, constructorNode, ir);
+    if (chains == null) return null;
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<InstanceKey> chain : chains) {
+      Set<Long> previousUnits = null;
+      for (InstanceKey layer : chain) {
+        TensorGenerator generator = reader.dispatchLayer(builder, layer);
+        if (!(generator instanceof DenseCall dense)) {
+          previousUnits = null;
+          continue;
+        }
+        dense.composeWith(
+            new ComposedArguments(
+                OrdinalSet.toOrdinalSet(
+                    List.of(layer), builder.getPointerAnalysis().getInstanceKeyMapping()),
+                null,
+                null));
+        Set<Long> units = dense.getPossibleUnits(builder);
+        if (units == null || units.isEmpty()) return null;
+        for (Long unit : units) {
+          NumericDim width = new NumericDim(unit.intValue());
+          ret.add(List.of(width));
+          if (previousUnits == null) ret.add(List.of(UnresolvedDim.INSTANCE, width));
+          else
+            for (Long previous : previousUnits)
+              ret.add(List.of(new NumericDim(previous.intValue()), width));
+        }
+        previousUnits = units;
+      }
+    }
+    return ret;
   }
 
   /**

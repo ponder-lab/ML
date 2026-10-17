@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.python.ml.client.DenseCall.Parameters;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -89,11 +90,12 @@ public class Model extends TensorGenerator {
 
   /**
    * Infers the shapes of the model's weights by traversing the computation graph backwards from the
-   * model's outputs.
+   * model's outputs, or, for a {@code Sequential} model, from its layer list (wala/ML#832).
    *
    * @param builder The propagation call graph builder.
    * @param modelSource The source points-to set variable representing the model.
-   * @return A set of weight shapes.
+   * @return A set of weight shapes, or {@code null} when a {@code Sequential} model's layer list
+   *     cannot give them.
    */
   public Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
@@ -164,6 +166,23 @@ public class Model extends TensorGenerator {
         }
       }
     }
+
+    // A `Sequential` model has no `outputs` to walk back from: its weights are those of the layers
+    // in its list (wala/ML#832).
+    if (this.getSource() != null)
+      for (InstanceKey modelIK :
+          builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey())) {
+        AllocationSiteInNode model = getAllocationSiteInNode(modelIK);
+        if (model == null
+            || !model
+                .concreteType()
+                .getReference()
+                .equals(TensorFlowTypes.SEQUENTIAL.getDeclaringClass())) continue;
+        Set<List<Dimension<?>>> layerWeights = SequentialCall.getWeightShapes(builder, model);
+        // Weights the list cannot give are still tensors, of shapes this does not know.
+        if (layerWeights == null) return null;
+        weightShapes.addAll(layerWeights);
+      }
 
     return weightShapes;
   }
