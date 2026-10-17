@@ -548,6 +548,51 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
   }
 
+  /** A branch on {@code tf.executing_eagerly()} picking a Keras symbolic tensor (wala/ML#1110). */
+  private static final String EXECUTING_EAGERLY_FILE = "tf2_test_executing_eagerly_branch.py";
+
+  /**
+   * A branch in a module's own body on {@code tf.executing_eagerly()} takes its {@code True} arm
+   * under TensorFlow 2, so a Keras symbolic tensor the {@code else} arm assigns does not reach the
+   * function the merged value is passed to (wala/ML#1110).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testExecutingEagerlyModuleBranch()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorOrigin> parameter =
+        getParameterOrigins(EXECUTING_EAGERLY_FILE, "executing_eagerly_branch.py.merged.do")
+            .get("executing_eagerly_branch.py.merged.do");
+    assertNotNull("merged has parameters in the flow graph.", parameter);
+    assertFalse(
+        "merged's parameter carries no Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+  }
+
+  /**
+   * A control: the same branch inside a function is kept, since the function may run under {@code
+   * tf.function}, where {@code tf.executing_eagerly()} is {@code False}, so the symbolic tensor
+   * reaches the function the result is passed to (wala/ML#1110).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testExecutingEagerlyFunctionBranchKept()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorOrigin> parameter =
+        getParameterOrigins(EXECUTING_EAGERLY_FILE, "executing_eagerly_branch.py.kept.do")
+            .get("executing_eagerly_branch.py.kept.do");
+    assertNotNull("kept has parameters in the flow graph.", parameter);
+    assertTrue(
+        "kept's parameter carries the Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+  }
+
   /**
    * Runs the tensor analysis over the given file and collects, for each method whose signature
    * contains one of the given fragments, the origins of all of its parameters, unioned across
