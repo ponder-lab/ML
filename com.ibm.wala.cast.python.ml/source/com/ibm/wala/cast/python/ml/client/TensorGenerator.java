@@ -84,6 +84,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
@@ -398,6 +399,7 @@ public abstract class TensorGenerator {
     FIELD_PUT_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
+    MAY_RUN_IN_GRAPH_MODE.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -4164,6 +4166,96 @@ public abstract class TensorGenerator {
     return resolveComparableConstant(builder, node, vn, env, HashSetFactory.make());
   }
 
+  /**
+   * Whether a node is a module's own body, the code a script runs at its top level, rather than a
+   * function or method defined in it.
+   *
+   * @param node The node.
+   * @return Whether the node's method is a script's top-level body.
+   */
+  private static boolean isModuleBody(CGNode node) {
+    String name = node.getMethod().getDeclaringClass().getName().toString();
+    return name.startsWith("Lscript ") && name.endsWith(".py");
+  }
+
+  /**
+   * Whether every target of a call is the summary of the given type.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the call.
+   * @param node The caller.
+   * @param call The call.
+   * @param type The summary's type.
+   * @return Whether the call has targets and each is that summary or a trampoline into it.
+   */
+  private static boolean callsOnly(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      TypeReference type) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    return !targets.isEmpty()
+        && targets.stream()
+            .allMatch(t -> sanitize(t.getMethod().getDeclaringClass().getReference()).equals(type));
+  }
+
+  /**
+   * Attribute names whose reading signals that a program's module code may run in graph mode, where
+   * {@code tf.executing_eagerly()} is {@code False} (wala/ML#1110):
+   *
+   * <ul>
+   *   <li>{@code disable_eager_execution} and {@code disable_v2_behavior} switch the whole program.
+   *   <li>{@code as_default} enters a graph, as {@code with tf.Graph().as_default():} does.
+   *   <li>{@code enable_eager_execution}, {@code placeholder} and {@code Session} mark a program
+   *       written for TensorFlow 1, whose default is graph mode.
+   * </ul>
+   *
+   * <p>The test is by name, so it also catches a call the analysis does not model, and a stray name
+   * costs only precision.
+   */
+  private static final Set<String> GRAPH_MODE_ATTRIBUTES =
+      Set.of(
+          "disable_eager_execution",
+          "disable_v2_behavior",
+          "as_default",
+          "enable_eager_execution",
+          "placeholder",
+          "Session");
+
+  /** Per builder, whether the program reads any of {@link #GRAPH_MODE_ATTRIBUTES}. */
+  private static final Map<PropagationCallGraphBuilder, Boolean> MAY_RUN_IN_GRAPH_MODE =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Whether the program's module code may run in graph mode: whether any program node reads an
+   * attribute named in {@link #GRAPH_MODE_ATTRIBUTES}. The answer is for the whole program, since a
+   * switch's reach depends on an order or a scope the branch fold does not track. A module imported
+   * from inside a {@code tf.function} also runs in graph mode, which this does not detect.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph holds the program.
+   * @return Whether a graph-mode switch is present.
+   */
+  private static boolean mayRunInGraphMode(PropagationCallGraphBuilder builder) {
+    return MAY_RUN_IN_GRAPH_MODE.computeIfAbsent(
+        builder,
+        b -> {
+          for (CGNode n : b.getCallGraph()) {
+            if (!n.getMethod().getDeclaringClass().getName().toString().startsWith("Lscript ")
+                || n.getIR() == null) continue;
+            SymbolTable st = n.getIR().getSymbolTable();
+            for (SSAInstruction instruction : n.getIR().getInstructions()) {
+              String name = null;
+              if (instruction instanceof SSAGetInstruction get)
+                name = get.getDeclaredField().getName().toString();
+              else if (instruction instanceof PythonPropertyRead read
+                  && st.isStringConstant(read.getMemberRef()))
+                name = st.getStringValue(read.getMemberRef());
+              if (name != null && GRAPH_MODE_ATTRIBUTES.contains(name)) return true;
+            }
+          }
+          return false;
+        });
+  }
+
   /** The phi folds on this thread's stack, breaking the guard-evaluates-its-own-phi cycle. */
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
       ThreadLocal.withInitial(HashSetFactory::make);
@@ -4180,6 +4272,15 @@ public abstract class TensorGenerator {
     if (st.isConstant(vn)) return st.getConstantValue(vn);
 
     SSAInstruction def = node.getDU().getDef(vn);
+
+    // TensorFlow 2 runs a module's own body eagerly, so `tf.executing_eagerly()` there is `True`;
+    // inside a function the call may run under `tf.function`, where it is `False`, and a program
+    // that switches to graph mode makes it `False` in its module body too, so both are left
+    // undecided (wala/ML#1110).
+    if (def instanceof SSAAbstractInvokeInstruction call
+        && isModuleBody(node)
+        && callsOnly(builder, node, call, TensorFlowTypes.EXECUTING_EAGERLY_TYPE)
+        && !mayRunInGraphMode(builder)) return 1;
 
     // A phi merges its predecessors' values, and its points-to union UNDER-represents them when
     // an arm's producer mints no instance key (wala/ML#805: a comparison result contributes
