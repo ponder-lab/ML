@@ -329,7 +329,18 @@ public class TensorGeneratorFactory {
 
   /** Attributes of `tf.Tensor` that do not represent tensor elements. */
   private static final Set<String> NON_TENSOR_ATTRIBUTES =
-      Set.of("value_index", "dtype", "shape", "ndim", "name", "graph", "op", "device", "consumers");
+      Set.of(
+          "value_index",
+          "dtype",
+          "shape",
+          "ndim",
+          "name",
+          "graph",
+          "op",
+          "device",
+          "consumers",
+          // A bound method, which `t.numpy()` calls (wala/ML#1105).
+          "numpy");
 
   /**
    * The types the summaries allocate for a tensor value, as opposed to another library object: a
@@ -2048,6 +2059,46 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether a value is the result of a tensor's {@code numpy()} method, {@code t.numpy()}
+   * (wala/ML#1105): a call whose function value is a {@code numpy} attribute read, with no
+   * points-to members of its own since tensor allocations carry no method summaries, off a value
+   * that may be a tensor allocation ({@link #TENSOR_VALUE_TYPES}).
+   *
+   * @param source The value.
+   * @param builder The propagation call graph builder, for the points-to sets.
+   * @return Whether the value is a tensor's {@code numpy()} result.
+   */
+  private static boolean isTensorNumpyCall(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey local)) return false;
+    CGNode node = local.getNode();
+    if (node.getIR() == null
+        || !(node.getDU().getDef(local.getValueNumber()) instanceof PythonInvokeInstruction call)
+        || call.getNumberOfUses() < 1) return false;
+    if (!(node.getDU().getDef(call.getUse(0)) instanceof PythonPropertyRead read)) return false;
+    SymbolTable symtab = node.getIR().getSymbolTable();
+    int member = read.getMemberRef();
+    if (!symtab.isConstant(member) || !TENSOR_NUMPY_METHOD.equals(symtab.getConstantValue(member)))
+      return false;
+    HeapModel heap = builder.getPointerAnalysis().getHeapModel();
+    if (!builder
+        .getPointerAnalysis()
+        .getPointsToSet(heap.getPointerKeyForLocal(node, call.getUse(0)))
+        .isEmpty()) return false;
+    for (InstanceKey ik :
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(heap.getPointerKeyForLocal(node, read.getObjectRef()))) {
+      TypeReference type = allocatedType(ik);
+      if (type != null && TENSOR_VALUE_TYPES.contains(type)) return true;
+    }
+    return false;
+  }
+
+  /** The name of a tensor's method converting it to a NumPy array (wala/ML#1105). */
+  private static final String TENSOR_NUMPY_METHOD = "numpy";
+
+  /**
    * The type an instance key allocates, for the two key kinds that name one.
    *
    * @param ik The instance key.
@@ -2801,6 +2852,8 @@ public class TensorGeneratorFactory {
         }
       }
     }
+
+    if (isTensorNumpyCall(source, builder)) return new TensorNumpyMethod(source);
 
     TypeReference calledFunction = getFunction(source, builder);
     LOGGER.fine("Getting tensor generator for call to: " + calledFunction + ".");
