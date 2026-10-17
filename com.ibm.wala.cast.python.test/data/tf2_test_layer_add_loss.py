@@ -32,6 +32,18 @@ class Plain(tf.keras.layers.Layer):
         return tf.matmul(inputs, self.w)
 
 
+class Vae(tf.keras.Model):
+
+    def __init__(self):
+        super().__init__()
+        self.dense = tf.keras.layers.Dense(2)
+
+    def call(self, inputs):
+        out = self.dense(inputs)
+        self.add_loss(tf.reduce_sum(tf.square(out)))
+        return out
+
+
 x = tf.random.normal((8, 3))
 
 var = Var()
@@ -45,3 +57,7 @@ assert len(outer.losses) == 1
 plain = Plain()
 plain(x)
 assert len(plain.losses) == 0
+
+vae = Vae()
+vae(x)
+assert len(vae.losses) == 1

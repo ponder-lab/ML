@@ -49,6 +49,15 @@ public class TestLayerAddLoss extends AbstractTensorTest {
     assertTrue(this.modifiedLayerFields("Outer.call").contains("Var._losses"));
   }
 
+  /**
+   * A subclass of {@code tf.keras.Model} registers a loss in its own {@code call}: a model is a
+   * layer at run time, so the call writes the model's {@code _losses}.
+   */
+  @Test
+  public void testModelCallAddsLoss() throws ClassHierarchyException, CancelException, IOException {
+    assertTrue(this.modifiedLayerFields("Vae.call").contains("Vae._losses"));
+  }
+
   /** A control: a layer that registers no loss writes no losses. */
   @Test
   public void testCallWithoutLoss() throws ClassHierarchyException, CancelException, IOException {
