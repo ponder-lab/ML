@@ -4545,7 +4545,20 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape#gradient — fresh allocation (not pass-through of `sources`). The dedicated `Gradient` generator inherits shape and dtype from the `sources` argument. See wala/ML#430. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self target sources output_gradients unconnected_gradients">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
-          <return value="res"/>
+          <!-- The container a list or tuple `sources` gives the result (wala/ML#464): the builder allocates each only when the read of `sources` below may hold one, and it holds the gradient tensor as its element. The read needs a use, the write back onto the holder, to have a points-to set of its own. -->
+          <new def="holder" class="Lobject"/>
+          <putfield class="LRoot" field="sources" fieldType="LRoot" ref="holder" value="sources"/>
+          <getfield class="LRoot" field="sources" fieldType="LRoot" ref="holder" def="structure"/>
+          <putfield class="LRoot" field="sources" fieldType="LRoot" ref="holder" value="structure"/>
+          <new def="gradient_list" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="gradient_list" value="res"/>
+          <new def="gradient_tuple" class="Ltuple"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="gradient_tuple" value="res"/>
+          <putfield class="LRoot" field="result" fieldType="LRoot" ref="holder" value="res"/>
+          <putfield class="LRoot" field="result" fieldType="LRoot" ref="holder" value="gradient_list"/>
+          <putfield class="LRoot" field="result" fieldType="LRoot" ref="holder" value="gradient_tuple"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="holder" def="result"/>
+          <return value="result"/>
         </method>
       </class>
     </package>
