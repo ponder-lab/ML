@@ -3584,6 +3584,10 @@
           <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="weights" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="res" value="x"/>
+          <!-- The variable properties are the same list as the weight properties above (wala/ML#1111). -->
+          <putfield class="LRoot" field="trainable_variables" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="non_trainable_variables" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="variables" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="inputs" fieldType="LRoot" ref="res" value="inputs"/>
           <putfield class="LRoot" field="outputs" fieldType="LRoot" ref="res" value="outputs"/>
           <!-- Functional-API models carry the same default distribution strategy as subclassed ones (wala/ML#683); see the shell `Model.__init__` above. -->
@@ -3611,6 +3615,10 @@
           <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="weights" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="res" value="x"/>
+          <!-- The variable properties are the same list as the weight properties above (wala/ML#1111). -->
+          <putfield class="LRoot" field="trainable_variables" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="non_trainable_variables" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="variables" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="layers" fieldType="LRoot" ref="res" value="layers"/>
           <!-- Sequential models carry the same default distribution strategy as functional and subclassed ones (wala/ML#683); see `Model.do` above. -->
           <new def="ds" class="Ltensorflow/distribute/MirroredStrategy"/>
@@ -3648,6 +3656,14 @@
           <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="ds" value="edd"/>
           <putfield class="LRoot" field="_distribution_strategy" fieldType="LRoot" ref="self" value="ds"/>
           <putfield class="LRoot" field="distribute_strategy" fieldType="LRoot" ref="self" value="ds"/>
+          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#trainable_variables. A model's variable properties are Python lists of its variables, so `tape.gradient(loss, model.trainable_variables)` returns a list of gradients by the rule of wala/ML#464 (wala/ML#1111). Which variables a model holds is not modelled here, so the list carries no elements. A model built by the functional constructor gets its properties from that constructor instead. -->
+          <new def="variables" class="Llist"/>
+          <putfield class="LRoot" field="trainable_variables" fieldType="LRoot" ref="self" value="variables"/>
+          <putfield class="LRoot" field="non_trainable_variables" fieldType="LRoot" ref="self" value="variables"/>
+          <putfield class="LRoot" field="variables" fieldType="LRoot" ref="self" value="variables"/>
+          <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="self" value="variables"/>
+          <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="self" value="variables"/>
+          <putfield class="LRoot" field="weights" fieldType="LRoot" ref="self" value="variables"/>
           <return value="self"/>
         </method>
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
