@@ -396,6 +396,7 @@ public abstract class TensorGenerator {
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
     DictComprehensionComponent.clearComprehensions(builder);
+    ElementWiseOperation.clearPythonNumbers(builder);
     FIELD_PUT_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);

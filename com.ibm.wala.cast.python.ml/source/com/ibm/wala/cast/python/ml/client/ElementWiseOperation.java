@@ -41,6 +41,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -1225,7 +1227,28 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * @return {@code true} iff the slot is shown to hold a Python number.
    */
   private boolean isPythonNumber(PropagationCallGraphBuilder builder, int vn) {
-    return isPythonNumber(builder, this.getNode(), vn, 0, HashSetFactory.make());
+    CGNode node = this.getNode();
+    // Memoized per builder (wala/ML#1083): the test is a walk into callers, asked once per operand
+    // per elementwise query, and reads only the finished pointer analysis. Only this fresh-walk
+    // entry is memoized; an inner answer can be the decline of a parameter met again on that walk.
+    return PYTHON_NUMBERS
+        .computeIfAbsent(builder, b -> new ConcurrentHashMap<>())
+        .computeIfAbsent(
+            Pair.make(node, vn), k -> isPythonNumber(builder, node, vn, 0, HashSetFactory.make()));
+  }
+
+  /** Per builder, the answers of {@link #isPythonNumber(PropagationCallGraphBuilder, int)}. */
+  private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Boolean>>
+      PYTHON_NUMBERS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Clears the memoized Python-number answers of a builder; its keys hold the builder's call-graph
+   * nodes, which keep the weak key reachable.
+   *
+   * @param builder The builder.
+   */
+  static void clearPythonNumbers(PropagationCallGraphBuilder builder) {
+    PYTHON_NUMBERS.remove(builder);
   }
 
   /**
