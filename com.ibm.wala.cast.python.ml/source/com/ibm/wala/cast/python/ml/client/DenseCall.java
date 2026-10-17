@@ -1,14 +1,19 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -16,7 +21,10 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -135,6 +143,7 @@ public class DenseCall extends TensorGenerator {
 
     if (selfPTS != null)
       for (InstanceKey selfIK : selfPTS) {
+        int before = ret.size();
         LOGGER.finer(
             () ->
                 "Found `self` instance key: "
@@ -199,9 +208,87 @@ public class DenseCall extends TensorGenerator {
           // rather than crashing or claiming a partial value.
           if (unitValues != null) ret.addAll(unitValues);
         }
+
+        if (ret.size() == before) {
+          Set<Long> inherited =
+              unitsFromInheritedConstructor(builder, selfASIN, this.getUnitsFieldName());
+          if (inherited != null) ret.addAll(inherited);
+        }
       }
 
     return ret;
+  }
+
+  /**
+   * The sizes an instance of a program class that subclasses this generator's built-in layer was
+   * constructed with, when the class inherits the layer's constructor (wala/ML#1108). Such an
+   * instance is allocated in the program class's synthesized constructor, which does not run the
+   * built-in layer's summary, so the layer's field holding the size is never written. The class
+   * passes its constructor arguments on to the built-in layer's, whose first parameter is the size
+   * for every layer this generator types ({@code units} or {@code filters}), so the size is, at
+   * each call of the synthesized constructor, the first positional argument or else the argument
+   * the size's keyword names.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @param self The layer instance.
+   * @param sizeName The name of the built-in layer's size parameter.
+   * @return The sizes, empty when the instance is not of a program class or when the class or a
+   *     program base declares {@code __init__}, or {@code null} when a call passes no readable size
+   *     or one that does not resolve to an integer.
+   */
+  private static Set<Long> unitsFromInheritedConstructor(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode self, String sizeName) {
+    IClassHierarchy cha = builder.getClassHierarchy();
+    // A program class's instance is allocated as an `object` in its synthesized constructor, so the
+    // class is the constructor's.
+    CGNode constructor = self.getNode();
+    IClass type = constructor.getMethod().getDeclaringClass();
+    if (!isProgramClass(type)) return Collections.emptySet();
+    for (IClass c = type; isProgramClass(c); c = c.getSuperclass())
+      if (cha.lookupClass(
+              TypeReference.findOrCreateClass(
+                  c.getClassLoader().getReference(),
+                  "$" + c.getName().toString().substring(1),
+                  INIT_METHOD_NAME))
+          != null) return Collections.emptySet();
+    Set<Long> ret = new HashSet<>();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> caller :
+        getCallerInvokes(builder, constructor)) {
+      // The class object is the call's first positional use, and the first argument its second.
+      if (!(caller.snd instanceof PythonInvokeInstruction call)) return null;
+      int size;
+      if (call.getNumberOfPositionalParameters() > 1 && !call.isPositionalSlotStarred(1))
+        size = call.getUse(1);
+      else if (call.firstStarredPosition() == -1) size = call.getUse(sizeName);
+      else return null;
+      if (size < 0) return null;
+      Integer units =
+          TensorGenerator.resolveIntFlowSensitively(
+              builder, caller.fst, size, HashSetFactory.make(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+      LOGGER.fine(
+          () ->
+              "Size from the inherited constructor of "
+                  + describe(self)
+                  + " at "
+                  + describe(caller.fst)
+                  + ": "
+                  + units
+                  + " (wala/ML#1108).");
+      if (units == null) return null;
+      ret.add(units.longValue());
+    }
+    return ret;
+  }
+
+  /**
+   * Whether the given class is one the program defines, rather than a library summary's class
+   * shell.
+   *
+   * @param c The class.
+   * @return Whether {@code c} is a program class.
+   */
+  private static boolean isProgramClass(IClass c) {
+    return c instanceof PythonClass && !(c instanceof PythonSummaryShellClass);
   }
 
   /**

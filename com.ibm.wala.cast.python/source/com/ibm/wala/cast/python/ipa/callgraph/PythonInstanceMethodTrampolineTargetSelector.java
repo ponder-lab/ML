@@ -288,9 +288,40 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    */
   private static IClass inheritedMethod(
       IClassHierarchy cha, ClassLoaderReference loader, IClass type, String name) {
+    return inheritedMethod(cha, loader, type, name, false);
+  }
+
+  /**
+   * The method class of the given name the nearest base class of the given class declares, in
+   * Python's method resolution order over every declared base, as {@link
+   * #inheritedMethod(IClassHierarchy, ClassLoaderReference, IClass, String)} finds it, except that
+   * the walk may also end at a library summary's class shell.
+   *
+   * @param cha The class hierarchy.
+   * @param loader The program's class loader.
+   * @param type The instance's class.
+   * @param name The method's name.
+   * @param throughShell Whether the first class in that order the program does not define answers
+   *     with its own method of that name when it is a summary's class shell. Python finds that
+   *     method there, so a program class that inherits a built-in Keras layer's {@code call}
+   *     without overriding it is called through the layer's (wala/ML#1108).
+   * @return The inherited method class, or {@code null} when no base before the first library class
+   *     (or, with {@code throughShell}, that shell itself) declares one.
+   */
+  private static IClass inheritedMethod(
+      IClassHierarchy cha,
+      ClassLoaderReference loader,
+      IClass type,
+      String name,
+      boolean throughShell) {
     List<IClass> order = methodResolutionOrder(cha, type, new HashSet<>());
     for (IClass base : order.subList(1, order.size())) {
-      if (!isProgramClass(base)) return null;
+      if (!isProgramClass(base)) {
+        if (!throughShell || !(base instanceof PythonSummaryShellClass)) return null;
+        return cha.lookupClass(
+            TypeReference.findOrCreateClass(
+                loader, "$" + base.getName().toString().substring(1), name));
+      }
       IClass method =
           cha.lookupClass(
               TypeReference.findOrCreateClass(
@@ -528,7 +559,11 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
       if (callable == null)
         callable =
             inheritedMethod(
-                cha, classLoaderReference, declaringClass, CALLABLE_METHOD_NAME_FOR_KERAS_MODELS);
+                cha,
+                classLoaderReference,
+                declaringClass,
+                CALLABLE_METHOD_NAME_FOR_KERAS_MODELS,
+                true);
       if (callable == null)
         callable = inheritedMethod(cha, classLoaderReference, declaringClass, DO_METHOD_NAME);
 

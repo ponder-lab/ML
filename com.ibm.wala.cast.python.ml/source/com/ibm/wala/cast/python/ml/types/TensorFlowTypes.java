@@ -2545,6 +2545,31 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/functions/concatenate")),
           AstMethodReference.fnSelector);
 
+  /** The type name prefix of a built-in Keras layer's summary methods. */
+  private static final String KERAS_LAYER_METHOD_PREFIX = "Ltensorflow/keras/layers/";
+
+  /**
+   * The type a built-in Keras layer's {@code call} summary dispatches its generator as: the same
+   * layer's {@code __call__}. A built-in layer's {@code __call__} runs its {@code call} on the same
+   * inputs, so the two give one type, and only {@code __call__} has a generator registered. A
+   * program class reaches the {@code call} without the {@code __call__} when it inherits {@code
+   * call} from a built-in layer it subclasses, or overrides it and calls {@code super().call}
+   * (wala/ML#1108).
+   *
+   * @param type The sanitized type of a called function.
+   * @return The layer's {@code __call__} type when {@code type} is a built-in layer's {@code call},
+   *     and {@code type} otherwise.
+   */
+  public static TypeReference layerCallAsDunderCall(TypeReference type) {
+    String name = type.getName().toString();
+    String suffix = "/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
+    if (!name.startsWith(KERAS_LAYER_METHOD_PREFIX) || !name.endsWith(suffix)) return type;
+    String layer =
+        name.substring(KERAS_LAYER_METHOD_PREFIX.length(), name.length() - suffix.length());
+    if (layer.isEmpty() || layer.contains("/")) return type;
+    return kerasLayerCall(layer).getDeclaringClass();
+  }
+
   /**
    * Builds the {@code __call__} method reference for a Keras layer class by its simple name.
    *

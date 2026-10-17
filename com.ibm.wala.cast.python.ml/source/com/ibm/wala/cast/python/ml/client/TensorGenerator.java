@@ -11143,7 +11143,7 @@ public abstract class TensorGenerator {
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
-    type = sanitize(type);
+    type = TensorFlowTypes.layerCallAsDunderCall(sanitize(type));
 
     LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
 
