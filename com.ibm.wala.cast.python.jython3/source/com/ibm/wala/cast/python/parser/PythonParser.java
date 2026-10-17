@@ -3146,6 +3146,11 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      * temporaries, whose header then read the inner loop's iterator. The name still advances {@link
      * #tmpIndex}, as it did, so no comprehension, lambda or filter name shifts.
      *
+     * <p>A boolean operator's {@code boolop temp} ({@link #boolOpTempIndex}) is also numbered per
+     * visitor and can repeat across nested bodies, but each is declared and read within its own
+     * expression and is never live across a loop header, so a repeat overwrites nothing that is
+     * read later. A {@code pass} label is not a variable.
+     *
      * @param prefix The temporary's name up to its number.
      * @return The name.
      */
