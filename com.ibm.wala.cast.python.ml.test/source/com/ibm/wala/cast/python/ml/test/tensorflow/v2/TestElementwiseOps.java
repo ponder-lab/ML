@@ -2774,4 +2774,20 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
   }
+
+  /**
+   * The same product in a list comprehension over {@code range(2)}, where the comprehension's body
+   * reads the index off the iterable its synthesized function is passed, is typed as the tensor
+   * operand, {@code (8,) float32} (wala/ML#1083).
+   */
+  @Test
+  public void testTensorTimesComprehensionNumber()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tensor_times_parameter_number.py",
+        "consume_comprehension",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
+  }
 }

@@ -20,3 +20,12 @@ def consume_memory(y):
 for j in range(2):
     consume_loop(tf.range(8, dtype=tf.float32) * (j + 1.0))
     consume_memory(memory(j))
+
+
+def consume_comprehension(y):
+    assert y.shape == (8,) and y.dtype == tf.float32
+    return y
+
+
+for y in [tf.range(8, dtype=tf.float32) * (k + 1.0) for k in range(2)]:
+    consume_comprehension(y)
