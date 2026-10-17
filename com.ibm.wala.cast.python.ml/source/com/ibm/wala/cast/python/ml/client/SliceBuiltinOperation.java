@@ -166,6 +166,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       LOGGER.fine(() -> "No call site resolved for " + describe(source));
       return null;
     }
+    if (receiverIsPythonSequence(builder, view)) return Set.of();
 
     Set<List<Dimension<?>>> receiverShapes;
     try {
@@ -400,6 +401,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     CallSiteView view = findCallSite(builder);
     if (view == null) return Set.of(DType.UNKNOWN);
+    if (receiverIsPythonSequence(builder, view)) return Set.of();
     Set<DType> dtypes;
     try {
       // Parallel to the shape path: use the SSA-DU fallback so chained sources (mnist → astype
@@ -413,6 +415,36 @@ public class SliceBuiltinOperation extends TensorGenerator {
     // getDTypesOrSSAChain can return null (no dtype recovered via the SSA-DU fallback); treat it
     // like an empty set rather than NPEing on isEmpty(). See https://github.com/wala/ML/issues/602.
     return (dtypes == null || dtypes.isEmpty()) ? Set.of(DType.UNKNOWN) : dtypes;
+  }
+
+  /**
+   * Whether the slice's receiver is a Python list or tuple and nothing else: every member of its
+   * points-to set is a list or tuple allocation (wala/ML#1121). Python slices such a receiver into
+   * a new list or tuple of its elements, which is no tensor, though the value read of a list of
+   * tensors reads it as their stack. A receiver that may also be anything else keeps the reading it
+   * had.
+   *
+   * @param builder The propagation call graph builder.
+   * @param view The slice's call site.
+   * @return {@code true} iff the receiver is shown to be a Python list or tuple only.
+   */
+  private static boolean receiverIsPythonSequence(
+      PropagationCallGraphBuilder builder, CallSiteView view) {
+    if (view.receiverVn() <= 0) return false;
+    PointerKey receiver =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(view.callerNode(), view.receiverVn());
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(receiver);
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey member : pts) {
+      AllocationSiteInNode site = getAllocationSiteInNode(member);
+      if (site == null) return false;
+      TypeReference type = site.concreteType().getReference();
+      if (!type.equals(PythonTypes.list) && !type.equals(PythonTypes.tuple)) return false;
+    }
+    return true;
   }
 
   @Override
