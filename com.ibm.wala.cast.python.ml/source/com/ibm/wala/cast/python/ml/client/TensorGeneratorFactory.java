@@ -2807,7 +2807,7 @@ public class TensorGeneratorFactory {
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
-    calledFunction = sanitize(calledFunction);
+    calledFunction = TensorFlowTypes.layerCallAsDunderCall(sanitize(calledFunction));
 
     LOGGER.fine("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 

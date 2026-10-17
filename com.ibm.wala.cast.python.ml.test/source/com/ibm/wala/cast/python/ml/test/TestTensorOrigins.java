@@ -481,6 +481,36 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Applying a program class that subclasses a built-in Keras layer to a Keras symbolic tensor
+   * gives a value with {@link TensorOrigin#KERAS_SYMBOLIC}, which the functions it is passed to
+   * receive (wala/ML#1108): {@code after_frozen} receives the application of a class that overrides
+   * {@code call} and returns {@code super().call}, and {@code after_plain} that of a class that
+   * inherits {@code call}.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicSubclassApplication()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> origins =
+        getMethodOrigins(
+            "tf2_test_keras_symbolic_subclass.py",
+            "keras_symbolic_subclass.py.after_frozen.do",
+            "keras_symbolic_subclass.py.after_plain.do");
+    for (String function : List.of("after_frozen", "after_plain")) {
+      MethodOrigins method = origins.get("keras_symbolic_subclass.py." + function + ".do");
+      assertNotNull(function + " has tensor-typed values.", method);
+      Set<TensorOrigin> parameter = EnumSet.noneOf(TensorOrigin.class);
+      method.parameters().values().forEach(parameter::addAll);
+      assertTrue(
+          function + "'s parameter carries the Keras symbolic origin: " + parameter,
+          parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+    }
+  }
+
+  /**
    * A loop-carried slice of an ndarray, {@code v = v[1:]} over a parameter {@code v} (wala/ML#979).
    * The slice's receiver is a φ of the parameter and of the slice's own result, so classifying the
    * slice through its receiver revisits the slice. The revisit contributes no origin evidence, so
