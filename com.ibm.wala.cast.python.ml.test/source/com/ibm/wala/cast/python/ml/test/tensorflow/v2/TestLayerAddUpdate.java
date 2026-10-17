@@ -79,33 +79,32 @@ public class TestLayerAddUpdate extends AbstractTensorTest {
   }
 
   /**
-   * A stateful recurrent layer registers the update of its state with {@code add_update}, so
-   * applying it writes the layer's {@code _updates}.
+   * A stateful recurrent layer registers the update of its state with {@code add_update}, but the
+   * recurrent layers' summaries write nothing, so applying one writes no {@code _updates} today.
    *
-   * <p>TODO: The recurrent layers' summaries write nothing, so this pins a known gap. Remove the
-   * expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/1124">wala/ML#1124</a> is fixed.
+   * <p>TODO: This pins a known gap. Once <a
+   * href="https://github.com/wala/ML/issues/1124">wala/ML#1124</a> is fixed, the updated layers
+   * contain {@link #SIMPLE_RNN}.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testStatefulRecurrentRegistersUpdate()
       throws ClassHierarchyException, CancelException, IOException {
-    assertTrue(
-        this.updatedLayers("StatefulRecurrent.call").toString(),
-        this.updatedLayers("StatefulRecurrent.call").contains(SIMPLE_RNN));
+    assertEquals(Set.of(), this.updatedLayers("StatefulRecurrent.call"));
   }
 
   /**
-   * A normalization layer applied with {@code training=False} registers no update, so applying it
-   * in inference writes no {@code _updates}.
+   * A normalization layer applied with {@code training=False} registers no update, but the summary
+   * cannot branch on {@code training} and writes on every application, so applying it in inference
+   * writes the layer's {@code _updates} today.
    *
-   * <p>TODO: The summary cannot branch on {@code training} and writes on every application, so this
-   * pins a known over-approximation. Remove the expected {@link AssertionError} once <a
-   * href="https://github.com/wala/ML/issues/1124">wala/ML#1124</a> is fixed.
+   * <p>TODO: This pins a known over-approximation. Once <a
+   * href="https://github.com/wala/ML/issues/1124">wala/ML#1124</a> is fixed, the updated layers are
+   * empty.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testInferenceNormalizationRegistersNoUpdate()
       throws ClassHierarchyException, CancelException, IOException {
-    assertEquals(Set.of(), this.updatedLayers("normalize_inference"));
+    assertEquals(Set.of(BATCH_NORMALIZATION), this.updatedLayers("normalize_inference"));
   }
 
   /** A control: a layer that applies no stateful layer registers no update. */
