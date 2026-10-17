@@ -7,6 +7,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -88,14 +89,90 @@ public class Model extends TensorGenerator {
     return this.getWeightDTypes(builder, this.getSource());
   }
 
+  /** The prefix of the types of the Keras layers' summaries. */
+  private static final String KERAS_LAYERS_PREFIX = "Ltensorflow/keras/layers/";
+
+  /**
+   * The Keras layers that hold no weights, so a model's weights need nothing from them
+   * (wala/ML#1123).
+   */
+  private static final Set<String> WEIGHTLESS_LAYERS =
+      Set.of(
+          "Activation",
+          "Add",
+          "Average",
+          "AveragePooling1D",
+          "AveragePooling2D",
+          "AveragePooling3D",
+          "Concatenate",
+          "Cropping1D",
+          "Cropping2D",
+          "Cropping3D",
+          "Dropout",
+          "Flatten",
+          "GaussianDropout",
+          "GaussianNoise",
+          "GlobalAveragePooling1D",
+          "GlobalAveragePooling2D",
+          "GlobalAveragePooling3D",
+          "GlobalMaxPooling1D",
+          "GlobalMaxPooling2D",
+          "GlobalMaxPooling3D",
+          "InputLayer",
+          "LeakyReLU",
+          "Masking",
+          "MaxPooling1D",
+          "MaxPooling2D",
+          "MaxPooling3D",
+          "Maximum",
+          "Minimum",
+          "Multiply",
+          "Permute",
+          "ReLU",
+          "RepeatVector",
+          "Reshape",
+          "Softmax",
+          "SpatialDropout1D",
+          "SpatialDropout2D",
+          "SpatialDropout3D",
+          "Subtract",
+          "UpSampling1D",
+          "UpSampling2D",
+          "UpSampling3D",
+          "ZeroPadding1D",
+          "ZeroPadding2D",
+          "ZeroPadding3D");
+
+  /**
+   * The Keras layer class whose call a node is, as {@code Dense} for the node of {@code
+   * Ltensorflow/keras/layers/Dense/__call__} (wala/ML#1123).
+   *
+   * @param node The node.
+   * @return The layer's class name, or {@code null} when the node is no Keras layer's call.
+   */
+  private static String kerasLayerName(CGNode node) {
+    String type = node.getMethod().getDeclaringClass().getName().toString();
+    if (!type.startsWith(KERAS_LAYERS_PREFIX)) return null;
+    String rest = type.substring(KERAS_LAYERS_PREFIX.length());
+    int slash = rest.indexOf('/');
+    if (slash < 0) return null;
+    // A call node only, `Dense/__call__` or `Dense/call`: the walk also meets constructors
+    // (`class/Dense`) and inputs, which hold no weights of their own.
+    String method = rest.substring(slash + 1);
+    return method.equals(PythonTypes.CALLABLE_METHOD_NAME)
+            || method.equals(PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+        ? rest.substring(0, slash)
+        : null;
+  }
+
   /**
    * Infers the shapes of the model's weights by traversing the computation graph backwards from the
    * model's outputs, or, for a {@code Sequential} model, from its layer list (wala/ML#832).
    *
    * @param builder The propagation call graph builder.
    * @param modelSource The source points-to set variable representing the model.
-   * @return A set of weight shapes, or {@code null} when a {@code Sequential} model's layer list
-   *     cannot give them.
+   * @return A set of weight shapes, or {@code null} when a layer the walk reaches holds weights it
+   *     does not model or a {@code Sequential} model's layer list cannot give them.
    */
   public Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
@@ -120,7 +197,16 @@ public class Model extends TensorGenerator {
       if (!visited.add(node)) continue;
 
       TensorGenerator generator = createManualGenerator(node, builder);
-      if (generator instanceof DenseCall denseCall) {
+      // Only a `Dense` layer's weights are modeled: the convolution and recurrent calls extend
+      // `DenseCall`, but their `units` are no dense kernel's width (wala/ML#1123). A layer known to
+      // hold no weights contributes none, and any other Keras layer holds weights this does not
+      // know, so the model's weights are then tensors of unknown shape.
+      String layer = kerasLayerName(node);
+      if (layer != null
+          && (generator == null || generator.getClass() != DenseCall.class)
+          && !WEIGHTLESS_LAYERS.contains(layer)) return null;
+      if (generator != null && generator.getClass() == DenseCall.class) {
+        DenseCall denseCall = (DenseCall) generator;
         int valNum =
             denseCall.getArgumentValueNumber(
                 builder,
