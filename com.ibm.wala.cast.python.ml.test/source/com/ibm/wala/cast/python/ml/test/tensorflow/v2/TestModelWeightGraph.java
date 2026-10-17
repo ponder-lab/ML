@@ -217,4 +217,26 @@ public class TestModelWeightGraph extends AbstractTensorTest {
                 TENSOR_4_5_FLOAT32,
                 TENSOR_5_FLOAT32)));
   }
+
+  /**
+   * A Sequential model whose list holds a layer other than {@code Dense}, here a {@code Conv1D},
+   * has weights its list does not give, so its weights are {@code float32} tensors of shapes the
+   * analysis does not know, not the {@code Dense} layer's alone (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialWeightShapesWithOtherLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_weights_mixed.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
 }
