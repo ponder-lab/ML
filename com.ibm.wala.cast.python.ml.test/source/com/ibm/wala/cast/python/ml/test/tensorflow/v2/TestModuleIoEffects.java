@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -10,6 +11,7 @@ import com.ibm.wala.cast.python.modref.PythonModRef;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -68,6 +70,43 @@ public class TestModuleIoEffects extends AbstractTensorTest {
   @Test
   public void testCountLines() throws ClassHierarchyException, CancelException, IOException {
     this.assertTouches("count_lines", false, "Ltensorflow/io/gfile.files");
+  }
+
+  /**
+   * Iterating an open file, {@code for line in f}, reads the file system: the loop goes through the
+   * file's {@code __iter__} and its iterator's {@code __next__}.
+   */
+  @Test
+  public void testIteratesFile() throws ClassHierarchyException, CancelException, IOException {
+    this.assertTouches("iterates_file", false, "Ltensorflow/io/gfile.files");
+  }
+
+  /**
+   * A line a loop over an open file binds is no function object: the iteration does not read the
+   * file object's method fields as its elements.
+   */
+  @Test
+  public void testLineIsNoFunction() throws ClassHierarchyException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, emptyList(), FILE);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    String signature = "script " + FILE + ".consume_line.do()LRoot;";
+    boolean reached = false;
+    for (CGNode node : cg) {
+      if (!node.getMethod().getSignature().equals(signature)) continue;
+      reached = true;
+      PointerKey line =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(node, node.getIR().getParameter(1));
+      for (InstanceKey instance : builder.getPointerAnalysis().getPointsToSet(line))
+        assertFalse(
+            "The line is a function object: " + instance,
+            instance.concreteType().getName().toString().contains("/functions/"));
+    }
+    assertTrue("Function must exist in call graph: " + signature, reached);
   }
 
   /** A control: a function that calls none of these modules touches none of their state. */

@@ -42,6 +42,16 @@ def count_lines(filename):
     return num_lines
 
 
+def consume_line(line):
+    assert isinstance(line, str)
+    return line
+
+
+def iterates_file(f):
+    for line in f:
+        consume_line(line)
+
+
 def doubles(x):
     return x * 2.0
 
@@ -59,4 +69,5 @@ assert scales_randomly(x).shape == (2,)
 writes_image(image_path, np.zeros((4, 4, 3), dtype=np.uint8))
 assert reads_image(image_path).shape == (4, 4, 3)
 assert count_lines(text_path) == 2
+iterates_file(tf.io.gfile.GFile(text_path))
 assert doubles(x).shape == (2,)
