@@ -3661,13 +3661,13 @@
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
-        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` records nothing the analysis reads. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#add_loss. A model is a layer at run time, but this shell does not extend the `Layer` shell, so the method is declared here as well: registering a loss in a model's `call` writes the model's `_losses`, as for a layer (wala/ML#1095). -->
         <method name="add_loss" descriptor="()LRoot;" numArgs="3" paramNames="func self losses">
           <putfield class="LRoot" field="_losses" fieldType="LRoot" ref="self" value="losses"/>
           <new def="none" class="Lobject"/>
           <return value="none"/>
         </method>
+        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` records nothing the analysis reads. -->
         <method name="compile" descriptor="()LRoot;" numArgs="10" paramNames="func self optimizer loss metrics loss_weights weighted_metrics run_eagerly steps_per_execution jit_compile">
           <new def="none" class="Lobject"/>
           <return value="none"/>
