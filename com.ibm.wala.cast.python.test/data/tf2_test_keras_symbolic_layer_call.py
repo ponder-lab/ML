@@ -11,6 +11,20 @@ def scale_inside(t):
     return t * 2.0
 
 
+DIRECT_SEEN = []
+
+
+def direct_inside(t):
+    DIRECT_SEEN.append(type(t).__name__)
+    return t * 2.0
+
+
+class Direct(tf.keras.layers.Layer):
+
+    def call(self, inputs):
+        return direct_inside(inputs)
+
+
 class Scaled(tf.keras.layers.Layer):
 
     def call(self, inputs):
@@ -37,3 +51,7 @@ relu = after_relu(Relu()(inp))
 assert type(scaled).__name__ == "KerasTensor"
 assert type(relu).__name__ == "KerasTensor"
 assert SEEN == ["Tensor"]
+
+# Calling `call` directly bypasses `Layer.__call__`, so `call` receives the symbolic tensor itself.
+direct = Direct().call(inp)
+assert DIRECT_SEEN == ["KerasTensor"]

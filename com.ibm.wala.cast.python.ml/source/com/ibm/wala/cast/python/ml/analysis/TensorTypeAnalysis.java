@@ -458,6 +458,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
      * The provenance markers that cross into a Keras {@code call} body's input: {@link
      * TensorOrigin#ANNOTATION} only, since the body receives a graph tensor where the caller holds
      * a Keras symbolic one (wala/ML#1109).
+     *
+     * <p>TODO: A direct {@code layer.call(x)} bypasses {@code Layer.__call__}, so its input keeps
+     * the marker, but the destination alone does not tell it from an application; see
+     * https://github.com/wala/ML/issues/1114.
      */
     private static final Set<TensorOrigin> CALL_INPUT_MARKERS = EnumSet.of(TensorOrigin.ANNOTATION);
 

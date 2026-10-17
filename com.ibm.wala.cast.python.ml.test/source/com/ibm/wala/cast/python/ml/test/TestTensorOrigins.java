@@ -9,12 +9,14 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
@@ -506,12 +508,84 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
       MethodOrigins method = origins.get("keras_symbolic_layer_call.py." + function + ".do");
       assertNotNull(function + " has tensor-typed values.", method);
       assertFalse(function + " has a tensor parameter.", method.parameters().isEmpty());
-      Set<TensorOrigin> parameter = EnumSet.noneOf(TensorOrigin.class);
-      method.parameters().values().forEach(parameter::addAll);
+    }
+    // Every parameter, `self` included, whether or not its tensor state is empty.
+    Map<String, Set<TensorOrigin>> parameters =
+        getParameterOrigins(
+            KERAS_SYMBOLIC_LAYER_CALL_FILE,
+            "keras_symbolic_layer_call.py.scale_inside.do",
+            "keras_symbolic_layer_call.py.Scaled.call.do",
+            "keras_symbolic_layer_call.py.Relu.call.do");
+    for (String function : List.of("scale_inside", "Scaled.call", "Relu.call")) {
+      Set<TensorOrigin> parameter =
+          parameters.get("keras_symbolic_layer_call.py." + function + ".do");
+      assertNotNull(function + " has parameters in the flow graph.", parameter);
       assertFalse(
-          function + "'s parameter carries no Keras symbolic origin: " + parameter,
+          function + "'s parameters carry no Keras symbolic origin: " + parameter,
           parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
     }
+  }
+
+  /**
+   * A layer's {@code call} invoked directly, {@code Direct().call(inp)}, receives the Keras
+   * symbolic tensor itself, since the call bypasses {@code Layer.__call__}, so the function {@code
+   * call} passes it to receives one too.
+   *
+   * <p>TODO: Flip to a plain {@code @Test} once https://github.com/wala/ML/issues/1114 is fixed.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test(expected = AssertionError.class)
+  public void testKerasSymbolicIntoDirectCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorOrigin> parameter =
+        getParameterOrigins(
+                KERAS_SYMBOLIC_LAYER_CALL_FILE, "keras_symbolic_layer_call.py.direct_inside.do")
+            .get("keras_symbolic_layer_call.py.direct_inside.do");
+    assertNotNull("direct_inside has parameters in the flow graph.", parameter);
+    assertTrue(
+        "direct_inside's parameter carries the Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+  }
+
+  /**
+   * Runs the tensor analysis over the given file and collects, for each method whose signature
+   * contains one of the given fragments, the origins of all of its parameters, unioned across
+   * contexts. Unlike {@link #getMethodOrigins(String, String...)}, which reads only variables with
+   * a nonempty tensor state, this reads every parameter in the flow graph, so a parameter that
+   * carries an origin but no tensor type, such as a layer's {@code self}, is seen too.
+   *
+   * @param filename The Python test file to analyze.
+   * @param methodFragments The signature fragments naming the methods under test.
+   * @return The parameters' origins, keyed by fragment; a fragment absent from the map matched no
+   *     parameter in the flow graph.
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  private Map<String, Set<TensorOrigin>> getParameterOrigins(
+      String filename, String... methodFragments)
+      throws ClassHierarchyException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine = makeEngine(emptyList(), filename);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+    Map<String, Set<TensorOrigin>> ret = new HashMap<>();
+    for (PointsToSetVariable variable : analysis.getProblem().getFlowGraph()) {
+      if (!(variable.getPointerKey() instanceof LocalPointerKey local) || !local.isParameter())
+        continue;
+      TensorVariable out = analysis.getOut(variable);
+      if (out == null) continue;
+      String signature = local.getNode().getMethod().getSignature();
+      for (String fragment : methodFragments)
+        if (signature.contains(fragment))
+          ret.computeIfAbsent(fragment, k -> EnumSet.noneOf(TensorOrigin.class))
+              .addAll(out.getOrigins());
+    }
+    return ret;
   }
 
   /**
