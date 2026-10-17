@@ -529,15 +529,13 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   /**
    * A layer's {@code call} invoked directly, {@code Direct().call(inp)}, receives the Keras
    * symbolic tensor itself, since the call bypasses {@code Layer.__call__}, so the function {@code
-   * call} passes it to receives one too.
-   *
-   * <p>TODO: Flip to a plain {@code @Test} once https://github.com/wala/ML/issues/1114 is fixed.
+   * call} passes it to receives one too (wala/ML#1114).
    *
    * @throws ClassHierarchyException If the class hierarchy cannot be built.
    * @throws CancelException If the analysis is canceled.
    * @throws IOException If the test file cannot be read.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testKerasSymbolicIntoDirectCall()
       throws ClassHierarchyException, CancelException, IOException {
     Set<TensorOrigin> parameter =
