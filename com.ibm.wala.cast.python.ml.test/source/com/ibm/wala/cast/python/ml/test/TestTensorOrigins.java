@@ -480,6 +480,69 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
   }
 
+  /** A program-defined Keras layer applied to a Keras symbolic tensor (wala/ML#1109). */
+  private static final String KERAS_SYMBOLIC_LAYER_CALL_FILE =
+      "tf2_test_keras_symbolic_layer_call.py";
+
+  /**
+   * The input parameter of a program-defined layer's {@code call}, and a function {@code call}
+   * passes it to, carry no {@link TensorOrigin#KERAS_SYMBOLIC} when the layer is applied to a Keras
+   * symbolic tensor (wala/ML#1109): {@code Layer.__call__} runs {@code call} on a graph tensor.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicNotIntoLayerCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> origins =
+        getMethodOrigins(
+            KERAS_SYMBOLIC_LAYER_CALL_FILE,
+            "keras_symbolic_layer_call.py.scale_inside.do",
+            "keras_symbolic_layer_call.py.Scaled.call.do",
+            "keras_symbolic_layer_call.py.Relu.call.do");
+    for (String function : List.of("scale_inside", "Scaled.call", "Relu.call")) {
+      MethodOrigins method = origins.get("keras_symbolic_layer_call.py." + function + ".do");
+      assertNotNull(function + " has tensor-typed values.", method);
+      assertFalse(function + " has a tensor parameter.", method.parameters().isEmpty());
+      Set<TensorOrigin> parameter = EnumSet.noneOf(TensorOrigin.class);
+      method.parameters().values().forEach(parameter::addAll);
+      assertFalse(
+          function + "'s parameter carries no Keras symbolic origin: " + parameter,
+          parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+    }
+  }
+
+  /**
+   * The result of applying a program-defined layer to a Keras symbolic tensor carries {@link
+   * TensorOrigin#KERAS_SYMBOLIC} into the function it is passed to, whether the layer's {@code
+   * call} ends in a Python operator ({@code after_scaled}) or a TensorFlow operation ({@code
+   * after_relu}) (wala/ML#1109).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicLayerApplication()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> origins =
+        getMethodOrigins(
+            KERAS_SYMBOLIC_LAYER_CALL_FILE,
+            "keras_symbolic_layer_call.py.after_scaled.do",
+            "keras_symbolic_layer_call.py.after_relu.do");
+    for (String function : List.of("after_scaled", "after_relu")) {
+      MethodOrigins method = origins.get("keras_symbolic_layer_call.py." + function + ".do");
+      assertNotNull(function + " has tensor-typed values.", method);
+      Set<TensorOrigin> parameter = EnumSet.noneOf(TensorOrigin.class);
+      method.parameters().values().forEach(parameter::addAll);
+      assertTrue(
+          function + "'s parameter carries the Keras symbolic origin: " + parameter,
+          parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+    }
+  }
+
   /**
    * Applying a program class that subclasses a built-in Keras layer to a Keras symbolic tensor
    * gives a value with {@link TensorOrigin#KERAS_SYMBOLIC}, which the functions it is passed to
