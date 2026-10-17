@@ -20,6 +20,10 @@ import org.junit.Test;
  * the predicate declines, so the recursion is bounded and the analysis completes. The witness is
  * completion with {@code scores} read as {@code (2, 5) float32}: on the previous engine this test
  * ends in a {@code StackOverflowError}.
+ *
+ * <p>The seven local tensors include {@code k}, the scalar {@code int32} that {@code tf.minimum}
+ * returns, which is typed since {@code n + 1}, a Python number computed from a parameter fed one,
+ * broadcasts as a scalar (wala/ML#1083).
  */
 public class TestRankPredicateRecursion extends AbstractTensorTest {
 
@@ -30,7 +34,7 @@ public class TestRankPredicateRecursion extends AbstractTensorTest {
         "test_rank_assert_overflow.py",
         "pick",
         1,
-        6,
+        7,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5))));
   }
 }
