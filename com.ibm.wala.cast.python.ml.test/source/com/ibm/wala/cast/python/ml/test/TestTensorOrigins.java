@@ -594,6 +594,58 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A module-level branch inside {@code with tf.Graph().as_default():} is kept, since that code
+   * runs in graph mode, where {@code tf.executing_eagerly()} is {@code False} (wala/ML#1110).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testExecutingEagerlyGraphDefaultBranchKept()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertGraphModeBranchKept(
+        "tf2_test_executing_eagerly_graph_default.py",
+        "executing_eagerly_graph_default.py.graph_merged.do");
+  }
+
+  /**
+   * A module-level branch after {@code tf.compat.v1.disable_eager_execution()} is kept, since the
+   * module then runs in graph mode, where {@code tf.executing_eagerly()} is {@code False}
+   * (wala/ML#1110).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testExecutingEagerlyDisabledBranchKept()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertGraphModeBranchKept(
+        "tf2_test_executing_eagerly_disabled.py",
+        "executing_eagerly_disabled.py.disabled_merged.do");
+  }
+
+  /**
+   * Asserts that the parameter of the function receiving a graph-mode branch's result carries the
+   * Keras symbolic origin of the branch's {@code False} arm.
+   *
+   * @param filename The fixture.
+   * @param fragment The signature fragment naming the receiving function.
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  private void assertGraphModeBranchKept(String filename, String fragment)
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorOrigin> parameter = getParameterOrigins(filename, fragment).get(fragment);
+    assertNotNull("The receiving function has parameters in the flow graph.", parameter);
+    assertTrue(
+        "The receiving function's parameter carries the Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+  }
+
+  /**
    * Runs the tensor analysis over the given file and collects, for each method whose signature
    * contains one of the given fragments, the origins of all of its parameters, unioned across
    * contexts. Unlike {@link #getMethodOrigins(String, String...)}, which reads only variables with
