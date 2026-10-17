@@ -1404,7 +1404,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * fields are the dictionary's catalogued keys and their fields' values, so {@code for k, v in
      * d.items()} binds {@code v} to the values; and {@code d.update(other)} writes each of {@code
      * other}'s catalogued fields to the field of the same name of {@code d}, and {@code other}'s
-     * keys into {@code d}'s catalog, so a later {@code **d} or {@code d.items()} sees them. The
+     * keys into {@code d}'s catalog, so a later {@code **d} or {@code d.items()} sees them; and
+     * {@code d.copy()} yields a new dictionary holding {@code d}'s fields (wala/ML#1082). The
      * receiver is checked when its points-to set arrives, so a method of the same name on an object
      * that is not a dictionary is untouched, and a receiver that is implicitly represented (a
      * literal) is read directly, since a side effect must not materialize its key (wala/ML#668).
@@ -1434,6 +1435,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         kind = DictMethodOperator.Kind.FIELD;
         if (positional == 3) argument = inst.getUse(2);
       } else if ("items".equals(member) && positional == 1) kind = DictMethodOperator.Kind.ITEMS;
+      else if ("copy".equals(member) && positional == 1) kind = DictMethodOperator.Kind.COPY;
       else if ("update".equals(member) && positional == 2) {
         kind = DictMethodOperator.Kind.UPDATE;
         argument = inst.getUse(1);
@@ -2562,7 +2564,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public enum Kind {
       FIELD,
       ITEMS,
-      UPDATE
+      UPDATE,
+      COPY
     }
 
     private final CGNode node;
@@ -2619,6 +2622,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           case FIELD -> readField(receiver);
           case ITEMS -> items(receiver);
           case UPDATE -> update(receiver);
+          case COPY -> copy(receiver);
         }
       }
     }
@@ -2678,6 +2682,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               new ElementCopyOperator(
                   receiver, factory.getPointerKeyForInstanceField(tuple, one), pc),
               factory.getPointerKeyForObjectCatalog(receiver));
+    }
+
+    /**
+     * {@code d.copy()}: a new dictionary, allocated at the call, holding each of {@code d}'s
+     * catalogued fields under the same name (wala/ML#1082).
+     */
+    private void copy(InstanceKey receiver) {
+      InstanceKey copy =
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.dict));
+      if (copy == null) return;
+      getSystem().newConstraint(resultKey, copy);
+      copyDictInto(receiver, copy, pc);
     }
 
     /** {@code d.update(other)}: each of {@code other}'s catalogued fields into {@code d}'s. */
