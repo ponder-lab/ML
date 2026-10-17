@@ -137,6 +137,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   public static final String LIST_OPERATION_CONTENTS_FIELD = "__list_operation_contents__";
 
+  /**
+   * The synthetic field of a {@code d.items()} tuple holding the dictionaries whose items it stands
+   * for (<a href="https://github.com/wala/ML/issues/1107">wala/ML#1107</a>). The one tuple holds
+   * every key in its first field and every value in its second, so a copy {@code copy[k] = v} over
+   * it writes each value under each key; this field lets the copy go field by field from the
+   * dictionary instead. Only {@code PythonConstraintVisitor#processPairedWrite} reads it.
+   */
+  public static final String ITEMS_RECEIVER_FIELD = "__items_receiver__";
+
   private static final Logger logger =
       Logger.getLogger(PythonSSAPropagationCallGraphBuilder.class.getName());
 
@@ -267,6 +276,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * polymorphic call whose targets declare {@code *args} at different positions).
    */
   private final Map<InstanceKey, Integer> packLengths = HashMapFactory.make();
+
+  /**
+   * The tuples {@code d.items()} allocates (wala/ML#1107), recorded when allocated, before the key
+   * can reach a reader, so a copy that sees one in its pair's points-to set already knows it is
+   * one. Each holds the dictionaries it stands for under {@value #ITEMS_RECEIVER_FIELD}.
+   */
+  private final Set<InstanceKey> itemsTuples = HashSetFactory.make();
 
   /**
    * The exact leading elements of each tuple concatenation whose left operand is a tuple literal,
@@ -1601,7 +1617,67 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public void visitPropertyWrite(AstPropertyWrite instruction) {
-      if (!processStarredElement(instruction)) super.visitPropertyWrite(instruction);
+      if (!processStarredElement(instruction) && !processPairedWrite(instruction))
+        super.visitPropertyWrite(instruction);
+    }
+
+    /**
+     * Keeps each key of a dictionary copied over its {@code items()} paired with its own value,
+     * {@code for k, v in d.items(): copy[k] = v} (<a
+     * href="https://github.com/wala/ML/issues/1107">wala/ML#1107</a>). The loop's key and value are
+     * the first and second fields of one pair, and {@code d.items()} yields one tuple holding every
+     * key in its first field and every value in its second, so the ordinary write stores every
+     * value under every key: a later {@code **copy} passes every value to every keyword, and {@code
+     * copy["k"]} reads every value. A write whose member and value are the first and second fields
+     * of the same pair is instead a {@link PairedWriteOperator}, which copies field by field from
+     * the dictionaries an {@code items()} tuple stands for, and falls back to the ordinary write
+     * for any other pair.
+     *
+     * @param instruction The property write.
+     * @return {@code true} iff the write is a copy over a loop's pairs and has been handled.
+     */
+    private boolean processPairedWrite(AstPropertyWrite instruction) {
+      int pair = pairField(instruction.getMemberRef(), 0);
+      if (pair < 0 || pair != pairField(instruction.getValue(), 1)) return false;
+      SymbolTable symtab = ir.getSymbolTable();
+      PointerKey pairKey = getPointerKeyForLocal(pair);
+      // A pair that is a literal is not a loop's: the ordinary write is exact for it.
+      if (contentsAreInvariant(symtab, du, pair) || system.isImplicit(pairKey)) return false;
+      int objectVn = instruction.getObjectRef();
+      int memberVn = instruction.getMemberRef();
+      int valueVn = instruction.getValue();
+      InstanceKey[] objectKeys = null;
+      PointerKey objectKey = getPointerKeyForLocal(objectVn);
+      if (contentsAreInvariant(symtab, du, objectVn) || system.isImplicit(objectKey))
+        objectKeys = getInvariantContents(symtab, du, node, objectVn);
+      CGNode opNode = node;
+      system.newSideEffect(
+          getBuilder()
+          .new PairedWriteOperator(
+              node,
+              instruction.iIndex(),
+              objectKeys,
+              objectKeys == null ? objectKey : null,
+              () -> newFieldWrite(opNode, objectVn, memberVn, valueVn)),
+          pairKey);
+      return true;
+    }
+
+    /**
+     * The value number of the object whose field of the given index defines a value, if it does.
+     *
+     * @param vn The value.
+     * @param index The field index.
+     * @return The object's value number, or {@code -1} if the value is not a read of that field.
+     */
+    private int pairField(int vn, int index) {
+      if (!(du.getDef(vn) instanceof AstPropertyRead read)) return -1;
+      SymbolTable symtab = ir.getSymbolTable();
+      int member = read.getMemberRef();
+      if (!symtab.isConstant(member)
+          || !(symtab.getConstantValue(member) instanceof Number number)
+          || number.doubleValue() != index) return -1;
+      return read.getObjectRef();
     }
 
     /**
@@ -2576,6 +2652,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       InstanceKey tuple =
           getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.tuple));
       if (list == null || tuple == null) return;
+      // Recorded before the tuple can reach a copy over it, and the dictionary it stands for kept
+      // on
+      // it, so that copy can go field by field (wala/ML#1107).
+      itemsTuples.add(tuple);
+      IField receiverField = resolveRootField(cha, ITEMS_RECEIVER_FIELD);
+      if (receiverField != null)
+        getSystem()
+            .newConstraint(factory.getPointerKeyForInstanceField(tuple, receiverField), receiver);
       InstanceKey zeroKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0);
       InstanceKey oneKey = getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(1), 1);
       getSystem().newConstraint(resultKey, list);
@@ -2608,17 +2692,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * receiver}, and {@code other}'s keys into {@code receiver}'s catalog.
      */
     private void copyInto(InstanceKey other, InstanceKey receiver) {
-      if (other == null) return;
-      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
-      getSystem()
-          .newConstraint(
-              factory.getPointerKeyForObjectCatalog(receiver),
-              assignOperator,
-              factory.getPointerKeyForObjectCatalog(other));
-      getSystem()
-          .newSideEffect(
-              new DictFieldsOperator(other, receiver, pc),
-              factory.getPointerKeyForObjectCatalog(other));
+      copyDictInto(other, receiver, pc);
     }
 
     /** Applies {@link #copyInto} to each dictionary the update's argument may be. */
@@ -2739,6 +2813,183 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "conditional allocation of " + instance + " into " + result;
+    }
+  }
+
+  /**
+   * Flows every catalogued field of {@code other} into the field of the same name of {@code
+   * receiver}, and {@code other}'s keys into {@code receiver}'s catalog (wala/ML#997).
+   *
+   * @param other The dictionary whose fields are copied.
+   * @param receiver The object they are copied into.
+   * @param pc The instruction index of the copy.
+   */
+  private void copyDictInto(InstanceKey other, InstanceKey receiver, int pc) {
+    if (other == null || receiver == null) return;
+    AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+    getSystem()
+        .newConstraint(
+            factory.getPointerKeyForObjectCatalog(receiver),
+            assignOperator,
+            factory.getPointerKeyForObjectCatalog(other));
+    getSystem()
+        .newSideEffect(
+            new DictFieldsOperator(other, receiver, pc),
+            factory.getPointerKeyForObjectCatalog(other));
+  }
+
+  /**
+   * A copy {@code copy[pair[0]] = pair[1]} over the pairs of a loop (wala/ML#1107); see {@code
+   * PythonConstraintVisitor#processPairedWrite}. For each tuple the pair may be that {@code
+   * d.items()} allocated, the copy goes field by field from the dictionaries the tuple stands for,
+   * so each key keeps its own value. For any other pair the ordinary write is installed, once,
+   * which writes every value the pair's second field may hold under every key its first may hold,
+   * as before. Equal for the same write.
+   */
+  private final class PairedWriteOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final InstanceKey[] objectKeys;
+    private final PointerKey objectKey;
+    private final Runnable ordinaryWrite;
+    private final Set<InstanceKey> pairs = HashSetFactory.make();
+    private boolean ordinary;
+
+    private PairedWriteOperator(
+        CGNode node,
+        int pc,
+        InstanceKey[] objectKeys,
+        PointerKey objectKey,
+        Runnable ordinaryWrite) {
+      this.node = node;
+      this.pc = pc;
+      this.objectKeys = objectKeys;
+      this.objectKey = objectKey;
+      this.ordinaryWrite = ordinaryWrite;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> pair(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Registers the copy for one key the pair may be.
+     *
+     * @param pair A key the pair may be.
+     */
+    private void pair(InstanceKey pair) {
+      if (!pairs.add(pair)) return;
+      if (!itemsTuples.contains(pair)) {
+        if (!ordinary) {
+          ordinary = true;
+          logger.fine(() -> "ordinary write at " + pc + " in " + node + " for " + pair);
+          ordinaryWrite.run();
+        }
+        return;
+      }
+      IField receiverField = resolveRootField(getClassHierarchy(), ITEMS_RECEIVER_FIELD);
+      if (receiverField == null) return;
+      logger.fine(() -> "paired write at " + pc + " in " + node + " over " + pair);
+      getSystem()
+          .newSideEffect(
+              new ItemsReceiverOperator(),
+              ((AstPointerKeyFactory) getPointerKeyFactory())
+                  .getPointerKeyForInstanceField(pair, receiverField));
+    }
+
+    /** Copies each dictionary an {@code items()} tuple stands for into each object written. */
+    private final class ItemsReceiverOperator extends UnaryOperator<PointsToSetVariable> {
+      private final Set<InstanceKey> receivers = HashSetFactory.make();
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (rhs.getValue() != null)
+          rhs.getValue()
+              .foreach(
+                  i -> {
+                    InstanceKey receiver = getSystem().getInstanceKey(i);
+                    if (!receivers.add(receiver)) return;
+                    if (objectKeys != null)
+                      for (InstanceKey object : objectKeys) copyDictInto(receiver, object, pc);
+                    else getSystem().newSideEffect(new ObjectOperator(receiver), objectKey);
+                  });
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return PairedWriteOperator.this.hashCode() * 31 + 1;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o == this;
+      }
+
+      @Override
+      public String toString() {
+        return "items receivers of " + PairedWriteOperator.this;
+      }
+    }
+
+    /** Copies one dictionary into each object the written object may be. */
+    private final class ObjectOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey receiver;
+      private final Set<InstanceKey> objects = HashSetFactory.make();
+
+      private ObjectOperator(InstanceKey receiver) {
+        this.receiver = receiver;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (rhs.getValue() != null)
+          rhs.getValue()
+              .foreach(
+                  i -> {
+                    InstanceKey object = getSystem().getInstanceKey(i);
+                    if (objects.add(object)) copyDictInto(receiver, object, pc);
+                  });
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return PairedWriteOperator.this.hashCode() * 31 + receiver.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof ObjectOperator other
+            && other.receiver.equals(receiver)
+            && other.outer() == PairedWriteOperator.this;
+      }
+
+      private PairedWriteOperator outer() {
+        return PairedWriteOperator.this;
+      }
+
+      @Override
+      public String toString() {
+        return "paired write of " + receiver + " at " + pc + " in " + node;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof PairedWriteOperator other && other.node.equals(node) && other.pc == pc;
+    }
+
+    @Override
+    public String toString() {
+      return "paired write at " + pc + " in " + node;
     }
   }
 
