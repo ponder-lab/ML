@@ -33,4 +33,37 @@ public class TestListSliceNotTensor extends AbstractTensorTest {
   public void testTensorSlice() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_tensor_slice", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
   }
+
+  /**
+   * The control for operations: TensorFlow converts a list argument by stacking it, so an operation
+   * over a slice of a list of tensors is still a tensor of the operation's type.
+   */
+  @Test
+  public void testConcatOverSlice() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_concat", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /** {@code tf.stack} over a slice of a list of tensors is a tensor. */
+  @Test
+  public void testStackOverSlice() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_stack", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /** {@code tf.add_n} over a slice of a list of tensors is a tensor. */
+  @Test
+  public void testAddNOverSlice() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_add_n", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /** {@code tf.convert_to_tensor} of a slice of a list of tensors is a tensor. */
+  @Test
+  public void testConvertedSlice() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_converted", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /** {@code tf.reduce_mean} over a slice of a list of tensors is a scalar tensor. */
+  @Test
+  public void testMeanOverSlice() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_mean", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
 }
