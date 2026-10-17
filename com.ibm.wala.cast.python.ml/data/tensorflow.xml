@@ -231,6 +231,16 @@
         <putfield class="LRoot" field="get" fieldType="LRoot" ref="initializers" value="get_fn"/>
         <new def="Dataset" class="Ltensorflow/data/Dataset"/>
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data#INFINITE_CARDINALITY and #UNKNOWN_CARDINALITY: the values `Dataset.cardinality()` reports for an infinite dataset and for one whose size it cannot tell (wala/ML#1072). -->
+        <constant name="infinite_cardinality" type="int" value="-1"/>
+        <putfield class="LRoot" field="INFINITE_CARDINALITY" fieldType="LRoot" ref="data" value="infinite_cardinality"/>
+        <constant name="unknown_cardinality" type="int" value="-2"/>
+        <putfield class="LRoot" field="UNKNOWN_CARDINALITY" fieldType="LRoot" ref="data" value="unknown_cardinality"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/experimental/cardinality: the older spelling of `Dataset.cardinality()`, taking the dataset as its argument (wala/ML#1072). -->
+        <new def="data_experimental" class="Lobject"/>
+        <putfield class="LRoot" field="experimental" fieldType="LRoot" ref="data" value="data_experimental"/>
+        <new def="data_cardinality" class="Ltensorflow/data/cardinality"/>
+        <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="data_experimental" value="data_cardinality"/>
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
         <!-- Distinct class type so the factory can dispatch to `TextLineDatasetGenerator` and seed iteration elements as 0-D string tensors (wala/ML#452). -->
         <new def="TextLineDataset" class="Ltensorflow/data/TextLineDataset"/>
@@ -4696,6 +4706,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
@@ -4738,6 +4750,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
@@ -4780,6 +4794,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -4827,6 +4843,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -4873,6 +4891,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -4920,6 +4940,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -4967,6 +4989,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -5012,6 +5036,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>
@@ -5048,6 +5074,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -5095,6 +5123,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -5146,6 +5176,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the function's return. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="mapped_element"/>
@@ -5193,6 +5225,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -5240,6 +5274,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -5252,6 +5288,13 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
+        </method>
+      </class>
+      <class name="cardinality" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#cardinality. The number of elements of a dataset, `tf.data.INFINITE_CARDINALITY` or `tf.data.UNKNOWN_CARDINALITY`, as a scalar `int64` tensor, which `DatasetCardinality` types. One body serves the method, bound on each dataset, and `tf.data.experimental.cardinality(input_dataset)`, which takes the dataset as its argument (wala/ML#1072). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self input_dataset">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="reduce" allocatable="true">
@@ -5291,6 +5334,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>
@@ -5328,6 +5373,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the structure of `tensors`. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="tensors"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="tensors"/>
@@ -5373,6 +5420,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the structure of `tensors`. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="tensors"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="tensors"/>
@@ -5418,6 +5467,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>
@@ -5453,6 +5504,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>
@@ -5487,6 +5540,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>
@@ -5523,6 +5578,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the declared one. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="output_types"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="output_signature"/>
@@ -5578,6 +5635,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- FIXME: This could return tuples of tensors. See https://github.com/wala/ML/issues/165. -->
           <return value="x"/>
         </method>
@@ -5613,6 +5672,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>
@@ -5647,6 +5708,8 @@
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
           <new def="rd_window" class="Ltensorflow/data/window"/>
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <return value="x"/>
         </method>
       </class>

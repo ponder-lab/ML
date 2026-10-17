@@ -52,6 +52,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CARDINALITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CONCATENATE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ENUMERATE_TYPE;
@@ -837,6 +838,8 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(MaxPool::new, MaxPool::new);
     if (isType(type, MESHGRID.getDeclaringClass()))
       return anchor.makeGenerator(Meshgrid::new, Meshgrid::new);
+    if (isType(type, DATASET_CARDINALITY.getDeclaringClass()))
+      return anchor.makeGenerator(DatasetCardinality::new, DatasetCardinality::new);
     if (isType(type, RANK.getDeclaringClass())) return anchor.makeGenerator(Rank::new, Rank::new);
     if (isType(type, SEQUENCE_MASK.getDeclaringClass()))
       return anchor.makeGenerator(SequenceMask::new, SequenceMask::new);
