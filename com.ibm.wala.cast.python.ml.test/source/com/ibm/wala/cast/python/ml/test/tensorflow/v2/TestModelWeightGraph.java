@@ -239,4 +239,48 @@ public class TestModelWeightGraph extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
+
+  /**
+   * A functional model with a convolution layer has the convolution's kernel and bias among its
+   * weights, which the walk does not model, so its weights are {@code float32} tensors of unknown
+   * shape, not a dense kernel {@code (3, 4)} for the convolution (<a
+   * href="https://github.com/wala/ML/issues/1123">wala/ML#1123</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFunctionalConvolutionWeights()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_functional_conv_weights.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A control: a {@code Dropout} layer holds no weights, so the dense layers' weights of a
+   * functional model that passes through one stay known (<a
+   * href="https://github.com/wala/ML/issues/1123">wala/ML#1123</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFunctionalWeightlessLayerWeights()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_functional_dropout_weights.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_4_FLOAT32, TENSOR_4_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
 }
