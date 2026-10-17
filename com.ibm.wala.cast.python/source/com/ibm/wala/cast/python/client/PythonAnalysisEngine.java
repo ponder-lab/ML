@@ -324,6 +324,21 @@ public abstract class PythonAnalysisEngine<T>
     return xmlStream;
   }
 
+  /**
+   * Rewrites a statement of a summary method as it becomes the body of the method's function class.
+   * A summary file's {@code <call>} passes its arguments by position only, so a subclass that needs
+   * a summary to pass one by keyword rewrites that call here (wala/ML#1120). The default keeps the
+   * statement.
+   *
+   * @param summary The summary method the statement belongs to.
+   * @param statement The statement.
+   * @return The statement to use in its place.
+   */
+  protected SSAInstruction rewriteSummaryStatement(
+      MethodSummary summary, SSAInstruction statement) {
+    return statement;
+  }
+
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
     XMLMethodSummaryReader xml = new XMLMethodSummaryReader(openSummaryStream(summary), scope);
@@ -358,7 +373,7 @@ public abstract class PythonAnalysisEngine<T>
 
         PythonSummary funSummary = new PythonSummary(funDoRef, s.getNumberOfParameters());
         for (SSAInstruction inst : s.getStatements())
-          if (inst != null) funSummary.addStatement(inst);
+          if (inst != null) funSummary.addStatement(this.rewriteSummaryStatement(s, inst));
         funSummary.setValueNames(s.getValueNames());
         summaries.put(funDoRef, funSummary);
         if (!isInit) summaries.remove(mr);
