@@ -554,13 +554,13 @@ public class SequentialCall extends ModelCall {
    * (units,)} and a kernel of {@code (input_dim, units)}, where {@code input_dim} is the previous
    * layer's units when that layer is a {@code Dense}. Otherwise, as for the first layer, it is the
    * width of what the layer is fed, a fixed size at run time that the list does not determine, so
-   * it is {@link UnresolvedDim}. A layer of another class contributes no weights here, as on the
-   * functional path, and leaves the next kernel's input width unresolved.
+   * it is {@link UnresolvedDim}. A layer of any other class may have weights the list does not
+   * give, so a list holding one declines.
    *
    * @param builder The propagation call graph builder.
    * @param model The model's allocation, in its {@code Sequential.do} constructor node.
-   * @return The weights' shapes, or {@code null} when the model's layers cannot be read whole or a
-   *     {@code Dense} layer's units do not resolve.
+   * @return The weights' shapes, or {@code null} when the model's layers cannot be read whole, a
+   *     layer is not a {@code Dense} layer, or a {@code Dense} layer's units do not resolve.
    */
   static Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, AllocationSiteInNode model) {
@@ -575,10 +575,12 @@ public class SequentialCall extends ModelCall {
       Set<Long> previousUnits = null;
       for (InstanceKey layer : chain) {
         TensorGenerator generator = reader.dispatchLayer(builder, layer);
-        if (!(generator instanceof DenseCall dense)) {
-          previousUnits = null;
-          continue;
-        }
+        // A layer of another class may have weights the list does not give, as a convolution's
+        // kernel, so the model's weights are then not the `Dense` layers' alone. Its generator may
+        // still extend `DenseCall`, as the convolution and recurrent calls do, whose `units` are
+        // not a kernel's width, so only `DenseCall` itself qualifies.
+        if (generator == null || generator.getClass() != DenseCall.class) return null;
+        DenseCall dense = (DenseCall) generator;
         dense.composeWith(
             new ComposedArguments(
                 OrdinalSet.toOrdinalSet(
