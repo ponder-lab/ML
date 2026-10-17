@@ -171,6 +171,12 @@
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="x" value="image"/>
         <new def="io" class="Lobject"/>
         <putfield class="LRoot" field="io" fieldType="LRoot" ref="x" value="io"/>
+        <!-- `tf.io.gfile` (wala/ML#1080): the module whose `files` field stands for the file system, which `GFile` and its file's methods read and write, so a mod-ref query sees their I/O. -->
+        <new def="gfile" class="Ltensorflow/io/gfile"/>
+        <putfield class="LRoot" field="gfile" fieldType="LRoot" ref="io" value="gfile"/>
+        <new def="GFile" class="Ltensorflow/io/gfile/functions/GFile"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="GFile" value="gfile"/>
+        <putfield class="LRoot" field="GFile" fieldType="LRoot" ref="gfile" value="GFile"/>
         <!-- The parsing APIs are `tf.io.*` (wala/ML#645); also expose them under the `io` object, not just `tf`. -->
         <putfield class="LRoot" field="parse_single_example" fieldType="LRoot" ref="io" value="parse_single_example"/>
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="io" value="FixedLenFeature"/>
@@ -6493,6 +6499,87 @@
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input precision scientific shortest width fill name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/io">
+      <!-- https://www.tensorflow.org/api_docs/python/tf/io/gfile. The module object of `tf.io.gfile`; its `files` field stands for the file system (wala/ML#1080). -->
+      <class name="gfile" allocatable="true"/>
+    </package>
+    <package name="tensorflow/io/gfile">
+      <!-- An open file of `tf.io.gfile.GFile`. A `with` statement binds the file itself, so its methods are fields of this object (wala/ML#1080). Iterating it, `for line in f`, goes through `__iter__` and its iterator's `__next__`, as a dataset's does (wala/ML#1010), so the loop binds a line rather than the file's method objects, and each line read is a read of the file system. -->
+      <class name="file" allocatable="true">
+        <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <new def="it" class="Ltensorflow/io/gfile/lines"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="it" value="module"/>
+          <return value="it"/>
+        </method>
+      </class>
+      <!-- The iterator over an open file's lines. Its `__next__` reads the module's `files` field, the file system, and returns its own `result` field, which nothing writes, so a line has no points-to set, as the file's contents are not modeled (wala/ML#1080). -->
+      <class name="lines" allocatable="true">
+        <method name="__next__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/io/gfile/functions">
+      <!-- https://www.tensorflow.org/api_docs/python/tf/io/gfile/GFile. Opening a file reads the module's `files` field, the file system, and the open file's `read`, `readline` and `readlines` read it while `write` writes it, so a mod-ref query sees a function's file I/O, such as counting a file's lines (wala/ML#1080). The contents are not modeled: each method returns its own `result` field, which nothing writes, so a result has no points-to set, as before. -->
+      <class name="GFile" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self name mode">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <new def="file" class="Ltensorflow/io/gfile/file"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="file" value="module"/>
+          <new def="read" class="Ltensorflow/io/gfile/functions/read"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="read" value="module"/>
+          <putfield class="LRoot" field="read" fieldType="LRoot" ref="file" value="read"/>
+          <new def="readline" class="Ltensorflow/io/gfile/functions/readline"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="readline" value="module"/>
+          <putfield class="LRoot" field="readline" fieldType="LRoot" ref="file" value="readline"/>
+          <new def="readlines" class="Ltensorflow/io/gfile/functions/readlines"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="readlines" value="module"/>
+          <putfield class="LRoot" field="readlines" fieldType="LRoot" ref="file" value="readlines"/>
+          <new def="write" class="Ltensorflow/io/gfile/functions/write"/>
+          <putfield class="LRoot" field="module" fieldType="LRoot" ref="write" value="module"/>
+          <putfield class="LRoot" field="write" fieldType="LRoot" ref="file" value="write"/>
+          <return value="file"/>
+        </method>
+      </class>
+      <class name="read" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self n">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="readline" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="readlines" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="write" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self file_content">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="files" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
         </method>
       </class>
     </package>

@@ -125,7 +125,10 @@ public abstract class PythonAnalysisEngine<T>
         "abseil.xml",
         "copy.xml",
         "collections.xml",
-        "tqdm.xml"
+        "tqdm.xml",
+        "time.xml",
+        "random.xml",
+        "cv2.xml"
       };
 
   protected PythonSSAPropagationCallGraphBuilder builder;

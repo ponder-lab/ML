@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- cv2 model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="cv2" allocatable="true">
+      <method name="import" static="true" descriptor="()Lcv2;">
+        <new def="x" class="Lcv2"/>
+        <new def="imread" class="Lcv2/functions/imread"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="imread" value="x"/>
+        <putfield class="LRoot" field="imread" fieldType="LRoot" ref="x" value="imread"/>
+        <new def="imwrite" class="Lcv2/functions/imwrite"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="imwrite" value="x"/>
+        <putfield class="LRoot" field="imwrite" fieldType="LRoot" ref="x" value="imwrite"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="cv2/functions">
+      <!-- https://docs.opencv.org/4.x/d4/da8/group__imgcodecs.html -->
+      <!-- `imread` reads and `imwrite` writes the module's `files` field, the file system, so a mod-ref query sees the call's file I/O (wala/ML#1080). Return values are not modeled: each function returns its own `result` field, which nothing writes, so a result has no points-to set, as before. -->
+      <class name="imread" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self filename flags">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="files" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="imwrite" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self filename img params">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="files" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
