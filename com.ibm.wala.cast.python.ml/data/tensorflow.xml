@@ -4300,7 +4300,7 @@
         </method>
       </class>
       <class name="BatchNormalization" allocatable="true" super="Ltensorflow/keras/layers/Layer">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). Applied with `training` true, the layer registers the update of its moving statistics with `add_update`, so the call writes the layer's `_updates`, with a fresh object standing for the update (wala/ML#1119). A summary cannot branch on `training`, so the write is there for every call, and the parameter is declared so that a client can read the value the layer receives. -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). Applied with `training` true, the layer registers the update of its moving statistics with `add_update`, so the call writes the layer's `_updates`, with a fresh object standing for the update (wala/ML#1119). A summary cannot branch on `training`, so the write is there for every call, which is wrong for a constant `False` `training`, where the layer registers no update (wala/ML#1124), and the parameter is declared so that a client can read the value the layer receives. -->
         <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="func self inputs training">
           <new def="update" class="Lobject"/>
           <putfield class="LRoot" field="_updates" fieldType="LRoot" ref="self" value="update"/>

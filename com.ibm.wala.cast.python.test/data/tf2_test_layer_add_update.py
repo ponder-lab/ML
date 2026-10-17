@@ -26,6 +26,15 @@ class Counter(tf.keras.layers.Layer):
 class Recurrent(tf.keras.layers.Layer):
     def __init__(self):
         super().__init__()
+        self.rnn = tf.keras.layers.SimpleRNN(4)
+
+    def call(self, x):
+        return self.rnn(x)
+
+
+class StatefulRecurrent(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
         self.rnn = tf.keras.layers.SimpleRNN(4, stateful=True)
 
     def call(self, x):
@@ -57,6 +66,7 @@ counter = Counter()
 counter(x)
 assert float(counter.v.numpy()) == 1.0
 Recurrent()(tf.ones([2, 3, 4]))
+StatefulRecurrent()(tf.ones([2, 3, 4]))
 Plain()(x)
 normalize_training(x)
 assert abs(float(bn_train.moving_mean.numpy()[0])) > 0.0

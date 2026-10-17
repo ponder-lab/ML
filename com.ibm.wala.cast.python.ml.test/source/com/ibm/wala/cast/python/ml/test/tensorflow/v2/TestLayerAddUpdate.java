@@ -39,6 +39,9 @@ public class TestLayerAddUpdate extends AbstractTensorTest {
   /** The type of the normalization layer's instances. */
   private static final String BATCH_NORMALIZATION = "Ltensorflow/keras/layers/BatchNormalization";
 
+  /** The type of the simple recurrent layer's instances. */
+  private static final String SIMPLE_RNN = "Ltensorflow/keras/layers/SimpleRNN";
+
   /** A layer's {@code call} that applies a normalization layer writes that layer's updates. */
   @Test
   public void testCallAppliesNormalization()
@@ -66,13 +69,43 @@ public class TestLayerAddUpdate extends AbstractTensorTest {
   }
 
   /**
-   * A control: a stateful recurrent layer updates its state with operations that run as it is
-   * called, not with deferred updates, so applying it registers none.
+   * A control: a recurrent layer that is not stateful registers no update, so applying it writes no
+   * {@code _updates}.
    */
   @Test
   public void testRecurrentRegistersNoUpdate()
       throws ClassHierarchyException, CancelException, IOException {
     assertEquals(Set.of(), this.updatedLayers("Recurrent.call"));
+  }
+
+  /**
+   * A stateful recurrent layer registers the update of its state with {@code add_update}, so
+   * applying it writes the layer's {@code _updates}.
+   *
+   * <p>TODO: The recurrent layers' summaries write nothing, so this pins a known gap. Remove the
+   * expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/1124">wala/ML#1124</a> is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testStatefulRecurrentRegistersUpdate()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertTrue(
+        this.updatedLayers("StatefulRecurrent.call").toString(),
+        this.updatedLayers("StatefulRecurrent.call").contains(SIMPLE_RNN));
+  }
+
+  /**
+   * A normalization layer applied with {@code training=False} registers no update, so applying it
+   * in inference writes no {@code _updates}.
+   *
+   * <p>TODO: The summary cannot branch on {@code training} and writes on every application, so this
+   * pins a known over-approximation. Remove the expected {@link AssertionError} once <a
+   * href="https://github.com/wala/ML/issues/1124">wala/ML#1124</a> is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testInferenceNormalizationRegistersNoUpdate()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertEquals(Set.of(), this.updatedLayers("normalize_inference"));
   }
 
   /** A control: a layer that applies no stateful layer registers no update. */
