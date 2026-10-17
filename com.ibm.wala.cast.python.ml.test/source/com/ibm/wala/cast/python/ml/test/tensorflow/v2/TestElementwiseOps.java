@@ -2742,4 +2742,52 @@ public class TestElementwiseOps extends AbstractTensorTest {
     test(
         "tf2_test_comparison_gate_sinks.py", "list_sink", 1, 1, Map.of(2, Set.of(TENSOR_2_3_BOOL)));
   }
+
+  /**
+   * A tensor times a Python number computed from a loop variable, at module level, is typed as the
+   * tensor operand, {@code (8,) float32} (wala/ML#1083): the control for {@link
+   * #testTensorTimesParameterNumber}.
+   */
+  @Test
+  public void testTensorTimesLoopNumber()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tensor_times_parameter_number.py",
+        "consume_loop",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
+  }
+
+  /**
+   * The same product inside a function, where the Python number {@code j + 1.0} is computed from
+   * the function's parameter, is typed as the tensor operand, {@code (8,) float32}, where the
+   * function's result is received (wala/ML#1083).
+   */
+  @Test
+  public void testTensorTimesParameterNumber()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tensor_times_parameter_number.py",
+        "consume_memory",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
+  }
+
+  /**
+   * The same product in a list comprehension over {@code range(2)}, where the comprehension's body
+   * reads the index off the iterable its synthesized function is passed, is typed as the tensor
+   * operand, {@code (8,) float32} (wala/ML#1083).
+   */
+  @Test
+  public void testTensorTimesComprehensionNumber()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tensor_times_parameter_number.py",
+        "consume_comprehension",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
+  }
 }
