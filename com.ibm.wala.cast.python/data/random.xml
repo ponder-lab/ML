@@ -1,0 +1,94 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- random model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="random" allocatable="true">
+      <method name="import" static="true" descriptor="()Lrandom;">
+        <new def="x" class="Lrandom"/>
+        <new def="random" class="Lrandom/functions/random"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="random" value="x"/>
+        <putfield class="LRoot" field="random" fieldType="LRoot" ref="x" value="random"/>
+        <new def="uniform" class="Lrandom/functions/uniform"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="uniform" value="x"/>
+        <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="x" value="uniform"/>
+        <new def="randint" class="Lrandom/functions/randint"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="randint" value="x"/>
+        <putfield class="LRoot" field="randint" fieldType="LRoot" ref="x" value="randint"/>
+        <new def="choice" class="Lrandom/functions/choice"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="choice" value="x"/>
+        <putfield class="LRoot" field="choice" fieldType="LRoot" ref="x" value="choice"/>
+        <new def="shuffle" class="Lrandom/functions/shuffle"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="shuffle" value="x"/>
+        <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="shuffle"/>
+        <new def="seed" class="Lrandom/functions/seed"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="seed" value="x"/>
+        <putfield class="LRoot" field="seed" fieldType="LRoot" ref="x" value="seed"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="random/functions">
+      <!-- https://docs.python.org/3/library/random.html -->
+      <!-- Each function reads and writes the module's `state` field, the generator's hidden state, which every draw advances and `seed` resets, so a mod-ref query sees the call change state the program does not pass it (wala/ML#1080). Return values are not modeled: each function returns its own `result` field, which nothing writes, so a result has no points-to set, as before. -->
+      <class name="random" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="state" fieldType="LRoot" ref="module" def="current"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="state" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="uniform" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a b">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="state" fieldType="LRoot" ref="module" def="current"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="state" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="randint" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a b">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="state" fieldType="LRoot" ref="module" def="current"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="state" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="choice" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self seq">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="state" fieldType="LRoot" ref="module" def="current"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="state" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="shuffle" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self x">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="state" fieldType="LRoot" ref="module" def="current"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="state" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="seed" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self a">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="state" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>

@@ -1,0 +1,63 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- time model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="time" allocatable="true">
+      <method name="import" static="true" descriptor="()Ltime;">
+        <new def="x" class="Ltime"/>
+        <new def="time" class="Ltime/functions/time"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="time" value="x"/>
+        <putfield class="LRoot" field="time" fieldType="LRoot" ref="x" value="time"/>
+        <new def="perf_counter" class="Ltime/functions/perf_counter"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="perf_counter" value="x"/>
+        <putfield class="LRoot" field="perf_counter" fieldType="LRoot" ref="x" value="perf_counter"/>
+        <new def="monotonic" class="Ltime/functions/monotonic"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="monotonic" value="x"/>
+        <putfield class="LRoot" field="monotonic" fieldType="LRoot" ref="x" value="monotonic"/>
+        <new def="sleep" class="Ltime/functions/sleep"/>
+        <putfield class="LRoot" field="module" fieldType="LRoot" ref="sleep" value="x"/>
+        <putfield class="LRoot" field="sleep" fieldType="LRoot" ref="x" value="sleep"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="time/functions">
+      <!-- https://docs.python.org/3/library/time.html -->
+      <!-- Each function reads the module's `clock` field, the process's clock, so a mod-ref query sees the call read state the program does not pass it, and `sleep` also writes it: a call executed only while a function is traced then shows as an effect of the trace (wala/ML#1080). Return values are not modeled: each function returns its own `result` field, which nothing writes, so a result has no points-to set, as before. -->
+      <class name="time" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="clock" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="perf_counter" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="clock" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="monotonic" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="clock" fieldType="LRoot" ref="module" def="current"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="sleep" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self secs">
+          <getfield class="LRoot" field="module" fieldType="LRoot" ref="self" def="module"/>
+          <getfield class="LRoot" field="clock" fieldType="LRoot" ref="module" def="current"/>
+          <new def="next" class="Lobject"/>
+          <putfield class="LRoot" field="clock" fieldType="LRoot" ref="module" value="next"/>
+          <getfield class="LRoot" field="result" fieldType="LRoot" ref="self" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
