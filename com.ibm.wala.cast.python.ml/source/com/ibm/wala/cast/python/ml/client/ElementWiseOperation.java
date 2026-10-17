@@ -7,6 +7,8 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
+import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -32,6 +34,7 @@ import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -831,6 +834,9 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * generator dispatch.
    */
   private Set<List<Dimension<?>>> getOperandShapes(PropagationCallGraphBuilder builder, int vn) {
+    // A Python number broadcasts as a scalar, also one computed from a loop index or a parameter
+    // fed one, whose nested read has no shape to give (wala/ML#1083).
+    if (this.isPythonNumber(builder, vn)) return singleton(emptyList());
     ElementWiseOperation nested = getNestedForBinop(builder, vn);
     // The nested evaluation diverts through the engine's memoized generator eval (wala/ML#790): a
     // direct getDefaultShapes call is an engine-invisible transfer whose result depends on the
@@ -995,7 +1001,19 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * wala/ML#395.
    */
   private boolean isScalarLiteral(PropagationCallGraphBuilder builder, int vn) {
-    CGNode node = this.getNode();
+    return isScalarLiteral(builder, this.getNode(), vn);
+  }
+
+  /**
+   * Frame-explicit {@link #isScalarLiteral(PropagationCallGraphBuilder, int)}, for an operand
+   * followed into a caller's frame (wala/ML#1083).
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame whose IR holds the value.
+   * @param vn The value number.
+   * @return {@code true} iff the value is a scalar literal of that frame.
+   */
+  private static boolean isScalarLiteral(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (node.getDU().getDef(vn) != null) return false;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (!builder.getPointerAnalysis().getPointsToSet(pk).isEmpty()) return false;
@@ -1196,33 +1214,149 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * (a parameter every caller feeds a number, a stored attribute written a number); or a binary
    * operation over such operands ({@code n ** 0.5}, {@code self.num_units ** 0.5}). A Python number
    * is converted to the dtype of the tensor beside it and imposes nothing on it, whatever dtype its
-   * own evaluation promotes to. A value that allocates anything, or whose points-to set is empty,
-   * is not a number by this test, so an unresolved operand keeps the coercion rule it had.
+   * own evaluation promotes to. A value drawn by iterating a {@code range(...)} is an integer, and
+   * a parameter with an empty points-to set is a number when every caller passes one (wala/ML#1083:
+   * {@code j + 1.0} for a loop index {@code j}, or a parameter fed one). A value that allocates
+   * anything, or whose points-to set is otherwise empty, is not a number by this test, so an
+   * unresolved operand keeps the coercion rule it had.
    *
    * @param builder The propagation call graph builder.
    * @param vn The operand's value number.
    * @return {@code true} iff the slot is shown to hold a Python number.
    */
   private boolean isPythonNumber(PropagationCallGraphBuilder builder, int vn) {
-    return this.isPythonNumber(builder, vn, 0);
+    return isPythonNumber(builder, this.getNode(), vn, 0, HashSetFactory.make());
   }
 
-  private boolean isPythonNumber(PropagationCallGraphBuilder builder, int vn, int depth) {
-    if (vn <= 0 || depth > 8) return false;
-    if (this.isScalarLiteral(builder, vn)) return true;
-    CGNode node = this.getNode();
+  /**
+   * Frame-explicit {@link #isPythonNumber(PropagationCallGraphBuilder, int)}, which follows a
+   * parameter into its callers' frames.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame whose IR holds the value.
+   * @param vn The value number.
+   * @param depth The recursion depth, bounded.
+   * @param parameters The parameters already followed into their callers.
+   * @return {@code true} iff the value is shown to be a Python number.
+   */
+  private static boolean isPythonNumber(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      int depth,
+      Set<Pair<CGNode, Integer>> parameters) {
+    if (vn <= 0 || depth > 8 || node.getIR() == null) return false;
+    if (isScalarLiteral(builder, node, vn)) return true;
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof SSABinaryOpInstruction binop) {
       for (int i = 0; i < binop.getNumberOfUses(); i++)
-        if (!this.isPythonNumber(builder, binop.getUse(i), depth + 1)) return false;
+        if (!isPythonNumber(builder, node, binop.getUse(i), depth + 1, parameters)) return false;
       return true;
     }
+    if (isRangeElement(builder, node, def)) return true;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
-    if (pts == null || pts.isEmpty()) return false;
+    if (pts == null || pts.isEmpty())
+      return isParameterVn(node, vn)
+          && isPythonNumberParameter(builder, node, vn, depth, parameters);
     for (InstanceKey ik : pts)
       if (!(ik instanceof ConstantKey<?> constant) || !(constant.getValue() instanceof Number))
         return false;
+    return true;
+  }
+
+  /**
+   * Whether every caller passes a Python number for a parameter (wala/ML#1083). Declines when the
+   * parameter has no caller, a caller cannot be inspected, an argument cannot be mapped, or the
+   * parameter is met again on the walk.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame the parameter belongs to.
+   * @param vn The parameter's value number.
+   * @param depth The recursion depth, bounded.
+   * @param parameters The parameters already followed into their callers.
+   * @return {@code true} iff every caller's argument is shown to be a Python number.
+   */
+  private static boolean isPythonNumberParameter(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      int depth,
+      Set<Pair<CGNode, Integer>> parameters) {
+    if (!parameters.add(Pair.make(node, vn))) return false;
+    int position = parameterPosition(node, vn);
+    if (position < 0) return false;
+    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); )
+      if (it.next().getIR() == null) return false;
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> callers = getCallerInvokes(builder, node);
+    if (callers.isEmpty()) return false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> caller : callers) {
+      int argument = callerArgumentValueNumber(caller.snd, position);
+      if (argument <= 0 || !isPythonNumber(builder, caller.fst, argument, depth + 1, parameters))
+        return false;
+    }
+    return true;
+  }
+
+  /** The declaring type of the {@code range} builtin's summary (wala/ML#1083). */
+  private static final String RANGE_BUILTIN_TYPE_NAME = "Lwala/builtin/range";
+
+  /** The declaring type of the {@code iter} builtin's summary (wala/ML#1083). */
+  private static final String ITER_BUILTIN_TYPE_NAME = "Lwala/builtin/iter";
+
+  /** The declaring type of the {@code next} builtin's summary (wala/ML#1083). */
+  private static final String NEXT_BUILTIN_TYPE_NAME = "Lwala/builtin/next";
+
+  /**
+   * Whether a value is drawn by iterating a {@code range(...)} call (wala/ML#1083), and so is an
+   * integer. A {@code for} loop draws it as {@code next(iter(range(...)))}; a comprehension's body
+   * reads it as a property of the call's result whose member is a key an {@link
+   * EachElementGetInstruction} draws from that same object. Every call must target its builtin
+   * alone.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame whose IR holds the value.
+   * @param def The value's definition.
+   * @return {@code true} iff the value is an element of a {@code range}.
+   */
+  private static boolean isRangeElement(
+      PropagationCallGraphBuilder builder, CGNode node, SSAInstruction def) {
+    int range;
+    if (def instanceof AstPropertyRead read
+        && node.getDU().getDef(read.getMemberRef()) instanceof EachElementGetInstruction each
+        && each.getUse(0) == read.getObjectRef()) range = read.getObjectRef();
+    else if (def instanceof SSAAbstractInvokeInstruction next
+        && callsOnlyBuiltin(builder, node, next, NEXT_BUILTIN_TYPE_NAME)
+        && node.getDU().getDef(next.getUse(1)) instanceof SSAAbstractInvokeInstruction iter
+        && callsOnlyBuiltin(builder, node, iter, ITER_BUILTIN_TYPE_NAME)) range = iter.getUse(1);
+    else return false;
+    return node.getDU().getDef(range) instanceof SSAAbstractInvokeInstruction call
+        && callsOnlyBuiltin(builder, node, call, RANGE_BUILTIN_TYPE_NAME);
+  }
+
+  /**
+   * Whether every target of a call is the given builtin (wala/ML#1083), and, except for {@code
+   * range}, which takes up to three, the call passes it a single argument.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame whose IR holds the call.
+   * @param call The call.
+   * @param builtin The builtin summary's declaring type name.
+   * @return {@code true} iff the call targets that builtin alone, with one argument unless it is
+   *     {@code range}.
+   */
+  private static boolean callsOnlyBuiltin(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      String builtin) {
+    if (call.getNumberOfReturnValues() == 0
+        || (!RANGE_BUILTIN_TYPE_NAME.equals(builtin) && call.getNumberOfUses() != 2)) return false;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (targets == null || targets.isEmpty()) return false;
+    for (CGNode target : targets)
+      if (!builtin.equals(
+          target.getMethod().getDeclaringClass().getReference().getName().toString())) return false;
     return true;
   }
 
