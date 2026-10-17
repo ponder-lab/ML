@@ -3,7 +3,9 @@ package com.ibm.wala.cast.python.ml.test;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.nCopies;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -418,6 +420,64 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         });
 
     return ret;
+  }
+
+  /** A Keras symbolic tensor passed through functions beside an eager tensor (wala/ML#1101). */
+  private static final String KERAS_SYMBOLIC_FILE = "tf2_test_keras_symbolic_origin.py";
+
+  /**
+   * The parameters of the functions a Keras symbolic tensor is passed to carry {@link
+   * TensorOrigin#KERAS_SYMBOLIC} (wala/ML#1101): {@code model_fn} receives {@code
+   * tf.keras.layers.Input}'s value directly, {@code backbone} receives it through {@code model_fn},
+   * and {@code decode} receives {@code backbone}'s result, a layer application and a resize of it,
+   * through a container. Each function is also called with an eager tensor, or with a value derived
+   * from one, but the origin records that some call passes a symbolic value.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicParameters()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> origins =
+        getMethodOrigins(
+            KERAS_SYMBOLIC_FILE,
+            "keras_symbolic_origin.py.model_fn.do",
+            "keras_symbolic_origin.py.backbone.do",
+            "keras_symbolic_origin.py.decode.do");
+    for (String function : List.of("model_fn", "backbone", "decode")) {
+      MethodOrigins method = origins.get("keras_symbolic_origin.py." + function + ".do");
+      assertNotNull(function + " has tensor-typed values.", method);
+      Set<TensorOrigin> parameter = EnumSet.noneOf(TensorOrigin.class);
+      method.parameters().values().forEach(parameter::addAll);
+      assertTrue(
+          function + "'s parameter carries the Keras symbolic origin: " + parameter,
+          parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+    }
+  }
+
+  /**
+   * A control: a function only ever called with an eager tensor has a tensor parameter without
+   * {@link TensorOrigin#KERAS_SYMBOLIC} (wala/ML#1101).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testEagerOnlyParameter()
+      throws ClassHierarchyException, CancelException, IOException {
+    MethodOrigins method =
+        getMethodOrigins(KERAS_SYMBOLIC_FILE, "keras_symbolic_origin.py.eager_only.do")
+            .get("keras_symbolic_origin.py.eager_only.do");
+    assertNotNull("eager_only has tensor-typed values.", method);
+    assertFalse("eager_only has a tensor parameter.", method.parameters().isEmpty());
+    Set<TensorOrigin> parameter = EnumSet.noneOf(TensorOrigin.class);
+    method.parameters().values().forEach(parameter::addAll);
+    assertFalse(
+        "eager_only's parameter carries no Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
   }
 
   /**

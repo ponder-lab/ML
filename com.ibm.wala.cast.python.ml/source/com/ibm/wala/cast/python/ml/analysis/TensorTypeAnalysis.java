@@ -262,26 +262,70 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
-   * Crosses the {@link TensorOrigin#ANNOTATION} provenance marker from an inflow value into a
-   * parameter destination whose barrier otherwise blocks origin inflow (wala/ML#726, wala/ML#901).
-   * ANNOTATION records that a fact rests on a user-supplied annotation rather than on inference,
-   * and crossing a parameter boundary does not change that; it is already a boundary-crossing
-   * additive marker elsewhere in this file ({@link TypeFeedOp} unions it from an operand; {@code
-   * RefineShapeOp} crosses it for non-parameter destinations), so the parameter barrier's blanket
-   * origin block was an inconsistency with the file's own handling rather than a deliberate
-   * provenance invariant. Only ANNOTATION crosses, so wala/ML#726's invariant is preserved intact:
-   * a symbolic parameter still does not inherit its eager feeds' producing-library origins ({@link
-   * TensorOrigin#NUMPY}/{@link TensorOrigin#TENSORFLOW}), which is what that barrier exists to
-   * block.
+   * The provenance markers, which record a fact about a value rather than the library that produced
+   * it, so they cross the boundaries that block producing-library origins: {@link
+   * TensorOrigin#ANNOTATION} (wala/ML#901) and {@link TensorOrigin#KERAS_SYMBOLIC} (wala/ML#1101).
+   */
+  private static final Set<TensorOrigin> MARKERS =
+      EnumSet.of(TensorOrigin.ANNOTATION, TensorOrigin.KERAS_SYMBOLIC);
+
+  /**
+   * Crosses the provenance markers ({@link #MARKERS}) from an inflow value into a parameter
+   * destination whose barrier otherwise blocks origin inflow (wala/ML#726, wala/ML#901,
+   * wala/ML#1101). ANNOTATION records that a fact rests on a user-supplied annotation rather than
+   * on inference, and crossing a parameter boundary does not change that; it is already a
+   * boundary-crossing additive marker elsewhere in this file ({@link TypeFeedOp} unions it from an
+   * operand; {@code RefineShapeOp} crosses it for non-parameter destinations), so the parameter
+   * barrier's blanket origin block was an inconsistency with the file's own handling rather than a
+   * deliberate provenance invariant. KERAS_SYMBOLIC records that the value is a Keras symbolic
+   * tensor, which a function receiving it receives as one. Only the markers cross, so wala/ML#726's
+   * invariant is preserved intact: a symbolic parameter still does not inherit its eager feeds'
+   * producing-library origins ({@link TensorOrigin#NUMPY}/{@link TensorOrigin#TENSORFLOW}), which
+   * is what that barrier exists to block.
    *
    * @param lhs The parameter destination variable.
    * @param rhs The inflow variable.
    * @return Whether {@code lhs}'s origins changed.
    */
-  private static boolean crossAnnotation(TensorVariable lhs, TensorVariable rhs) {
-    if (rhs == null || rhs.origins == null || !rhs.origins.contains(TensorOrigin.ANNOTATION))
-      return false;
-    return lhs.origins.add(TensorOrigin.ANNOTATION);
+  private static boolean crossMarkers(TensorVariable lhs, TensorVariable rhs) {
+    if (rhs == null || rhs.origins == null) return false;
+    boolean changed = false;
+    for (TensorOrigin marker : MARKERS)
+      if (rhs.origins.contains(marker)) changed |= lhs.origins.add(marker);
+    return changed;
+  }
+
+  /**
+   * A transfer function for an edge that carries only the provenance markers (wala/ML#1101): from
+   * an argument of a TensorFlow call to the call's result, which the call's own generator types.
+   * Tensor state does not flow, since the result's type is the operation's and not the argument's,
+   * but the markers do: an operation or layer applied to a Keras symbolic tensor yields one.
+   */
+  static final class MarkerOp extends UnaryOperator<TensorVariable> {
+    static final MarkerOp INSTANCE = new MarkerOp();
+
+    private MarkerOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs == null || rhs == null) return NOT_CHANGED;
+      return crossMarkers(lhs, rhs) ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x1101A7C5; // arbitrary constant; this is a singleton
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof MarkerOp;
+    }
+
+    @Override
+    public String toString() {
+      return "propagate the provenance markers only";
+    }
   }
 
   /**
@@ -289,9 +333,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * unchanged, and the producing-library origins union is skipped, so a parameter keeps its seeded
    * {@link TensorOrigin#PARAMETER} instead of inheriting its call sites' eager origins. The {@link
    * TensorOrigin#ANNOTATION} provenance marker crosses regardless (wala/ML#901; see {@link
-   * #crossAnnotation}), since it is not an eager producing library. Otherwise mirrors the plain
-   * node transfer's state handling minus the producer provenance; a ⊤-state (unknown tensor)
-   * predecessor contributes only its ANNOTATION, if any.
+   * #crossMarkers}), since it is not an eager producing library. Otherwise mirrors the plain node
+   * transfer's state handling minus the producer provenance; a ⊤-state (unknown tensor) predecessor
+   * contributes only its ANNOTATION, if any.
    */
   static final class ParameterBarrierOp extends UnaryOperator<TensorVariable> {
     static final ParameterBarrierOp INSTANCE = new ParameterBarrierOp();
@@ -308,7 +352,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           changed = true;
         } else changed = lhs.state.addAll(rhs.state);
       }
-      changed |= crossAnnotation(lhs, rhs);
+      changed |= crossMarkers(lhs, rhs);
       return changed ? CHANGED : NOT_CHANGED;
     }
 
@@ -391,7 +435,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
    * destination is a parameter and this operator replaces rather than supplements that barrier; the
    * {@link TensorOrigin#ANNOTATION} provenance marker crosses regardless (wala/ML#901, {@link
-   * #crossAnnotation}), as it does at that barrier.
+   * #crossMarkers}), as it does at that barrier.
    */
   static final class ComputeDTypeCastOp extends UnaryOperator<TensorVariable> {
     static final ComputeDTypeCastOp INSTANCE = new ComputeDTypeCastOp();
@@ -411,8 +455,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         if (changed) lhs.state = HashSetFactory.make();
         for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
       }
-      changed |=
-          crossAnnotation(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
+      changed |= crossMarkers(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
       return changed ? CHANGED : NOT_CHANGED;
     }
 
@@ -472,7 +515,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
    * destination is a parameter and this operator replaces rather than supplements that barrier; the
    * {@link TensorOrigin#ANNOTATION} provenance marker crosses regardless (wala/ML#901, {@link
-   * #crossAnnotation}), as it does at that barrier.
+   * #crossMarkers}), as it does at that barrier.
    */
   static final class CoerceDTypeOp extends UnaryOperator<TensorVariable> {
 
@@ -503,8 +546,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         for (TensorType t : rhs.state)
           for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
       }
-      changed |=
-          crossAnnotation(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
+      changed |= crossMarkers(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
       return changed ? CHANGED : NOT_CHANGED;
     }
 
@@ -608,6 +650,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
@@ -748,7 +791,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   if (origin != TensorOrigin.PARAMETER
                       || !iterationProducts.contains(this.destination))
                     changed |= lhs.origins.add(origin);
-              }
+              } else changed |= crossMarkers(lhs, rhs); // as at the parameter barrier
               return changed ? CHANGED : NOT_CHANGED;
             }
 
@@ -896,13 +939,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   break;
               }
               // The fed result carries the modeled operation's own origins regardless of what
-              // produced the operand (wala/ML#724, wala/ML#772), plus the operand's ANNOTATION
-              // marker when present: evidence resting on user-supplied facts stays auditable
-              // through feeds (wala/ML#370).
+              // produced the operand (wala/ML#724, wala/ML#772), plus the operand's provenance
+              // markers when present: evidence resting on user-supplied facts stays auditable
+              // through feeds (wala/ML#370), and an operation applied to a Keras symbolic tensor
+              // yields one (wala/ML#1101).
               if (changed) {
                 changed |= lhs.origins.addAll(this.plan.seedOrigins());
-                if (rhs.origins.contains(TensorOrigin.ANNOTATION))
-                  changed |= lhs.origins.add(TensorOrigin.ANNOTATION);
+                changed |= crossMarkers(lhs, rhs);
               }
               return changed ? CHANGED : NOT_CHANGED;
             }
@@ -1137,8 +1180,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   }
                 }
                 // A convolution is a TensorFlow operation; its result is TensorFlow-origin
-                // whatever produced the input (wala/ML#724).
+                // whatever produced the input (wala/ML#724), plus the input's provenance markers:
+                // the operation applied to a Keras symbolic tensor yields one (wala/ML#1101).
                 changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
+                changed |= crossMarkers(lhs, rhs);
               }
               // Never FIXED: the composition consumes the predecessor's members, so an edge fixed
               // on an early evaluation (e.g. against a suppressed seed whose feed delivers later,
@@ -1240,8 +1285,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   }
                 }
                 // `tf.reshape` is a TensorFlow operation; its result is TensorFlow-origin
-                // whatever produced the input (wala/ML#724).
+                // whatever produced the input (wala/ML#724), plus the input's provenance markers:
+                // the operation applied to a Keras symbolic tensor yields one (wala/ML#1101).
                 changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
+                changed |= crossMarkers(lhs, rhs);
               }
               // Never FIXED: the composition consumes the predecessor's members, so an edge fixed
               // on an early evaluation (e.g. against a suppressed seed whose feed delivers later,
@@ -1347,6 +1394,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return DropOp.INSTANCE;
             } else if (armSuppressions.containsKey(dst) && armSuppressions.get(dst).contains(src)) {
               return ArmSuppressOp.INSTANCE;
+            } else if (markerEdges.getOrDefault(dst, Collections.emptySet()).contains(src)) {
+              return MarkerOp.INSTANCE;
             } else if (typeFeeds.containsKey(dst) && typeFeeds.get(dst).operands().contains(src)) {
               return new TypeFeedOp(typeFeeds.get(dst), src);
             } else if (set_shapes.containsKey(dst)) {
@@ -1424,6 +1473,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    */
   private final Set<PointsToSetVariable> stateBlockedDestinations;
 
+  /**
+   * The flow-graph edges that carry only the provenance markers (wala/ML#1101), by destination; see
+   * {@link MarkerOp}. They carry no tensor state, so the coercion reach does not walk them.
+   */
+  private final Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges;
+
   /** Whether {@link #solve} has completed at least once; gates the post-solve accessors. */
   private boolean solved;
 
@@ -1496,6 +1551,54 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         computeDTypeCasts,
         dtypeCoercions,
         iterationProducts,
+        Collections.emptyMap(),
+        errorLog);
+  }
+
+  /**
+   * As the constructor without marker edges, with the flow-graph edges that carry only the
+   * provenance markers (wala/ML#1101): from an argument of a TensorFlow call to the call's result,
+   * where no other edge joins them, so an operation or layer applied to a Keras symbolic tensor
+   * yields one. Such an edge carries no tensor state.
+   *
+   * @param markerEdges Each destination mapped to the sources whose edges into it carry only the
+   *     markers; every pair is an edge of {@code G}.
+   */
+  public TensorTypeAnalysis(
+      Graph<PointsToSetVariable> G,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
+      Map<PointsToSetVariable, Set<TensorType>> reshapeTypes,
+      Map<PointsToSetVariable, Set<TensorType>> set_shapes,
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements,
+      Map<PointsToSetVariable, FeedPlan> typeFeeds,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
+      Set<PointsToSetVariable> conv2ds,
+      Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
+      Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
+      Set<PointsToSetVariable> iterationProducts,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
+      Map<PointerKey, AnalysisError> errorLog) {
+    this(
+        G,
+        init,
+        initOrigins,
+        reshapeTypes,
+        set_shapes,
+        refinements,
+        typeFeeds,
+        armSuppressions,
+        conv2ds,
+        conv3ds,
+        drops,
+        parameters,
+        computeDTypeCasts,
+        dtypeCoercions,
+        iterationProducts,
+        markerEdges,
         errorLog,
         new AtomicReference<>());
   }
@@ -1526,6 +1629,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
       Map<PointerKey, AnalysisError> errorLog,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {
     super(
@@ -1543,9 +1647,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             computeDTypeCasts,
             dtypeCoercions,
             iterationProducts,
+            markerEdges,
             outAccessor,
             errorLog));
     outAccessor.set(this::getOut);
+    this.markerEdges = markerEdges;
     this.init = init;
     this.initOrigins = initOrigins;
     // A defensive deep copy (the wala/ML#753 aliasing class). CAVEAT, deliberate and documented:
@@ -1661,6 +1767,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       for (Iterator<PointsToSetVariable> successors = flowGraph.getSuccNodes(node);
           successors.hasNext(); ) {
         PointsToSetVariable successor = successors.next();
+        // A marker edge carries no state (wala/ML#1101).
+        if (this.markerEdges.getOrDefault(successor, Collections.emptySet()).contains(node))
+          continue;
         if (!reached.add(successor)) continue;
         // A state-blocking destination absorbs the flow: it is marked reached (its own record, if
         // coerced, degrades) but nothing propagates past it.
