@@ -943,6 +943,9 @@
         <new def="tensor_scatter_nd_update" class="Ltensorflow/functions/tensor_scatter_nd_update"/>
         <putfield class="LRoot" field="tensor_scatter_nd_update" fieldType="LRoot" ref="x" value="tensor_scatter_nd_update"/>
         <putfield class="LRoot" field="tensor_scatter_nd_update" fieldType="LRoot" ref="array_ops" value="tensor_scatter_nd_update"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/executing_eagerly -->
+        <new def="executing_eagerly" class="Ltensorflow/functions/executing_eagerly"/>
+        <putfield class="LRoot" field="executing_eagerly" fieldType="LRoot" ref="x" value="executing_eagerly"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/abs -->
         <new def="abs" class="Ltensorflow/math/abs"/>
         <putfield class="LRoot" field="abs" fieldType="LRoot" ref="x" value="abs"/>
@@ -2199,6 +2202,13 @@
       <class name="constant" allocatable="true"></class>
     </package>
     <package name="tensorflow/functions">
+      <class name="executing_eagerly" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/executing_eagerly. Whether the current thread runs eagerly: `True` in a module's own body under TensorFlow 2, `False` inside a `tf.function`. The result is a Python `bool`, so the call allocates no tensor; the branch fold reads a call to this summary in a module's own body as `True` (wala/ML#1110). -->
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="res" class="Lobject"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="from_nested_value_rowids" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self flat_values nested_value_rowids nested_nrows name validate">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>

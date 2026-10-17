@@ -1660,6 +1660,15 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/map_argument"));
 
+  /**
+   * The summary of {@code tf.executing_eagerly()}, which a branch fold reads as {@code True} in a
+   * module's own body (wala/ML#1110).
+   */
+  public static final TypeReference EXECUTING_EAGERLY_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader,
+          TypeName.string2TypeName("Ltensorflow/functions/executing_eagerly"));
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
   public static final MethodReference EXTRACT_PATCHES =
       MethodReference.findOrCreate(

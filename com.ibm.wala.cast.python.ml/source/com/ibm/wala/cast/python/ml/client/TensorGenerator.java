@@ -4164,6 +4164,38 @@ public abstract class TensorGenerator {
     return resolveComparableConstant(builder, node, vn, env, HashSetFactory.make());
   }
 
+  /**
+   * Whether a node is a module's own body, the code a script runs at its top level, rather than a
+   * function or method defined in it.
+   *
+   * @param node The node.
+   * @return Whether the node's method is a script's top-level body.
+   */
+  private static boolean isModuleBody(CGNode node) {
+    String name = node.getMethod().getDeclaringClass().getName().toString();
+    return name.startsWith("Lscript ") && name.endsWith(".py");
+  }
+
+  /**
+   * Whether every target of a call is the summary of the given type.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the call.
+   * @param node The caller.
+   * @param call The call.
+   * @param type The summary's type.
+   * @return Whether the call has targets and each is that summary or a trampoline into it.
+   */
+  private static boolean callsOnly(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      TypeReference type) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    return !targets.isEmpty()
+        && targets.stream()
+            .allMatch(t -> sanitize(t.getMethod().getDeclaringClass().getReference()).equals(type));
+  }
+
   /** The phi folds on this thread's stack, breaking the guard-evaluates-its-own-phi cycle. */
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
       ThreadLocal.withInitial(HashSetFactory::make);
@@ -4180,6 +4212,13 @@ public abstract class TensorGenerator {
     if (st.isConstant(vn)) return st.getConstantValue(vn);
 
     SSAInstruction def = node.getDU().getDef(vn);
+
+    // TensorFlow 2 runs a module's own body eagerly, so `tf.executing_eagerly()` there is `True`;
+    // inside a function the call may run under `tf.function`, where it is `False`, so it is left
+    // undecided (wala/ML#1110).
+    if (def instanceof SSAAbstractInvokeInstruction call
+        && isModuleBody(node)
+        && callsOnly(builder, node, call, TensorFlowTypes.EXECUTING_EAGERLY_TYPE)) return 1;
 
     // A phi merges its predecessors' values, and its points-to union UNDER-represents them when
     // an arm's producer mints no instance key (wala/ML#805: a comparison result contributes
