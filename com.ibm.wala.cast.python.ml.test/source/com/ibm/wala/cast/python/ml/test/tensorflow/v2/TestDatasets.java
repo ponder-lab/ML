@@ -2807,29 +2807,60 @@ public class TestDatasets extends AbstractTensorTest {
                     asList(UnresolvedDim.INSTANCE, new NumericDim(3), new NumericDim(1))))));
   }
 
-  /**
-   * {@code Dataset.cardinality()} has no summary, so the cardinality is not a tensor here. At run
-   * time it is a scalar {@code int64} tensor.
-   *
-   * <p>TODO: Expect a scalar {@code int64} once <a
-   * href="https://github.com/wala/ML/issues/1072">wala/ML#1072</a> is fixed.
-   */
+  /** {@code Dataset.cardinality()} is a scalar {@code int64} tensor (wala/ML#1072). */
   @Test
   public void testDatasetCardinality()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset_cardinality.py", "cardinality_sink", 0, 0);
+    test(
+        "tf2_test_dataset_cardinality.py",
+        "cardinality_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
   }
 
   /**
-   * Comparing the unmodeled cardinality with the unmodeled {@code tf.data.INFINITE_CARDINALITY}
-   * yields no tensor either. At run time it is a scalar {@code bool} tensor.
-   *
-   * <p>TODO: Expect a scalar {@code bool} once <a
-   * href="https://github.com/wala/ML/issues/1072">wala/ML#1072</a> is fixed.
+   * Comparing the cardinality with {@code tf.data.INFINITE_CARDINALITY}, the constant {@code -1},
+   * is a scalar {@code bool} tensor (wala/ML#1072).
    */
   @Test
   public void testDatasetCardinalityComparison()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset_cardinality.py", "comparison_sink", 0, 0);
+    test(
+        "tf2_test_dataset_cardinality.py",
+        "comparison_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * The older spelling {@code tf.data.experimental.cardinality(dataset)} is the same scalar {@code
+   * int64} tensor (wala/ML#1072).
+   */
+  @Test
+  public void testDatasetExperimentalCardinality()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_cardinality.py",
+        "experimental_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
+   * Comparing the cardinality with {@code tf.data.UNKNOWN_CARDINALITY}, the constant {@code -2}, is
+   * a scalar {@code bool} tensor (wala/ML#1072).
+   */
+  @Test
+  public void testDatasetUnknownCardinalityComparison()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_cardinality.py",
+        "unknown_comparison_sink",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
   }
 }
