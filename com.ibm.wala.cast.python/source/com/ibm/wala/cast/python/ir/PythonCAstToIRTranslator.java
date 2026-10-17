@@ -33,6 +33,8 @@ import com.ibm.wala.cast.python.parser.AbstractParser.MissingType;
 import com.ibm.wala.cast.python.parser.AbstractParser.PythonGlobalsEntity;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAstAnnotation;
@@ -383,6 +385,29 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 .ThrowInstruction(context.cfg().getCurrentInstruction(), exception));
   }
 
+  /**
+   * The value of the third child the parser gives an {@link CAstNode#OBJECT_REF} that came from
+   * subscript syntax, {@code y[k]}, and not from attribute syntax, {@code y.k}, which both lower to
+   * one (wala/ML#1100). The translator visits only an object reference's first two children, so the
+   * marker produces no instructions; it only lets {@link #isSubscript} tell the two apart.
+   */
+  public static final String SUBSCRIPT_MARKER = "wala:subscript";
+
+  /**
+   * Whether an object reference came from subscript syntax rather than attribute syntax
+   * (wala/ML#1100); see {@link #SUBSCRIPT_MARKER}.
+   *
+   * @param objectRef The {@link CAstNode#OBJECT_REF}.
+   * @return {@code true} iff the parser marked it as a subscript.
+   */
+  public static boolean isSubscript(CAstNode objectRef) {
+    return objectRef != null
+        && objectRef.getKind() == CAstNode.OBJECT_REF
+        && objectRef.getChildCount() > 2
+        && objectRef.getChild(2).getKind() == CAstNode.CONSTANT
+        && SUBSCRIPT_MARKER.equals(objectRef.getChild(2).getValue());
+  }
+
   @Override
   public void doArrayRead(
       WalkContext context, int result, int arrayValue, CAstNode arrayRef, int[] dimValues) {
@@ -391,8 +416,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       context
           .cfg()
           .addInstruction(
-              ((AstInstructionFactory) insts)
-                  .PropertyRead(currentInstruction, result, arrayValue, dimValues[0]));
+              new PythonPropertyRead(currentInstruction, result, arrayValue, dimValues[0], true));
       context.cfg().noteOperands(currentInstruction, context.getSourceMap().getPosition(arrayRef));
     }
   }
@@ -409,9 +433,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     context
         .cfg()
         .addInstruction(
-            ((AstInstructionFactory) insts)
-                .PropertyWrite(
-                    context.cfg().getCurrentInstruction(), arrayValue, dimValues[0], rval));
+            new PythonPropertyWrite(
+                context.cfg().getCurrentInstruction(), arrayValue, dimValues[0], rval, true));
   }
 
   @Override
@@ -429,8 +452,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     context
         .cfg()
         .addInstruction(
-            ((AstInstructionFactory) insts)
-                .PropertyRead(currentInstruction, result, receiver, context.getValue(elt)));
+            new PythonPropertyRead(
+                currentInstruction, result, receiver, context.getValue(elt), isSubscript(parent)));
     //		}
     context
         .cfg()
@@ -459,9 +482,12 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     context
         .cfg()
         .addInstruction(
-            ((AstInstructionFactory) insts)
-                .PropertyWrite(
-                    context.cfg().getCurrentInstruction(), receiver, context.getValue(elt), rval));
+            new PythonPropertyWrite(
+                context.cfg().getCurrentInstruction(),
+                receiver,
+                context.getValue(elt),
+                rval,
+                isSubscript(parent)));
     //		}
   }
 
