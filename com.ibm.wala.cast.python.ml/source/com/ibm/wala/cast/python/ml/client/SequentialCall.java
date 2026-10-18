@@ -588,7 +588,8 @@ public class SequentialCall extends ModelCall {
                 null,
                 null));
         Set<Long> units = dense.getPossibleUnits(builder);
-        if (units == null || units.isEmpty()) return null;
+        // A `None` among the sizes `units` may hold is a size the analysis cannot give.
+        if (units == null || units.isEmpty() || units.contains(null)) return null;
         for (Long unit : units) {
           NumericDim width = new NumericDim(unit.intValue());
           ret.add(List.of(width));

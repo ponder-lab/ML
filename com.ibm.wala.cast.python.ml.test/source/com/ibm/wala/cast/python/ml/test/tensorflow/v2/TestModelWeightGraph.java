@@ -239,4 +239,46 @@ public class TestModelWeightGraph extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
+
+  /**
+   * A Sequential model whose {@code Dense} layer's {@code units} may be {@code None}, as far as the
+   * analysis knows, has weights of unknown shape: a {@code units} that does not resolve to sizes
+   * alone gives no kernel or bias shape. Before, the {@code None} member crashed the analysis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialWeightShapesWithNoneUnits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_weights_units_none.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The functional counterpart of {@link #testSequentialWeightShapesWithNoneUnits()}: a model whose
+   * {@code Dense} layer's {@code units} may be {@code None} has weights of unknown shape. Before,
+   * the {@code None} member crashed the analysis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelWeightShapesWithNoneUnits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_weights_units_none.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
 }

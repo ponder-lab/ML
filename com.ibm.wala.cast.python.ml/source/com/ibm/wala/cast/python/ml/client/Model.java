@@ -94,8 +94,8 @@ public class Model extends TensorGenerator {
    *
    * @param builder The propagation call graph builder.
    * @param modelSource The source points-to set variable representing the model.
-   * @return A set of weight shapes, or {@code null} when a {@code Sequential} model's layer list
-   *     cannot give them.
+   * @return A set of weight shapes, or {@code null} when a {@code Dense} layer's {@code units} may
+   *     be {@code None} or a {@code Sequential} model's layer list cannot give them.
    */
   public Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
@@ -133,6 +133,9 @@ public class Model extends TensorGenerator {
         // (wala/ML#670).
         if (inputShapes != null) {
           Set<Long> unitsValues = denseCall.getPossibleUnits(builder);
+          // A `None` among the sizes `units` may hold is a size the analysis cannot give, so the
+          // model's weights are tensors of unknown shape.
+          if (unitsValues.contains(null)) return null;
 
           for (List<Dimension<?>> inputShape : inputShapes) {
             if (inputShape.isEmpty()) continue;
