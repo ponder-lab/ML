@@ -708,6 +708,21 @@ public class WorklistTypeResolverTest {
         });
     assertEquals(typed, engine.demand("DECLINE_ROOT", transfers.get(0), true));
 
+    // An unrelated settlement pass in which the root's skip is observed to hold, so the root is no
+    // longer marked for the restricted pass by its own settled recomputation.
+    List<Supplier<Object>> before = new ArrayList<>();
+    before.add(
+        () -> {
+          engine.read("DECLINE_Q", before.get(1), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    before.add(
+        () -> {
+          engine.read("DECLINE_P", before.get(0), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    engine.demand("DECLINE_P", before.get(0), true);
+
     applies[0] = false;
     List<Supplier<Object>> others = new ArrayList<>();
     others.add(
@@ -724,5 +739,93 @@ public class WorklistTypeResolverTest {
 
     assertTrue("The binding was not declined.", engine.isBindingDeclined("binding"));
     return engine.demand("DECLINE_ROOT", transfers.get(0), true);
+  }
+
+  /**
+   * The check mode verifies the settlement restriction against the whole graph: each restricted
+   * pass's components are the whole condensation's that meet the region, in its order, and no query
+   * outside the region is targeted, promoted or evaluated. The scenarios are the settlement tests
+   * that leave the check mode on. One method, as for {@link #testShuffleSeedKnob}: the check mode
+   * is a shared system property.
+   */
+  @Test
+  public void testRestrictedSettlementMatchesWholeGraph() {
+    System.setProperty(WorklistTypeResolver.CHECK_SKIPS_PROPERTY, "true");
+    try {
+      testPureCyclePromotesToUnknown();
+      uninstall();
+      testCanonicalizationRetractsStaleCollapse();
+      uninstall();
+      testCanonicalizationKeepsSettledOverBottom();
+      uninstall();
+      testSettledCycleRecomputedWhenPartnerRewritten();
+      uninstall();
+      testSettledReadsSurviveFixpointEvaluation();
+    } finally {
+      System.clearProperty(WorklistTypeResolver.CHECK_SKIPS_PROPERTY);
+    }
+  }
+
+  /**
+   * With the restriction off, a settled cycle that a rewritten partner makes stale is recomputed
+   * all the same: the restriction changes which queries a pass walks, not what it computes.
+   */
+  @Test
+  public void testSettlementRestrictionCanBeTurnedOff() {
+    System.setProperty(WorklistTypeResolver.RESTRICT_SETTLEMENT_PROPERTY, "false");
+    try {
+      testSettledCycleRecomputedWhenPartnerRewritten();
+    } finally {
+      System.clearProperty(WorklistTypeResolver.RESTRICT_SETTLEMENT_PROPERTY);
+    }
+  }
+
+  /**
+   * A cycle that forms without any query's value changing is settled all the same. A declined
+   * binding re-evaluates its root, which now reads a partner that reads the root back, and the
+   * declined evaluation's join leaves the root's state as it was. So no query in the new cycle is
+   * changed, stale, requested or a shape bottom, and only the read edges that formed it put it in
+   * the restricted pass's region.
+   */
+  @Test
+  public void testCycleFormedWithoutChangeIsSettled() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    // The check mode recomputes what the pass skips; this test reads the value the pass leaves.
+    engine.disableSkipCheck();
+    ShapeResult typed =
+        ShapeResult.of(Set.of(List.of(new NumericDim(2)))).union(ShapeResult.unknown());
+    boolean[] applies = {true};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // EDGE_ROOT is bound, and reads EDGE_PARTNER only once its binding is declined.
+    transfers.add(
+        () -> {
+          engine.registerBindingCheck("edge", resolver -> applies[0], "EDGE_ROOT");
+          if (!engine.isBindingDeclined("edge")) return typed;
+          engine.read("EDGE_PARTNER", transfers.get(1), true);
+          return ShapeResult.unknown();
+        });
+    transfers.add(
+        () -> {
+          engine.read("EDGE_ROOT", transfers.get(0), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    assertEquals(typed, engine.demand("EDGE_ROOT", transfers.get(0), true));
+
+    applies[0] = false;
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("EDGE_S", others.get(1), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    others.add(
+        () -> {
+          engine.read("EDGE_R", others.get(0), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    engine.demand("EDGE_R", others.get(0), true);
+
+    assertTrue("The binding was not declined.", engine.isBindingDeclined("edge"));
+    assertEquals(ShapeResult.unknown(), engine.demand("EDGE_ROOT", transfers.get(0), true));
   }
 }

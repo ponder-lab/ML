@@ -280,6 +280,44 @@ final class WorklistTypeResolver {
   /** Whether the settlement pass may skip a query; see {@link #SETTLEMENT_SKIP_PROPERTY}. */
   private boolean skipEnabled = !"false".equals(System.getProperty(SETTLEMENT_SKIP_PROPERTY));
 
+  /**
+   * The system property that turns the restriction off when {@code false}, so every settlement walk
+   * covers the whole query graph, as before.
+   */
+  static final String RESTRICT_SETTLEMENT_PROPERTY = "ariadne.typeResolution.restrictSettlement";
+
+  /** Whether the settlement walks are restricted; see {@link #RESTRICT_SETTLEMENT_PROPERTY}. */
+  private final boolean restrictSettlement =
+      !"false".equals(System.getProperty(RESTRICT_SETTLEMENT_PROPERTY));
+
+  /**
+   * The queries for which {@link #settledInputsUnchanged} may be false: a superset, kept by the
+   * writes that can make it false (registration, a stamp of the query or of a settled read, and
+   * every settled recomputation), and shrunk only when the predicate is observed true.
+   */
+  private final Set<Object> settleDirty = HashSetFactory.make();
+
+  /** The queries some Tarjan pass found in a cyclic component; monotone, as edges never go. */
+  private final Set<Object> everCyclic = HashSetFactory.make();
+
+  /** {@link #settleDirty} restricted to {@link #everCyclic}. */
+  private final Set<Object> dirtyCyclic = HashSetFactory.make();
+
+  /** The readers that gained an edge since the last full settlement sweep began. */
+  private final Set<Object> newEdgeReaders = HashSetFactory.make();
+
+  /** The inverse of {@link #settledReads}, over-approximate (entries are never retracted). */
+  private final Map<Object, Set<Object>> settledReaders = HashMapFactory.make();
+
+  /**
+   * The region of the restricted sweep in progress under the check mode, or {@code null}; an
+   * evaluation of a graph query outside it is a write the restriction does not see.
+   */
+  private Set<Object> checkedSweepRegion;
+
+  /** The shape queries whose state is absent or bottom: a superset of the promotion candidates. */
+  private final Set<Object> shapeBottoms = HashSetFactory.make();
+
   /** The settlement census: passes, guarded passes, recomputations, skips and checked skips. */
   private long settlementPasses,
       guardedSettlementPasses,
@@ -686,9 +724,10 @@ final class WorklistTypeResolver {
       for (Object root : entry.getValue().roots()) {
         // The decline is an input of the root that is not a query it reads, so a settled
         // recomputation of the root no longer stands, even when the declined evaluation's join
-        // leaves the root's state as it was.
+        // leaves the root's state as it was; and a restricted settlement pass must walk the root.
         this.settledAt.remove(root);
         this.settledReads.remove(root);
+        this.markDirty(root);
         this.enqueue(root);
       }
       declined = true;
@@ -710,13 +749,11 @@ final class WorklistTypeResolver {
     Object reader = this.evaluating.peek();
     if (this.settling && reader != null && reader.equals(key)) this.selfReadInRecomputation = true;
     if (reader != null && !reader.equals(key)) {
-      this.reads.computeIfAbsent(reader, k -> HashSetFactory.make()).add(key);
+      if (this.reads.computeIfAbsent(reader, k -> HashSetFactory.make()).add(key))
+        this.newEdgeReaders.add(reader);
       this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
     }
-    if (!this.transfers.containsKey(key)) {
-      this.transfers.put(key, transfer);
-      this.shapeKinds.put(key, shapeKind);
-    }
+    if (!this.transfers.containsKey(key)) this.register(key, transfer, shapeKind);
     // Hybrid scheduling: a first-sighted query evaluates inline, so recursion gives the acyclic
     // region its natural (reverse-topological) order and each such query runs once; only an
     // on-stack read (a cycle) returns the current value and defers to the worklist, which then
@@ -788,10 +825,7 @@ final class WorklistTypeResolver {
    * @return The stabilized value.
    */
   Object demand(Object key, Supplier<Object> transfer, boolean shapeKind) {
-    if (!this.transfers.containsKey(key)) {
-      this.transfers.put(key, transfer);
-      this.shapeKinds.put(key, shapeKind);
-    }
+    if (!this.transfers.containsKey(key)) this.register(key, transfer, shapeKind);
     this.unwinding(
         () -> {
           if (!this.evaluated.contains(key) && !this.inStack.contains(key)) this.evaluate(key);
@@ -998,7 +1032,7 @@ final class WorklistTypeResolver {
         if (promoted.isEmpty()) break;
         Set<Object> promotedNow = HashSetFactory.make();
         for (Object query : promoted) {
-          this.state.put(query, ShapeResult.unknown());
+          this.putState(query, ShapeResult.unknown());
           this.versions.merge(query, 1, Integer::sum);
           this.stamp(query, true);
           promotedNow.add(query);
@@ -1035,79 +1069,118 @@ final class WorklistTypeResolver {
   private int sweep(Set<Object> changed, boolean full) {
     int replaced = 0;
     String probeFilter = System.getProperty("ariadne.typeResolution.canonProbe");
-    for (List<Object> scc : this.tarjan()) {
-      boolean cyclic =
-          scc.size() > 1
-              || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
-      List<Object> targets = new ArrayList<>();
-      // Beyond the cyclic-SCC and changed-read criteria, an ever-stale reader is targeted (its
-      // join history can hold artifacts of the since-grown consumption even after re-evaluation
-      // caught it up), and so is a settlement-requested query (its transfer withheld a
-      // finality-dependent arm that must now fire against the settled state). wala/ML#758.
-      for (Object key : scc)
-        if ((full && (this.staleReaders.contains(key) || this.settlementRequested.contains(key)))
-            || !Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), changed))
-          targets.add(key);
-        else if (full && cyclic) {
-          // A cyclic query whose inputs have not changed since its last settled recomputation would
-          // recompute to the value it settled at, which the write-back below would leave in place.
-          if (!this.settledInputsUnchanged(key)) targets.add(key);
-          else {
-            this.settledSkips++;
-            if (this.checkSkips) this.checkSkip(key);
+    // The region a sweep can target: the readers, transitively, of the changed queries and, in a
+    // full sweep with the skip on, of the stale, requested and possibly-unskippable cyclic queries
+    // and of every reader that gained an edge since the last full sweep (where a new cycle can
+    // be). Outside it no query is targeted and none is written, so walking it changes nothing.
+    Set<Object> region = null;
+    if (this.restrictSettlement && !(full && (!this.skipEnabled || this.guardedSettlement))) {
+      Set<Object> seeds = HashSetFactory.make();
+      seeds.addAll(changed);
+      if (full) {
+        seeds.addAll(this.staleReaders);
+        seeds.addAll(this.settlementRequested);
+        seeds.addAll(this.dirtyCyclic);
+        seeds.addAll(this.newEdgeReaders);
+      }
+      region = this.readerClosure(seeds);
+    }
+    if (full) this.newEdgeReaders.clear();
+    List<List<Object>> sccs;
+    if (region == null) sccs = this.tarjan();
+    else if (this.checkSkips) {
+      sccs = this.tarjan();
+      this.checkRestriction(sccs, region);
+    } else sccs = this.tarjan(region);
+    if (region != null && this.checkSkips) this.checkedSweepRegion = region;
+    try {
+      for (List<Object> scc : sccs) {
+        boolean cyclic =
+            scc.size() > 1
+                || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
+        if (cyclic) this.noteCyclic(scc, region, full);
+        List<Object> targets = new ArrayList<>();
+        // Beyond the cyclic-SCC and changed-read criteria, an ever-stale reader is targeted (its
+        // join history can hold artifacts of the since-grown consumption even after re-evaluation
+        // caught it up), and so is a settlement-requested query (its transfer withheld a
+        // finality-dependent arm that must now fire against the settled state). wala/ML#758.
+        for (Object key : scc)
+          if ((full && (this.staleReaders.contains(key) || this.settlementRequested.contains(key)))
+              || !Collections.disjoint(
+                  this.reads.getOrDefault(key, Collections.emptySet()), changed)) targets.add(key);
+          else if (full && cyclic) {
+            // A cyclic query whose inputs have not changed since its last settled recomputation
+            // would
+            // recompute to the value it settled at, which the write-back below would leave in
+            // place.
+            if (!this.settledInputsUnchanged(key)) targets.add(key);
+            else {
+              this.settleDirty.remove(key);
+              this.dirtyCyclic.remove(key);
+              this.settledSkips++;
+              if (this.checkSkips) this.checkSkip(key);
+            }
           }
+        if (full && probeFilter != null)
+          for (Object key : scc) {
+            Object settled = this.state.get(key);
+            if (!(settled instanceof ShapeResult)) continue;
+            ShapeResult shapes = (ShapeResult) settled;
+            if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
+            if (!String.valueOf(key).contains(probeFilter)) continue;
+            boolean targeted = targets.contains(key);
+            boolean inCycle = cyclic;
+            LOGGER.fine(
+                () ->
+                    "CANON-PROBE "
+                        + brief(key)
+                        + " cyclic="
+                        + inCycle
+                        + " sccSize="
+                        + scc.size()
+                        + " targeted="
+                        + targeted
+                        + " edges="
+                        + this.reads.getOrDefault(key, Collections.emptySet()).size());
+          }
+        if (region != null && this.checkSkips)
+          for (Object key : scc)
+            if (!region.contains(key)
+                && (targets.contains(key) || (full && cyclic && !this.settledInputsUnchanged(key))))
+              throw new AssertionError("A settlement target lies outside the region: " + key + ".");
+        if (targets.isEmpty()) continue;
+        Map<Object, Object> replacements = HashMapFactory.make();
+        for (Object key : targets) {
+          // The clock at the entry of the attempt that completes: an unwound attempt reruns, and
+          // the
+          // writes the pending chain makes before the rerun precede every read the rerun records.
+          long[] entry = {0};
+          replacements.put(
+              key,
+              this.unwinding(
+                  () -> {
+                    entry[0] = this.clock;
+                    return this.recomputeSettled(key);
+                  }));
+          this.settledRecomputations++;
+          this.recordSettledRecomputation(key, entry[0]);
         }
-      if (full && probeFilter != null)
-        for (Object key : scc) {
+        for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
+          Object key = replacement.getKey();
+          Object value = replacement.getValue();
           Object settled = this.state.get(key);
-          if (!(settled instanceof ShapeResult)) continue;
-          ShapeResult shapes = (ShapeResult) settled;
-          if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
-          if (!String.valueOf(key).contains(probeFilter)) continue;
-          boolean targeted = targets.contains(key);
-          boolean inCycle = cyclic;
-          LOGGER.fine(
-              () ->
-                  "CANON-PROBE "
-                      + brief(key)
-                      + " cyclic="
-                      + inCycle
-                      + " sccSize="
-                      + scc.size()
-                      + " targeted="
-                      + targeted
-                      + " edges="
-                      + this.reads.getOrDefault(key, Collections.emptySet()).size());
+          if (probeFilter != null && String.valueOf(key).contains(probeFilter))
+            LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
+          if (value == null || value.equals(settled)) continue;
+          if (isBottomValue(value) && !isBottomValue(settled)) continue;
+          this.putState(key, value);
+          this.stamp(key, false);
+          changed.add(key);
+          replaced++;
         }
-      if (targets.isEmpty()) continue;
-      Map<Object, Object> replacements = HashMapFactory.make();
-      for (Object key : targets) {
-        // The clock at the entry of the attempt that completes: an unwound attempt reruns, and the
-        // writes the pending chain makes before the rerun precede every read the rerun records.
-        long[] entry = {0};
-        replacements.put(
-            key,
-            this.unwinding(
-                () -> {
-                  entry[0] = this.clock;
-                  return this.recomputeSettled(key);
-                }));
-        this.settledRecomputations++;
-        this.recordSettledRecomputation(key, entry[0]);
       }
-      for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
-        Object key = replacement.getKey();
-        Object value = replacement.getValue();
-        Object settled = this.state.get(key);
-        if (probeFilter != null && String.valueOf(key).contains(probeFilter))
-          LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
-        if (value == null || value.equals(settled)) continue;
-        if (isBottomValue(value) && !isBottomValue(settled)) continue;
-        this.state.put(key, value);
-        this.stamp(key, false);
-        changed.add(key);
-        replaced++;
-      }
+    } finally {
+      this.checkedSweepRegion = null;
     }
     return replaced;
   }
@@ -1156,6 +1229,107 @@ final class WorklistTypeResolver {
     long now = ++this.clock;
     this.stamps.put(key, now);
     if (self) this.selfStamps.put(key, now);
+    this.markDirty(key);
+    for (Object reader : this.settledReaders.getOrDefault(key, Collections.emptySet()))
+      this.markDirty(reader);
+  }
+
+  /**
+   * Registers a first-sighted query.
+   *
+   * @param key The query.
+   * @param transfer Its transfer.
+   * @param shapeKind Whether it is shape-valued.
+   */
+  private void register(Object key, Supplier<Object> transfer, boolean shapeKind) {
+    this.transfers.put(key, transfer);
+    this.shapeKinds.put(key, shapeKind);
+    // No settled recomputation stands for a new query.
+    this.markDirty(key);
+    if (shapeKind) this.shapeBottoms.add(key);
+  }
+
+  /**
+   * Writes a query's state, keeping {@link #shapeBottoms}.
+   *
+   * @param key The query.
+   * @param value Its new value.
+   */
+  private void putState(Object key, Object value) {
+    this.state.put(key, value);
+    if (Boolean.TRUE.equals(this.shapeKinds.get(key))) {
+      if (value instanceof ShapeResult && ((ShapeResult) value).isBottom())
+        this.shapeBottoms.add(key);
+      else this.shapeBottoms.remove(key);
+    }
+  }
+
+  /**
+   * Marks a query as one whose settlement skip may no longer hold.
+   *
+   * @param key The query.
+   */
+  private void markDirty(Object key) {
+    this.settleDirty.add(key);
+    if (this.everCyclic.contains(key)) this.dirtyCyclic.add(key);
+  }
+
+  /**
+   * Records a cyclic component found by a Tarjan pass. Under the check mode, a restricted pass also
+   * walks the whole graph, so it sees components outside its region; it records none of them, as
+   * the restricted pass alone would not see them. A full sweep's region holds every reader that
+   * gained an edge since the last full sweep, so a cyclic component outside it was already cyclic,
+   * and recorded, at that sweep; the check mode asserts so.
+   *
+   * @param scc The component.
+   * @param region The region of the restricted pass in progress, or {@code null}.
+   * @param recorded Whether a component outside the region must already be recorded.
+   */
+  private void noteCyclic(List<Object> scc, Set<Object> region, boolean recorded) {
+    if (region != null && !region.contains(scc.get(0))) {
+      if (recorded && !this.everCyclic.containsAll(scc))
+        throw new AssertionError(
+            "A cyclic component outside the region was not recorded: " + scc + ".");
+      return;
+    }
+    for (Object key : scc)
+      if (this.everCyclic.add(key) && this.settleDirty.contains(key)) this.dirtyCyclic.add(key);
+  }
+
+  /**
+   * The closure of the given queries under {@link #dependents}: every query that reads one of them,
+   * transitively. Closed under readers, it holds every component of each of its members whole.
+   *
+   * @param seeds The queries to close.
+   * @return The closure.
+   */
+  private Set<Object> readerClosure(Set<Object> seeds) {
+    Set<Object> region = HashSetFactory.make();
+    Deque<Object> work = new ArrayDeque<>();
+    for (Object seed : seeds) if (region.add(seed)) work.push(seed);
+    while (!work.isEmpty())
+      for (Object reader : this.dependents.getOrDefault(work.pop(), Collections.emptySet()))
+        if (region.add(reader)) work.push(reader);
+    return region;
+  }
+
+  /**
+   * Checks the restriction against the whole-graph condensation: each component lies wholly inside
+   * or outside the region, and the region's components are the restricted pass's, in its order.
+   *
+   * @param whole The whole-graph condensation.
+   * @param region The region.
+   */
+  private void checkRestriction(List<List<Object>> whole, Set<Object> region) {
+    List<List<Object>> inside = new ArrayList<>();
+    for (List<Object> scc : whole) {
+      long in = scc.stream().filter(region::contains).count();
+      if (in != 0 && in != scc.size())
+        throw new AssertionError("A component straddles the settlement region: " + scc + ".");
+      if (in != 0) inside.add(scc);
+    }
+    if (!inside.equals(this.tarjan(region)))
+      throw new AssertionError("The restricted condensation differs from the whole one's order.");
   }
 
   /**
@@ -1168,6 +1342,8 @@ final class WorklistTypeResolver {
    * @param entry The clock at the entry of the attempt that completed.
    */
   private void recordSettledRecomputation(Object key, long entry) {
+    // The next pass decides afresh whether this recomputation stands.
+    this.markDirty(key);
     if (this.recomputationThrew
         || this.guardedSettlement
         || this.reentryDeferredAtSettlement.contains(key)) {
@@ -1181,6 +1357,8 @@ final class WorklistTypeResolver {
     Map<Object, Integer> records = this.readVersions.get(key);
     this.settledReads.put(
         key, records == null ? Collections.emptySet() : new HashSet<>(records.keySet()));
+    for (Object read : this.settledReads.get(key))
+      this.settledReaders.computeIfAbsent(read, k -> HashSetFactory.make()).add(key);
   }
 
   /**
@@ -1584,6 +1762,10 @@ final class WorklistTypeResolver {
   private void evaluate(Object key) {
     Supplier<Object> transfer = this.transfers.get(key);
     if (transfer == null) return;
+    if (this.checkedSweepRegion != null
+        && this.reads.containsKey(key)
+        && !this.checkedSweepRegion.contains(key))
+      throw new AssertionError("A restricted sweep evaluates a query outside its region: " + key);
     // The consumed-version records reflect the latest evaluation only: a value the last run did
     // not read cannot stale this run's result (wala/ML#758's exactness over the edge heuristic).
     Map<Object, Integer> records = this.readVersions.get(key);
@@ -1630,7 +1812,7 @@ final class WorklistTypeResolver {
     Object joined = join(old, result);
     joined = this.widen(key, joined);
     if (!joined.equals(old)) {
-      this.state.put(key, joined);
+      this.putState(key, joined);
       this.versions.merge(key, 1, Integer::sum);
       this.stamp(key, true);
       this.reEnqueueStaleDependents(key);
@@ -1709,11 +1891,25 @@ final class WorklistTypeResolver {
    */
   private boolean promotePureCycles() {
     boolean any = false;
-    for (List<Object> scc : this.tarjan()) {
+    // Only a shape query whose state is absent or bottom promotes, and its component lies whole in
+    // the closure of such queries under their readers.
+    Set<Object> region = null;
+    if (this.restrictSettlement) {
+      region = this.readerClosure(this.shapeBottoms);
+      if (region.isEmpty() && !this.checkSkips) return false;
+    }
+    List<List<Object>> sccs;
+    if (region == null) sccs = this.tarjan();
+    else if (this.checkSkips) {
+      sccs = this.tarjan();
+      this.checkRestriction(sccs, region);
+    } else sccs = this.tarjan(region);
+    for (List<Object> scc : sccs) {
       boolean cyclic =
           scc.size() > 1
               || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
       if (!cyclic) continue;
+      this.noteCyclic(scc, region, false);
       for (Object key : scc) {
         // Only shape-valued queries promote; a bottom dtype set already reads as "no info."
         if (!this.shapeKinds.get(key)) continue;
@@ -1722,7 +1918,9 @@ final class WorklistTypeResolver {
             value == null || (value instanceof ShapeResult && ((ShapeResult) value).isBottom());
         if (!bottomShapes) continue;
         if (value == null && !(this.transfers.containsKey(key))) continue;
-        this.state.put(key, ShapeResult.unknown());
+        if (region != null && !region.contains(key))
+          throw new AssertionError("A promotion lies outside the region: " + key + ".");
+        this.putState(key, ShapeResult.unknown());
         this.versions.merge(key, 1, Integer::sum);
         this.stamp(key, true);
         this.reEnqueueStaleDependents(key);
@@ -1733,6 +1931,19 @@ final class WorklistTypeResolver {
   }
 
   private List<List<Object>> tarjan() {
+    return this.tarjan(null);
+  }
+
+  /**
+   * The condensation of the query graph, or of a region of it closed under readers, in the
+   * whole-graph emission order: a query outside such a region reads none inside, so the whole
+   * pass's search never enters the region from outside it and its components emit in the same
+   * relative order.
+   *
+   * @param region The region, or {@code null} for the whole graph.
+   * @return The components, in reverse-topological order.
+   */
+  private List<List<Object>> tarjan(Set<Object> region) {
     Map<Object, Integer> index = HashMapFactory.make();
     Map<Object, Integer> low = HashMapFactory.make();
     Set<Object> onStack = HashSetFactory.make();
@@ -1743,16 +1954,16 @@ final class WorklistTypeResolver {
     // without an engine read) appears in no edge, so it roots explicitly; a read-free root emits
     // as a trivial SCC before any reader that reaches it, preserving the reverse-topological
     // emission order.
-    List<Object> roots = new ArrayList<>(this.reads.keySet());
+    List<Object> roots = new ArrayList<>();
+    for (Object key : this.reads.keySet())
+      if (region == null || region.contains(key)) roots.add(key);
     for (Object requested : this.settlementRequested)
-      if (!this.reads.containsKey(requested)) roots.add(requested);
+      if (!this.reads.containsKey(requested) && (region == null || region.contains(requested)))
+        roots.add(requested);
     for (Object root : roots) {
       if (index.containsKey(root)) continue;
       Deque<Object[]> frames = new ArrayDeque<>();
-      frames.push(
-          new Object[] {
-            root, new ArrayList<>(this.reads.getOrDefault(root, Collections.emptySet())).iterator()
-          });
+      frames.push(new Object[] {root, this.successors(root, region).iterator()});
       index.put(root, counter[0]);
       low.put(root, counter[0]);
       counter[0]++;
@@ -1771,11 +1982,7 @@ final class WorklistTypeResolver {
             counter[0]++;
             stack.push(next);
             onStack.add(next);
-            frames.push(
-                new Object[] {
-                  next,
-                  new ArrayList<>(this.reads.getOrDefault(next, Collections.emptySet())).iterator()
-                });
+            frames.push(new Object[] {next, this.successors(next, region).iterator()});
           } else if (onStack.contains(next))
             low.put(node, Math.min(low.get(node), index.get(next)));
         } else {
@@ -1798,5 +2005,19 @@ final class WorklistTypeResolver {
       }
     }
     return sccs;
+  }
+
+  /**
+   * A query's reads in their set order, within a region.
+   *
+   * @param key The query.
+   * @param region The region, or {@code null} for the whole graph.
+   * @return The reads.
+   */
+  private List<Object> successors(Object key, Set<Object> region) {
+    List<Object> ret = new ArrayList<>();
+    for (Object read : this.reads.getOrDefault(key, Collections.emptySet()))
+      if (region == null || region.contains(read)) ret.add(read);
+    return ret;
   }
 }
