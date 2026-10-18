@@ -658,4 +658,71 @@ public class WorklistTypeResolverTest {
     assertEquals(typed, engine.demand("reader", () -> engine.read("root", root, true), true));
     assertTrue("The binding was declined.", !engine.isBindingDeclined("binding"));
   }
+
+  /**
+   * A binding declined after a cyclic bound root settled is a change of the root's input, though
+   * not of a query it reads: the next settlement pass recomputes the root to the declined answer,
+   * as it does with the skip off, instead of skipping it as unchanged. Here the root already holds
+   * an unknown remainder, so the declined evaluation's join leaves its state, and so its stamps, as
+   * they were. The second demand's unrelated cycle runs the validation that declines the binding
+   * and then the settlement pass.
+   */
+  @Test
+  public void testBindingDeclinedAfterSettlementIsNotSkipped() {
+    assertEquals(ShapeResult.unknown(), declineAfterSettlement(true));
+  }
+
+  /** The control: with the skip off, the declined root recomputes to the declined answer. */
+  @Test
+  public void testBindingDeclinedAfterSettlementWithoutSkip() {
+    assertEquals(ShapeResult.unknown(), declineAfterSettlement(false));
+  }
+
+  /**
+   * Settles a cyclic root whose binding check passes, then fails the check and runs a second
+   * settlement pass.
+   *
+   * @param skip Whether the settlement skip is on.
+   * @return The root's value after the second pass.
+   */
+  private static Object declineAfterSettlement(boolean skip) {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    if (!skip) engine.disableSkip();
+    // The check mode recomputes what the pass skips; this test reads the value the skip leaves.
+    engine.disableSkipCheck();
+    ShapeResult typed =
+        ShapeResult.of(Set.of(List.of(new NumericDim(2)))).union(ShapeResult.unknown());
+    boolean[] applies = {true};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // DECLINE_ROOT is bound, and in a cycle with DECLINE_PARTNER.
+    transfers.add(
+        () -> {
+          engine.registerBindingCheck("binding", resolver -> applies[0], "DECLINE_ROOT");
+          engine.read("DECLINE_PARTNER", transfers.get(1), true);
+          return engine.isBindingDeclined("binding") ? ShapeResult.unknown() : typed;
+        });
+    transfers.add(
+        () -> {
+          engine.read("DECLINE_ROOT", transfers.get(0), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    assertEquals(typed, engine.demand("DECLINE_ROOT", transfers.get(0), true));
+
+    applies[0] = false;
+    List<Supplier<Object>> others = new ArrayList<>();
+    others.add(
+        () -> {
+          engine.read("DECLINE_S", others.get(1), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    others.add(
+        () -> {
+          engine.read("DECLINE_R", others.get(0), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    engine.demand("DECLINE_R", others.get(0), true);
+
+    assertTrue("The binding was not declined.", engine.isBindingDeclined("binding"));
+    return engine.demand("DECLINE_ROOT", transfers.get(0), true);
+  }
 }

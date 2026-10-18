@@ -670,7 +670,8 @@ final class WorklistTypeResolver {
   /**
    * Runs the registered binding checks against the converged dependency graph. A failed check
    * declines its binding and re-evaluates the queries relying on it, whose declined evaluation
-   * joins in the unknown-marked element.
+   * joins in the unknown-marked element, and forgets their settled recomputations, so the next
+   * settlement pass recomputes them against the decline instead of skipping them.
    *
    * @return {@code true} iff a binding was declined, so the iteration must continue.
    */
@@ -682,7 +683,14 @@ final class WorklistTypeResolver {
       if (entry.getValue().check().test(this)) continue;
       this.declinedBindings.add(entry.getKey());
       LOGGER.fine(() -> "Declined binding " + entry.getKey() + " (wala/ML#1071).");
-      for (Object root : entry.getValue().roots()) this.enqueue(root);
+      for (Object root : entry.getValue().roots()) {
+        // The decline is an input of the root that is not a query it reads, so a settled
+        // recomputation of the root no longer stands, even when the declined evaluation's join
+        // leaves the root's state as it was.
+        this.settledAt.remove(root);
+        this.settledReads.remove(root);
+        this.enqueue(root);
+      }
       declined = true;
     }
     return declined;
