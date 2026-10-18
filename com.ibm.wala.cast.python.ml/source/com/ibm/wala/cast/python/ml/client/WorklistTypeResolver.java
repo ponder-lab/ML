@@ -1110,9 +1110,8 @@ final class WorklistTypeResolver {
                   this.reads.getOrDefault(key, Collections.emptySet()), changed)) targets.add(key);
           else if (full && cyclic) {
             // A cyclic query whose inputs have not changed since its last settled recomputation
-            // would
-            // recompute to the value it settled at, which the write-back below would leave in
-            // place.
+            // would recompute to the value it settled at, which the write-back below would leave
+            // in place.
             if (!this.settledInputsUnchanged(key)) targets.add(key);
             else {
               this.settleDirty.remove(key);
@@ -1152,8 +1151,8 @@ final class WorklistTypeResolver {
         Map<Object, Object> replacements = HashMapFactory.make();
         for (Object key : targets) {
           // The clock at the entry of the attempt that completes: an unwound attempt reruns, and
-          // the
-          // writes the pending chain makes before the rerun precede every read the rerun records.
+          // the writes the pending chain makes before the rerun precede every read the rerun
+          // records.
           long[] entry = {0};
           replacements.put(
               key,
