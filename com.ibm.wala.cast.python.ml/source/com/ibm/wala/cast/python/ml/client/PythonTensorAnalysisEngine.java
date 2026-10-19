@@ -17,6 +17,7 @@ import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -72,6 +73,7 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IConditionalBranchInstruction;
 import com.ibm.wala.ssa.DefUse;
@@ -4684,6 +4686,46 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return callString instanceof CallString
         ? ((CallString) callString).getCallSiteRefs().length
         : -1;
+  }
+
+  /** The name of the keyword a {@code Sequential} model's call passes its layers (wala/ML#1120). */
+  private static final String TRAINING_KEYWORD = "training";
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>A {@code Sequential} model's call passes each layer the {@code training} value it is called
+   * with, by keyword, as Keras's {@code Sequential.call} does (wala/ML#1120). The summary calls
+   * each layer with the layer and its input, since a summary file's {@code <call>} passes arguments
+   * by position: passed third by position, {@code training} would bind to whatever a layer's {@code
+   * call} declares second, such as {@code mask} or {@code states}. So each such call is rewritten
+   * here into a Python call that adds the model's {@code training} as a keyword, which binds to a
+   * layer's {@code training} parameter wherever it is, and to nothing in a layer that does not take
+   * one.
+   */
+  @Override
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  protected SSAInstruction rewriteSummaryStatement(
+      MethodSummary summary, SSAInstruction statement) {
+    MethodReference method = summary.getMethod();
+    if (!method.getDeclaringClass().equals(TensorFlowTypes.SEQUENTIAL.getDeclaringClass())
+        || !method.getName().toString().equals(PythonTypes.CALLABLE_METHOD_NAME)
+        || !(statement instanceof PythonInvokeInstruction call)
+        || call.getNumberOfKeywordParameters() != 0
+        || call.getNumberOfUses() != 2
+        || call.getNumberOfReturnValues() != 1) return statement;
+    int training = -1;
+    if (summary.getValueNames() != null)
+      for (Map.Entry<Integer, Atom> name : summary.getValueNames().entrySet())
+        if (name.getValue().toString().equals(TRAINING_KEYWORD)) training = name.getKey();
+    if (training <= 0) return statement;
+    return new PythonInvokeInstruction(
+        call.iIndex(),
+        call.getDef(),
+        call.getException(),
+        new DynamicCallSiteReference(PythonTypes.CodeBody, call.getCallSite().getProgramCounter()),
+        new int[] {call.getUse(0), call.getUse(1)},
+        new Pair[] {Pair.make(TRAINING_KEYWORD, training)});
   }
 
   protected void addBypassLogic(IClassHierarchy cha, AnalysisOptions options) {
