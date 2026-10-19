@@ -394,4 +394,26 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
             a -> parameterTypesInAnyScript(a, "consume_shadowed"),
             Set.of(TensorType.of(DType.FLOAT32, 7))));
   }
+
+  /**
+   * A regular package in a later PYTHONPATH entry outranks a namespace portion in an earlier one,
+   * as Python's search ranks them: with the project root then {@code src}, where the root's {@code
+   * conv} has no {@code __init__.py} and {@code src/conv} has one, {@code from conv.dense import
+   * make} binds {@code src/conv/dense.py}'s {@code (4, 4)}.
+   *
+   * <p>TODO: The candidates are ranked by the first entry holding one at the module's name,
+   * whatever kind of package holds it, so the import binds the root's {@code conv/dense.py} and its
+   * {@code (3,)} instead (<a href="https://github.com/wala/ML/issues/168">wala/ML#168</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testRegularPackageOutranksEarlierNamespacePortion() throws Exception {
+    assertEquals(
+        "Checkouts binding the import to another module than Python",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nsreg_path_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypes(a, "consume"),
+            Set.of(TensorType.of(DType.FLOAT32, 4, 4))));
+  }
 }
