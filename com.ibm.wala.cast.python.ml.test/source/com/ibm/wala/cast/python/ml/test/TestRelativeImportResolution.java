@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Test;
@@ -196,6 +197,51 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
     return a.types().getOrDefault("script main.py." + function + ".do()LRoot;#2", Set.of());
   }
 
+  /**
+   * The types of a function's first parameter in whichever script defines it, for a function that
+   * one script alone defines.
+   *
+   * @param a The analysis.
+   * @param function The function's name.
+   * @return The parameter's types, over every script whose function of that name it is.
+   */
+  private static Set<TensorType> parameterTypesInAnyScript(Analysis a, String function) {
+    Set<TensorType> types = new HashSet<>();
+    a.types().entrySet().stream()
+        .filter(e -> e.getKey().endsWith("." + function + ".do()LRoot;#2"))
+        .forEach(e -> types.addAll(e.getValue()));
+    return types;
+  }
+
+  /**
+   * Checks a fixture out under every directory name and analyzes each checkout under a PYTHONPATH.
+   *
+   * @param fixture The fixture's resource name.
+   * @param pythonPath The PYTHONPATH entries, in order, given the checkout's project root.
+   * @param observed What to read off each analysis.
+   * @param expected What each analysis should give.
+   * @return The checkouts, each with what it gave, that did not give what was expected.
+   */
+  private List<String> checkoutsGivingOtherThan(
+      String fixture,
+      Function<Path, List<File>> pythonPath,
+      Function<Analysis, Set<TensorType>> observed,
+      Set<TensorType> expected)
+      throws Exception {
+    Path parent = Files.createTempDirectory(fixture);
+    try {
+      List<String> wrong = new ArrayList<>();
+      for (String name : NAMES) {
+        Path root = checkOut(parent, name, fixture);
+        Set<TensorType> got = observed.apply(analyze(root, false, pythonPath.apply(root)));
+        if (!got.equals(expected)) wrong.add(name + " (" + got + ")");
+      }
+      return wrong;
+    } finally {
+      delete(parent);
+    }
+  }
+
   private static void delete(Path dir) throws IOException {
     try (Stream<Path> walk = Files.walk(dir)) {
       for (Path p : walk.sorted(Comparator.reverseOrder()).collect(Collectors.toList()))
@@ -309,5 +355,43 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
     } finally {
       delete(parent);
     }
+  }
+
+  /**
+   * Under two sibling PYTHONPATH entries that hold the same relative path, {@code a} then {@code
+   * b}, {@code from conv.dense import make} binds the module Python binds, {@code
+   * a/conv/dense.py}'s {@code (3,)}.
+   *
+   * <p>TODO: Both modules are named {@code conv/dense.py}, and the import binds the shadowed {@code
+   * b/conv/dense.py}'s {@code (4, 4)} instead (<a
+   * href="https://github.com/wala/ML/issues/168">wala/ML#168</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testSiblingEntriesBindTheFirstEntrysModule() throws Exception {
+    assertEquals(
+        "Checkouts binding the import to another module than Python",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "sibling_path_proj",
+            root -> List.of(root.resolve("a").toFile(), root.resolve("b").toFile()),
+            a -> parameterTypes(a, "consume"),
+            Set.of(TensorType.of(DType.FLOAT32, 3))));
+  }
+
+  /**
+   * Under two sibling PYTHONPATH entries that hold the same relative path, {@code a} then {@code
+   * b}, the module no import reaches, {@code b/conv/dense.py}, is still analyzed: its own call
+   * gives {@code consume_shadowed} a {@code (7,)} tensor.
+   */
+  @Test
+  public void testSiblingEntriesKeepTheShadowedModule() throws Exception {
+    assertEquals(
+        "Checkouts losing the shadowed module's own code",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "sibling_path_proj",
+            root -> List.of(root.resolve("a").toFile(), root.resolve("b").toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_shadowed"),
+            Set.of(TensorType.of(DType.FLOAT32, 7))));
   }
 }
