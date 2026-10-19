@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -99,7 +98,10 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
   private static Path checkOut(Path parent, String name, String fixture)
       throws IOException, URISyntaxException {
     URL resource = TestRelativeImportResolution.class.getResource("/" + fixture);
-    assertTrue("The fixture is on the test class path", resource != null);
+    // Not an assertion failure, which an expected-failure test would take for the failure it
+    // documents.
+    if (resource == null)
+      throw new IllegalStateException("The fixture " + fixture + " is not on the test class path.");
     URI uri = resource.toURI();
     Path target = parent.resolve(name).resolve(fixture);
     // The fixture is a directory when the test module's classes are, and an entry of its jar when
@@ -233,7 +235,13 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
       List<String> wrong = new ArrayList<>();
       for (String name : NAMES) {
         Path root = checkOut(parent, name, fixture);
-        Set<TensorType> got = observed.apply(analyze(root, false, pythonPath.apply(root)));
+        Analysis a = analyze(root, false, pythonPath.apply(root));
+        // As for a missing fixture, a run that analyzed none of the fixture's scripts is not the
+        // failure an expected-failure test documents.
+        if (a.nodes().keySet().stream().noneMatch(m -> m.startsWith("script ")))
+          throw new IllegalStateException(
+              "The checkout " + name + " of " + fixture + " analyzed no script.");
+        Set<TensorType> got = observed.apply(a);
         if (!got.equals(expected)) wrong.add(name + " (" + got + ")");
       }
       return wrong;
@@ -401,9 +409,13 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * conv} has no {@code __init__.py} and {@code src/conv} has one, {@code from conv.dense import
    * make} binds {@code src/conv/dense.py}'s {@code (4, 4)}.
    *
-   * <p>TODO: The candidates are ranked by the first entry holding one at the module's name,
-   * whatever kind of package holds it, so the import binds the root's {@code conv/dense.py} and its
-   * {@code (3,)} instead (<a href="https://github.com/wala/ML/issues/168">wala/ML#168</a>).
+   * <p>TODO: Each script is named against the first entry containing it, the root, so the root's
+   * module is named {@code conv/dense.py} and {@code src}'s {@code src/conv/dense.py}. The import
+   * finds the root's by that name, whatever kind of package holds it, and binds its {@code (3,)}
+   * instead (<a href="https://github.com/wala/ML/issues/168">wala/ML#168</a>). This test cannot yet
+   * tell ranking by package kind from a name collision: a rule naming each script against the most
+   * specific entry containing it names both modules {@code conv/dense.py}, and the test then passes
+   * because the collision binds {@code src/conv/dense.py}.
    */
   @Test(expected = AssertionError.class)
   public void testRegularPackageOutranksEarlierNamespacePortion() throws Exception {
@@ -458,6 +470,13 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * Under nested PYTHONPATH entries that each hold {@code pkg/sub/mod.py}, the project root then
    * {@code src}, {@code from pkg.sub.mod import take} binds the module Python binds, the root's,
    * with its {@code (3,)}.
+   *
+   * <p>On master this passes only because {@code src}'s scripts are named against the root, as
+   * {@code src/pkg/...}, so the import finds the root's module by name and {@code src}'s is never a
+   * candidate (see {@link #testNestedEntriesRootFirstReachThePackage()}). Under a rule naming each
+   * script against the most specific entry containing it, both modules are named {@code
+   * pkg/sub/mod.py} and the import binds {@code src/pkg/sub/mod.py}'s {@code (4, 4)} (<a
+   * href="https://github.com/wala/ML/issues/984">wala/ML#984</a>).
    */
   @Test
   public void testNestedEntriesBindTheFirstEntrysModule() throws Exception {
@@ -475,6 +494,9 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * Under nested PYTHONPATH entries that each hold {@code pkg/sub/mod.py}, the project root then
    * {@code src}, the module {@code import pkg.sub.mod} does not reach, {@code src/pkg/sub/mod.py},
    * is still analyzed: its own call gives {@code consume_shadowed} a {@code (7,)} tensor.
+   *
+   * <p>On master the two modules have different names, {@code pkg/sub/mod.py} and {@code
+   * src/pkg/sub/mod.py}, so this passes without any choice between them being made.
    */
   @Test
   public void testNestedEntriesKeepTheShadowedModule() throws Exception {
