@@ -160,6 +160,14 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
   private static boolean COMPREHENSION_IR = true;
 
+  /**
+   * The index of the last variable temporary named in this file, shared by all of its visitors so
+   * that no two temporaries share a name (wala/ML#1106).
+   *
+   * @see CAstVisitor#temporary(String)
+   */
+  private int temporaryIndex = 0;
+
   private CAstType codeBody =
       new CAstType() {
 
@@ -1569,7 +1577,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitDictComp(DictComp arg0) throws Exception {
-      String dictName = "temp " + tmpIndex++;
+      String dictName = temporary("temp ");
       CAstNode body =
           Ast.makeNode(
               CAstNode.ASSIGN,
@@ -2601,8 +2609,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
             Ast.makeNode(CAstNode.EXPR_LIST, filters));
 
       } else {
-        String listName = "temp " + ++tmpIndex;
-        String indexName = "temp " + ++tmpIndex;
+        String listName = temporary("temp ");
+        String indexName = temporary("temp ");
         CAstNode body =
             Ast.makeNode(
                 CAstNode.BLOCK_EXPR,
@@ -2653,7 +2661,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           }
         }
 
-        String tempName = "temp " + ++tmpIndex;
+        String tempName = temporary("temp ");
 
         // The iteration key must survive to drive the element-value read (`temp[key]`) and the
         // next-key step (`EACH_ELEMENT_GET(temp, key)`). A simple-name target serves as its own
@@ -2663,13 +2671,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         // through a dedicated scalar temporary instead; the target is then assigned (and
         // destructured) from the element VALUE.
         boolean scalarTarget = c.getInternalTarget() instanceof Name;
-        String keyName = scalarTarget ? null : "temp key " + ++tmpIndex;
+        String keyName = scalarTarget ? null : temporary("temp key ");
 
         // The element is what `next` returns from the iterator `iter` makes over the iterable, as
         // Python's iteration protocol does (wala/ML#1010): `next` yields a sequence's elements, and
         // an object whose class declares `__iter__`/`__next__` yields through them. The key loop
         // over the iterable only decides when the loop ends.
-        String iteratorName = "temp iterator " + ++tmpIndex;
+        String iteratorName = temporary("temp iterator ");
         CAstNode nextElement =
             Ast.makeNode(
                 CAstNode.CALL,
@@ -3131,6 +3139,27 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     private int tmpIndex = 0;
 
     /**
+     * A name for a variable temporary, unique in the file (wala/ML#1106). {@link #tmpIndex} counts
+     * per visitor, and each loop, {@code with} and handler body is visited by a visitor of its own,
+     * so a name numbered from it alone can repeat in one scope: a loop nested in another loop's
+     * body got the outer loop's iterable and iterator names, and overwrote the outer loop's
+     * temporaries, whose header then read the inner loop's iterator. The name still advances {@link
+     * #tmpIndex}, as it did, so no comprehension, lambda or filter name shifts.
+     *
+     * <p>A boolean operator's {@code boolop temp} ({@link #boolOpTempIndex}) is also numbered per
+     * visitor and can repeat across nested bodies, but each is declared and read within its own
+     * expression and is never live across a loop header, so a repeat overwrites nothing that is
+     * read later. A {@code pass} label is not a variable.
+     *
+     * @param prefix The temporary's name up to its number.
+     * @return The name.
+     */
+    private String temporary(String prefix) {
+      ++tmpIndex;
+      return prefix + ++temporaryIndex;
+    }
+
+    /**
      * The index of the next temporary that holds a boolean operator's left operand. It is kept
      * apart from {@link #tmpIndex}, which also numbers comprehensions and lambdas, so introducing
      * these temporaries renames no function.
@@ -3148,7 +3177,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       CAstNode body = Ast.makeNode(CAstNode.BLOCK_EXPR, blk);
 
       for (withitem wi : itemsList) {
-        String tmpName = "tmp_" + ++tmpIndex;
+        String tmpName = temporary("tmp_");
 
         Supplier<CAstNode> v =
             () -> {

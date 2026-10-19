@@ -570,11 +570,10 @@ public class TestReductions extends AbstractTensorTest {
    * recovers the element dtypes ({@code float32} values, {@code int32} indices). No {@code
    * read_data} is involved, so this is a case wala/ML#380 would not fix.
    *
-   * <p>The composed {@code (k,) = (2,)} shape now appears for both elements (the wala/ML#609
-   * composer), so the asserted set is a union of the precise {@code (2,)} shapes and the residual ⊤
-   * ones. The ⊤ components come from the wala/ML#480 attribute/slice path, which doesn't carry the
-   * composed per-element shape through; once wala/ML#480 lands they drop, narrowing this to {@code
-   * Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)}.
+   * <p>The composed {@code (k,) = (2,)} shape appears for both elements (the wala/ML#609 composer).
+   * The named tuple is a tuple, so the slice reads no shape of its own: it once read the tuple as
+   * the stack of its elements and added a ⊤ component for each, which wala/ML#1121 drops, leaving
+   * the element types alone.
    *
    * <p>Also a regression guard for the receiver-to-result edge of a {@code slice} call
    * (wala/ML#916): the named tuple is a pass-through receiver, so its element types reach the slice
@@ -591,13 +590,7 @@ public class TestReductions extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                TENSOR_2_FLOAT32,
-                TENSOR_INT32_UNKNOWN_SHAPE,
-                TENSOR_2_INT32)));
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
   }
 
   /**

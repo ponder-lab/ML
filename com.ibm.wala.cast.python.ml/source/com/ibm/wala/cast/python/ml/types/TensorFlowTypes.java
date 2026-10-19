@@ -2316,6 +2316,18 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String LOG_SOFTMAX_SIGNATURE = "tf.nn.log_softmax()";
 
+  /**
+   * https://www.tensorflow.org/api_docs/python/tf/data/Dataset#cardinality, which also serves
+   * {@code tf.data.experimental.cardinality} (wala/ML#1072).
+   */
+  public static final MethodReference DATASET_CARDINALITY =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/data/cardinality")),
+          AstMethodReference.fnSelector);
+
+  private static final String DATASET_CARDINALITY_SIGNATURE = "tf.data.Dataset.cardinality()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/rank. */
   public static final MethodReference RANK =
       MethodReference.findOrCreate(
@@ -2933,6 +2945,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EXP.getDeclaringClass(), EXP_SIGNATURE),
           Map.entry(RSQRT.getDeclaringClass(), RSQRT_SIGNATURE),
           Map.entry(LOG_SOFTMAX.getDeclaringClass(), LOG_SOFTMAX_SIGNATURE),
+          Map.entry(DATASET_CARDINALITY.getDeclaringClass(), DATASET_CARDINALITY_SIGNATURE),
           Map.entry(RANK.getDeclaringClass(), RANK_SIGNATURE),
           Map.entry(SIZE.getDeclaringClass(), SIZE_SIGNATURE),
           Map.entry(IDENTITY.getDeclaringClass(), IDENTITY_SIGNATURE),

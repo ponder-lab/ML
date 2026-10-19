@@ -9,9 +9,13 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_64_7_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_7_FLOAT32;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -178,31 +182,27 @@ public class TestModelWeightGraph extends AbstractTensorTest {
   }
 
   /**
-   * Witness for <a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>'s weights half: a
-   * Sequential-built model resolves NO weight shapes.
+   * The weights of a Sequential-built model come from its layer list (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>'s weights half).
    *
    * <p>The same two-layer network as {@link #testModelAttributes2()}, with the same weights, built
-   * from a layer LIST rather than from {@code inputs}/{@code outputs}. That test is the control: it
-   * resolves all four shapes, so the only difference here is how the model was constructed. This
-   * one resolves nothing at all, not even a tensor parameter, because the weight machinery anchors
-   * on the {@code outputs} constructor argument and a Sequential frame has none.
+   * from a layer LIST rather than from {@code inputs}/{@code outputs}. That test is the control:
+   * the functional model's weights come from walking back from its {@code outputs}, which a
+   * Sequential constructor does not take.
    *
-   * <p>Three of the four shapes are determined by the layer list alone and need no call site: every
-   * bias is {@code (units,)}, and every kernel after the first is {@code (units[i-1], units[i])}.
-   * Only {@code (3, 4)} depends on the width the model is fed, and the {@code Dense} summary has no
-   * {@code input_shape} parameter, so that one is genuinely unavailable and should be omitted
-   * rather than guessed.
-   *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#832's weights half is fixed,
-   * and expect the three list-determined shapes.
+   * <p>Every bias is {@code (units,)}, and every kernel after the first is {@code (units[i-1],
+   * units[i])}, so three of the four shapes are determined by the list. The first kernel's input
+   * width is the width the model is fed, a fixed size at run time that the list does not give (the
+   * {@code Dense} summary has no {@code input_shape} parameter), so that axis is unresolved: {@code
+   * (?, 4)}, where the program has {@code (3, 4)}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
-  public void testSequentialResolvesNoWeightShapes()
+  @Test
+  public void testSequentialWeightShapes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_sequential_weights.py",
@@ -210,6 +210,75 @@ public class TestModelWeightGraph extends AbstractTensorTest {
         1,
         1,
         Map.of(
-            2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_4_FLOAT32, TENSOR_4_5_FLOAT32, TENSOR_5_FLOAT32)));
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, List.of(UnresolvedDim.INSTANCE, new NumericDim(4))),
+                TENSOR_4_FLOAT32,
+                TENSOR_4_5_FLOAT32,
+                TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * A Sequential model whose list holds a layer other than {@code Dense}, here a {@code Conv1D},
+   * has weights its list does not give, so its weights are {@code float32} tensors of shapes the
+   * analysis does not know, not the {@code Dense} layer's alone (<a
+   * href="https://github.com/wala/ML/issues/832">wala/ML#832</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialWeightShapesWithOtherLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_weights_mixed.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A Sequential model whose {@code Dense} layer's {@code units} may be {@code None}, as far as the
+   * analysis knows, has weights of unknown shape: a {@code units} that does not resolve to sizes
+   * alone gives no kernel or bias shape. Before, the {@code None} member crashed the analysis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialWeightShapesWithNoneUnits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential_weights_units_none.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The functional counterpart of {@link #testSequentialWeightShapesWithNoneUnits()}: a model whose
+   * {@code Dense} layer's {@code units} may be {@code None} has weights of unknown shape. Before,
+   * the {@code None} member crashed the analysis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelWeightShapesWithNoneUnits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_weights_units_none.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 }

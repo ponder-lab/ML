@@ -1279,15 +1279,17 @@ public class TestModelCall extends AbstractTensorTest {
    *
    * <p>With `list.append` modeled (<a
    * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>), the loop's element values reach
-   * classification and the local-tensor count is 8 (the loop variable {@code g}, the per-iteration
+   * classification and the local-tensor count is 5 (the loop variable {@code g}, the per-iteration
    * {@code expand_dims} results, and the {@code concat} chain). The parameter count stays 0: {@code
    * tower_grads} is the list <em>container</em>, which is not itself a tensor; its elements are
-   * classified where they are read.
+   * classified where they are read. Neither is the outer loop's element {@code tgrads}, a tuple of
+   * tensors: it and the outer loop's iterable were 3 more values of the count while the inner
+   * loop's temporaries shared the outer loop's names (wala/ML#1106).
    */
   @Test
   public void testMultiGPUTraining2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("multigpu_training.py", "average_gradients", 0, 8);
+    test("multigpu_training.py", "average_gradients", 0, 5);
   }
 
   /**
