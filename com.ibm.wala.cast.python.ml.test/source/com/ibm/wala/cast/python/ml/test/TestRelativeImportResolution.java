@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -33,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Test;
@@ -98,7 +98,10 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
   private static Path checkOut(Path parent, String name, String fixture)
       throws IOException, URISyntaxException {
     URL resource = TestRelativeImportResolution.class.getResource("/" + fixture);
-    assertTrue("The fixture is on the test class path", resource != null);
+    // Not an assertion failure, which an expected-failure test would take for the failure it
+    // documents.
+    if (resource == null)
+      throw new IllegalStateException("The fixture " + fixture + " is not on the test class path.");
     URI uri = resource.toURI();
     Path target = parent.resolve(name).resolve(fixture);
     // The fixture is a directory when the test module's classes are, and an entry of its jar when
@@ -194,6 +197,57 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
 
   private static Set<TensorType> parameterTypes(Analysis a, String function) {
     return a.types().getOrDefault("script main.py." + function + ".do()LRoot;#2", Set.of());
+  }
+
+  /**
+   * The types of a function's first parameter in whichever script defines it, for a function that
+   * one script alone defines.
+   *
+   * @param a The analysis.
+   * @param function The function's name.
+   * @return The parameter's types, over every script whose function of that name it is.
+   */
+  private static Set<TensorType> parameterTypesInAnyScript(Analysis a, String function) {
+    Set<TensorType> types = new HashSet<>();
+    a.types().entrySet().stream()
+        .filter(e -> e.getKey().endsWith("." + function + ".do()LRoot;#2"))
+        .forEach(e -> types.addAll(e.getValue()));
+    return types;
+  }
+
+  /**
+   * Checks a fixture out under every directory name and analyzes each checkout under a PYTHONPATH.
+   *
+   * @param fixture The fixture's resource name.
+   * @param pythonPath The PYTHONPATH entries, in order, given the checkout's project root.
+   * @param observed What to read off each analysis.
+   * @param expected What each analysis should give.
+   * @return The checkouts, each with what it gave, that did not give what was expected.
+   */
+  private List<String> checkoutsGivingOtherThan(
+      String fixture,
+      Function<Path, List<File>> pythonPath,
+      Function<Analysis, Set<TensorType>> observed,
+      Set<TensorType> expected)
+      throws Exception {
+    Path parent = Files.createTempDirectory(fixture);
+    try {
+      List<String> wrong = new ArrayList<>();
+      for (String name : NAMES) {
+        Path root = checkOut(parent, name, fixture);
+        Analysis a = analyze(root, false, pythonPath.apply(root));
+        // As for a missing fixture, a run that analyzed none of the fixture's scripts is not the
+        // failure an expected-failure test documents.
+        if (a.nodes().keySet().stream().noneMatch(m -> m.startsWith("script ")))
+          throw new IllegalStateException(
+              "The checkout " + name + " of " + fixture + " analyzed no script.");
+        Set<TensorType> got = observed.apply(a);
+        if (!got.equals(expected)) wrong.add(name + " (" + got + ")");
+      }
+      return wrong;
+    } finally {
+      delete(parent);
+    }
   }
 
   private static void delete(Path dir) throws IOException {
@@ -309,5 +363,150 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
     } finally {
       delete(parent);
     }
+  }
+
+  /**
+   * Under two sibling PYTHONPATH entries that hold the same relative path, {@code a} then {@code
+   * b}, {@code from conv.dense import make} binds the module Python binds, {@code
+   * a/conv/dense.py}'s {@code (3,)}.
+   *
+   * <p>TODO: Both modules are named {@code conv/dense.py}, and the import binds the shadowed {@code
+   * b/conv/dense.py}'s {@code (4, 4)} instead (<a
+   * href="https://github.com/wala/ML/issues/168">wala/ML#168</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testSiblingEntriesBindTheFirstEntrysModule() throws Exception {
+    assertEquals(
+        "Checkouts binding the import to another module than Python",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "sibling_path_proj",
+            root -> List.of(root.resolve("a").toFile(), root.resolve("b").toFile()),
+            a -> parameterTypes(a, "consume"),
+            Set.of(TensorType.of(DType.FLOAT32, 3))));
+  }
+
+  /**
+   * Under two sibling PYTHONPATH entries that hold the same relative path, {@code a} then {@code
+   * b}, the module no import reaches, {@code b/conv/dense.py}, is still analyzed: its own call
+   * gives {@code consume_shadowed} a {@code (7,)} tensor.
+   */
+  @Test
+  public void testSiblingEntriesKeepTheShadowedModule() throws Exception {
+    assertEquals(
+        "Checkouts losing the shadowed module's own code",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "sibling_path_proj",
+            root -> List.of(root.resolve("a").toFile(), root.resolve("b").toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_shadowed"),
+            Set.of(TensorType.of(DType.FLOAT32, 7))));
+  }
+
+  /**
+   * A regular package in a later PYTHONPATH entry outranks a namespace portion in an earlier one,
+   * as Python's search ranks them: with the project root then {@code src}, where the root's {@code
+   * conv} has no {@code __init__.py} and {@code src/conv} has one, {@code from conv.dense import
+   * make} binds {@code src/conv/dense.py}'s {@code (4, 4)}.
+   *
+   * <p>TODO: Each script is named against the first entry containing it, the root, so the root's
+   * module is named {@code conv/dense.py} and {@code src}'s {@code src/conv/dense.py}. The import
+   * finds the root's by that name, whatever kind of package holds it, and binds its {@code (3,)}
+   * instead (<a href="https://github.com/wala/ML/issues/168">wala/ML#168</a>). This test cannot yet
+   * tell ranking by package kind from a name collision: a rule naming each script against the most
+   * specific entry containing it names both modules {@code conv/dense.py}, and the test then passes
+   * because the collision binds {@code src/conv/dense.py}.
+   */
+  @Test(expected = AssertionError.class)
+  public void testRegularPackageOutranksEarlierNamespacePortion() throws Exception {
+    assertEquals(
+        "Checkouts binding the import to another module than Python",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nsreg_path_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypes(a, "consume"),
+            Set.of(TensorType.of(DType.FLOAT32, 4, 4))));
+  }
+
+  /**
+   * A {@code src} layout under nested PYTHONPATH entries, the project root first and {@code src}
+   * inside it: {@code import pkg.sub} reaches {@code take} through the package's initializers, so
+   * {@code consume_taken} gets the {@code (4, 5)} tensor.
+   *
+   * <p>TODO: Each script is named against the first entry containing it, the root, so the package
+   * is {@code src/pkg/...} and {@code import pkg.sub} never reaches it (<a
+   * href="https://github.com/wala/ML/issues/984">wala/ML#984</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testNestedEntriesRootFirstReachThePackage() throws Exception {
+    assertEquals(
+        "Checkouts not reaching the package",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_path_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_taken"),
+            Set.of(TensorType.of(DType.FLOAT32, 4, 5))));
+  }
+
+  /**
+   * A {@code src} layout under nested PYTHONPATH entries, {@code src} first and the project root
+   * after it: {@code import pkg.sub} reaches {@code take} as it does with the root first.
+   */
+  @Test
+  public void testNestedEntriesSrcFirstReachThePackage() throws Exception {
+    assertEquals(
+        "Checkouts not reaching the package",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_path_proj",
+            root -> List.of(root.resolve("src").toFile(), root.toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_taken"),
+            Set.of(TensorType.of(DType.FLOAT32, 4, 5))));
+  }
+
+  /**
+   * Under nested PYTHONPATH entries that each hold {@code pkg/sub/mod.py}, the project root then
+   * {@code src}, {@code from pkg.sub.mod import take} binds the module Python binds, the root's,
+   * with its {@code (3,)}.
+   *
+   * <p>On master this passes only because {@code src}'s scripts are named against the root, as
+   * {@code src/pkg/...}, so the import finds the root's module by name and {@code src}'s is never a
+   * candidate (see {@link #testNestedEntriesRootFirstReachThePackage()}). Under a rule naming each
+   * script against the most specific entry containing it, both modules are named {@code
+   * pkg/sub/mod.py} and the import binds {@code src/pkg/sub/mod.py}'s {@code (4, 4)} (<a
+   * href="https://github.com/wala/ML/issues/984">wala/ML#984</a>).
+   */
+  @Test
+  public void testNestedEntriesBindTheFirstEntrysModule() throws Exception {
+    assertEquals(
+        "Checkouts binding the import to another module than Python",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_collide_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypes(a, "consume"),
+            Set.of(TensorType.of(DType.FLOAT32, 3))));
+  }
+
+  /**
+   * Under nested PYTHONPATH entries that each hold {@code pkg/sub/mod.py}, the project root then
+   * {@code src}, the module {@code import pkg.sub.mod} does not reach, {@code src/pkg/sub/mod.py},
+   * is still analyzed: its own call gives {@code consume_shadowed} a {@code (7,)} tensor.
+   *
+   * <p>On master the two modules have different names, {@code pkg/sub/mod.py} and {@code
+   * src/pkg/sub/mod.py}, so this passes without any choice between them being made.
+   */
+  @Test
+  public void testNestedEntriesKeepTheShadowedModule() throws Exception {
+    assertEquals(
+        "Checkouts losing the shadowed module's own code",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_collide_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_shadowed"),
+            Set.of(TensorType.of(DType.FLOAT32, 7))));
   }
 }
