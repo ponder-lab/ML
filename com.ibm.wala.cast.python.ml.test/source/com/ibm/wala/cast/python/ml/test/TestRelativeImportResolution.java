@@ -416,4 +416,41 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
             a -> parameterTypes(a, "consume"),
             Set.of(TensorType.of(DType.FLOAT32, 4, 4))));
   }
+
+  /**
+   * A {@code src} layout under nested PYTHONPATH entries, the project root first and {@code src}
+   * inside it: {@code import pkg.sub} reaches {@code take} through the package's initializers, so
+   * {@code consume_taken} gets the {@code (4, 5)} tensor.
+   *
+   * <p>TODO: Each script is named against the first entry containing it, the root, so the package
+   * is {@code src/pkg/...} and {@code import pkg.sub} never reaches it (<a
+   * href="https://github.com/wala/ML/issues/984">wala/ML#984</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testNestedEntriesRootFirstReachThePackage() throws Exception {
+    assertEquals(
+        "Checkouts not reaching the package",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_path_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_taken"),
+            Set.of(TensorType.of(DType.FLOAT32, 4, 5))));
+  }
+
+  /**
+   * A {@code src} layout under nested PYTHONPATH entries, {@code src} first and the project root
+   * after it: {@code import pkg.sub} reaches {@code take} as it does with the root first.
+   */
+  @Test
+  public void testNestedEntriesSrcFirstReachThePackage() throws Exception {
+    assertEquals(
+        "Checkouts not reaching the package",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_path_proj",
+            root -> List.of(root.resolve("src").toFile(), root.toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_taken"),
+            Set.of(TensorType.of(DType.FLOAT32, 4, 5))));
+  }
 }
