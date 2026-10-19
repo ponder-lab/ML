@@ -453,4 +453,38 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
             a -> parameterTypesInAnyScript(a, "consume_taken"),
             Set.of(TensorType.of(DType.FLOAT32, 4, 5))));
   }
+
+  /**
+   * Under nested PYTHONPATH entries that each hold {@code pkg/sub/mod.py}, the project root then
+   * {@code src}, {@code from pkg.sub.mod import take} binds the module Python binds, the root's,
+   * with its {@code (3,)}.
+   */
+  @Test
+  public void testNestedEntriesBindTheFirstEntrysModule() throws Exception {
+    assertEquals(
+        "Checkouts binding the import to another module than Python",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_collide_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypes(a, "consume"),
+            Set.of(TensorType.of(DType.FLOAT32, 3))));
+  }
+
+  /**
+   * Under nested PYTHONPATH entries that each hold {@code pkg/sub/mod.py}, the project root then
+   * {@code src}, the module {@code import pkg.sub.mod} does not reach, {@code src/pkg/sub/mod.py},
+   * is still analyzed: its own call gives {@code consume_shadowed} a {@code (7,)} tensor.
+   */
+  @Test
+  public void testNestedEntriesKeepTheShadowedModule() throws Exception {
+    assertEquals(
+        "Checkouts losing the shadowed module's own code",
+        List.of(),
+        checkoutsGivingOtherThan(
+            "nested_collide_proj",
+            root -> List.of(root.toFile(), root.resolve("src").toFile()),
+            a -> parameterTypesInAnyScript(a, "consume_shadowed"),
+            Set.of(TensorType.of(DType.FLOAT32, 7))));
+  }
 }
