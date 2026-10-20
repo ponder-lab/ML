@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -19,6 +20,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
 
@@ -81,6 +83,32 @@ public class TestKerasBaseSpellings extends AbstractTensorTest {
     assertReaches(cha, "MaxPooling2DSub", LAYER);
     assertReaches(cha, "Conv3DSub", LAYER);
     assertReaches(cha, "MultiHeadAttentionSub", LAYER);
+    assertReaches(cha, "MaxPool1DSub", "Ltensorflow/keras/layers/MaxPooling1D");
+    assertReaches(cha, "MaxPool1DSub", LAYER);
+  }
+
+  /**
+   * A subclass of {@code keras.layers.Dense} that does not override {@code call}: applying an
+   * instance runs the {@code call} it inherits from {@code Dense}, so the result is a dense
+   * layer's. Before, the superclass was {@code object}, so the subclass had no {@code call} and the
+   * application resolved to nothing.
+   */
+  @Test
+  public void testStandaloneKerasInheritedCall()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_dense", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A subclass of the legacy {@code Layer} that creates its weight with the {@code add_weight} it
+   * inherits from {@code Layer}, so the weight is a tensor and the product of the input and the
+   * weight has the weight's last dimension. Before, the superclass was {@code object}, and the
+   * weight was nothing.
+   */
+  @Test
+  public void testLegacyKerasInheritedAddWeight()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_weighted", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2))));
   }
 
   /** A program class named {@code Layer}, and its subclass, are not Keras layers. */

@@ -4028,7 +4028,6 @@
       <class name="Cropping2D" super="Ltensorflow/keras/layers/Cropping2D"></class>
       <class name="Cropping3D" super="Ltensorflow/keras/layers/Cropping3D"></class>
       <class name="Dense" super="Ltensorflow/keras/layers/Dense"></class>
-      <class name="DenseFeatures" super="Ltensorflow/keras/layers/DenseFeatures"></class>
       <class name="DepthwiseConv1D" super="Ltensorflow/keras/layers/DepthwiseConv1D"></class>
       <class name="DepthwiseConv2D" super="Ltensorflow/keras/layers/DepthwiseConv2D"></class>
       <class name="Discretization" super="Ltensorflow/keras/layers/Discretization"></class>
@@ -4079,7 +4078,6 @@
       <class name="PReLU" super="Ltensorflow/keras/layers/PReLU"></class>
       <class name="Permute" super="Ltensorflow/keras/layers/Permute"></class>
       <class name="RNN" super="Ltensorflow/keras/layers/RNN"></class>
-      <class name="RandomBrightness" super="Ltensorflow/keras/layers/RandomBrightness"></class>
       <class name="RandomContrast" super="Ltensorflow/keras/layers/RandomContrast"></class>
       <class name="RandomCrop" super="Ltensorflow/keras/layers/RandomCrop"></class>
       <class name="RandomFlip" super="Ltensorflow/keras/layers/RandomFlip"></class>
@@ -4735,7 +4733,7 @@
           <return value="inputs"/>
         </method>
       </class>
-      <!-- The built-in layers TensorFlow 2.9 exports from `tf.keras.layers` that the summaries above do not model, each declared only by its superclass, so a program class subclassing one is a Keras layer whose declared bases reach `Layer` (wala/ML#1127). An alias of a modeled layer (the same class at run time, e.g. `MaxPooling2D` for `MaxPool2D`) extends that layer, so it keeps the layer's modeling; any other extends `Layer` directly, since its own ancestors between it and `Layer` are not modeled. -->
+      <!-- The built-in layers TensorFlow 2.9 exports from `tf.keras.layers` that the summaries above do not model, each declared only by its superclass, so a program class subclassing one is a Keras layer whose declared bases reach `Layer` (wala/ML#1127). An alias (the same class at run time, e.g. `MaxPooling2D` for `MaxPool2D`) extends the class it names, so an alias of a modeled layer keeps the layer's modeling; any other layer extends `Layer` directly, since its own ancestors between it and `Layer` are not modeled. -->
       <class name="AbstractRNNCell" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="ActivityRegularization" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Add" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4745,9 +4743,9 @@
       <class name="Average" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="AveragePooling1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="AveragePooling3D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="AvgPool1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AvgPool1D" super="Ltensorflow/keras/layers/AveragePooling1D"></class>
       <class name="AvgPool2D" super="Ltensorflow/keras/layers/AveragePooling2D"></class>
-      <class name="AvgPool3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AvgPool3D" super="Ltensorflow/keras/layers/AveragePooling3D"></class>
       <class name="CategoryEncoding" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="CenterCrop" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Conv1DTranspose" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4757,11 +4755,11 @@
       <class name="ConvLSTM2D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="ConvLSTM3D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Convolution1D" super="Ltensorflow/keras/layers/Conv1D"></class>
-      <class name="Convolution1DTranspose" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Convolution1DTranspose" super="Ltensorflow/keras/layers/Conv1DTranspose"></class>
       <class name="Convolution2D" super="Ltensorflow/keras/layers/Conv2D"></class>
       <class name="Convolution2DTranspose" super="Ltensorflow/keras/layers/Conv2DTranspose"></class>
-      <class name="Convolution3D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="Convolution3DTranspose" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Convolution3D" super="Ltensorflow/keras/layers/Conv3D"></class>
+      <class name="Convolution3DTranspose" super="Ltensorflow/keras/layers/Conv3DTranspose"></class>
       <class name="Cropping1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Cropping2D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Cropping3D" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4777,11 +4775,11 @@
       <class name="GlobalAveragePooling2D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="GlobalAveragePooling3D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="GlobalAvgPool1D" super="Ltensorflow/keras/layers/GlobalAveragePooling1D"></class>
-      <class name="GlobalAvgPool2D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="GlobalAvgPool3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GlobalAvgPool2D" super="Ltensorflow/keras/layers/GlobalAveragePooling2D"></class>
+      <class name="GlobalAvgPool3D" super="Ltensorflow/keras/layers/GlobalAveragePooling3D"></class>
       <class name="GlobalMaxPool1D" super="Ltensorflow/keras/layers/GlobalMaxPooling1D"></class>
       <class name="GlobalMaxPool2D" super="Ltensorflow/keras/layers/GlobalMaxPooling2D"></class>
-      <class name="GlobalMaxPool3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GlobalMaxPool3D" super="Ltensorflow/keras/layers/GlobalMaxPooling3D"></class>
       <class name="GlobalMaxPooling3D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Hashing" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="InputLayer" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4790,8 +4788,8 @@
       <class name="Lambda" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="LocallyConnected1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="LocallyConnected2D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="MaxPool1D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="MaxPool3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="MaxPool1D" super="Ltensorflow/keras/layers/MaxPooling1D"></class>
+      <class name="MaxPool3D" super="Ltensorflow/keras/layers/MaxPooling3D"></class>
       <class name="MaxPooling1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="MaxPooling2D" super="Ltensorflow/keras/layers/MaxPool2D"></class>
       <class name="MaxPooling3D" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4817,8 +4815,8 @@
       <class name="Resizing" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SeparableConv1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SeparableConv2D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="SeparableConvolution1D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="SeparableConvolution2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SeparableConvolution1D" super="Ltensorflow/keras/layers/SeparableConv1D"></class>
+      <class name="SeparableConvolution2D" super="Ltensorflow/keras/layers/SeparableConv2D"></class>
       <class name="SimpleRNNCell" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SpatialDropout1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SpatialDropout2D" super="Ltensorflow/keras/layers/Layer"></class>

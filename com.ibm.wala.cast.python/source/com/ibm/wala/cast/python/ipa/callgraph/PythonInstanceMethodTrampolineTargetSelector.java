@@ -304,9 +304,12 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    * @param throughShell Whether the first class in that order the program does not define answers
    *     with its own method of that name when it is a summary's class shell. Python finds that
    *     method there, so a program class that inherits a built-in Keras layer's {@code call}
-   *     without overriding it is called through the layer's (wala/ML#1108).
+   *     without overriding it is called through the layer's (wala/ML#1108). A shell that declares
+   *     no method only aliases its superclass, such as {@code keras.layers.Dense} or {@code
+   *     MaxPooling2D} (wala/ML#1127), so the method is then looked up on the superclass in turn,
+   *     and an alias spelling answers as the class it aliases does.
    * @return The inherited method class, or {@code null} when no base before the first library class
-   *     (or, with {@code throughShell}, that shell itself) declares one.
+   *     (or, with {@code throughShell}, that shell or the shells it aliases) declares one.
    */
   private static IClass inheritedMethod(
       IClassHierarchy cha,
@@ -317,10 +320,18 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     List<IClass> order = methodResolutionOrder(cha, type, new HashSet<>());
     for (IClass base : order.subList(1, order.size())) {
       if (!isProgramClass(base)) {
-        if (!throughShell || !(base instanceof PythonSummaryShellClass)) return null;
-        return cha.lookupClass(
-            TypeReference.findOrCreateClass(
-                loader, "$" + base.getName().toString().substring(1), name));
+        if (!throughShell) return null;
+        for (IClass shell = base;
+            shell instanceof PythonSummaryShellClass;
+            shell = shell.getSuperclass()) {
+          IClass method =
+              cha.lookupClass(
+                  TypeReference.findOrCreateClass(
+                      loader, "$" + shell.getName().toString().substring(1), name));
+          if (method != null || !((PythonClass) shell).getMethodReferences().isEmpty())
+            return method;
+        }
+        return null;
       }
       IClass method =
           cha.lookupClass(
