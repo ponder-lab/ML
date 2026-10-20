@@ -2677,12 +2677,15 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         // Python's iteration protocol does (wala/ML#1010): `next` yields a sequence's elements, and
         // an object whose class declares `__iter__`/`__next__` yields through them. The key loop
         // over the iterable only decides when the loop ends.
+        // Both calls carry the marker in their otherwise empty second child, so the invokes record
+        // that they come from this lowering and not from an `iter(x)` or `next(it)` in the source
+        // (wala/ML#1131).
         String iteratorName = temporary("temp iterator ");
         CAstNode nextElement =
             Ast.makeNode(
                 CAstNode.CALL,
                 Ast.makeNode(CAstNode.VAR, Ast.makeConstant("next")),
-                Ast.makeNode(CAstNode.EMPTY),
+                Ast.makeConstant(PythonCAstToIRTranslator.ITERATION_PROTOCOL_MARKER),
                 Ast.makeNode(CAstNode.VAR, Ast.makeConstant(iteratorName)));
         CAstNode iteratorDecl =
             Ast.makeNode(
@@ -2691,7 +2694,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                 Ast.makeNode(
                     CAstNode.CALL,
                     Ast.makeNode(CAstNode.VAR, Ast.makeConstant("iter")),
-                    Ast.makeNode(CAstNode.EMPTY),
+                    Ast.makeConstant(PythonCAstToIRTranslator.ITERATION_PROTOCOL_MARKER),
                     Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName))));
 
         CAstNode test;
