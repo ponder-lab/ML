@@ -38,6 +38,14 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
    */
   private final int[] starredPositions;
 
+  /**
+   * Whether the front end made this call while lowering a {@code for} loop or a comprehension's
+   * generator to the iteration protocol, the {@code iter} call over the iterable and the {@code
+   * next} calls on its iterator, rather than translating a call written in the source. A source
+   * {@code iter(x)} otherwise lowers to the same instruction (wala/ML#1131).
+   */
+  private final boolean iterationProtocol;
+
   public PythonInvokeInstruction(
       int iindex,
       int result,
@@ -56,11 +64,48 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
       int[] positionalParams,
       Pair<String, Integer>[] keywordParams,
       int[] starredPositions) {
+    this(iindex, result, exception, site, positionalParams, keywordParams, starredPositions, false);
+  }
+
+  /**
+   * An invoke that records whether the front end made it while lowering a loop or a comprehension
+   * to the iteration protocol (wala/ML#1131).
+   *
+   * @param iindex The instruction index.
+   * @param result The call's value number.
+   * @param exception The value number of the exception the call may throw.
+   * @param site The call site.
+   * @param positionalParams The positional arguments' value numbers, the callee first.
+   * @param keywordParams The keyword arguments, each a name and a value number.
+   * @param starredPositions The positional slots whose argument was a starred expression.
+   * @param iterationProtocol Whether the call comes from the iteration protocol's lowering rather
+   *     than from the source.
+   */
+  public PythonInvokeInstruction(
+      int iindex,
+      int result,
+      int exception,
+      CallSiteReference site,
+      int[] positionalParams,
+      Pair<String, Integer>[] keywordParams,
+      int[] starredPositions,
+      boolean iterationProtocol) {
     super(iindex, exception, site);
     this.positionalParams = positionalParams;
     this.keywordParams = keywordParams;
     this.starredPositions = starredPositions;
+    this.iterationProtocol = iterationProtocol;
     this.result = result;
+  }
+
+  /**
+   * Whether the front end made this call while lowering a {@code for} loop or a comprehension's
+   * generator to the iteration protocol, and not from a call in the source (wala/ML#1131).
+   *
+   * @return {@code true} iff the call is the lowering's {@code iter} or {@code next} call.
+   */
+  public boolean isIterationProtocol() {
+    return iterationProtocol;
   }
 
   private static final int[] EMPTY_STARRED = new int[0];
@@ -175,7 +220,8 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
       }
     }
 
-    return new PythonInvokeInstruction(iIndex(), nr, ne, site, newpos, newkey, starredPositions);
+    return new PythonInvokeInstruction(
+        iIndex(), nr, ne, site, newpos, newkey, starredPositions, iterationProtocol);
   }
 
   @Override

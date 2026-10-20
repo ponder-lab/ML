@@ -105,6 +105,16 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    */
   public static final String STARRED_ARGUMENT_MARKER = "*starred*";
 
+  /**
+   * The value of the constant the parser gives as the second child of a {@link CAstNode#CALL} it
+   * makes while lowering a {@code for} loop or a comprehension's generator to the iteration
+   * protocol: the {@code iter} call over the iterable and the {@code next} call on its iterator
+   * (wala/ML#1131). A call's second child is never visited, and the Python parser otherwise leaves
+   * it empty, so the marker produces no instructions; it only lets {@link #doCall} record the
+   * call's origin on the invoke.
+   */
+  public static final String ITERATION_PROTOCOL_MARKER = "wala:iteration-protocol";
+
   private final Map<CAstType, TypeName> walaTypeNames = HashMapFactory.make();
 
   /**
@@ -1343,7 +1353,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 site,
                 hack,
                 keyp.toArray(new Pair[keyp.size()]),
-                starredArr));
+                starredArr,
+                name != null
+                    && name.getKind() == CAstNode.CONSTANT
+                    && ITERATION_PROTOCOL_MARKER.equals(name.getValue())));
 
     pospos.addAll(keypos);
     context.cfg().noteOperands(pos, pospos.toArray(new Position[pospos.size()]));
