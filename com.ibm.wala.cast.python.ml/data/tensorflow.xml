@@ -3939,6 +3939,183 @@
       <!-- The private-module `keras.Sequential` spelling, aliased like `Model` (wala/ML#817). -->
       <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
     </package>
+    <package name="tensorflow/python/keras/models">
+      <!-- The private-module spellings of `Layer`, `Model` and `Sequential` in TensorFlow 2.9's legacy copy of Keras, aliased into the `tf.keras` chains: the legacy classes are distinct at run time, but their `__call__` contract is the one `tf.keras` has, which supplies `training` to `call` (wala/ML#1127). -->
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="tensorflow/python/keras/layers">
+      <class name="Layer" super="Ltensorflow/keras/layers/Layer"></class>
+    </package>
+    <package name="tensorflow/python/keras/engine/base_layer">
+      <class name="Layer" super="Ltensorflow/keras/layers/Layer"></class>
+    </package>
+    <package name="tensorflow/python/keras/engine/training">
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+    </package>
+    <package name="tensorflow/python/keras/engine/sequential">
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="tensorflow/compat/v1/keras">
+      <!-- The `tf.compat` spellings, at run time the `tf.keras` classes themselves (wala/ML#1127). -->
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="tensorflow/compat/v1/keras/models">
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="tensorflow/compat/v1/keras/layers">
+      <class name="Layer" super="Ltensorflow/keras/layers/Layer"></class>
+    </package>
+    <package name="tensorflow/compat/v2/keras">
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="tensorflow/compat/v2/keras/models">
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="tensorflow/compat/v2/keras/layers">
+      <class name="Layer" super="Ltensorflow/keras/layers/Layer"></class>
+    </package>
+    <package name="keras">
+      <!-- The standalone `keras` package's spellings, at run time the `tf.keras` classes themselves under TensorFlow 2.9 (wala/ML#1127). -->
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="keras/models">
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
+    </package>
+    <package name="keras/layers">
+      <!-- Each layer of the standalone package extends the `tf.keras` layer of the same name, modeled or declared only by its superclass (wala/ML#1127). -->
+      <class name="AbstractRNNCell" super="Ltensorflow/keras/layers/AbstractRNNCell"></class>
+      <class name="Activation" super="Ltensorflow/keras/layers/Activation"></class>
+      <class name="ActivityRegularization" super="Ltensorflow/keras/layers/ActivityRegularization"></class>
+      <class name="Add" super="Ltensorflow/keras/layers/Add"></class>
+      <class name="AdditiveAttention" super="Ltensorflow/keras/layers/AdditiveAttention"></class>
+      <class name="AlphaDropout" super="Ltensorflow/keras/layers/AlphaDropout"></class>
+      <class name="Attention" super="Ltensorflow/keras/layers/Attention"></class>
+      <class name="Average" super="Ltensorflow/keras/layers/Average"></class>
+      <class name="AveragePooling1D" super="Ltensorflow/keras/layers/AveragePooling1D"></class>
+      <class name="AveragePooling2D" super="Ltensorflow/keras/layers/AveragePooling2D"></class>
+      <class name="AveragePooling3D" super="Ltensorflow/keras/layers/AveragePooling3D"></class>
+      <class name="AvgPool1D" super="Ltensorflow/keras/layers/AvgPool1D"></class>
+      <class name="AvgPool2D" super="Ltensorflow/keras/layers/AvgPool2D"></class>
+      <class name="AvgPool3D" super="Ltensorflow/keras/layers/AvgPool3D"></class>
+      <class name="BatchNormalization" super="Ltensorflow/keras/layers/BatchNormalization"></class>
+      <class name="Bidirectional" super="Ltensorflow/keras/layers/Bidirectional"></class>
+      <class name="CategoryEncoding" super="Ltensorflow/keras/layers/CategoryEncoding"></class>
+      <class name="CenterCrop" super="Ltensorflow/keras/layers/CenterCrop"></class>
+      <class name="Concatenate" super="Ltensorflow/keras/layers/Concatenate"></class>
+      <class name="Conv1D" super="Ltensorflow/keras/layers/Conv1D"></class>
+      <class name="Conv1DTranspose" super="Ltensorflow/keras/layers/Conv1DTranspose"></class>
+      <class name="Conv2D" super="Ltensorflow/keras/layers/Conv2D"></class>
+      <class name="Conv2DTranspose" super="Ltensorflow/keras/layers/Conv2DTranspose"></class>
+      <class name="Conv3D" super="Ltensorflow/keras/layers/Conv3D"></class>
+      <class name="Conv3DTranspose" super="Ltensorflow/keras/layers/Conv3DTranspose"></class>
+      <class name="ConvLSTM1D" super="Ltensorflow/keras/layers/ConvLSTM1D"></class>
+      <class name="ConvLSTM2D" super="Ltensorflow/keras/layers/ConvLSTM2D"></class>
+      <class name="ConvLSTM3D" super="Ltensorflow/keras/layers/ConvLSTM3D"></class>
+      <class name="Convolution1D" super="Ltensorflow/keras/layers/Convolution1D"></class>
+      <class name="Convolution1DTranspose" super="Ltensorflow/keras/layers/Convolution1DTranspose"></class>
+      <class name="Convolution2D" super="Ltensorflow/keras/layers/Convolution2D"></class>
+      <class name="Convolution2DTranspose" super="Ltensorflow/keras/layers/Convolution2DTranspose"></class>
+      <class name="Convolution3D" super="Ltensorflow/keras/layers/Convolution3D"></class>
+      <class name="Convolution3DTranspose" super="Ltensorflow/keras/layers/Convolution3DTranspose"></class>
+      <class name="Cropping1D" super="Ltensorflow/keras/layers/Cropping1D"></class>
+      <class name="Cropping2D" super="Ltensorflow/keras/layers/Cropping2D"></class>
+      <class name="Cropping3D" super="Ltensorflow/keras/layers/Cropping3D"></class>
+      <class name="Dense" super="Ltensorflow/keras/layers/Dense"></class>
+      <class name="DepthwiseConv1D" super="Ltensorflow/keras/layers/DepthwiseConv1D"></class>
+      <class name="DepthwiseConv2D" super="Ltensorflow/keras/layers/DepthwiseConv2D"></class>
+      <class name="Discretization" super="Ltensorflow/keras/layers/Discretization"></class>
+      <class name="Dot" super="Ltensorflow/keras/layers/Dot"></class>
+      <class name="Dropout" super="Ltensorflow/keras/layers/Dropout"></class>
+      <class name="ELU" super="Ltensorflow/keras/layers/ELU"></class>
+      <class name="Embedding" super="Ltensorflow/keras/layers/Embedding"></class>
+      <class name="Flatten" super="Ltensorflow/keras/layers/Flatten"></class>
+      <class name="GRU" super="Ltensorflow/keras/layers/GRU"></class>
+      <class name="GRUCell" super="Ltensorflow/keras/layers/GRUCell"></class>
+      <class name="GaussianDropout" super="Ltensorflow/keras/layers/GaussianDropout"></class>
+      <class name="GaussianNoise" super="Ltensorflow/keras/layers/GaussianNoise"></class>
+      <class name="GlobalAveragePooling1D" super="Ltensorflow/keras/layers/GlobalAveragePooling1D"></class>
+      <class name="GlobalAveragePooling2D" super="Ltensorflow/keras/layers/GlobalAveragePooling2D"></class>
+      <class name="GlobalAveragePooling3D" super="Ltensorflow/keras/layers/GlobalAveragePooling3D"></class>
+      <class name="GlobalAvgPool1D" super="Ltensorflow/keras/layers/GlobalAvgPool1D"></class>
+      <class name="GlobalAvgPool2D" super="Ltensorflow/keras/layers/GlobalAvgPool2D"></class>
+      <class name="GlobalAvgPool3D" super="Ltensorflow/keras/layers/GlobalAvgPool3D"></class>
+      <class name="GlobalMaxPool1D" super="Ltensorflow/keras/layers/GlobalMaxPool1D"></class>
+      <class name="GlobalMaxPool2D" super="Ltensorflow/keras/layers/GlobalMaxPool2D"></class>
+      <class name="GlobalMaxPool3D" super="Ltensorflow/keras/layers/GlobalMaxPool3D"></class>
+      <class name="GlobalMaxPooling1D" super="Ltensorflow/keras/layers/GlobalMaxPooling1D"></class>
+      <class name="GlobalMaxPooling2D" super="Ltensorflow/keras/layers/GlobalMaxPooling2D"></class>
+      <class name="GlobalMaxPooling3D" super="Ltensorflow/keras/layers/GlobalMaxPooling3D"></class>
+      <class name="Hashing" super="Ltensorflow/keras/layers/Hashing"></class>
+      <class name="InputLayer" super="Ltensorflow/keras/layers/InputLayer"></class>
+      <class name="IntegerLookup" super="Ltensorflow/keras/layers/IntegerLookup"></class>
+      <class name="LSTM" super="Ltensorflow/keras/layers/LSTM"></class>
+      <class name="LSTMCell" super="Ltensorflow/keras/layers/LSTMCell"></class>
+      <class name="Lambda" super="Ltensorflow/keras/layers/Lambda"></class>
+      <class name="Layer" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="LayerNormalization" super="Ltensorflow/keras/layers/LayerNormalization"></class>
+      <class name="LeakyReLU" super="Ltensorflow/keras/layers/LeakyReLU"></class>
+      <class name="LocallyConnected1D" super="Ltensorflow/keras/layers/LocallyConnected1D"></class>
+      <class name="LocallyConnected2D" super="Ltensorflow/keras/layers/LocallyConnected2D"></class>
+      <class name="Masking" super="Ltensorflow/keras/layers/Masking"></class>
+      <class name="MaxPool1D" super="Ltensorflow/keras/layers/MaxPool1D"></class>
+      <class name="MaxPool2D" super="Ltensorflow/keras/layers/MaxPool2D"></class>
+      <class name="MaxPool3D" super="Ltensorflow/keras/layers/MaxPool3D"></class>
+      <class name="MaxPooling1D" super="Ltensorflow/keras/layers/MaxPooling1D"></class>
+      <class name="MaxPooling2D" super="Ltensorflow/keras/layers/MaxPooling2D"></class>
+      <class name="MaxPooling3D" super="Ltensorflow/keras/layers/MaxPooling3D"></class>
+      <class name="Maximum" super="Ltensorflow/keras/layers/Maximum"></class>
+      <class name="Minimum" super="Ltensorflow/keras/layers/Minimum"></class>
+      <class name="MultiHeadAttention" super="Ltensorflow/keras/layers/MultiHeadAttention"></class>
+      <class name="Multiply" super="Ltensorflow/keras/layers/Multiply"></class>
+      <class name="Normalization" super="Ltensorflow/keras/layers/Normalization"></class>
+      <class name="PReLU" super="Ltensorflow/keras/layers/PReLU"></class>
+      <class name="Permute" super="Ltensorflow/keras/layers/Permute"></class>
+      <class name="RNN" super="Ltensorflow/keras/layers/RNN"></class>
+      <class name="RandomContrast" super="Ltensorflow/keras/layers/RandomContrast"></class>
+      <class name="RandomCrop" super="Ltensorflow/keras/layers/RandomCrop"></class>
+      <class name="RandomFlip" super="Ltensorflow/keras/layers/RandomFlip"></class>
+      <class name="RandomHeight" super="Ltensorflow/keras/layers/RandomHeight"></class>
+      <class name="RandomRotation" super="Ltensorflow/keras/layers/RandomRotation"></class>
+      <class name="RandomTranslation" super="Ltensorflow/keras/layers/RandomTranslation"></class>
+      <class name="RandomWidth" super="Ltensorflow/keras/layers/RandomWidth"></class>
+      <class name="RandomZoom" super="Ltensorflow/keras/layers/RandomZoom"></class>
+      <class name="ReLU" super="Ltensorflow/keras/layers/ReLU"></class>
+      <class name="RepeatVector" super="Ltensorflow/keras/layers/RepeatVector"></class>
+      <class name="Rescaling" super="Ltensorflow/keras/layers/Rescaling"></class>
+      <class name="Reshape" super="Ltensorflow/keras/layers/Reshape"></class>
+      <class name="Resizing" super="Ltensorflow/keras/layers/Resizing"></class>
+      <class name="SeparableConv1D" super="Ltensorflow/keras/layers/SeparableConv1D"></class>
+      <class name="SeparableConv2D" super="Ltensorflow/keras/layers/SeparableConv2D"></class>
+      <class name="SeparableConvolution1D" super="Ltensorflow/keras/layers/SeparableConvolution1D"></class>
+      <class name="SeparableConvolution2D" super="Ltensorflow/keras/layers/SeparableConvolution2D"></class>
+      <class name="SimpleRNN" super="Ltensorflow/keras/layers/SimpleRNN"></class>
+      <class name="SimpleRNNCell" super="Ltensorflow/keras/layers/SimpleRNNCell"></class>
+      <class name="Softmax" super="Ltensorflow/keras/layers/Softmax"></class>
+      <class name="SpatialDropout1D" super="Ltensorflow/keras/layers/SpatialDropout1D"></class>
+      <class name="SpatialDropout2D" super="Ltensorflow/keras/layers/SpatialDropout2D"></class>
+      <class name="SpatialDropout3D" super="Ltensorflow/keras/layers/SpatialDropout3D"></class>
+      <class name="StackedRNNCells" super="Ltensorflow/keras/layers/StackedRNNCells"></class>
+      <class name="StringLookup" super="Ltensorflow/keras/layers/StringLookup"></class>
+      <class name="Subtract" super="Ltensorflow/keras/layers/Subtract"></class>
+      <class name="TextVectorization" super="Ltensorflow/keras/layers/TextVectorization"></class>
+      <class name="ThresholdedReLU" super="Ltensorflow/keras/layers/ThresholdedReLU"></class>
+      <class name="TimeDistributed" super="Ltensorflow/keras/layers/TimeDistributed"></class>
+      <class name="UnitNormalization" super="Ltensorflow/keras/layers/UnitNormalization"></class>
+      <class name="UpSampling1D" super="Ltensorflow/keras/layers/UpSampling1D"></class>
+      <class name="UpSampling2D" super="Ltensorflow/keras/layers/UpSampling2D"></class>
+      <class name="UpSampling3D" super="Ltensorflow/keras/layers/UpSampling3D"></class>
+      <class name="Wrapper" super="Ltensorflow/keras/layers/Wrapper"></class>
+      <class name="ZeroPadding1D" super="Ltensorflow/keras/layers/ZeroPadding1D"></class>
+      <class name="ZeroPadding2D" super="Ltensorflow/keras/layers/ZeroPadding2D"></class>
+      <class name="ZeroPadding3D" super="Ltensorflow/keras/layers/ZeroPadding3D"></class>
+    </package>
     <package name="tensorflow/keras/layers/class">
       <class name="Dense" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Dense -->
@@ -4556,6 +4733,107 @@
           <return value="inputs"/>
         </method>
       </class>
+      <!-- The built-in layers TensorFlow 2.9 exports from `tf.keras.layers` that the summaries above do not model, each declared only by its superclass, so a program class subclassing one is a Keras layer whose declared bases reach `Layer` (wala/ML#1127). An alias (the same class at run time, e.g. `MaxPooling2D` for `MaxPool2D`) extends the class it names, so an alias of a modeled layer keeps the layer's modeling; any other layer extends `Layer` directly, since its own ancestors between it and `Layer` are not modeled. -->
+      <class name="AbstractRNNCell" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ActivityRegularization" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Add" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AdditiveAttention" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AlphaDropout" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Attention" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Average" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AveragePooling1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AveragePooling3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="AvgPool1D" super="Ltensorflow/keras/layers/AveragePooling1D"></class>
+      <class name="AvgPool2D" super="Ltensorflow/keras/layers/AveragePooling2D"></class>
+      <class name="AvgPool3D" super="Ltensorflow/keras/layers/AveragePooling3D"></class>
+      <class name="CategoryEncoding" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="CenterCrop" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Conv1DTranspose" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Conv3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Conv3DTranspose" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ConvLSTM1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ConvLSTM2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ConvLSTM3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Convolution1D" super="Ltensorflow/keras/layers/Conv1D"></class>
+      <class name="Convolution1DTranspose" super="Ltensorflow/keras/layers/Conv1DTranspose"></class>
+      <class name="Convolution2D" super="Ltensorflow/keras/layers/Conv2D"></class>
+      <class name="Convolution2DTranspose" super="Ltensorflow/keras/layers/Conv2DTranspose"></class>
+      <class name="Convolution3D" super="Ltensorflow/keras/layers/Conv3D"></class>
+      <class name="Convolution3DTranspose" super="Ltensorflow/keras/layers/Conv3DTranspose"></class>
+      <class name="Cropping1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Cropping2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Cropping3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="DenseFeatures" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="DepthwiseConv1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="DepthwiseConv2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Discretization" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Dot" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ELU" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GRUCell" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GaussianDropout" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GaussianNoise" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GlobalAveragePooling2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GlobalAveragePooling3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="GlobalAvgPool1D" super="Ltensorflow/keras/layers/GlobalAveragePooling1D"></class>
+      <class name="GlobalAvgPool2D" super="Ltensorflow/keras/layers/GlobalAveragePooling2D"></class>
+      <class name="GlobalAvgPool3D" super="Ltensorflow/keras/layers/GlobalAveragePooling3D"></class>
+      <class name="GlobalMaxPool1D" super="Ltensorflow/keras/layers/GlobalMaxPooling1D"></class>
+      <class name="GlobalMaxPool2D" super="Ltensorflow/keras/layers/GlobalMaxPooling2D"></class>
+      <class name="GlobalMaxPool3D" super="Ltensorflow/keras/layers/GlobalMaxPooling3D"></class>
+      <class name="GlobalMaxPooling3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Hashing" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="InputLayer" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="IntegerLookup" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="LSTMCell" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Lambda" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="LocallyConnected1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="LocallyConnected2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="MaxPool1D" super="Ltensorflow/keras/layers/MaxPooling1D"></class>
+      <class name="MaxPool3D" super="Ltensorflow/keras/layers/MaxPooling3D"></class>
+      <class name="MaxPooling1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="MaxPooling2D" super="Ltensorflow/keras/layers/MaxPool2D"></class>
+      <class name="MaxPooling3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Maximum" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Minimum" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="MultiHeadAttention" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Multiply" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Normalization" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="PReLU" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Permute" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomBrightness" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomContrast" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomCrop" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomFlip" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomHeight" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomRotation" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomTranslation" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomWidth" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RandomZoom" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="RepeatVector" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Rescaling" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Reshape" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Resizing" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SeparableConv1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SeparableConv2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SeparableConvolution1D" super="Ltensorflow/keras/layers/SeparableConv1D"></class>
+      <class name="SeparableConvolution2D" super="Ltensorflow/keras/layers/SeparableConv2D"></class>
+      <class name="SimpleRNNCell" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SpatialDropout1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SpatialDropout2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="SpatialDropout3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="StackedRNNCells" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="StringLookup" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Subtract" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="TextVectorization" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ThresholdedReLU" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="TimeDistributed" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="UnitNormalization" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="UpSampling1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="UpSampling2D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="UpSampling3D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Wrapper" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ZeroPadding1D" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="ZeroPadding3D" super="Ltensorflow/keras/layers/Layer"></class>
     </package>
     <package name="tensorflow/keras/layers/Embedding">
       <!-- The `embeddings` weight of a `tf.keras.layers.Embedding`, allocated by the layer's `__init__` with its `input_dim` and `output_dim` as plain arguments; typed by `EmbeddingWeight`. -->
