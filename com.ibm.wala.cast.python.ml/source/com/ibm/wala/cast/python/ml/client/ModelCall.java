@@ -12,10 +12,14 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -25,15 +29,20 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -425,41 +434,52 @@ public class ModelCall extends TensorGenerator {
     CGNode classNode = selfASIN.getNode();
     CallGraph cg = builder.getCallGraph();
 
-    boolean ownInit = false;
+    // The class has a constructor of its own, or a program base's, if its construction calls one or
+    // if one is declared in the hierarchy: either alone can be missed (an unresolved constructor, a
+    // base translated later, wala/ML#944), and taking the inherited branch by mistake could answer
+    // an omission for `outputs` a program constructor does pass.
+    boolean ownInit = declaresInit(builder.getClassHierarchy(), classNode);
     for (Iterator<CGNode> it = cg.getSuccNodes(classNode); it.hasNext(); ) {
       String callee = it.next().getMethod().getDeclaringClass().getName().toString();
       if (callee.startsWith("Lscript ") && callee.endsWith("/" + INIT_METHOD_NAME)) ownInit = true;
     }
 
+    // Each call of `Model.__init__` for the instance other than the construction's own, which
+    // passes only the instance: a `super().__init__(...)`.
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> superInits = new ArrayList<>();
+    for (CGNode init : cg.getNodes(MODEL_INIT)) {
+      IR ir = init.getIR();
+      // The instance is the formal after the function object.
+      if (ir == null || ir.getNumberOfParameters() < 2) continue;
+      PointerKey selfPK =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(init, ir.getParameter(1));
+      boolean ofInstance = false;
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPK))
+        if (ik.equals(selfIK)) ofInstance = true;
+      if (!ofInstance) continue;
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> call : getCallerInvokes(builder, init))
+        if (!call.fst.equals(classNode)) superInits.add(call);
+    }
+
     List<Pair<CGNode, SSAAbstractInvokeInstruction>> calls = new ArrayList<>();
     int leading;
+    boolean unknown = false;
     if (ownInit) {
       leading = 1;
-      for (CGNode init : cg.getNodes(MODEL_INIT)) {
-        IR ir = init.getIR();
-        // The instance is the formal after the function object.
-        if (ir == null || ir.getNumberOfParameters() < 2) continue;
-        PointerKey selfPK =
-            builder
-                .getPointerAnalysis()
-                .getHeapModel()
-                .getPointerKeyForLocal(init, ir.getParameter(1));
-        boolean ofInstance = false;
-        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPK))
-          if (ik.equals(selfIK)) ofInstance = true;
-        if (!ofInstance) continue;
-        for (Pair<CGNode, SSAAbstractInvokeInstruction> call : getCallerInvokes(builder, init))
-          // The construction's own call passes only the instance.
-          if (!call.fst.equals(classNode)) calls.add(call);
-      }
+      calls.addAll(superInits);
     } else {
       leading = 0;
       calls.addAll(getCallerInvokes(builder, classNode));
+      // A `super().__init__(...)` means a program constructor ran after all, whose arguments the
+      // class's call does not show.
+      if (!superInits.isEmpty()) unknown = true;
     }
 
     OrdinalSet<InstanceKey> outputs = OrdinalSet.empty();
     boolean read = false;
-    boolean unknown = false;
     for (Pair<CGNode, SSAAbstractInvokeInstruction> call : calls) {
       if (!(call.snd instanceof PythonInvokeInstruction pyCall)) {
         unknown = true;
@@ -475,6 +495,35 @@ public class ModelCall extends TensorGenerator {
       outputs = OrdinalSet.unify(outputs, builder.getPointerAnalysis().getPointsToSet(argPK));
     }
     return new ConstructionOutputs(outputs, !calls.isEmpty() && !read && !unknown);
+  }
+
+  /**
+   * Whether the program class a construction node builds, or a program base of it, declares {@code
+   * __init__}.
+   *
+   * @param cha The class hierarchy.
+   * @param classNode The class's construction node.
+   * @return {@code true} if a program class from the class up to its first library base declares a
+   *     constructor.
+   */
+  private static boolean declaresInit(IClassHierarchy cha, CGNode classNode) {
+    Deque<IClass> work = new ArrayDeque<>();
+    Set<IClass> seen = HashSetFactory.make();
+    work.add(classNode.getMethod().getDeclaringClass());
+    while (!work.isEmpty()) {
+      IClass c = work.pop();
+      if (!seen.add(c)
+          || !(c instanceof IPythonClass python)
+          || c instanceof PythonSummaryShellClass
+          || !c.getName().toString().startsWith("Lscript ")) continue;
+      for (MethodReference m : python.getMethodReferences())
+        if (m.getName().toString().equals(INIT_METHOD_NAME)) return true;
+      for (TypeName base : python.getBaseTypeNames()) {
+        IClass next = cha.lookupClass(TypeReference.findOrCreate(PythonTypes.pythonLoader, base));
+        if (next != null) work.add(next);
+      }
+    }
+    return false;
   }
 
   @Override
