@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
@@ -22,12 +23,15 @@ import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import org.junit.Test;
 
 public class TestPythonModRefAnalysis extends TestJythonCallGraphShape {
@@ -196,5 +200,157 @@ public class TestPythonModRefAnalysis extends TestJythonCallGraphShape {
       if (instruction != null) instruction.visit(visitor);
 
     assertEquals(Set.of("global a", "global b"), globalNames(result));
+  }
+
+  /**
+   * A pointer analysis that delegates to the given one, counting its reads of the pointer keys and
+   * leaving out the keys the given filter rejects.
+   *
+   * @param pa The pointer analysis to delegate to.
+   * @param reads The count of {@link PointerAnalysis#getPointerKeys()} calls.
+   * @param keep The pointer keys {@link PointerAnalysis#getPointerKeys()} returns.
+   * @return The delegating analysis.
+   */
+  private static PointerAnalysis<InstanceKey> delegating(
+      PointerAnalysis<InstanceKey> pa, AtomicInteger reads, Predicate<PointerKey> keep) {
+    @SuppressWarnings("unchecked")
+    PointerAnalysis<InstanceKey> ret =
+        (PointerAnalysis<InstanceKey>)
+            Proxy.newProxyInstance(
+                PointerAnalysis.class.getClassLoader(),
+                new Class<?>[] {PointerAnalysis.class},
+                (proxy, method, args) -> {
+                  if (method.getName().equals("getPointerKeys")) {
+                    reads.incrementAndGet();
+                    Set<PointerKey> keys = HashSetFactory.make();
+                    for (PointerKey key : pa.getPointerKeys()) if (keep.test(key)) keys.add(key);
+                    return keys;
+                  }
+                  try {
+                    return method.invoke(pa, args);
+                  } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                  }
+                });
+    return ret;
+  }
+
+  /**
+   * The union of the mod sets {@link ModRef#getMod(CGNode, ExtendedHeapModel, PointerAnalysis,
+   * SSAInstruction, com.ibm.wala.ipa.slicer.HeapExclusions)} gives each of the node's instructions,
+   * the path a client computing a node's direct mod set one instruction at a time takes.
+   *
+   * @param modRef The mod-ref analysis.
+   * @param node The node.
+   * @param pa The pointer analysis.
+   * @return The keys the node's instructions modify.
+   */
+  private static Set<PointerKey> perInstructionMod(
+      ModRef<InstanceKey> modRef, CGNode node, PointerAnalysis<InstanceKey> pa) {
+    ExtendedHeapModel h = modRef.makeHeapModel(pa);
+    Set<PointerKey> ret = HashSetFactory.make();
+    for (SSAInstruction instruction : node.getIR().getInstructions())
+      if (instruction != null) ret.addAll(modRef.getMod(node, h, pa, instruction, null));
+    return ret;
+  }
+
+  /**
+   * Global writes visited one instruction at a time, by visitors of several {@link PythonModRef}s,
+   * share one read of the analysis's pointer keys, and each function's mod set is the one {@link
+   * ModRef#computeMod} gives (https://github.com/wala/ML/issues/1063).
+   */
+  @Test
+  public void testPerInstructionGlobalWritesReadPointerKeysOnce()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("globals_two_writers.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    AtomicInteger reads = new AtomicInteger();
+    PointerAnalysis<InstanceKey> pa = delegating(builder.getPointerAnalysis(), reads, key -> true);
+    CGNode f = getNode(cg, "f");
+    CGNode g = getNode(cg, "g");
+
+    for (CGNode node : cg) perInstructionMod(new PythonModRef(), node, pa);
+    Set<PointerKey> fMod = perInstructionMod(new PythonModRef(), f, pa);
+    Set<PointerKey> gMod = perInstructionMod(new PythonModRef(), g, pa);
+
+    assertEquals(1, reads.get());
+    assertEquals(Set.of("global a"), globalNames(fMod));
+    assertEquals(Set.of("global a", "global b"), globalNames(gMod));
+
+    Map<CGNode, OrdinalSet<PointerKey>> mod = new PythonModRef().computeMod(cg, pa);
+    for (CGNode node : List.of(f, g)) {
+      Set<PointerKey> computed = HashSetFactory.make();
+      mod.get(node).forEach(computed::add);
+      assertEquals(computed, node == f ? fMod : gMod);
+    }
+  }
+
+  /**
+   * A global with no static field key in the analysis modifies no key
+   * (https://github.com/wala/ML/issues/1063).
+   */
+  @Test
+  public void testGlobalWithoutStaticFieldKeyModifiesNothing()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("globals_two_writers.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa =
+        delegating(
+            builder.getPointerAnalysis(),
+            new AtomicInteger(),
+            key ->
+                !(key instanceof StaticFieldKey
+                    && ((StaticFieldKey) key).getField().getName().toString().equals("global b")));
+
+    assertEquals(
+        Set.of("global a"),
+        globalNames(perInstructionMod(new PythonModRef(), getNode(cg, "g"), pa)));
+  }
+
+  /**
+   * Indexes the static fields of a fresh analysis delegating to the given one, and returns a weak
+   * reference to that analysis, so that nothing else holds it.
+   *
+   * @param pa The pointer analysis to delegate to.
+   * @param node A node whose global writes are visited.
+   * @return A weak reference to the indexed analysis.
+   */
+  private static WeakReference<PointerAnalysis<InstanceKey>> indexFreshAnalysis(
+      PointerAnalysis<InstanceKey> pa, CGNode node) {
+    PointerAnalysis<InstanceKey> fresh = delegating(pa, new AtomicInteger(), key -> true);
+    assertEquals(
+        Set.of("global a", "global b"),
+        globalNames(perInstructionMod(new PythonModRef(), node, fresh)));
+    return new WeakReference<>(fresh);
+  }
+
+  /**
+   * The static-field index does not keep its analysis reachable
+   * (https://github.com/wala/ML/issues/1063).
+   */
+  @Test
+  public void testStaticFieldIndexDoesNotPinItsAnalysis()
+      throws ClassHierarchyException,
+          IllegalArgumentException,
+          CancelException,
+          IOException,
+          InterruptedException {
+    PythonAnalysisEngine<?> engine = makeEngine("globals_two_writers.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    WeakReference<PointerAnalysis<InstanceKey>> ref =
+        indexFreshAnalysis(builder.getPointerAnalysis(), getNode(cg, "g"));
+
+    for (int i = 0; i < 50 && ref.get() != null; i++) {
+      System.gc();
+      Thread.sleep(20);
+    }
+
+    assertNull("The index keeps an unreachable analysis.", ref.get());
   }
 }
