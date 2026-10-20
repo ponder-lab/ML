@@ -595,6 +595,11 @@ public class TensorGeneratorFactory {
     if (isType(type, SEQUENTIAL_CALL.getDeclaringClass()))
       return anchor.makeGenerator(SequentialCall::new, SequentialCall::new);
 
+    // The model summary's `call`, which applying a subclass instance that does not override `call`
+    // runs (wala/ML#1128), registered here so one entry serves both dispatch routes.
+    if (isType(type, TensorFlowTypes.MODEL_KERAS_CALL.getDeclaringClass()))
+      return anchor.makeGenerator(InheritedModelCall::new, InheritedModelCall::new);
+
     if (isType(type, MULTIPLY.getDeclaringClass())
         || isType(type, ADD.getDeclaringClass())
         || isType(type, SUBTRACT.getDeclaringClass())

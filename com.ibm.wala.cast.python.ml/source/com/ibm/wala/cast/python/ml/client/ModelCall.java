@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_INIT;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -233,9 +234,11 @@ public class ModelCall extends TensorGenerator {
    * comes back empty); the formal parameter's points-to set survives. See <a
    * href="https://github.com/wala/ML/issues/537">wala/ML#537</a>.
    *
-   * <p>Subclassed models (no {@code outputs} constructor argument; the output flows from the {@code
-   * call} method) are not handled here and yield no generators, so {@link #getDefaultShapes}
-   * returns ⊤ for them rather than an unsound shape.
+   * <p>An instance of a subclass whose constructor passes {@code outputs} to {@code
+   * super().__init__(...)} is a functional model too, and its outputs are read off that call
+   * (wala/ML#1128). Other subclassed models (no {@code outputs} constructor argument; the output
+   * flows from the {@code call} method) yield no generators, so {@link #getDefaultShapes} returns ⊤
+   * for them rather than an unsound shape.
    *
    * @param builder The propagation call graph builder.
    * @return A set of tensor generators for the outputs of this model call.
@@ -256,36 +259,40 @@ public class ModelCall extends TensorGenerator {
       AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
       if (selfASIN == null) continue;
 
-      // Only functional-API models carry an `outputs` constructor argument.
-      if (!selfASIN.concreteType().getReference().equals(MODEL.getDeclaringClass())) continue;
+      // Only functional-API models carry an `outputs` constructor argument: a `tf.keras.Model`
+      // built directly, or an instance of a subclass whose constructor passes `outputs` to
+      // `super().__init__` (wala/ML#1128).
+      OrdinalSet<InstanceKey> outputsPTS;
+      if (selfASIN.concreteType().getReference().equals(MODEL.getDeclaringClass())) {
+        CGNode modelDoNode = selfASIN.getNode();
+        IR ir = modelDoNode.getIR();
+        if (ir == null) continue;
 
-      CGNode modelDoNode = selfASIN.getNode();
-      IR ir = modelDoNode.getIR();
-      if (ir == null) continue;
+        // 3. Collect the `outputs` points-to set from two complementary sources, unioned:
+        //   (a) the caller-side `Model(...)` invoke's `outputs` argument, resolved by keyword name
+        //       or position (covers both `Model(in, out)` and `Model(outputs=out, ...)`); and
+        //   (b) the `outputs` formal parameter of the synthetic `Model.do` node (a positional
+        //       binding that survives even when the caller invoke can't be located).
+        outputsPTS = getOutputsArgumentPTS(builder, modelDoNode, 0);
+        if (outputsParamIRIndex < ir.getNumberOfParameters()) {
+          int outputsVn = ir.getParameter(outputsParamIRIndex);
+          PointerKey outputsPK =
+              builder
+                  .getPointerAnalysis()
+                  .getHeapModel()
+                  .getPointerKeyForLocal(modelDoNode, outputsVn);
+          outputsPTS =
+              OrdinalSet.unify(outputsPTS, builder.getPointerAnalysis().getPointsToSet(outputsPK));
+        }
+      } else outputsPTS = getSuperInitOutputsPTS(builder, selfIK);
 
-      // 3. Collect the `outputs` points-to set from two complementary sources, unioned:
-      //   (a) the caller-side `Model(...)` invoke's `outputs` argument, resolved by keyword name or
-      //       position (covers both `Model(in, out)` and `Model(outputs=out, ...)`); and
-      //   (b) the `outputs` formal parameter of the synthetic `Model.do` node (a positional binding
-      //       that survives even when the caller invoke can't be located).
-      OrdinalSet<InstanceKey> outputsPTS = getOutputsArgumentPTS(builder, modelDoNode);
-      if (outputsParamIRIndex < ir.getNumberOfParameters()) {
-        int outputsVn = ir.getParameter(outputsParamIRIndex);
-        PointerKey outputsPK =
-            builder
-                .getPointerAnalysis()
-                .getHeapModel()
-                .getPointerKeyForLocal(modelDoNode, outputsVn);
-        outputsPTS =
-            OrdinalSet.unify(outputsPTS, builder.getPointerAnalysis().getPointsToSet(outputsPK));
-      }
       final OrdinalSet<InstanceKey> finalOutputsPTS = outputsPTS;
       LOGGER.finer(
           () ->
               "Found outputs points-to set: "
                   + finalOutputsPTS
-                  + " for node: "
-                  + modelDoNode
+                  + " for model instance: "
+                  + describe(selfIK)
                   + ".");
 
       for (InstanceKey outputIK : outputsPTS) {
@@ -319,20 +326,25 @@ public class ModelCall extends TensorGenerator {
   }
 
   /**
-   * Resolves the points-to set of the {@code outputs} argument at the caller-side {@code
-   * Model(...)} invoke that created the given synthetic {@code Model.do} node. Walks the node's
-   * call-graph edges to each calling invoke and reads the {@code outputs} use by keyword name first
-   * (covers {@code Model(outputs=...)}) then by position (covers {@code Model(in, out)}). Reading
-   * the caller invoke handles keyword construction, which the {@code Model.do} formal-parameter
-   * binding alone does not.
+   * Resolves the points-to set of the {@code outputs} argument at the caller-side invoke of the
+   * given node: the {@code Model(...)} invoke that created a synthetic {@code Model.do} node, or
+   * the call of a {@code Model.__init__} node. Walks the node's call-graph edges to each calling
+   * invoke and reads the {@code outputs} use by keyword name first (covers {@code
+   * Model(outputs=...)}) then by position (covers {@code Model(in, out)}). Reading the caller
+   * invoke handles keyword construction, which the {@code Model.do} formal-parameter binding alone
+   * does not.
    *
    * @param builder The propagation call graph builder.
-   * @param modelDoNode The synthetic {@code Model.do} node allocating the model instance.
+   * @param modelDoNode The synthetic {@code Model.do} node allocating the model instance, or a
+   *     {@code Model.__init__} node.
+   * @param leading The number of positional arguments before {@code inputs} besides the callee:
+   *     none for a {@code Model(...)} construction, and one, the instance, for a call of {@code
+   *     Model.__init__}.
    * @return The union of the resolved {@code outputs} argument points-to sets, or an empty set if
    *     none could be located.
    */
-  private OrdinalSet<InstanceKey> getOutputsArgumentPTS(
-      PropagationCallGraphBuilder builder, CGNode modelDoNode) {
+  private static OrdinalSet<InstanceKey> getOutputsArgumentPTS(
+      PropagationCallGraphBuilder builder, CGNode modelDoNode, int leading) {
     OrdinalSet<InstanceKey> ret = OrdinalSet.empty();
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, modelDoNode)) {
@@ -342,15 +354,46 @@ public class ModelCall extends TensorGenerator {
 
       int argVn = pyCall.getUse(Model.Parameters.OUTPUTS.getName());
       if (argVn == -1) {
-        int numPositionalArgs = pyCall.getNumberOfPositionalParameters() - 1;
+        int numPositionalArgs = pyCall.getNumberOfPositionalParameters() - 1 - leading;
         int outputsPos = Model.Parameters.OUTPUTS.getIndex();
-        if (outputsPos < numPositionalArgs) argVn = pyCall.getUse(outputsPos + 1);
+        if (outputsPos < numPositionalArgs) argVn = pyCall.getUse(outputsPos + 1 + leading);
       }
       if (argVn <= 0) continue;
 
       PointerKey argPK =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, argVn);
       ret = OrdinalSet.unify(ret, builder.getPointerAnalysis().getPointsToSet(argPK));
+    }
+    return ret;
+  }
+
+  /**
+   * Resolves the points-to set of the {@code outputs} a subclass instance's constructor passes to
+   * {@code super().__init__(...)}, by keyword or by position (wala/ML#1128). The summary's {@code
+   * Model.__init__} declares no {@code inputs} or {@code outputs}, so the argument is read off each
+   * call of a {@code Model.__init__} node whose instance is the given one.
+   *
+   * @param builder The propagation call graph builder.
+   * @param selfIK The model instance.
+   * @return The union of the resolved {@code outputs} argument points-to sets, or an empty set if
+   *     no such call passes one.
+   */
+  protected static OrdinalSet<InstanceKey> getSuperInitOutputsPTS(
+      PropagationCallGraphBuilder builder, InstanceKey selfIK) {
+    OrdinalSet<InstanceKey> ret = OrdinalSet.empty();
+    for (CGNode init : builder.getCallGraph().getNodes(MODEL_INIT)) {
+      IR ir = init.getIR();
+      // The instance is the formal after the function object.
+      if (ir == null || ir.getNumberOfParameters() < 2) continue;
+      PointerKey selfPK =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(init, ir.getParameter(1));
+      boolean ofInstance = false;
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPK))
+        if (ik.equals(selfIK)) ofInstance = true;
+      if (ofInstance) ret = OrdinalSet.unify(ret, getOutputsArgumentPTS(builder, init, 1));
     }
     return ret;
   }
