@@ -1136,6 +1136,30 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String MODEL_CALL_SIGNATURE =
       "tf.keras.models.Model." + CALLABLE_METHOD_NAME + "()";
 
+  /**
+   * The {@code tf.keras.Model} summary's {@code call}, which an instance of a subclass that does
+   * not override {@code call} is applied through (wala/ML#1128).
+   */
+  public static final MethodReference MODEL_KERAS_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/models/Model/call")),
+          AstMethodReference.fnSelector);
+
+  private static final String MODEL_KERAS_CALL_SIGNATURE = "tf.keras.models.Model.call()";
+
+  /**
+   * The {@code tf.keras.Model} summary's {@code __init__}, which a subclass's {@code
+   * super().__init__(...)} reaches (wala/ML#1128).
+   */
+  public static final MethodReference MODEL_INIT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/models/Model/__init__")),
+          AstMethodReference.fnSelector);
+
   /** The {@code tf.keras.Sequential} constructor's synthetic class (wala/ML#817). */
   public static final MethodReference SEQUENTIAL =
       MethodReference.findOrCreate(
@@ -2813,6 +2837,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(IS_NAN.getDeclaringClass(), IS_NAN_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),
+          Map.entry(MODEL_KERAS_CALL.getDeclaringClass(), MODEL_KERAS_CALL_SIGNATURE),
           Map.entry(SEQUENTIAL.getDeclaringClass(), SEQUENTIAL_SIGNATURE),
           Map.entry(SEQUENTIAL_CALL.getDeclaringClass(), SEQUENTIAL_CALL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),

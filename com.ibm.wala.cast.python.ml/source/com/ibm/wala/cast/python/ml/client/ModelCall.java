@@ -3,6 +3,8 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_INIT;
+import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -10,27 +12,38 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -233,9 +246,11 @@ public class ModelCall extends TensorGenerator {
    * comes back empty); the formal parameter's points-to set survives. See <a
    * href="https://github.com/wala/ML/issues/537">wala/ML#537</a>.
    *
-   * <p>Subclassed models (no {@code outputs} constructor argument; the output flows from the {@code
-   * call} method) are not handled here and yield no generators, so {@link #getDefaultShapes}
-   * returns ⊤ for them rather than an unsound shape.
+   * <p>An instance of a subclass whose constructor passes {@code outputs} to {@code
+   * super().__init__(...)} is a functional model too, and its outputs are read off that call
+   * (wala/ML#1128). Other subclassed models (no {@code outputs} constructor argument; the output
+   * flows from the {@code call} method) yield no generators, so {@link #getDefaultShapes} returns ⊤
+   * for them rather than an unsound shape.
    *
    * @param builder The propagation call graph builder.
    * @return A set of tensor generators for the outputs of this model call.
@@ -256,36 +271,40 @@ public class ModelCall extends TensorGenerator {
       AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
       if (selfASIN == null) continue;
 
-      // Only functional-API models carry an `outputs` constructor argument.
-      if (!selfASIN.concreteType().getReference().equals(MODEL.getDeclaringClass())) continue;
+      // Only functional-API models carry an `outputs` constructor argument: a `tf.keras.Model`
+      // built directly, or an instance of a subclass whose constructor passes `outputs` to
+      // `super().__init__` (wala/ML#1128).
+      OrdinalSet<InstanceKey> outputsPTS;
+      if (selfASIN.concreteType().getReference().equals(MODEL.getDeclaringClass())) {
+        CGNode modelDoNode = selfASIN.getNode();
+        IR ir = modelDoNode.getIR();
+        if (ir == null) continue;
 
-      CGNode modelDoNode = selfASIN.getNode();
-      IR ir = modelDoNode.getIR();
-      if (ir == null) continue;
+        // 3. Collect the `outputs` points-to set from two complementary sources, unioned:
+        //   (a) the caller-side `Model(...)` invoke's `outputs` argument, resolved by keyword name
+        //       or position (covers both `Model(in, out)` and `Model(outputs=out, ...)`); and
+        //   (b) the `outputs` formal parameter of the synthetic `Model.do` node (a positional
+        //       binding that survives even when the caller invoke can't be located).
+        outputsPTS = getOutputsArgumentPTS(builder, modelDoNode, 0);
+        if (outputsParamIRIndex < ir.getNumberOfParameters()) {
+          int outputsVn = ir.getParameter(outputsParamIRIndex);
+          PointerKey outputsPK =
+              builder
+                  .getPointerAnalysis()
+                  .getHeapModel()
+                  .getPointerKeyForLocal(modelDoNode, outputsVn);
+          outputsPTS =
+              OrdinalSet.unify(outputsPTS, builder.getPointerAnalysis().getPointsToSet(outputsPK));
+        }
+      } else outputsPTS = getConstructionOutputs(builder, selfIK).outputs();
 
-      // 3. Collect the `outputs` points-to set from two complementary sources, unioned:
-      //   (a) the caller-side `Model(...)` invoke's `outputs` argument, resolved by keyword name or
-      //       position (covers both `Model(in, out)` and `Model(outputs=out, ...)`); and
-      //   (b) the `outputs` formal parameter of the synthetic `Model.do` node (a positional binding
-      //       that survives even when the caller invoke can't be located).
-      OrdinalSet<InstanceKey> outputsPTS = getOutputsArgumentPTS(builder, modelDoNode);
-      if (outputsParamIRIndex < ir.getNumberOfParameters()) {
-        int outputsVn = ir.getParameter(outputsParamIRIndex);
-        PointerKey outputsPK =
-            builder
-                .getPointerAnalysis()
-                .getHeapModel()
-                .getPointerKeyForLocal(modelDoNode, outputsVn);
-        outputsPTS =
-            OrdinalSet.unify(outputsPTS, builder.getPointerAnalysis().getPointsToSet(outputsPK));
-      }
       final OrdinalSet<InstanceKey> finalOutputsPTS = outputsPTS;
       LOGGER.finer(
           () ->
               "Found outputs points-to set: "
                   + finalOutputsPTS
-                  + " for node: "
-                  + modelDoNode
+                  + " for model instance: "
+                  + describe(selfIK)
                   + ".");
 
       for (InstanceKey outputIK : outputsPTS) {
@@ -319,20 +338,25 @@ public class ModelCall extends TensorGenerator {
   }
 
   /**
-   * Resolves the points-to set of the {@code outputs} argument at the caller-side {@code
-   * Model(...)} invoke that created the given synthetic {@code Model.do} node. Walks the node's
-   * call-graph edges to each calling invoke and reads the {@code outputs} use by keyword name first
-   * (covers {@code Model(outputs=...)}) then by position (covers {@code Model(in, out)}). Reading
-   * the caller invoke handles keyword construction, which the {@code Model.do} formal-parameter
-   * binding alone does not.
+   * Resolves the points-to set of the {@code outputs} argument at the caller-side invoke of the
+   * given node: the {@code Model(...)} invoke that created a synthetic {@code Model.do} node, or
+   * the call of a {@code Model.__init__} node. Walks the node's call-graph edges to each calling
+   * invoke and reads the {@code outputs} use by keyword name first (covers {@code
+   * Model(outputs=...)}) then by position (covers {@code Model(in, out)}). Reading the caller
+   * invoke handles keyword construction, which the {@code Model.do} formal-parameter binding alone
+   * does not.
    *
    * @param builder The propagation call graph builder.
-   * @param modelDoNode The synthetic {@code Model.do} node allocating the model instance.
+   * @param modelDoNode The synthetic {@code Model.do} node allocating the model instance, or a
+   *     {@code Model.__init__} node.
+   * @param leading The number of positional arguments before {@code inputs} besides the callee:
+   *     none for a {@code Model(...)} construction, and one, the instance, for a call of {@code
+   *     Model.__init__}.
    * @return The union of the resolved {@code outputs} argument points-to sets, or an empty set if
    *     none could be located.
    */
-  private OrdinalSet<InstanceKey> getOutputsArgumentPTS(
-      PropagationCallGraphBuilder builder, CGNode modelDoNode) {
+  private static OrdinalSet<InstanceKey> getOutputsArgumentPTS(
+      PropagationCallGraphBuilder builder, CGNode modelDoNode, int leading) {
     OrdinalSet<InstanceKey> ret = OrdinalSet.empty();
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, modelDoNode)) {
@@ -340,12 +364,7 @@ public class ModelCall extends TensorGenerator {
       if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
       PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
 
-      int argVn = pyCall.getUse(Model.Parameters.OUTPUTS.getName());
-      if (argVn == -1) {
-        int numPositionalArgs = pyCall.getNumberOfPositionalParameters() - 1;
-        int outputsPos = Model.Parameters.OUTPUTS.getIndex();
-        if (outputsPos < numPositionalArgs) argVn = pyCall.getUse(outputsPos + 1);
-      }
+      int argVn = getOutputsUse(pyCall, leading);
       if (argVn <= 0) continue;
 
       PointerKey argPK =
@@ -353,6 +372,158 @@ public class ModelCall extends TensorGenerator {
       ret = OrdinalSet.unify(ret, builder.getPointerAnalysis().getPointsToSet(argPK));
     }
     return ret;
+  }
+
+  /**
+   * The value number of a call's {@code outputs} argument, by keyword or else by position.
+   *
+   * @param call The call.
+   * @param leading The number of positional arguments before {@code inputs} besides the callee.
+   * @return The argument's value number, or {@code -1} if the call passes none.
+   */
+  private static int getOutputsUse(PythonInvokeInstruction call, int leading) {
+    int argVn = call.getUse(Model.Parameters.OUTPUTS.getName());
+    if (argVn == -1) {
+      int numPositionalArgs = call.getNumberOfPositionalParameters() - 1 - leading;
+      int outputsPos = Model.Parameters.OUTPUTS.getIndex();
+      if (outputsPos < numPositionalArgs) argVn = call.getUse(outputsPos + 1 + leading);
+    }
+    return argVn;
+  }
+
+  /**
+   * The keyword name a {@code **} argument reaches a call under: the parser gives it no name, and
+   * the translator spells the missing one this way.
+   */
+  private static final String DOUBLE_STARRED_KEYWORD = "null";
+
+  /**
+   * What the calls that build a subclass instance pass as its {@code outputs} (wala/ML#1128).
+   *
+   * @param outputs The union of the points-to sets of the {@code outputs} the calls pass.
+   * @param omitted Whether there is at least one such call and every one demonstrably passes no
+   *     {@code outputs}: no {@code outputs} keyword, too few positional arguments to reach it, and
+   *     no {@code *} or {@code **} argument that might carry it. Only then is the model not a
+   *     functional one; an empty {@link #outputs} alone may also mean the argument could not be
+   *     read or the calls were not found.
+   */
+  protected record ConstructionOutputs(OrdinalSet<InstanceKey> outputs, boolean omitted) {}
+
+  /**
+   * Resolves the {@code outputs} the construction of a {@code tf.keras.Model} subclass instance
+   * passes (wala/ML#1128). The summary's {@code Model.__init__} declares no {@code inputs} or
+   * {@code outputs}, so the argument is read off the calls that carry it:
+   *
+   * <ul>
+   *   <li>For a class whose constructor is its own or a program base's, each {@code
+   *       super().__init__(...)} call of a {@code Model.__init__} node whose instance is the given
+   *       one, past the instance.
+   *   <li>For a class that inherits {@code Model.__init__}, each call of the class, as for a {@code
+   *       tf.keras.Model(...)} construction. The call the class's construction makes of {@code
+   *       Model.__init__} itself passes only the instance.
+   * </ul>
+   *
+   * @param builder The propagation call graph builder.
+   * @param selfIK The model instance.
+   * @return The {@code outputs} the calls pass, and whether they demonstrably pass none.
+   */
+  protected static ConstructionOutputs getConstructionOutputs(
+      PropagationCallGraphBuilder builder, InstanceKey selfIK) {
+    AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
+    if (selfASIN == null) return new ConstructionOutputs(OrdinalSet.empty(), false);
+    CGNode classNode = selfASIN.getNode();
+    CallGraph cg = builder.getCallGraph();
+
+    // The class has a constructor of its own, or a program base's, if its construction calls one or
+    // if one is declared in the hierarchy: either alone can be missed (an unresolved constructor, a
+    // base translated later, wala/ML#944), and taking the inherited branch by mistake could answer
+    // an omission for `outputs` a program constructor does pass.
+    boolean ownInit = declaresInit(builder.getClassHierarchy(), classNode);
+    for (Iterator<CGNode> it = cg.getSuccNodes(classNode); it.hasNext(); ) {
+      String callee = it.next().getMethod().getDeclaringClass().getName().toString();
+      if (callee.startsWith("Lscript ") && callee.endsWith("/" + INIT_METHOD_NAME)) ownInit = true;
+    }
+
+    // Each call of `Model.__init__` for the instance other than the construction's own, which
+    // passes only the instance: a `super().__init__(...)`.
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> superInits = new ArrayList<>();
+    for (CGNode init : cg.getNodes(MODEL_INIT)) {
+      IR ir = init.getIR();
+      // The instance is the formal after the function object.
+      if (ir == null || ir.getNumberOfParameters() < 2) continue;
+      PointerKey selfPK =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(init, ir.getParameter(1));
+      boolean ofInstance = false;
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPK))
+        if (ik.equals(selfIK)) ofInstance = true;
+      if (!ofInstance) continue;
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> call : getCallerInvokes(builder, init))
+        if (!call.fst.equals(classNode)) superInits.add(call);
+    }
+
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> calls = new ArrayList<>();
+    int leading;
+    boolean unknown = false;
+    if (ownInit) {
+      leading = 1;
+      calls.addAll(superInits);
+    } else {
+      leading = 0;
+      calls.addAll(getCallerInvokes(builder, classNode));
+      // A `super().__init__(...)` means a program constructor ran after all, whose arguments the
+      // class's call does not show.
+      if (!superInits.isEmpty()) unknown = true;
+    }
+
+    OrdinalSet<InstanceKey> outputs = OrdinalSet.empty();
+    boolean read = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> call : calls) {
+      if (!(call.snd instanceof PythonInvokeInstruction pyCall)) {
+        unknown = true;
+        continue;
+      }
+      if (pyCall.firstStarredPosition() >= 0
+          || pyCall.getKeywords().contains(DOUBLE_STARRED_KEYWORD)) unknown = true;
+      int argVn = getOutputsUse(pyCall, leading);
+      if (argVn <= 0) continue;
+      read = true;
+      PointerKey argPK =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(call.fst, argVn);
+      outputs = OrdinalSet.unify(outputs, builder.getPointerAnalysis().getPointsToSet(argPK));
+    }
+    return new ConstructionOutputs(outputs, !calls.isEmpty() && !read && !unknown);
+  }
+
+  /**
+   * Whether the program class a construction node builds, or a program base of it, declares {@code
+   * __init__}.
+   *
+   * @param cha The class hierarchy.
+   * @param classNode The class's construction node.
+   * @return {@code true} if a program class from the class up to its first library base declares a
+   *     constructor.
+   */
+  private static boolean declaresInit(IClassHierarchy cha, CGNode classNode) {
+    Deque<IClass> work = new ArrayDeque<>();
+    Set<IClass> seen = HashSetFactory.make();
+    work.add(classNode.getMethod().getDeclaringClass());
+    while (!work.isEmpty()) {
+      IClass c = work.pop();
+      if (!seen.add(c)
+          || !(c instanceof IPythonClass python)
+          || c instanceof PythonSummaryShellClass
+          || !c.getName().toString().startsWith("Lscript ")) continue;
+      for (MethodReference m : python.getMethodReferences())
+        if (m.getName().toString().equals(INIT_METHOD_NAME)) return true;
+      for (TypeName base : python.getBaseTypeNames()) {
+        IClass next = cha.lookupClass(TypeReference.findOrCreate(PythonTypes.pythonLoader, base));
+        if (next != null) work.add(next);
+      }
+    }
+    return false;
   }
 
   @Override
