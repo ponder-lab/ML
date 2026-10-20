@@ -401,6 +401,7 @@ public abstract class TensorGenerator {
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
     MAY_RUN_IN_GRAPH_MODE.remove(builder);
+    BLOCK_FEASIBILITIES.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -3886,12 +3887,73 @@ public abstract class TensorGenerator {
    * are walked: a block reached over an exceptional edge alone has none and is kept, so a handler
    * is never decided dead by the guards above the call that may throw into it.
    *
+   * <p>The verdict is memoized per builder by node and block number: the analysis's passes over
+   * every block of every node ask about each block several times, and each walk follows a path of
+   * predecessors back to the entry (wala/ML#1132). The verdict depends on the builder's final
+   * pointer analysis, the node, and the block, and on the shape reads of the rank and {@code len}
+   * folds the branch folds may make. Those reads are settled when the engine's passes ask, after
+   * resolution; a walk during which a fold declined on an interim read is not memoized, so its
+   * verdict is recomputed on the next ask. Only whole walks are memoized. A predecessor's verdict
+   * within a walk counts the blocks already on that walk as live, so it can differ from the
+   * predecessor's own verdict and is not reused.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
    * @param node The {@link CGNode} whose IR contains the block.
    * @param block The block.
    * @return {@link Boolean#FALSE} iff the block is decidably dead; {@code null} otherwise (kept).
    */
   static Boolean computeBlockFeasibility(
+      PropagationCallGraphBuilder builder, CGNode node, ISSABasicBlock block) {
+    // Under a phi fold, the fold's cycle break can make the walk's branch folds answer differently
+    // than a fresh walk would, so such a verdict is neither read from nor written to the memo.
+    if (!PHI_FOLD_ON_STACK.get().isEmpty()) return walkBlockFeasibility(builder, node, block);
+    BlockFeasibilities feasibilities =
+        BLOCK_FEASIBILITIES.computeIfAbsent(builder, b -> new BlockFeasibilities());
+    // The lock is held across the walk's shape reads. The engine's passes ask from one thread, so
+    // it guards the memo's maps only; passes asking in parallel would serialize their walks on it.
+    synchronized (feasibilities) {
+      Map<Integer, Boolean> byBlock =
+          feasibilities.verdicts.computeIfAbsent(node, n -> HashMapFactory.make());
+      int number = block.getNumber();
+      if (byBlock.containsKey(number)) return byBlock.get(number);
+      int declinesBefore = interimGuardDeclines();
+      Boolean ret = walkBlockFeasibility(builder, node, block);
+      feasibilities.walks++;
+      // A fold declined on an interim read, so the verdict holds for this resolution only.
+      if (interimGuardDeclines() == declinesBefore) byBlock.put(number, ret);
+      return ret;
+    }
+  }
+
+  /**
+   * The block-feasibility verdicts of one builder's analysis, and the number of walks that computed
+   * them (wala/ML#1132).
+   */
+  static final class BlockFeasibilities {
+
+    /** Each node's verdicts by block number, {@code null} meaning kept. */
+    final Map<CGNode, Map<Integer, Boolean>> verdicts = HashMapFactory.make();
+
+    /** The number of walks {@link #computeBlockFeasibility} made. */
+    int walks;
+  }
+
+  /**
+   * Per builder, the memoized verdicts of {@link #computeBlockFeasibility}. The values hold the
+   * builder's nodes, which keep the weak key reachable, so {@link #clearCaches} removes the entry.
+   */
+  static final Map<PropagationCallGraphBuilder, BlockFeasibilities> BLOCK_FEASIBILITIES =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The walk behind {@link #computeBlockFeasibility}, unmemoized.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR contains the block.
+   * @param block The block.
+   * @return {@link Boolean#FALSE} iff the block is decidably dead; {@code null} otherwise (kept).
+   */
+  static Boolean walkBlockFeasibility(
       PropagationCallGraphBuilder builder, CGNode node, ISSABasicBlock block) {
     IR ir = node.getIR();
     Set<ISSABasicBlock> visited = HashSetFactory.make();
