@@ -22,6 +22,22 @@ class NotFunctional(tf.keras.Model):
     pass
 
 
+class InheritedInit(tf.keras.Model):
+    pass
+
+
+class KeywordsForwarded(tf.keras.Model):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class PositionalsForwarded(tf.keras.Model):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+
 def consume_keyword(t):
     assert t.shape == (2, 4) and t.dtype == tf.float32
 
@@ -35,6 +51,22 @@ def consume_direct(t):
 
 
 def consume_call(t):
+    assert t.shape == (2, 4) and t.dtype == tf.float32
+
+
+def consume_inherited_keyword(t):
+    assert t.shape == (2, 4) and t.dtype == tf.float32
+
+
+def consume_inherited_positional(t):
+    assert t.shape == (2, 4) and t.dtype == tf.float32
+
+
+def consume_keywords_forwarded(t):
+    assert t.shape == (2, 4) and t.dtype == tf.float32
+
+
+def consume_positionals_forwarded(t):
     assert t.shape == (2, 4) and t.dtype == tf.float32
 
 
@@ -52,6 +84,20 @@ consume_direct(
 
 direct = tf.keras.Model(inputs=i, outputs=tf.keras.layers.Dense(4)(i))
 consume_call(direct.call(tf.ones([2, 3])))
+
+j = tf.keras.Input(shape=(3,))
+consume_inherited_keyword(
+    InheritedInit(inputs=j, outputs=tf.keras.layers.Dense(4)(j))(tf.ones([2, 3]))
+)
+consume_inherited_positional(
+    InheritedInit(j, tf.keras.layers.Dense(4)(j))(tf.ones([2, 3]))
+)
+consume_keywords_forwarded(
+    KeywordsForwarded(inputs=j, outputs=tf.keras.layers.Dense(4)(j))(tf.ones([2, 3]))
+)
+consume_positionals_forwarded(
+    PositionalsForwarded(j, tf.keras.layers.Dense(4)(j))(tf.ones([2, 3]))
+)
 
 try:
     consume_not_functional(NotFunctional()(tf.ones([2, 3])))
