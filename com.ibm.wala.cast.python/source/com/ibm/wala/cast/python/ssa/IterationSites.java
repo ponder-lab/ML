@@ -17,10 +17,12 @@ import java.util.Map;
  * comprehension's generator, indexed by the {@link EachElementGetInstruction}s that step them
  * (wala/ML#1133).
  *
- * <p>Each such loop starts with the {@code iter} call over its iterable, and its element gets come
- * after that call and before any {@code iter} or {@code next} call of a loop nested in it, so the
- * nearest iteration-protocol call that dominates an element get is its loop's {@code iter} call.
- * Matching on the iterable's value number instead would conflate two loops over one variable.
+ * <p>Each such loop starts with the {@code iter} call over its iterable. One element get follows
+ * that call in straight-line code, and the other is in the loop's header, which no instruction of
+ * the loop's body dominates. So the iteration-protocol calls that dominate either get are the
+ * loop's own {@code iter} call and calls made before it, all of which dominate that call, and the
+ * nearest is the loop's {@code iter} call. Matching on the iterable's value number instead would
+ * conflate two loops over one variable.
  */
 public final class IterationSites {
 

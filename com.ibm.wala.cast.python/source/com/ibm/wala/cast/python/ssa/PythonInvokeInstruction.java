@@ -90,7 +90,8 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
 
   /**
    * An invoke that records whether the front end made it while lowering a loop or a comprehension
-   * to the iteration protocol (wala/ML#1131).
+   * to the iteration protocol (wala/ML#1131), but not the source construct it was lowered from, so
+   * {@link #getIterationSource()} answers {@code null} even when {@code iterationProtocol} holds.
    *
    * @param iindex The instruction index.
    * @param result The call's value number.
@@ -194,6 +195,11 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
   /**
    * The value numbers of the iterables a comprehension's invoke iterates, one per generator in
    * source order (wala/ML#1133).
+   *
+   * <p>The front end evaluates every generator's iterable in the enclosing scope, but Python does
+   * so only for the first generator. The first entry is therefore exact, and a later entry is the
+   * generator's iterable only when that iterable does not depend on an earlier generator's target:
+   * in {@code [b for a in x for b in a]}, the second entry is the enclosing scope's {@code a}.
    *
    * @return The iterables.
    * @throws IllegalStateException if the call is not a comprehension's invoke.
