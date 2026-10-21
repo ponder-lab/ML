@@ -49,6 +49,11 @@ jobs:
       run: mvn spotless:check -B
     - name: Check formatting with Black
       run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
+    # This job leaves the `WholeProjectFixtures` category out, and the `whole-project-fixtures`
+    # shards select by explicit `-Dtest` lists, so a test in the category that no list names runs
+    # nowhere outside a tag push. Fail on such a test, and on a list entry that selects none.
+    - name: Check that the whole-project shards select every test in their category
+      run: python3 .github/scripts/check-shard-coverage.py
     - name: Install Jython3
       run: |
         pushd jython3
