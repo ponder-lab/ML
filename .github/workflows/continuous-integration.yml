@@ -25,8 +25,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      is_semver_release: ${{ steps.tag_check.outputs.is_semver_release }}
     steps:
     - name: Check out wala/ML sources
       uses: actions/checkout@v7
@@ -51,7 +49,7 @@ jobs:
       run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
     # This job leaves the `WholeProjectFixtures` category out, and the `whole-project-fixtures`
     # shards select by explicit `-Dtest` lists, so a test in the category that no list names runs
-    # nowhere outside a tag push. Fail on such a test, and on a list entry that selects none.
+    # nowhere, tag pushes included. Fail on such a test, and on a list entry that selects none.
     - name: Check that the whole-project shards select every test in their category
       run: python3 .github/scripts/check-shard-coverage.py
     - name: Install Jython3
@@ -70,16 +68,11 @@ jobs:
         mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
         popd
     # The whole-project fixture analyses (the `WholeProjectFixtures` category) run in the parallel
-    # `whole-project-fixtures` job on PR/branch/queue runs, pulling the wall clock back to the
-    # pre-context-broadening band (wala/ML#755). Tag pushes run the FULL suite here instead: the
-    # deploy gate below sits in this job, and a release must never deploy while its long-pole
-    # tests run unconsumed in a sibling job.
+    # `whole-project-fixtures` job, pulling the wall clock back to the pre-context-broadening band
+    # (wala/ML#755), on every run, tag pushes included: the `deploy` job waits for both, so nothing
+    # deploys before every test has run.
     - name: Build with Maven
-      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
       run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco -DexcludedGroups=com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures
-    - name: Build with Maven (full suite, tag push)
-      if: ${{ startsWith(github.ref, 'refs/tags/') }}
-      run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco
     # Guard against `run.sh`'s JAR path drifting behind the project version (wala/ML#525): verify
     # its glob resolves to exactly one fat JAR carrying the driver's `Main-Class` manifest entry.
     - name: Smoke-test `run.sh` fat-JAR resolution
@@ -107,69 +100,12 @@ jobs:
         slug: ponder-lab/ML
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    # Gate the deploy: only a semver-shaped tag that's an ancestor of master, so a feature-branch
-    # tag can't trigger a release deploy (wala/ML#421). The non-semver early-exit also keeps the
-    # `merge-base` call from erroring on legacy tags. `--depth=50` (not the checkout's shallow
-    # `fetch-depth: 1`) gives the tag commit and master's tip a shared parent chain so `--is-ancestor`
-    # can link them — the root cause of the 0.44.0/0.45.0 deploy-gate misses (wala/ML#454).
-    - name: Verify tag is a semver release tag on master
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        if ! [[ "${{ github.ref_name }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-          echo "Tag ${{ github.ref_name }} is not semver-shaped; skipping deploy gate."
-          echo "is_semver_release=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-        git fetch --no-tags --depth=50 origin master
-        git merge-base --is-ancestor ${{ github.sha }} origin/master
-        echo "is_semver_release=true" >> "$GITHUB_OUTPUT"
-      id: tag_check
-      shell: bash
-    # A master push deploys a SNAPSHOT and nothing else. `release:prepare` lands a commit on master
-    # that carries the release version, and its push would deploy that version from a branch
-    # build; only the SNAPSHOT bump's push, cancelling it in the concurrency group, kept that from
-    # happening, so the release version could reach the registry from a run other than the tag's.
-    # Reading the version makes the tag run the release version's only route.
-    - name: Check that a master push builds a SNAPSHOT
-      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-      run: |
-        version=$(mvn help:evaluate -N -Dexpression=project.version -q -DforceStdout -B)
-        if [[ "$version" == *-SNAPSHOT ]]; then
-          echo "is_snapshot=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "::warning::Version $version on master is not a SNAPSHOT; skipping the deploy, which the tag run does."
-          echo "is_snapshot=false" >> "$GITHUB_OUTPUT"
-        fi
-      id: snapshot_check
-      shell: bash
-    - name: Deploy with Maven
-      run: mvn -s .ci.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
-      env:
-        GITHUB_USERNAME: ${{ secrets.GITHUB_USERNAME }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Hybrid deploy gate (wala/ML#421): master pushes deploy SNAPSHOTs (for downstream consumers
-      # like ponder-lab/Hybridize-Functions-Refactoring); semver tag pushes deploy the immutable
-      # release. Tag pushes are exempt from `cancel-in-progress` (see the `concurrency` block) so the
-      # release deploy reliably finishes — release:prepare lands two master commits in quick
-      # succession, and the SNAPSHOT-bump run would otherwise cancel the release run mid-deploy.
-      if: ${{ github.event_name == 'push' && ((github.ref == 'refs/heads/master' && steps.snapshot_check.outputs.is_snapshot == 'true') || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
-    # On semver tag-push, upload the fat-classifier JAR as a CI artifact for the
-    # downstream `release-upload` job to attach to the GitHub Release.
-    - name: Upload fat JAR artifact
-      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true' }}
-      uses: actions/upload-artifact@v7
-      with:
-        name: fat-jar
-        path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
-        if-no-files-found: error
-        retention-days: 1
   # The suite's long pole (the whole-project corpus analyses) runs beside the rest of the suite
   # instead of after it, sharded per subject so each leg stays short enough to serve as a required
   # check without restoring the old queue latency (wala/ML#755; measured: the corpus class alone is
-  # ~8 minutes serial, the order-invariance meta-test ~6). Tag pushes skip this job: the `build`
-  # job runs the full suite there so the deploy gate consumes every test itself.
+  # ~8 minutes serial, the order-invariance meta-test ~6). It runs on tag pushes too, and the
+  # `deploy` job waits for every leg.
   whole-project-fixtures:
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -236,13 +172,113 @@ jobs:
         slug: ponder-lab/ML
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  # Deploy after every test has passed: `needs` waits for `build` and every leg of
+  # `whole-project-fixtures`, and the default `success()` condition requires all of them. The
+  # deploy rebuilds without tests rather than taking artifacts from `build`, so the deployed
+  # artifacts and the fat JAR the Release attaches come from one build. A master SNAPSHOT deploy
+  # therefore also waits for, and is blocked by a failure in, the whole-project shards.
+  deploy:
+    needs: [build, whole-project-fixtures]
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) }}
+    runs-on: ubuntu-latest
+    outputs:
+      is_semver_release: ${{ steps.tag_check.outputs.is_semver_release }}
+    steps:
+    - name: Check out wala/ML sources
+      uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+    - name: Set up JDK 25
+      uses: actions/setup-java@v6
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+        cache: maven
+    - name: Install Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+    - name: Install Jython3
+      run: |
+        pushd jython3
+        ant
+        pushd dist
+        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+        popd
+      shell: bash
+    - name: Install IDE
+      run: |
+        pushd IDE/com.ibm.wala.cast.lsp
+        mvn package -B -q -DskipTests
+        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+    # Gate the deploy: only a semver-shaped tag that's an ancestor of master, so a feature-branch
+    # tag can't trigger a release deploy (wala/ML#421). The non-semver early-exit also keeps the
+    # `merge-base` call from erroring on legacy tags. `--depth=50` (not the checkout's shallow
+    # `fetch-depth: 1`) gives the tag commit and master's tip a shared parent chain so `--is-ancestor`
+    # can link them — the root cause of the 0.44.0/0.45.0 deploy-gate misses (wala/ML#454).
+    - name: Verify tag is a semver release tag on master
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        if ! [[ "${{ github.ref_name }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "Tag ${{ github.ref_name }} is not semver-shaped; skipping deploy gate."
+          echo "is_semver_release=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        git fetch --no-tags --depth=50 origin master
+        git merge-base --is-ancestor ${{ github.sha }} origin/master
+        echo "is_semver_release=true" >> "$GITHUB_OUTPUT"
+      id: tag_check
+      shell: bash
+    # A master push deploys a SNAPSHOT and nothing else. `release:prepare` lands a commit on master
+    # that carries the release version, and its push would deploy that version from a branch
+    # build; only the SNAPSHOT bump's push, cancelling it in the concurrency group, kept that from
+    # happening, so the release version could reach the registry from a run other than the tag's.
+    # Reading the version makes the tag run the release version's only route.
+    - name: Check that a master push builds a SNAPSHOT
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      run: |
+        version=$(mvn help:evaluate -N -Dexpression=project.version -q -DforceStdout -B)
+        if [[ "$version" == *-SNAPSHOT ]]; then
+          echo "is_snapshot=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::Version $version on master is not a SNAPSHOT; skipping the deploy, which the tag run does."
+          echo "is_snapshot=false" >> "$GITHUB_OUTPUT"
+        fi
+      id: snapshot_check
+      shell: bash
+    - name: Deploy with Maven
+      run: mvn -s .ci.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
+      env:
+        GITHUB_USERNAME: ${{ secrets.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Hybrid deploy gate (wala/ML#421): master pushes deploy SNAPSHOTs (for downstream consumers
+      # like ponder-lab/Hybridize-Functions-Refactoring); semver tag pushes deploy the immutable
+      # release. Tag pushes are exempt from `cancel-in-progress` (see the `concurrency` block) so the
+      # release deploy reliably finishes — release:prepare lands two master commits in quick
+      # succession, and the SNAPSHOT-bump run would otherwise cancel the release run mid-deploy.
+      if: ${{ github.event_name == 'push' && ((github.ref == 'refs/heads/master' && steps.snapshot_check.outputs.is_snapshot == 'true') || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
+    # On semver tag-push, upload the fat-classifier JAR as a CI artifact for the
+    # downstream `release-upload` job to attach to the GitHub Release.
+    - name: Upload fat JAR artifact
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: fat-jar
+        path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
+        if-no-files-found: error
+        retention-days: 1
   # Attach the fat-classifier JAR to the GitHub Release on semver tag-push, so standalone-driver
   # users (`java -jar`) can fetch it without the `read:packages` PAT that GitHub Packages requires.
   # A separate job scopes the elevated `contents: write` permission to release tag-pushes only;
-  # PR/branch-push runs of `build` keep the workflow-level `contents: read`.
+  # The other jobs keep the workflow-level `contents: read`.
   release-upload:
-    needs: build
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.build.outputs.is_semver_release == 'true' }}
+    needs: deploy
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.deploy.outputs.is_semver_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
