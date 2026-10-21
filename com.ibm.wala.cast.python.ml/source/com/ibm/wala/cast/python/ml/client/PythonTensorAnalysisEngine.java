@@ -13,7 +13,9 @@ import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 
+import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
+import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
@@ -3399,6 +3401,62 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether a call-graph node is a Keras {@code call} body that {@code Layer.__call__} runs, by the
+   * name of its declaring class (wala/ML#821), and not one the program invokes directly
+   * (wala/ML#1114).
+   *
+   * @param node The node.
+   * @return Whether the node is a Keras {@code call} body reached by applying its layer.
+   */
+  private static boolean isAppliedKerasCallBody(CGNode node) {
+    if (node.getIR() == null || node.getMethod().isStatic()) return false;
+    String declaringClass =
+        node.getMethod().getDeclaringClass().getReference().getName().toString();
+    return declaringClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+        && !isDirectlyInvoked(node);
+  }
+
+  /**
+   * The values of a Keras {@code call} body that {@code Layer.__call__} has converted from a Keras
+   * symbolic tensor to a graph tensor (wala/ML#1134): its argument parameters, every one after
+   * {@code self}, and the values the body reads out of them as elements, through a subscript, a
+   * tuple unpacking or an iteration, at any depth. An attribute read is left out, since the
+   * conversion maps over a nested structure's elements and not over an object's attributes.
+   *
+   * @param node A Keras {@code call} body's node.
+   * @return The value numbers.
+   */
+  private static Set<Integer> kerasCallInputValues(CGNode node) {
+    IR ir = node.getIR();
+    DefUse du = node.getDU();
+    Set<Integer> ret = HashSetFactory.make();
+    Deque<Integer> work = new ArrayDeque<>();
+    // The first parameter is the function object, and the second is `self`.
+    for (int i = 2; i < ir.getNumberOfParameters(); i++)
+      if (ret.add(ir.getParameter(i))) work.add(ir.getParameter(i));
+    while (!work.isEmpty()) {
+      int value = work.remove();
+      for (Iterator<SSAInstruction> uses = du.getUses(value); uses.hasNext(); ) {
+        SSAInstruction use = uses.next();
+        boolean element =
+            use instanceof AstPropertyRead read
+                    && read.getObjectRef() == value
+                    && ((read instanceof PythonPropertyRead python && python.isSubscript())
+                        || !ir.getSymbolTable().isStringConstant(read.getMemberRef()))
+                || use instanceof EachElementGetInstruction
+                || use instanceof AssignInstruction
+                // The iterator a loop takes with `iter`, then each element `next` takes from it.
+                || use instanceof PythonInvokeInstruction call
+                    && call.isIterationProtocol()
+                    && call.getNumberOfPositionalParameters() > 1
+                    && call.getUse(1) == value;
+        if (element && use.hasDef() && ret.add(use.getDef())) work.add(use.getDef());
+      }
+    }
+    return ret;
+  }
+
+  /**
    * Whether a call-graph node is a Keras {@code call} body or a trampoline into one, by the name of
    * its declaring class, as the Keras call input destinations are recognized (wala/ML#821).
    * Applying a layer whose {@code call} the program defines is such a call: {@code Layer.__call__}
@@ -3979,15 +4037,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable v : parameters) {
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
         CGNode owner = lpk.getNode();
-        if (owner.getIR() == null || owner.getMethod().isStatic()) continue;
+        if (!isAppliedKerasCallBody(owner)) continue;
         if (owner.getIR().getNumberOfParameters() < 3) continue;
-        if (owner.getIR().getParameter(2) != lpk.getValueNumber()) continue;
-        String declaringClass =
-            owner.getMethod().getDeclaringClass().getReference().getName().toString();
-        if (declaringClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
-            && !isDirectlyInvoked(owner)) computeDTypeCasts.add(v);
+        if (owner.getIR().getParameter(2) == lpk.getValueNumber()) computeDTypeCasts.add(v);
       }
       LOGGER.fine(() -> "wala/ML#821 Keras call input destinations: " + computeDTypeCasts.size());
+
+      // `Layer.__call__` makes a graph tensor for every Keras symbolic tensor it is given, in every
+      // argument and nested in any of them, before it runs `call` (wala/ML#1134), so none of the
+      // values `call` receives that way is a symbolic tensor. Collected here are a `call` body's
+      // argument parameters and the values it reads out of them as elements; the transfer into
+      // each withholds the Keras symbolic origin. The cast to the compute dtype is a different
+      // rule and stays on the first argument alone, above.
+      Map<CGNode, Set<Integer>> callInputValues = HashMapFactory.make();
+      for (PointsToSetVariable v : parameters) {
+        CGNode owner = ((LocalPointerKey) v.getPointerKey()).getNode();
+        if (!callInputValues.containsKey(owner) && isAppliedKerasCallBody(owner))
+          callInputValues.put(owner, kerasCallInputValues(owner));
+      }
+      Set<PointsToSetVariable> kerasCallInputs = HashSetFactory.make();
+      for (PointsToSetVariable v : dataflow)
+        if (v.getPointerKey() instanceof LocalPointerKey lpk
+            && callInputValues
+                .getOrDefault(lpk.getNode(), Collections.emptySet())
+                .contains(lpk.getValueNumber())) kerasCallInputs.add(v);
+      LOGGER.fine(() -> "wala/ML#1134 Keras call input values: " + kerasCallInputs.size());
 
       // A parameter's consumers coerce it (wala/ML#828): TensorFlow converts a NumPy argument
       // through the dtype of the operand beside it, so the dtype a parameter is fed is not the
@@ -4336,6 +4410,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               dtypeCoercions,
               iterationProducts,
               markerEdges,
+              kerasCallInputs,
               errorLog);
 
       tt.solve(new NullProgressMonitor());

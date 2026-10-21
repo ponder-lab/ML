@@ -343,6 +343,53 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
+   * A transfer function for an edge into a value that a Keras {@code call} body receives through
+   * {@code Layer.__call__} (wala/ML#1134): an argument parameter, or an element read out of one.
+   * {@code Layer.__call__} makes a graph tensor for every Keras symbolic tensor it is given, nested
+   * ones included, so the edge transfers what the destination's own transfer would, but from an
+   * inflow without {@link TensorOrigin#KERAS_SYMBOLIC}. Wrapping the destination's own transfer,
+   * rather than replacing it, keeps the dtype cast, coercion and barrier that transfer applies.
+   */
+  static final class KerasCallInputOp extends UnaryOperator<TensorVariable> {
+    /** The destination's own transfer. */
+    private final UnaryOperator<TensorVariable> delegate;
+
+    /**
+     * Wraps a destination's own transfer.
+     *
+     * @param delegate The transfer.
+     */
+    KerasCallInputOp(UnaryOperator<TensorVariable> delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (rhs == null || !rhs.origins.contains(TensorOrigin.KERAS_SYMBOLIC))
+        return delegate.evaluate(lhs, rhs);
+      TensorVariable converted = new TensorVariable();
+      converted.copyState(rhs);
+      converted.origins.remove(TensorOrigin.KERAS_SYMBOLIC);
+      return delegate.evaluate(lhs, converted);
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x1134CA11 ^ delegate.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof KerasCallInputOp other && delegate.equals(other.delegate);
+    }
+
+    @Override
+    public String toString() {
+      return delegate + ", without the Keras symbolic origin (Keras call input)";
+    }
+  }
+
+  /**
    * A transfer function for parameter destinations (wala/ML#726): tensor types flow through
    * unchanged, and the producing-library origins union is skipped, so a parameter keeps its seeded
    * {@link TensorOrigin#PARAMETER} instead of inheriting its call sites' eager origins. The {@link
@@ -681,6 +728,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
+      Set<PointsToSetVariable> kerasCallInputs,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
@@ -1416,6 +1464,23 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           @Override
           public UnaryOperator<TensorVariable> getEdgeTransferFunction(
               PointsToSetVariable src, PointsToSetVariable dst) {
+            UnaryOperator<TensorVariable> op = destinationEdgeTransferFunction(src, dst);
+            // An edge rather than a node transfer, since a node's own seed is not an inflow
+            // (wala/ML#1134). The wrapper changes no state, so stateBlockedDestinations is
+            // unaffected.
+            return kerasCallInputs.contains(dst) ? new KerasCallInputOp(op) : op;
+          }
+
+          /**
+           * The transfer for an edge by its destination's role, before a Keras {@code call} input
+           * withholds the Keras symbolic origin (wala/ML#1134).
+           *
+           * @param src The edge's source.
+           * @param dst The edge's destination.
+           * @return The transfer.
+           */
+          private UnaryOperator<TensorVariable> destinationEdgeTransferFunction(
+              PointsToSetVariable src, PointsToSetVariable dst) {
             // KEEP IN TANDEM with stateBlockedDestinations (wala/ML#838): the contamination
             // reach's stop set re-encodes which arms of this chain discard incoming state, so a
             // new state-rewriting arm here must be registered there (as a reach source if it
@@ -1629,6 +1694,55 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         dtypeCoercions,
         iterationProducts,
         markerEdges,
+        Collections.emptySet(),
+        errorLog);
+  }
+
+  /**
+   * As the constructor without Keras {@code call} inputs, with the values a Keras {@code call} body
+   * receives through {@code Layer.__call__}, whose inflow withholds {@link
+   * TensorOrigin#KERAS_SYMBOLIC} (wala/ML#1134).
+   *
+   * @param kerasCallInputs The argument parameters of the Keras {@code call} bodies that {@code
+   *     Layer.__call__} runs, and the elements the bodies read out of them.
+   */
+  public TensorTypeAnalysis(
+      Graph<PointsToSetVariable> G,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
+      Map<PointsToSetVariable, Set<TensorType>> reshapeTypes,
+      Map<PointsToSetVariable, Set<TensorType>> set_shapes,
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements,
+      Map<PointsToSetVariable, FeedPlan> typeFeeds,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
+      Set<PointsToSetVariable> conv2ds,
+      Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
+      Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
+      Set<PointsToSetVariable> iterationProducts,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
+      Set<PointsToSetVariable> kerasCallInputs,
+      Map<PointerKey, AnalysisError> errorLog) {
+    this(
+        G,
+        init,
+        initOrigins,
+        reshapeTypes,
+        set_shapes,
+        refinements,
+        typeFeeds,
+        armSuppressions,
+        conv2ds,
+        conv3ds,
+        drops,
+        parameters,
+        computeDTypeCasts,
+        dtypeCoercions,
+        iterationProducts,
+        markerEdges,
+        kerasCallInputs,
         errorLog,
         new AtomicReference<>());
   }
@@ -1660,6 +1774,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
+      Set<PointsToSetVariable> kerasCallInputs,
       Map<PointerKey, AnalysisError> errorLog,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {
     super(
@@ -1678,6 +1793,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             dtypeCoercions,
             iterationProducts,
             markerEdges,
+            kerasCallInputs,
             outAccessor,
             errorLog));
     outAccessor.set(this::getOut);
