@@ -1593,7 +1593,10 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               CAstNode.DECL_STMT,
               Ast.makeConstant(new CAstSymbolImpl(dictName, PythonCAstToIRTranslator.Any)),
               Ast.makeNode(CAstNode.NEW, Ast.makeConstant("dict"))),
-          doGenerators(arg0.getInternalGenerators(), body),
+          doGenerators(
+              arg0.getInternalGenerators(),
+              body,
+              PythonCAstToIRTranslator.COMPREHENSION_ITERATION_PROTOCOL_MARKER),
           Ast.makeNode(CAstNode.VAR, Ast.makeConstant(dictName)));
     }
 
@@ -1668,7 +1671,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           doGenerators(
               Collections.singletonList(g),
               Ast.makeNode(
-                  CAstNode.BLOCK_EXPR, Ast.makeNode(CAstNode.BLOCK_EXPR, body), continueStmt)),
+                  CAstNode.BLOCK_EXPR, Ast.makeNode(CAstNode.BLOCK_EXPR, body), continueStmt),
+              PythonCAstToIRTranslator.ITERATION_PROTOCOL_MARKER),
           breakStmt);
     }
 
@@ -2641,12 +2645,24 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                 CAstNode.DECL_STMT,
                 Ast.makeConstant(new CAstSymbolImpl(indexName, PythonCAstToIRTranslator.Any)),
                 Ast.makeConstant(0)),
-            doGenerators(gen, body),
+            doGenerators(
+                gen, body, PythonCAstToIRTranslator.COMPREHENSION_ITERATION_PROTOCOL_MARKER),
             Ast.makeNode(CAstNode.VAR, Ast.makeConstant(listName)));
       }
     }
 
-    private CAstNode doGenerators(java.util.List<comprehension> generators, CAstNode body)
+    /**
+     * Lowers generators to loops over the iteration protocol.
+     *
+     * @param generators The generators, in source order.
+     * @param body The innermost loop's body.
+     * @param protocolMarker The marker the {@code iter} and {@code next} calls carry, which records
+     *     whether the source wrote a {@code for} statement or a comprehension (wala/ML#1133).
+     * @return The loops.
+     * @throws Exception if a generator's part cannot be translated.
+     */
+    private CAstNode doGenerators(
+        java.util.List<comprehension> generators, CAstNode body, String protocolMarker)
         throws Exception {
       CAstNode result = body;
 
@@ -2679,13 +2695,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         // over the iterable only decides when the loop ends.
         // Both calls carry the marker in their otherwise empty second child, so the invokes record
         // that they come from this lowering and not from an `iter(x)` or `next(it)` in the source
-        // (wala/ML#1131).
+        // (wala/ML#1131), and whether a `for` statement or a comprehension wrote it (wala/ML#1133).
         String iteratorName = temporary("temp iterator ");
         CAstNode nextElement =
             Ast.makeNode(
                 CAstNode.CALL,
                 Ast.makeNode(CAstNode.VAR, Ast.makeConstant("next")),
-                Ast.makeConstant(PythonCAstToIRTranslator.ITERATION_PROTOCOL_MARKER),
+                Ast.makeConstant(protocolMarker),
                 Ast.makeNode(CAstNode.VAR, Ast.makeConstant(iteratorName)));
         CAstNode iteratorDecl =
             Ast.makeNode(
@@ -2694,7 +2710,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                 Ast.makeNode(
                     CAstNode.CALL,
                     Ast.makeNode(CAstNode.VAR, Ast.makeConstant("iter")),
-                    Ast.makeConstant(PythonCAstToIRTranslator.ITERATION_PROTOCOL_MARKER),
+                    Ast.makeConstant(protocolMarker),
                     Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName))));
 
         CAstNode test;

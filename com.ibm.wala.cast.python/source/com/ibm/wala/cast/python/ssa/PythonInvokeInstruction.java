@@ -18,12 +18,27 @@ import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.Pair;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
 public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
+
+  /**
+   * The source construct whose iteration the front end lowered a call from (wala/ML#1133). The two
+   * differ at run time: AutoGraph converts a {@code for} statement over a tensor to a graph loop,
+   * while a comprehension over a tensor raises when traced.
+   */
+  public enum IterationSource {
+    /** A {@code for} statement. */
+    FOR_STATEMENT,
+
+    /** A list, set, dict or generator comprehension, or a generator expression. */
+    COMPREHENSION
+  }
+
   private final int result;
   private final int[] positionalParams;
   private final Pair<String, Integer>[] keywordParams;
@@ -45,6 +60,12 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
    * {@code iter(x)} otherwise lowers to the same instruction (wala/ML#1131).
    */
   private final boolean iterationProtocol;
+
+  /**
+   * The source construct whose iteration the front end lowered this call from, or {@code null} for
+   * a call in the source (wala/ML#1133).
+   */
+  private final IterationSource iterationSource;
 
   public PythonInvokeInstruction(
       int iindex,
@@ -90,22 +111,99 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
       Pair<String, Integer>[] keywordParams,
       int[] starredPositions,
       boolean iterationProtocol) {
+    this(
+        iindex,
+        result,
+        exception,
+        site,
+        positionalParams,
+        keywordParams,
+        starredPositions,
+        iterationProtocol,
+        null);
+  }
+
+  /**
+   * An invoke that also records the source construct whose iteration the front end lowered it from
+   * (wala/ML#1133).
+   *
+   * @param iindex The instruction index.
+   * @param result The call's value number.
+   * @param exception The value number of the exception the call may throw.
+   * @param site The call site.
+   * @param positionalParams The positional arguments' value numbers, the callee first.
+   * @param keywordParams The keyword arguments, each a name and a value number.
+   * @param starredPositions The positional slots whose argument was a starred expression.
+   * @param iterationProtocol Whether the call comes from the iteration protocol's lowering rather
+   *     than from the source.
+   * @param iterationSource The construct whose iteration the call was lowered from, or {@code null}
+   *     for a call in the source.
+   */
+  public PythonInvokeInstruction(
+      int iindex,
+      int result,
+      int exception,
+      CallSiteReference site,
+      int[] positionalParams,
+      Pair<String, Integer>[] keywordParams,
+      int[] starredPositions,
+      boolean iterationProtocol,
+      IterationSource iterationSource) {
     super(iindex, exception, site);
     this.positionalParams = positionalParams;
     this.keywordParams = keywordParams;
     this.starredPositions = starredPositions;
     this.iterationProtocol = iterationProtocol;
+    this.iterationSource = iterationSource;
     this.result = result;
   }
 
   /**
-   * Whether the front end made this call while lowering a {@code for} loop or a comprehension's
-   * generator to the iteration protocol, and not from a call in the source (wala/ML#1131).
+   * Whether the front end made this call while lowering a {@code for} statement or a dict
+   * comprehension's generator to the iteration protocol, and not from a call in the source
+   * (wala/ML#1131). A list, set or generator comprehension makes no such call: it lowers to a
+   * single invoke, for which {@link #isComprehension()} holds.
    *
    * @return {@code true} iff the call is the lowering's {@code iter} or {@code next} call.
    */
   public boolean isIterationProtocol() {
     return iterationProtocol;
+  }
+
+  /**
+   * The source construct whose iteration the front end lowered this call from (wala/ML#1133): a
+   * {@code for} statement or a comprehension, for the {@code iter} and {@code next} calls of {@link
+   * #isIterationProtocol()} and for the invoke of {@link #isComprehension()}.
+   *
+   * @return The construct, or {@code null} for a call in the source.
+   */
+  public IterationSource getIterationSource() {
+    return iterationSource;
+  }
+
+  /**
+   * Whether this is the invoke a list, set or generator comprehension lowers to, which applies the
+   * comprehension's element function to each element of its iterables (wala/ML#1133).
+   *
+   * @return {@code true} iff the call is a comprehension's invoke.
+   */
+  public boolean isComprehension() {
+    return iterationSource == IterationSource.COMPREHENSION && !iterationProtocol;
+  }
+
+  /**
+   * The value numbers of the iterables a comprehension's invoke iterates, one per generator in
+   * source order (wala/ML#1133).
+   *
+   * @return The iterables.
+   * @throws IllegalStateException if the call is not a comprehension's invoke.
+   */
+  public int[] getComprehensionIterables() {
+    if (!isComprehension())
+      throw new IllegalStateException("Not a comprehension's invoke: " + this + ".");
+    // The positional parameters are the element function, the fresh collection, then the
+    // iterables.
+    return Arrays.copyOfRange(positionalParams, 2, positionalParams.length);
   }
 
   private static final int[] EMPTY_STARRED = new int[0];
@@ -221,7 +319,15 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
     }
 
     return new PythonInvokeInstruction(
-        iIndex(), nr, ne, site, newpos, newkey, starredPositions, iterationProtocol);
+        iIndex(),
+        nr,
+        ne,
+        site,
+        newpos,
+        newkey,
+        starredPositions,
+        iterationProtocol,
+        iterationSource);
   }
 
   @Override
