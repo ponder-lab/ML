@@ -132,7 +132,7 @@ jobs:
         if [[ "$version" == *-SNAPSHOT ]]; then
           echo "is_snapshot=true" >> "$GITHUB_OUTPUT"
         else
-          echo "Version $version on master is not a SNAPSHOT; skipping the deploy, which the tag run does."
+          echo "::warning::Version $version on master is not a SNAPSHOT; skipping the deploy, which the tag run does."
           echo "is_snapshot=false" >> "$GITHUB_OUTPUT"
         fi
       id: snapshot_check
