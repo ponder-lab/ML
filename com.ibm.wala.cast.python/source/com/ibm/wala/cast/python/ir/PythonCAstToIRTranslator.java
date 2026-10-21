@@ -33,6 +33,7 @@ import com.ibm.wala.cast.python.parser.AbstractParser.MissingType;
 import com.ibm.wala.cast.python.parser.AbstractParser.PythonGlobalsEntity;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction.IterationSource;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -107,13 +108,34 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   /**
    * The value of the constant the parser gives as the second child of a {@link CAstNode#CALL} it
-   * makes while lowering a {@code for} loop or a comprehension's generator to the iteration
-   * protocol: the {@code iter} call over the iterable and the {@code next} call on its iterator
-   * (wala/ML#1131). A call's second child is never visited, and the Python parser otherwise leaves
-   * it empty, so the marker produces no instructions; it only lets {@link #doCall} record the
-   * call's origin on the invoke.
+   * makes while lowering a {@code for} statement to the iteration protocol: the {@code iter} call
+   * over the iterable and the {@code next} call on its iterator (wala/ML#1131). A call's second
+   * child is never visited, and the Python parser otherwise leaves it empty, so the marker produces
+   * no instructions; it only lets {@link #doCall} record the call's origin on the invoke.
    */
   public static final String ITERATION_PROTOCOL_MARKER = "wala:iteration-protocol";
+
+  /**
+   * The marker in place of {@link #ITERATION_PROTOCOL_MARKER} on the {@code iter} and {@code next}
+   * calls of a comprehension's generator that the parser lowers to a loop, as it does a dict
+   * comprehension's, so the invokes record that the source wrote a comprehension (wala/ML#1133).
+   */
+  public static final String COMPREHENSION_ITERATION_PROTOCOL_MARKER =
+      "wala:iteration-protocol:comprehension";
+
+  /**
+   * The source construct whose iteration-protocol lowering a call's marker names.
+   *
+   * @param name The call's second child.
+   * @return The construct, or {@code null} when the call is not the lowering's.
+   */
+  private static IterationSource iterationSource(CAstNode name) {
+    if (name == null || name.getKind() != CAstNode.CONSTANT) return null;
+    if (ITERATION_PROTOCOL_MARKER.equals(name.getValue())) return IterationSource.FOR_STATEMENT;
+    if (COMPREHENSION_ITERATION_PROTOCOL_MARKER.equals(name.getValue()))
+      return IterationSource.COMPREHENSION;
+    return null;
+  }
 
   private final Map<CAstType, TypeName> walaTypeNames = HashMapFactory.make();
 
@@ -1354,9 +1376,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 hack,
                 keyp.toArray(new Pair[keyp.size()]),
                 starredArr,
-                name != null
-                    && name.getKind() == CAstNode.CONSTANT
-                    && ITERATION_PROTOCOL_MARKER.equals(name.getValue())));
+                iterationSource(name) != null,
+                iterationSource(name)));
 
     pospos.addAll(keypos);
     context.cfg().noteOperands(pos, pospos.toArray(new Position[pospos.size()]));
@@ -1759,10 +1780,21 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
       int result = context.currentScope().allocateTempValue();
       int exception = context.currentScope().allocateTempValue();
+      // The invoke records that it iterates as a comprehension, so a consumer can find the
+      // iteration and its iterables without knowing this layout (wala/ML#1133).
       context
           .cfg()
           .addInstruction(
-              new PythonInvokeInstruction(pos, result, exception, site, args, keywordParams));
+              new PythonInvokeInstruction(
+                  pos,
+                  result,
+                  exception,
+                  site,
+                  args,
+                  keywordParams,
+                  new int[0],
+                  false,
+                  IterationSource.COMPREHENSION));
 
       context.setValue(n, result);
       return true;
