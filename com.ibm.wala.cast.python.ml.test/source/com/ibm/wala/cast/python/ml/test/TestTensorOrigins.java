@@ -548,6 +548,144 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
   }
 
+  /**
+   * Asserts that no parameter of the given functions, {@code self} included, carries {@link
+   * TensorOrigin#KERAS_SYMBOLIC}.
+   *
+   * @param filename The fixture.
+   * @param functions The functions, by their names in the fixture's script.
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  private void assertNoKerasSymbolicParameter(String filename, String... functions)
+      throws ClassHierarchyException, CancelException, IOException {
+    String script = filename.substring("tf2_test_".length());
+    String[] fragments = new String[functions.length];
+    for (int i = 0; i < functions.length; i++) fragments[i] = script + "." + functions[i] + ".do";
+    Map<String, Set<TensorOrigin>> parameters = getParameterOrigins(filename, fragments);
+    Map<String, Set<TensorOrigin>> symbolic = new TreeMap<>();
+    for (int i = 0; i < functions.length; i++) {
+      Set<TensorOrigin> parameter = parameters.get(fragments[i]);
+      assertNotNull(functions[i] + " has parameters in the flow graph.", parameter);
+      if (parameter.contains(TensorOrigin.KERAS_SYMBOLIC)) symbolic.put(functions[i], parameter);
+    }
+    assertEquals(
+        "The functions whose parameters carry a Keras symbolic origin.", Map.of(), symbolic);
+  }
+
+  /**
+   * Every argument of a program-defined layer's {@code call}, not only the first, carries no {@link
+   * TensorOrigin#KERAS_SYMBOLIC} when the layer is applied to Keras symbolic tensors, whether the
+   * argument is positional or a keyword (wala/ML#1134): {@code Layer.__call__} runs {@code call} on
+   * graph tensors in every argument.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicNotIntoLaterCallArguments()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertNoKerasSymbolicParameter(
+        "tf2_test_keras_symbolic_later_call_args.py",
+        "Pair.call",
+        "second_inside",
+        "Keyed.call",
+        "keyword_inside");
+  }
+
+  /**
+   * A control: applying a layer whose {@code call} takes several arguments still gives a result
+   * with {@link TensorOrigin#KERAS_SYMBOLIC}, which the function it is passed to receives
+   * (wala/ML#1134), as a one-argument layer's does (wala/ML#1109).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicMultipleArgumentLayerApplication()
+      throws ClassHierarchyException, CancelException, IOException {
+    String file = "tf2_test_keras_symbolic_later_call_args.py";
+    Map<String, Set<TensorOrigin>> parameters =
+        getParameterOrigins(
+            file,
+            "keras_symbolic_later_call_args.py.after_pair.do",
+            "keras_symbolic_later_call_args.py.after_keyed.do");
+    for (String function : List.of("after_pair", "after_keyed")) {
+      Set<TensorOrigin> parameter =
+          parameters.get("keras_symbolic_later_call_args.py." + function + ".do");
+      assertNotNull(function + " has parameters in the flow graph.", parameter);
+      assertTrue(
+          function + "'s parameter carries the Keras symbolic origin: " + parameter,
+          parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+    }
+  }
+
+  /**
+   * The elements a program-defined layer's {@code call} reads or iterates from a list or a tuple
+   * input carry no {@link TensorOrigin#KERAS_SYMBOLIC} when the layer is applied to a container of
+   * Keras symbolic tensors, so neither do the method and the functions {@code call} passes them to
+   * (wala/ML#1134): {@code Layer.__call__} converts the container's elements too.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicNotIntoCallContainerElements()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertNoKerasSymbolicParameter(
+        "tf2_test_keras_symbolic_call_container.py",
+        "FromList.masked",
+        "list_inside",
+        "tuple_inside",
+        "iterated_inside");
+  }
+
+  /**
+   * The fields a program-defined layer's {@code call} reads from a named tuple input, a {@code
+   * typing.NamedTuple} or a {@code collections.namedtuple}, carry no {@link
+   * TensorOrigin#KERAS_SYMBOLIC}, so neither do the functions {@code call} passes them to
+   * (wala/ML#1134): a named tuple is a nested structure, whose fields {@code Layer.__call__}
+   * converts.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicNotIntoCallNamedTupleFields()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertNoKerasSymbolicParameter(
+        "tf2_test_keras_symbolic_call_named.py", "typed_inside", "plain_inside");
+  }
+
+  /**
+   * A control: an attribute a program-defined layer's {@code call} reads from a plain object
+   * argument keeps {@link TensorOrigin#KERAS_SYMBOLIC}, so the function {@code call} passes it to
+   * receives the origin (wala/ML#1134): {@code Layer.__call__} does not convert an object's
+   * attributes.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicIntoCallObjectAttribute()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorOrigin> parameter =
+        getParameterOrigins(
+                "tf2_test_keras_symbolic_call_named.py",
+                "keras_symbolic_call_named.py.boxed_inside.do")
+            .get("keras_symbolic_call_named.py.boxed_inside.do");
+    assertNotNull("boxed_inside has parameters in the flow graph.", parameter);
+    assertTrue(
+        "boxed_inside's parameter carries the Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+  }
+
   /** A branch on {@code tf.executing_eagerly()} picking a Keras symbolic tensor (wala/ML#1110). */
   private static final String EXECUTING_EAGERLY_FILE = "tf2_test_executing_eagerly_branch.py";
 

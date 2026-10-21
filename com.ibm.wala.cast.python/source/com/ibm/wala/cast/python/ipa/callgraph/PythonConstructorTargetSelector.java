@@ -743,7 +743,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
    * @param receiver The class being constructed.
    * @return {@code true} iff positional field population applies.
    */
-  private static boolean isPositionalFieldClass(IClass receiver) {
+  public static boolean isPositionalFieldClass(IClass receiver) {
     if (!(receiver instanceof PythonLoader.PythonClass)) return false;
     return ((PythonLoader.PythonClass) receiver)
         .getMissingTypeNames().stream()
