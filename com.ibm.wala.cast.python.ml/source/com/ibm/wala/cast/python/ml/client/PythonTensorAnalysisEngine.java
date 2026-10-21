@@ -21,6 +21,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -3417,16 +3418,54 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether a value can only be a named tuple, a {@code typing.NamedTuple} or a {@code
+   * collections.namedtuple}, so that a read of one of its attributes reads a field (wala/ML#1134).
+   *
+   * @param builder The builder whose pointer analysis gives the value's instances.
+   * @param node The value's node.
+   * @param value The value number.
+   * @return Whether the value has instances and every one is a named tuple.
+   */
+  private static boolean isNamedTuple(PropagationCallGraphBuilder builder, CGNode node, int value) {
+    PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, value);
+    boolean any = false;
+    for (InstanceKey instance : builder.getPointerAnalysis().getPointsToSet(key)) {
+      IClass type = instance.concreteType();
+      if (type == null) return false;
+      if (!type.getReference().equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE)) {
+        // A class's instance is allocated as an object in the class's synthetic constructor, so
+        // the class is the constructor's.
+        if (!(instance instanceof AllocationSiteInNode site)) return false;
+        IClass constructed =
+            builder
+                .getClassHierarchy()
+                .lookupClass(site.getNode().getMethod().getDeclaringClass().getReference());
+        if (constructed == null
+            || !PythonConstructorTargetSelector.isPositionalFieldClass(constructed)) return false;
+      }
+      any = true;
+    }
+    return any;
+  }
+
+  /**
    * The values of a Keras {@code call} body that {@code Layer.__call__} has converted from a Keras
    * symbolic tensor to a graph tensor (wala/ML#1134): its argument parameters, every one after
    * {@code self}, and the values the body reads out of them as elements, through a subscript, a
-   * tuple unpacking or an iteration, at any depth. An attribute read is left out, since the
-   * conversion maps over a nested structure's elements and not over an object's attributes.
+   * tuple unpacking, an iteration or a named tuple's field, at any depth. The conversion maps over
+   * a nested structure, which a named tuple is, and not over an object's attributes, so any other
+   * attribute read is left out.
    *
+   * <p>A subscript or an iteration of an opaque object whose {@code __getitem__} or {@code
+   * __iter__} returns a symbolic tensor it holds is included though the conversion does not enter
+   * the object. That is rare, and it errs toward a function receiving no symbolic tensor.
+   *
+   * @param builder The builder whose pointer analysis tells a named tuple receiver.
    * @param node A Keras {@code call} body's node.
    * @return The value numbers.
    */
-  private static Set<Integer> kerasCallInputValues(CGNode node) {
+  private static Set<Integer> kerasCallInputValues(
+      PropagationCallGraphBuilder builder, CGNode node) {
     IR ir = node.getIR();
     DefUse du = node.getDU();
     Set<Integer> ret = HashSetFactory.make();
@@ -3442,7 +3481,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             use instanceof AstPropertyRead read
                     && read.getObjectRef() == value
                     && ((read instanceof PythonPropertyRead python && python.isSubscript())
-                        || !ir.getSymbolTable().isStringConstant(read.getMemberRef()))
+                        || !ir.getSymbolTable().isStringConstant(read.getMemberRef())
+                        || isNamedTuple(builder, node, value))
                 || use instanceof EachElementGetInstruction
                 || use instanceof AssignInstruction
                 // The iterator a loop takes with `iter`, then each element `next` takes from it.
@@ -4053,7 +4093,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable v : parameters) {
         CGNode owner = ((LocalPointerKey) v.getPointerKey()).getNode();
         if (!callInputValues.containsKey(owner) && isAppliedKerasCallBody(owner))
-          callInputValues.put(owner, kerasCallInputValues(owner));
+          callInputValues.put(owner, kerasCallInputValues(builder, owner));
       }
       Set<PointsToSetVariable> kerasCallInputs = HashSetFactory.make();
       for (PointsToSetVariable v : dataflow)
@@ -4391,6 +4431,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges =
           markerEdges(builder, dataflow, flowVarsByKey, heapModel);
+
+      // A Keras call input's inflow withholds the Keras symbolic origin (wala/ML#1134), and so does
+      // its own seed, so that no seed reaching a caller-side producer gives the origin back.
+      for (PointsToSetVariable v : kerasCallInputs)
+        initOrigins.computeIfPresent(
+            v,
+            (k, origins) -> {
+              Set<TensorOrigin> ret = EnumSet.noneOf(TensorOrigin.class);
+              ret.addAll(origins);
+              ret.remove(TensorOrigin.KERAS_SYMBOLIC);
+              return ret;
+            });
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(

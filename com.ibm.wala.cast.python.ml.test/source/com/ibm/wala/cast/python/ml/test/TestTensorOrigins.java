@@ -643,6 +643,48 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         "tuple_inside");
   }
 
+  /**
+   * The fields a program-defined layer's {@code call} reads from a named tuple input, a {@code
+   * typing.NamedTuple} or a {@code collections.namedtuple}, carry no {@link
+   * TensorOrigin#KERAS_SYMBOLIC}, so neither do the functions {@code call} passes them to
+   * (wala/ML#1134): a named tuple is a nested structure, whose fields {@code Layer.__call__}
+   * converts.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicNotIntoCallNamedTupleFields()
+      throws ClassHierarchyException, CancelException, IOException {
+    assertNoKerasSymbolicParameter(
+        "tf2_test_keras_symbolic_call_named.py", "typed_inside", "plain_inside");
+  }
+
+  /**
+   * A control: an attribute a program-defined layer's {@code call} reads from a plain object
+   * argument keeps {@link TensorOrigin#KERAS_SYMBOLIC}, so the function {@code call} passes it to
+   * receives the origin (wala/ML#1134): {@code Layer.__call__} does not convert an object's
+   * attributes.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testKerasSymbolicIntoCallObjectAttribute()
+      throws ClassHierarchyException, CancelException, IOException {
+    Set<TensorOrigin> parameter =
+        getParameterOrigins(
+                "tf2_test_keras_symbolic_call_named.py",
+                "keras_symbolic_call_named.py.boxed_inside.do")
+            .get("keras_symbolic_call_named.py.boxed_inside.do");
+    assertNotNull("boxed_inside has parameters in the flow graph.", parameter);
+    assertTrue(
+        "boxed_inside's parameter carries the Keras symbolic origin: " + parameter,
+        parameter.contains(TensorOrigin.KERAS_SYMBOLIC));
+  }
+
   /** A branch on {@code tf.executing_eagerly()} picking a Keras symbolic tensor (wala/ML#1110). */
   private static final String EXECUTING_EAGERLY_FILE = "tf2_test_executing_eagerly_branch.py";
 
