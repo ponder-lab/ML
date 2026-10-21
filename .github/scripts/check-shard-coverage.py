@@ -54,45 +54,89 @@ def shard_patterns(workflow):
 
 
 def category_tests(root):
-    """Return (class, method) for each test method tagged with the category, on its class or itself."""
-    ret = []
+    """Return the test methods tagged with the category, and the forms this script cannot read.
+
+    The first is (class, method) for each test method tagged with the category, on its class or
+    on itself. The second names each place where the category could reach a test this script does
+    not see, so that the check fails rather than passing over it: an interface that extends the
+    category, which Surefire's group filter also matches; a test method declared in a superclass
+    of a tagged class, which the class inherits along with the category; an @Category annotation
+    spread over lines; and a test method whose name is not on the line that declares it void.
+    """
+    tests, unreadable, tagged, classes = [], [], set(), {}
     for directory, _, files in os.walk(root):
         for name in files:
             if not name.endswith(".java"):
                 continue
             with open(os.path.join(directory, name)) as f:
                 text = f.read()
+            cls = name[: -len(".java")]
+            extends = re.search(
+                r"\bclass\s+" + cls + r"\b[^{]*?\bextends\s+(\w+)", text
+            )
+            classes[cls] = (
+                extends.group(1) if extends else None,
+                re.search(r"^\s*@Test\b", text, re.M) is not None,
+            )
             if CATEGORY not in text:
                 continue
-            cls = name[: -len(".java")]
+            if re.search(
+                r"\binterface\s+\w+\s+extends\b[^{]*\b" + CATEGORY + r"\b", text
+            ):
+                unreadable.append(f"{cls} extends the {CATEGORY} interface.")
             tagged_class = False
             pending_test = pending_category = False
-            for line in text.splitlines():
+            for number, line in enumerate(text.splitlines(), 1):
                 stripped = line.strip()
                 if stripped.startswith("@Category") and CATEGORY in stripped:
+                    if ")" not in stripped:
+                        unreadable.append(
+                            f"{cls}:{number} spreads @Category over lines."
+                        )
                     pending_category = True
+                elif stripped.startswith("@Category") and ")" not in stripped:
+                    unreadable.append(f"{cls}:{number} spreads @Category over lines.")
                 elif re.match(
                     r"(public\s+)?(abstract\s+)?(final\s+)?class\s+" + cls + r"\b",
                     stripped,
                 ):
                     tagged_class = pending_category
                     pending_category = False
+                    if tagged_class:
+                        tagged.add(cls)
                 elif stripped.startswith("@Test"):
                     pending_test = True
-                else:
+                elif (
+                    pending_test
+                    and stripped
+                    and not stripped.startswith(("@", "//", "*", "/*"))
+                ):
                     m = re.search(r"\bvoid\s+(\w+)\s*\(", stripped)
-                    if m and pending_test:
-                        if tagged_class or pending_category:
-                            ret.append((cls, m.group(1)))
-                        pending_test = pending_category = False
-    return ret
+                    if not m:
+                        unreadable.append(
+                            f"{cls}:{number} declares a test method this script cannot read."
+                        )
+                    elif tagged_class or pending_category:
+                        tests.append((cls, m.group(1)))
+                    pending_test = pending_category = False
+    for cls in sorted(tagged):
+        ancestor = classes[cls][0]
+        while ancestor in classes:
+            if classes[ancestor][1]:
+                unreadable.append(f"{cls} inherits test methods from {ancestor}.")
+            ancestor = classes[ancestor][0]
+    return tests, unreadable
 
 
 def main():
     workflow = sys.argv[1] if len(sys.argv) > 1 else WORKFLOW
     root = sys.argv[2] if len(sys.argv) > 2 else TEST_SOURCE
     patterns = shard_patterns(workflow)
-    tests = category_tests(root)
+    tests, unreadable = category_tests(root)
+    for message in unreadable:
+        print(f"Cannot check: {message}")
+    if unreadable:
+        sys.exit(1)
     if not tests:
         sys.exit(f"No test methods in the {CATEGORY} category under {root}.")
 
