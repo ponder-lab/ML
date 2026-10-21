@@ -275,7 +275,7 @@ jobs:
   # Attach the fat-classifier JAR to the GitHub Release on semver tag-push, so standalone-driver
   # users (`java -jar`) can fetch it without the `read:packages` PAT that GitHub Packages requires.
   # A separate job scopes the elevated `contents: write` permission to release tag-pushes only;
-  # The other jobs keep the workflow-level `contents: read`.
+  # the other jobs keep the workflow-level `contents: read`.
   release-upload:
     needs: deploy
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.deploy.outputs.is_semver_release == 'true' }}
