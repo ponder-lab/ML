@@ -120,6 +120,23 @@ jobs:
         echo "is_semver_release=true" >> "$GITHUB_OUTPUT"
       id: tag_check
       shell: bash
+    # A master push deploys a SNAPSHOT and nothing else. `release:prepare` lands a commit on master
+    # that carries the release version, and its push would deploy that version from a branch
+    # build; only the SNAPSHOT bump's push, cancelling it in the concurrency group, kept that from
+    # happening, so the release version could reach the registry from a run other than the tag's.
+    # Reading the version makes the tag run the release version's only route.
+    - name: Check that a master push builds a SNAPSHOT
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      run: |
+        version=$(mvn help:evaluate -N -Dexpression=project.version -q -DforceStdout -B)
+        if [[ "$version" == *-SNAPSHOT ]]; then
+          echo "is_snapshot=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "Version $version on master is not a SNAPSHOT; skipping the deploy, which the tag run does."
+          echo "is_snapshot=false" >> "$GITHUB_OUTPUT"
+        fi
+      id: snapshot_check
+      shell: bash
     - name: Deploy with Maven
       run: mvn -s .ci.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
       env:
@@ -130,7 +147,7 @@ jobs:
       # release. Tag pushes are exempt from `cancel-in-progress` (see the `concurrency` block) so the
       # release deploy reliably finishes — release:prepare lands two master commits in quick
       # succession, and the SNAPSHOT-bump run would otherwise cancel the release run mid-deploy.
-      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
+      if: ${{ github.event_name == 'push' && ((github.ref == 'refs/heads/master' && steps.snapshot_check.outputs.is_snapshot == 'true') || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
     # On semver tag-push, upload the fat-classifier JAR as a CI artifact for the
     # downstream `release-upload` job to attach to the GitHub Release.
     - name: Upload fat JAR artifact
