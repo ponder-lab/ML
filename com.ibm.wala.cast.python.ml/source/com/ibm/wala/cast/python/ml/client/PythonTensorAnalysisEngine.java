@@ -123,6 +123,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -3421,6 +3422,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * Whether a value can only be a named tuple, a {@code typing.NamedTuple} or a {@code
    * collections.namedtuple}, so that a read of one of its attributes reads a field (wala/ML#1134).
    *
+   * <p>A {@code typing.NamedTuple} class is recognized by its direct base, so a subclass of one is
+   * not, and its fields keep the Keras symbolic origin. That errs toward a function receiving a
+   * symbolic tensor.
+   *
    * @param builder The builder whose pointer analysis gives the value's instances.
    * @param node The value's node.
    * @param value The value number.
@@ -4433,16 +4438,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           markerEdges(builder, dataflow, flowVarsByKey, heapModel);
 
       // A Keras call input's inflow withholds the Keras symbolic origin (wala/ML#1134), and so does
-      // its own seed, so that no seed reaching a caller-side producer gives the origin back.
-      for (PointsToSetVariable v : kerasCallInputs)
-        initOrigins.computeIfPresent(
-            v,
-            (k, origins) -> {
-              Set<TensorOrigin> ret = EnumSet.noneOf(TensorOrigin.class);
-              ret.addAll(origins);
-              ret.remove(TensorOrigin.KERAS_SYMBOLIC);
-              return ret;
-            });
+      // its own seed, so that no seed reaching a caller-side producer gives the origin back. The
+      // seeds a type feed suppressed are restored after the first solve, past the edge wrapper, so
+      // they withhold it too.
+      BiFunction<PointsToSetVariable, Set<TensorOrigin>, Set<TensorOrigin>> withoutKerasSymbolic =
+          (k, origins) -> {
+            Set<TensorOrigin> ret = EnumSet.noneOf(TensorOrigin.class);
+            ret.addAll(origins);
+            ret.remove(TensorOrigin.KERAS_SYMBOLIC);
+            return ret;
+          };
+      for (PointsToSetVariable v : kerasCallInputs) {
+        initOrigins.computeIfPresent(v, withoutKerasSymbolic);
+        suppressedOrigins.computeIfPresent(v, withoutKerasSymbolic);
+      }
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
