@@ -624,10 +624,10 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * The elements a program-defined layer's {@code call} reads from a list or a tuple input carry no
-   * {@link TensorOrigin#KERAS_SYMBOLIC} when the layer is applied to a container of Keras symbolic
-   * tensors, so neither do the method and the functions {@code call} passes them to (wala/ML#1134):
-   * {@code Layer.__call__} converts the container's elements too.
+   * The elements a program-defined layer's {@code call} reads or iterates from a list or a tuple
+   * input carry no {@link TensorOrigin#KERAS_SYMBOLIC} when the layer is applied to a container of
+   * Keras symbolic tensors, so neither do the method and the functions {@code call} passes them to
+   * (wala/ML#1134): {@code Layer.__call__} converts the container's elements too.
    *
    * @throws ClassHierarchyException If the class hierarchy cannot be built.
    * @throws CancelException If the analysis is canceled.
@@ -640,7 +640,8 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         "tf2_test_keras_symbolic_call_container.py",
         "FromList.masked",
         "list_inside",
-        "tuple_inside");
+        "tuple_inside",
+        "iterated_inside");
   }
 
   /**
