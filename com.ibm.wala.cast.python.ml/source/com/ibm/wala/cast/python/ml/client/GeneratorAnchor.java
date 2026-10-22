@@ -4,7 +4,6 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.TypeReference;
-import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -55,14 +54,14 @@ public sealed interface GeneratorAnchor {
    * @param source The {@link PointsToSetVariable} whose defining call produces the value.
    * @param declaredType The sanitized called function's type.
    * @param builder The propagation call graph builder.
-   * @param visited The factory's creator-walk visited set, for arms whose source path consults
-   *     operand evidence (e.g. the wala/ML#451 binary-operation gate).
+   * @param visited The factory's dispatch path, for arms whose source path consults operand
+   *     evidence (e.g. the wala/ML#451 binary-operation gate).
    */
   record SourceAnchor(
       PointsToSetVariable source,
       TypeReference declaredType,
       PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited)
+      DispatchPath visited)
       implements GeneratorAnchor {
     @Override
     public TensorGenerator makeGenerator(

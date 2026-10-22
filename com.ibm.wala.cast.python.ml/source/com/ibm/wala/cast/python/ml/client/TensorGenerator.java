@@ -165,7 +165,7 @@ import java.util.stream.Collectors;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public abstract class TensorGenerator {
+public abstract class TensorGenerator implements Cloneable {
 
   protected static final int UNDEFINED_PARAMETER_POSITION = -1;
 
@@ -402,6 +402,7 @@ public abstract class TensorGenerator {
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
     MAY_RUN_IN_GRAPH_MODE.remove(builder);
     BLOCK_FEASIBILITIES.remove(builder);
+    TensorGeneratorFactory.clearDispatches(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -531,6 +532,21 @@ public abstract class TensorGenerator {
    */
   ValueBinding getValueBinding() {
     return this.valueBinding;
+  }
+
+  /**
+   * A shallow copy of this generator, for {@link TensorGeneratorFactory} to hand out a memoized
+   * dispatch: callers bind arguments onto the generator they are given ({@link #composeWith},
+   * {@link #inheritBinding}), so the memoized one is never handed out itself.
+   *
+   * @return The copy.
+   */
+  TensorGenerator copy() {
+    try {
+      return (TensorGenerator) this.clone();
+    } catch (CloneNotSupportedException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   /**
@@ -3697,7 +3713,7 @@ public abstract class TensorGenerator {
       PointsToSetVariable var,
       boolean exact) {
     if (binop.getOperator() != IBinaryOpInstruction.Operator.ADD || var == null) return null;
-    if (!TensorGeneratorFactory.isBinopWithoutTensorOperand(var, builder, HashSetFactory.make()))
+    if (!TensorGeneratorFactory.isBinopWithoutTensorOperand(var, builder, new DispatchPath()))
       return null;
 
     // Per operand, the candidate lengths of a resolved rank-1 sequence, or null when the operand

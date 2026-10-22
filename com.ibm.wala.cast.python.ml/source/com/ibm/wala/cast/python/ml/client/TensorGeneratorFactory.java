@@ -1190,7 +1190,7 @@ public class TensorGeneratorFactory {
       PointsToSetVariable source,
       PointsToSetVariable iterated,
       PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      DispatchPath visited) {
     List<AllocationSiteInNode> elements =
         DatasetIteratorElementGenerator.elementAllocations(source, builder);
     if (elements.isEmpty()) return null;
@@ -1386,7 +1386,7 @@ public class TensorGeneratorFactory {
       int containerVn,
       int index,
       PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      DispatchPath visited) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
 
     // Path 1: the container was built locally; scan its property writes for the one at `index` and
@@ -1458,7 +1458,7 @@ public class TensorGeneratorFactory {
       int objRef,
       int index,
       PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      DispatchPath visited) {
     IR ir = node.getIR();
     DefUse du = node.getDU();
     if (ir == null || du == null) return null;
@@ -1788,9 +1788,7 @@ public class TensorGeneratorFactory {
    * source. See wala/ML#363.
    */
   private static TensorGenerator tryGetGenerator(
-      PointsToSetVariable source,
-      PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     try {
       return getGenerator(source, builder, visited);
     } catch (IllegalArgumentException e) {
@@ -1838,9 +1836,9 @@ public class TensorGeneratorFactory {
    * @param source The candidate {@link ElementWiseOperation} source.
    * @param builder The propagation call graph builder, used to materialise operand {@link
    *     PointsToSetVariable}s and recurse into their generator dispatch.
-   * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}; passed
-   *     unchanged to {@link #tryGetGenerator} so operand-side recursion participates in the same
-   *     cycle guard as the parent dispatch.
+   * @param visited The dispatch path threaded through {@link #getGenerator}; passed unchanged to
+   *     {@link #tryGetGenerator} so operand-side recursion participates in the same cycle guard as
+   *     the parent dispatch.
    * @return {@code true} iff {@code source} is binop-defined and no operand has tensor evidence.
    * @apiNote Package-visible so {@link TensorGenerator}'s sequence-concatenation stage can require
    *     the same absence of tensor evidence before reading a {@code +} as Python's list or tuple
@@ -1848,9 +1846,7 @@ public class TensorGeneratorFactory {
    *     gate and the fallback it leaves behind.
    */
   static boolean isBinopWithoutTensorOperand(
-      PointsToSetVariable source,
-      PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     if (!(source.getPointerKey() instanceof LocalPointerKey)) return false;
     LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
     CGNode node = lpk.getNode();
@@ -1884,14 +1880,12 @@ public class TensorGeneratorFactory {
    *
    * @param source The comparison's result.
    * @param builder The propagation call graph builder.
-   * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}.
+   * @param visited The dispatch path threaded through {@link #getGenerator}.
    * @return {@code true} iff {@code source} is defined by a binary operation whose result is not a
    *     tensor by the above.
    */
   private static boolean isComparisonWithoutTensorOperand(
-      PointsToSetVariable source,
-      PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     if (!(source.getPointerKey() instanceof LocalPointerKey)) return false;
     LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
     CGNode node = lpk.getNode();
@@ -2127,7 +2121,7 @@ public class TensorGeneratorFactory {
    * @param operandVn The operand SSA value number.
    * @param node The {@link CGNode} containing the binop.
    * @param builder The propagation call graph builder.
-   * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}.
+   * @param visited The dispatch path threaded through {@link #getGenerator}.
    * @param libraryAllocationsOnly Whether an allocation in the operand's points-to set counts only
    *     when it lies in a tensor-library namespace, rather than whenever it is not a constant.
    * @return {@code true} if the operand has tensor evidence; {@code false} otherwise.
@@ -2136,7 +2130,7 @@ public class TensorGeneratorFactory {
       int operandVn,
       CGNode node,
       PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited,
+      DispatchPath visited,
       boolean libraryAllocationsOnly) {
     // Python literal constant in the IR symbol table (e.g. `1` in `n - 1`,
     // `2.0` in `input * 2.0`) — not a tensor on its own. The companion operand
@@ -2226,7 +2220,87 @@ public class TensorGeneratorFactory {
    */
   public static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    return getGenerator(source, builder, HashSetFactory.make());
+    return getGenerator(source, builder, new DispatchPath(UNMEMOIZED_WALKS.get() == 0));
+  }
+
+  /**
+   * As {@link #getGenerator(PointsToSetVariable, PropagationCallGraphBuilder)}, but computing every
+   * dispatch along the walk afresh, neither reading nor writing the per-builder memo.
+   *
+   * @param source the points-to set variable representing the source of the tensor
+   * @param builder the propagation call graph builder used for the analysis
+   * @return the corresponding {@link TensorGenerator} for the TensorFlow function
+   * @throws IllegalArgumentException if the function call is unknown or not supported
+   * @apiNote For comparing the memoized dispatch with the one it memoizes.
+   */
+  public static TensorGenerator getUnmemoizedGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    UNMEMOIZED_WALKS.set(UNMEMOIZED_WALKS.get() + 1);
+    try {
+      return getGenerator(source, builder, new DispatchPath(false));
+    } finally {
+      UNMEMOIZED_WALKS.set(UNMEMOIZED_WALKS.get() - 1);
+    }
+  }
+
+  /**
+   * How many {@link #getUnmemoizedGenerator} walks are running on each thread. A dispatch can start
+   * a walk of its own through {@link #getGenerator(PointsToSetVariable,
+   * PropagationCallGraphBuilder)}, which inside one of these is unmemoized too.
+   */
+  private static final ThreadLocal<Integer> UNMEMOIZED_WALKS = ThreadLocal.withInitial(() -> 0);
+
+  /**
+   * A memoized dispatch: the generator, or the {@link IllegalArgumentException} the dispatch threw.
+   *
+   * @param generator The generator, never handed out itself, or {@code null} when there is none.
+   * @param failure What the dispatch threw, or {@code null} when it returned.
+   */
+  private record Dispatch(TensorGenerator generator, IllegalArgumentException failure) {
+
+    /**
+     * Replays this dispatch.
+     *
+     * @return A copy of the generator, since callers bind arguments onto the one they are given.
+     * @throws IllegalArgumentException The dispatch's failure, if it threw.
+     */
+    TensorGenerator replay() {
+      if (this.failure != null) throw this.failure;
+      return this.generator == null ? null : this.generator.copy();
+    }
+  }
+
+  /**
+   * The dispatches per builder that depended on their source alone (see {@link DispatchPath}),
+   * keyed by the source {@link #findCreator} resolves. Each value holds the builder's points-to set
+   * variables, which keep the weak key reachable, so {@link TensorGenerator#clearCaches} removes
+   * the entry.
+   */
+  private static final Map<PropagationCallGraphBuilder, Map<PointsToSetVariable, Dispatch>>
+      DISPATCHES = new WeakHashMap<>();
+
+  /**
+   * The memoized dispatches of a builder.
+   *
+   * @param builder The builder.
+   * @return Its dispatches.
+   */
+  private static Map<PointsToSetVariable, Dispatch> dispatches(
+      PropagationCallGraphBuilder builder) {
+    synchronized (DISPATCHES) {
+      return DISPATCHES.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+  }
+
+  /**
+   * Drops a builder's memoized dispatches.
+   *
+   * @param builder The builder.
+   */
+  static void clearDispatches(PropagationCallGraphBuilder builder) {
+    synchronized (DISPATCHES) {
+      DISPATCHES.remove(builder);
+    }
   }
 
   /**
@@ -2240,21 +2314,22 @@ public class TensorGeneratorFactory {
    * {@code null} so the outer dispatch loop can try other candidate callees / predecessors. See
    * wala/ML#435.
    *
-   * @implNote {@code visited} is used as a DFS recursion-stack set: a source is added on entry and
-   *     removed in a {@code finally} block before returning. This means only true cycles on the
-   *     current call path short-circuit; sibling sub-dispatches in the same top-level call can
-   *     re-visit a source freely without losing precision.
+   * @implNote {@code visited} is the DFS path: a source is entered on entry and left in a {@code
+   *     finally} block before returning. This means only true cycles on the current call path
+   *     short-circuit; sibling sub-dispatches in the same top-level call can re-visit a source
+   *     freely without losing precision. A dispatch during which no source being resolved was
+   *     reached is memoized per builder and replayed for every later visit of its source, from any
+   *     path; see {@link DispatchPath}.
    */
   private static TensorGenerator getGenerator(
-      PointsToSetVariable source,
-      PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     source = findCreator(source, builder);
     // `findCreator` can return null (an unresolvable points-to variable, e.g. a null source or a
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
     // source, so return null here rather than dereferencing it in `getGeneratorBody`. wala/ML#614.
     if (source == null) return null;
-    if (!visited.add(source)) {
+    Map<PointsToSetVariable, Dispatch> dispatches = visited.memoizes() ? dispatches(builder) : null;
+    if (visited.cuts(source)) {
       final PointsToSetVariable cycleSource = source;
       LOGGER.log(
           Level.FINE,
@@ -2264,23 +2339,35 @@ public class TensorGeneratorFactory {
                   + "; returning null so dispatch can try other branches.");
       return null;
     }
-    final PointsToSetVariable visitedSource = source;
-    try {
-      return getGeneratorBody(source, builder, visited);
-    } finally {
-      visited.remove(visitedSource);
+    if (dispatches != null) {
+      Dispatch memoized = dispatches.get(source);
+      if (memoized != null) return memoized.replay();
     }
+    long mark = visited.enter(source);
+    TensorGenerator generator = null;
+    IllegalArgumentException failure = null;
+    boolean ownSourceOnly;
+    try {
+      generator = getGeneratorBody(source, builder, visited);
+    } catch (IllegalArgumentException e) {
+      failure = e;
+    } finally {
+      ownSourceOnly = visited.leave(source, mark);
+    }
+    if (dispatches != null && ownSourceOnly)
+      dispatches.putIfAbsent(
+          source, new Dispatch(generator == null ? null : generator.copy(), failure));
+    if (failure != null) throw failure;
+    return generator;
   }
 
   /**
    * Body of the cycle-guarded {@link #getGenerator(PointsToSetVariable,
-   * PropagationCallGraphBuilder, Set)}, extracted so the cycle guard can wrap the entire dispatch
-   * in a single {@code try}/{@code finally} (add on entry, remove on exit).
+   * PropagationCallGraphBuilder, DispatchPath)}, extracted so the cycle guard can wrap the entire
+   * dispatch in a single {@code try}/{@code finally} (add on entry, remove on exit).
    */
   private static TensorGenerator getGeneratorBody(
-      PointsToSetVariable source,
-      PropagationCallGraphBuilder builder,
-      Set<PointsToSetVariable> visited) {
+      PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     PointerKey k = source.getPointerKey();
     // The data a Keras `fit`, `evaluate` or `predict` summary packs for the model's step, or an
     // `unpack_x_y_sample_weight` result, reaches a step as a parameter or an unpack result and is
