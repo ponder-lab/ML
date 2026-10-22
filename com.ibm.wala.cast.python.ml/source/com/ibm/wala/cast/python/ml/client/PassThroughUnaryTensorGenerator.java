@@ -216,7 +216,7 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
       PropagationCallGraphBuilder builder, TypeFeedKind kind, ShapeTransform transform) {
     int position = getInputParameterPosition();
     if (position == UNDEFINED_PARAMETER_POSITION) return null;
-    int ownInput = this.inputInOwnFrame(position);
+    int ownInput = this.inputInOwnFrame(builder, position);
     if (ownInput > 0)
       return new TypeFeed(
           kind,
@@ -263,13 +263,16 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    * target: a call such as {@code t.numpy()}, or a property read such as {@code x.T}, in program
    * code. Such a generator's node is the frame holding the operation, so the invocations of that
    * node, which {@link #feedOverInput} otherwise reads the input from, are calls of the enclosing
-   * function and pass no operand of this operation. The input is read off the operation itself.
+   * function and pass no operand of this operation. The input is read off the operation itself. A
+   * call that may reach a program function is left to the invocation walk, since its result is that
+   * function's, and the call's own operands need not be this generator's input.
    *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param position The input's position, {@link #RECEIVER_PARAMETER_POSITION} for the receiver.
    * @return The input's value number in {@link #getNode()}, or -1 when the source is not defined
    *     there by such an operation, as for a summarized operation's synthetic body.
    */
-  private int inputInOwnFrame(int position) {
+  private int inputInOwnFrame(PropagationCallGraphBuilder builder, int position) {
     CGNode node = this.getNode();
     if (this.getSource() == null
         || !(node.getMethod() instanceof AstMethod)
@@ -278,6 +281,8 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
         || node.getDU() == null) return -1;
     SSAInstruction def = node.getDU().getDef(local.getValueNumber());
     if (def instanceof PythonInvokeInstruction call) {
+      for (CGNode target : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
+        if (target.getMethod() instanceof AstMethod) return -1;
       if (position == RECEIVER_PARAMETER_POSITION) return getReceiverValueNumber(node, call);
       if (position < 0) return -1;
       if (call.getNumberOfPositionalParameters() >= position + 2) return call.getUse(position + 1);
