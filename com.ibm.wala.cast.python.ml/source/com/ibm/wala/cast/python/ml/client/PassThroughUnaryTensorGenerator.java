@@ -2,15 +2,19 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
 
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -212,6 +216,16 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
       PropagationCallGraphBuilder builder, TypeFeedKind kind, ShapeTransform transform) {
     int position = getInputParameterPosition();
     if (position == UNDEFINED_PARAMETER_POSITION) return null;
+    int ownInput = this.inputInOwnFrame(position);
+    if (ownInput > 0)
+      return new TypeFeed(
+          kind,
+          List.of(
+              builder
+                  .getPointerAnalysis()
+                  .getHeapModel()
+                  .getPointerKeyForLocal(this.getNode(), ownInput)),
+          transform);
     Set<PointerKey> ret = new LinkedHashSet<>();
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, this.getNode())) {
@@ -242,6 +256,37 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               .getPointerKeyForLocal(callerInvoke.fst, argValueNumber));
     }
     return ret.isEmpty() ? null : new TypeFeed(kind, new ArrayList<>(ret), transform);
+  }
+
+  /**
+   * The input's value number in the generator's own frame, for an operation that has no call-graph
+   * target: a call such as {@code t.numpy()}, or a property read such as {@code x.T}, in program
+   * code. Such a generator's node is the frame holding the operation, so the invocations of that
+   * node, which {@link #feedOverInput} otherwise reads the input from, are calls of the enclosing
+   * function and pass no operand of this operation. The input is read off the operation itself.
+   *
+   * @param position The input's position, {@link #RECEIVER_PARAMETER_POSITION} for the receiver.
+   * @return The input's value number in {@link #getNode()}, or -1 when the source is not defined
+   *     there by such an operation, as for a summarized operation's synthetic body.
+   */
+  private int inputInOwnFrame(int position) {
+    CGNode node = this.getNode();
+    if (this.getSource() == null
+        || !(node.getMethod() instanceof AstMethod)
+        || !(this.getSource().getPointerKey() instanceof LocalPointerKey local)
+        || !local.getNode().equals(node)
+        || node.getDU() == null) return -1;
+    SSAInstruction def = node.getDU().getDef(local.getValueNumber());
+    if (def instanceof PythonInvokeInstruction call) {
+      if (position == RECEIVER_PARAMETER_POSITION) return getReceiverValueNumber(node, call);
+      if (position < 0) return -1;
+      if (call.getNumberOfPositionalParameters() >= position + 2) return call.getUse(position + 1);
+      String name = getInputParameterName();
+      return name != null && call.getKeywords().contains(name) ? call.getUse(name) : -1;
+    }
+    if (def instanceof PythonPropertyRead read && position == RECEIVER_PARAMETER_POSITION)
+      return read.getObjectRef();
+    return -1;
   }
 
   /**
