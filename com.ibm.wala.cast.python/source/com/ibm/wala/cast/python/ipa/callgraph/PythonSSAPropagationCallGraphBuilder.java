@@ -4523,12 +4523,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * keyed on. A real method body inheriting a per-receiver context has the same context item, but
    * its first parameter is the function object, which the receiver filter would wrongly empty.
    *
+   * <p>A synthesized constructor's first parameter is the class object called, and the selector
+   * picks the constructor of a class only for that class's class object, so the parameter is
+   * filtered to it. Unfiltered, a call site that may construct either of several classes, {@code
+   * cls()} with {@code cls} bound to one or another, binds every class's object there, and each
+   * constructor reads every class's own {@code __init__} and methods off it.
+   *
    * @param target The callee {@link CGNode}.
    * @param dflt The unfiltered {@link PointerKey} for the target's first parameter.
    * @return A {@link FilteredPointerKey} restricted to the context's receiver when the target is a
-   *     trampoline whose context supplies a parameter-0 filter; otherwise {@code dflt}.
+   *     trampoline whose context supplies a parameter-0 filter, or to the constructed class's own
+   *     class object when the target is a synthesized constructor; otherwise {@code dflt}.
    */
   private PointerKey getReceiverFilteredPointerKey(CGNode target, PointerKey dflt) {
+    if (target.getMethod() instanceof PythonConstructorFunction constructor)
+      return getFilteredPointerKeyForLocal(
+          target, 1, new FilteredPointerKey.SingleClassFilter(constructor.getDeclaringClass()));
     if (!(target.getMethod().getDeclaringClass() instanceof PythonInstanceMethodTrampoline))
       return dflt;
     TypeFilter filter = (TypeFilter) target.getContext().get(ContextKey.PARAMETERS[0]);
