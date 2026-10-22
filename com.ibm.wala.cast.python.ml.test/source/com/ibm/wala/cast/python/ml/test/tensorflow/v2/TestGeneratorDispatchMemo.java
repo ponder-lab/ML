@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +27,10 @@ import org.junit.Test;
 
 /**
  * Tests that memoizing {@link TensorGeneratorFactory}'s dispatch per builder does not change its
- * answers. For every points-to set variable of a fixture, in the pointer analysis's order and with
- * the memo filling as the walk goes, the memoized dispatch must give the same generator, field by
- * field and through every generator it holds, as the dispatch computed afresh, or fail as it does.
+ * answers. For every points-to set variable of a fixture, in the pointer analysis's order and its
+ * reverse, with the memo filling as the walk goes, the memoized dispatch must give the same
+ * generator, field by field and through every generator it holds, as the dispatch computed afresh,
+ * or fail as it does.
  */
 public class TestGeneratorDispatchMemo extends AbstractTensorTest {
 
@@ -96,12 +98,26 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
   }
 
   /**
-   * Builds the fixture's call graph and compares the memoized dispatch of every points-to set
-   * variable with the unmemoized one.
+   * Compares the memoized dispatch of every points-to set variable of a fixture with the unmemoized
+   * one, walking the variables in the pointer analysis's order and again, on a fresh call graph, in
+   * the reverse order, since what the memo holds when a variable is reached depends on the order.
    *
    * @param fixture The fixture.
    */
   private void assertDispatchUnchanged(String fixture)
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
+    this.assertDispatchUnchanged(fixture, false);
+    this.assertDispatchUnchanged(fixture, true);
+  }
+
+  /**
+   * Builds the fixture's call graph and compares the memoized dispatch of every points-to set
+   * variable with the unmemoized one.
+   *
+   * @param fixture The fixture.
+   * @param reversed Whether to walk the variables in the reverse of the pointer analysis's order.
+   */
+  private void assertDispatchUnchanged(String fixture, boolean reversed)
       throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     PythonTensorAnalysisEngine engine =
         makeEngine(
@@ -114,6 +130,7 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
       // A snapshot: dispatch creates points-to set variables for keys it reads.
       List<PointerKey> keys = new ArrayList<>();
       builder.getPointerAnalysis().getPointerKeys().forEach(keys::add);
+      if (reversed) Collections.reverse(keys);
       for (PointerKey key : keys) {
         if (builder.getPropagationSystem().isImplicit(key)) continue;
         PointsToSetVariable variable = builder.getPropagationSystem().findOrCreatePointsToSet(key);
