@@ -2,10 +2,9 @@ package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
@@ -19,9 +18,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -40,7 +37,8 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
 
   /** A recursive function whose result flows back into itself, so the dispatch cuts cycles. */
   @Test
-  public void testRecursiveFunction() throws ClassHierarchyException, CancelException, IOException {
+  public void testRecursiveFunction()
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_recursive_function.py");
   }
 
@@ -50,46 +48,50 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
    * for that path, since dispatched first it would resolve the first and cut itself.
    */
   @Test
-  public void testMutualRecursion() throws ClassHierarchyException, CancelException, IOException {
+  public void testMutualRecursion()
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_dispatch_mutual_recursion.py");
   }
 
   /** As {@link #testRecursiveFunction()}, with only tensors flowing around the cycle. */
   @Test
   public void testRecursionTensorOnly()
-      throws ClassHierarchyException, CancelException, IOException {
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_recursion_tensor_only.py");
   }
 
   /** Dict comprehension reads, whose generators carry a value binding. */
   @Test
   public void testDictComprehensionItems()
-      throws ClassHierarchyException, CancelException, IOException {
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_dict_comprehension_items.py");
   }
 
   /** A {@code Sequential} fold, which binds arguments onto the layer generators it dispatches. */
   @Test
-  public void testSequentialFold() throws ClassHierarchyException, CancelException, IOException {
+  public void testSequentialFold()
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_sequential_fold.py");
   }
 
   /** Dataset elements, unwrapped through delegating and receiver generators. */
   @Test
-  public void testDatasetZipDict() throws ClassHierarchyException, CancelException, IOException {
+  public void testDatasetZipDict()
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_dataset_zip_dict.py");
   }
 
   /** Containers and iteration passed to Keras layer calls. */
   @Test
   public void testKerasCallContainer()
-      throws ClassHierarchyException, CancelException, IOException {
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_keras_symbolic_call_container.py");
   }
 
   /** Shape arithmetic over binary operations and tuple reads. */
   @Test
-  public void testReshapeRoundTrip() throws ClassHierarchyException, CancelException, IOException {
+  public void testReshapeRoundTrip()
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     this.assertDispatchUnchanged("tf2_test_reshape_round_trip.py");
   }
 
@@ -100,7 +102,7 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
    * @param fixture The fixture.
    */
   private void assertDispatchUnchanged(String fixture)
-      throws ClassHierarchyException, CancelException, IOException {
+      throws ClassHierarchyException, CancelException, IOException, IllegalAccessException {
     PythonTensorAnalysisEngine engine =
         makeEngine(
             PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, this.getPathFiles(""), fixture);
@@ -161,13 +163,11 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
    * @param compared The analysis objects already compared, against their counterparts.
    */
   private static void assertSameDispatch(
-      String where, Object expected, Object actual, Map<Object, Object> compared) {
+      String where, Object expected, Object actual, Map<Object, Object> compared)
+      throws IllegalAccessException {
     if (expected == actual) return;
-    if (expected == null || actual == null) {
-      assertNull(where, expected);
-      assertNull(where, actual);
-      return;
-    }
+    assertNotNull(where, expected);
+    assertNotNull(where, actual);
     assertEquals(where, expected.getClass(), actual.getClass());
     if (expected instanceof IllegalArgumentException e) {
       assertEquals(where, e.getMessage(), ((IllegalArgumentException) actual).getMessage());
@@ -178,25 +178,6 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
       assertEquals(where, e.size(), a.size());
       for (int i = 0; i < e.size(); i++)
         assertSameDispatch(where + "[" + i + "]", e.get(i), a.get(i), compared);
-      return;
-    }
-    if (expected instanceof Collection<?> e) {
-      Collection<?> a = (Collection<?>) actual;
-      assertEquals(where, e.size(), a.size());
-      Iterator<?> ai = a.iterator();
-      int i = 0;
-      for (Object element : e)
-        assertSameDispatch(where + "{" + i++ + "}", element, ai.next(), compared);
-      return;
-    }
-    if (expected instanceof Map<?, ?> e) {
-      Map<?, ?> a = (Map<?, ?>) actual;
-      assertEquals(where, e.size(), a.size());
-      for (Map.Entry<?, ?> entry : e.entrySet()) {
-        assertTrue(where + " key " + entry.getKey(), a.containsKey(entry.getKey()));
-        assertSameDispatch(
-            where + "." + entry.getKey(), entry.getValue(), a.get(entry.getKey()), compared);
-      }
       return;
     }
     if (!expected.getClass().getName().startsWith(ANALYSIS_PACKAGE)) {
@@ -213,12 +194,8 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
       for (Field field : c.getDeclaredFields()) {
         if (Modifier.isStatic(field.getModifiers())) continue;
         field.setAccessible(true);
-        try {
-          assertSameDispatch(
-              where + "." + field.getName(), field.get(expected), field.get(actual), compared);
-        } catch (IllegalAccessException ex) {
-          fail(where + "." + field.getName() + ": " + ex);
-        }
+        assertSameDispatch(
+            where + "." + field.getName(), field.get(expected), field.get(actual), compared);
       }
   }
 }
