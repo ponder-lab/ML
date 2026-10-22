@@ -29,4 +29,39 @@ public class TestConstructorClassChoice extends AbstractTensorTest {
   public void testSecondClass() throws ClassHierarchyException, CancelException, IOException {
     test(FIXTURE, "consume_b", 1, 1, Map.of(2, Set.of(TENSOR_3_3_FLOAT32)));
   }
+
+  /**
+   * The initializers alone: the two classes' methods have different names, so only the other
+   * class's initializer running on this class's instance could give the sink the other tensor.
+   */
+  @Test
+  public void testInitializerFirstClass()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FIXTURE, "consume_c", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /** As {@link #testInitializerFirstClass()}, for the second class. */
+  @Test
+  public void testInitializerSecondClass()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FIXTURE, "consume_d", 1, 1, Map.of(2, Set.of(TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
+   * Class-body attributes alone: neither class has an initializer, and their methods have different
+   * names, so only the other class's attribute copied onto this class's instance could give the
+   * sink the other tensor.
+   */
+  @Test
+  public void testClassAttributeFirstClass()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FIXTURE, "consume_e", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /** As {@link #testClassAttributeFirstClass()}, for the second class. */
+  @Test
+  public void testClassAttributeSecondClass()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FIXTURE, "consume_f", 1, 1, Map.of(2, Set.of(TENSOR_3_3_FLOAT32)));
+  }
 }
