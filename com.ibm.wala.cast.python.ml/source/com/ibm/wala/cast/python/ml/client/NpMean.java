@@ -41,6 +41,16 @@ public class NpMean extends NpArrayFunction {
   private final boolean real;
 
   /**
+   * {@inheritDoc}
+   *
+   * <p>A shallow copy suffices: {@link #real} is a primitive.
+   */
+  @Override
+  protected NpMean clone() throws CloneNotSupportedException {
+    return (NpMean) super.clone();
+  }
+
+  /**
    * Constructs for a source.
    *
    * @param source The source.
