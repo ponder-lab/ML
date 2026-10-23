@@ -915,6 +915,142 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A constant integer subscript of a component unpacked from a tuple parameter in the same
+   * function peels the component's leading axis: {@code a, gt = inputs} then {@code gt[0]} over a
+   * {@code (3, 4) int32} component is {@code (4,) int32}. The subscript's receiver is the
+   * unpacking's read, not a parameter, unlike {@link #testSubscriptUnpackedTupleParameter()}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalConstantIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_unpacked_local.py",
+        "consume_const",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * The loop-index counterpart of {@link #testSubscriptUnpackedLocalConstantIndex()}: {@code gt[i]}
+   * with {@code i} ranging over {@code range(2)} is {@code (4,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalLoopIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_unpacked_local.py",
+        "consume_loop",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * A loop-index subscript of a component unpacked from a Keras model's tuple input in {@code call}
+   * itself: the {@code (2, 5) int32} component's row is {@code (5,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_unpacked_local.py",
+        "consume_model",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  /**
+   * The row of {@link #testSubscriptUnpackedLocalModelCall()} under {@code tf.boolean_mask} keeps
+   * its dtype and takes a dynamic length: {@code (None,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalModelCallMasked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_unpacked_local.py",
+        "consume_model_masked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_INT32)));
+  }
+
+  /**
+   * A constant subscript of a component unpacked from a tuple parameter, where the component is a
+   * Python list of tensors, reads the element stored at that index, not a peeled tensor: {@code
+   * xs[1]} is the {@code (2, 3) float32} element.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalListComponent()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_unpacked_local.py",
+        "consume_list_component",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * A subscript of an unpacked component by a {@code slice} object is not an integer index, so it
+   * is not seeded as a peeled element: {@code gt[s]} with {@code s = slice(0, 2)} is {@code (2, 4)
+   * int32} at run time, and the analysis reaches the consumer without a tensor type rather than
+   * reading {@code (4,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalSliceIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_unpacked_local.py", "consume_slice", 0, 0, Map.of());
+  }
+
+  /**
+   * A subscript of an unpacked component by a tuple index is not an integer index, so it is not
+   * seeded as a peeled element: {@code gt[s]} with {@code s = (0, slice(None))} is {@code (4,)
+   * int32} at run time, and the analysis reaches the consumer without a tensor type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedLocalTupleIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_unpacked_local.py", "consume_tuple_index", 0, 0, Map.of());
+  }
+
+  /**
    * The leading-axis counterpart of {@link #testSubscriptDataflowReceiver()} (wala/ML#953): {@code
    * adj[:2]} over the same dataflow-typed {@code (4, 2) int32} receiver takes the {@code [:k]}
    * form's bound, {@code (2, 2) int32}, through the feed's rule.
