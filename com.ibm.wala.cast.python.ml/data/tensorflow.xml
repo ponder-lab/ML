@@ -3722,6 +3722,14 @@
           <new def="none" class="Lobject"/>
           <return value="none"/>
         </method>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#add_weight. A model is a layer at run time, so a model's `build` or `__init__` creates its weights with `self.add_weight(...)` as a layer's does, but this shell does not extend the `Layer` shell, so the method is declared here as well, with the same body as `Layer`'s: a fresh dense tensor whose shape and dtype the `AddWeight` generator reads from the call's `shape` and `dtype` arguments, and the constraint applied to it (wala/ML#938). -->
+        <method name="add_weight" descriptor="()LRoot;" numArgs="10" paramNames="func self name shape dtype initializer regularizer trainable constraint synchronization">
+          <new def="w" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <new def="z" class="Ltensorflow/functions/convert_to_tensor"/>
+          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="w" numArgs="2" def="wt"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="constraint" arg1="wt" numArgs="2" def="constrained"/>
+          <return value="w"/>
+        </method>
         <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` records nothing the analysis reads. -->
         <method name="compile" descriptor="()LRoot;" numArgs="10" paramNames="func self optimizer loss metrics loss_weights weighted_metrics run_eagerly steps_per_execution jit_compile">
           <new def="none" class="Lobject"/>
