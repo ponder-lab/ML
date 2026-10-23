@@ -10439,41 +10439,68 @@ public abstract class TensorGenerator implements Cloneable {
     Set<DType> combined = null;
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, this.getNode())) {
-      CGNode caller = callerInvoke.fst;
       if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
-      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
-      int argVn = -1;
-      if (paramName != null) argVn = pyCall.getUse(paramName);
-      if (argVn == -1 && paramPos >= 0) {
-        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
-        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
-      }
-      if (argVn <= 0) continue;
-      SSAInstruction def = caller.getDU().getDef(argVn);
-      if (!(def instanceof PythonPropertyRead)) continue;
-      PythonPropertyRead propRead = (PythonPropertyRead) def;
-      SymbolTable st = caller.getIR().getSymbolTable();
-      int memberVn = propRead.getMemberRef();
-      if (!st.isStringConstant(memberVn) || !"dtype".equals(st.getStringValue(memberVn))) continue;
-      int tensorVn = propRead.getObjectRef();
-      try {
-        Set<DType> tensorDTypes = this.getDTypes(builder, caller, tensorVn);
-        if (tensorDTypes != null && !tensorDTypes.isEmpty()) {
-          if (combined == null) combined = EnumSet.noneOf(DType.class);
-          combined.addAll(tensorDTypes);
-        }
-      } catch (IllegalArgumentException e) {
-        // The source tensor's dtype couldn't be resolved; fall through to the default.
-        LOGGER.log(
-            Level.FINE,
-            "getDTypeFromDTypeAttributeArgument: could not resolve .dtype source tensorVn="
-                + tensorVn
-                + " in caller="
-                + caller,
-            e);
+      Set<DType> dTypes =
+          this.getDTypeFromDTypeAttributeArgument(
+              builder,
+              callerInvoke.fst,
+              (PythonInvokeInstruction) callerInvoke.snd,
+              paramPos,
+              paramName);
+      if (dTypes != null && !dTypes.isEmpty()) {
+        if (combined == null) combined = EnumSet.noneOf(DType.class);
+        combined.addAll(dTypes);
       }
     }
     return combined;
+  }
+
+  /**
+   * The dtypes {@link #getDTypeFromDTypeAttributeArgument(PropagationCallGraphBuilder, int,
+   * String)} recovers from one call: those of the tensor whose {@code .dtype} the call passes as
+   * its dtype argument.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param caller The node whose IR holds {@code pyCall}.
+   * @param pyCall The call.
+   * @param paramPos The 0-based positional index of the dtype parameter (excluding {@code self}).
+   * @param paramName The dtype parameter's keyword name, or {@code null}.
+   * @return The tensor's dtypes, or {@code null} if the call's dtype argument is no {@code .dtype}
+   *     read or the tensor's dtypes do not resolve.
+   */
+  protected Set<DType> getDTypeFromDTypeAttributeArgument(
+      PropagationCallGraphBuilder builder,
+      CGNode caller,
+      PythonInvokeInstruction pyCall,
+      int paramPos,
+      String paramName) {
+    int argVn = -1;
+    if (paramName != null) argVn = pyCall.getUse(paramName);
+    if (argVn == -1 && paramPos >= 0) {
+      int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+      if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+    }
+    if (argVn <= 0) return null;
+    SSAInstruction def = caller.getDU().getDef(argVn);
+    if (!(def instanceof PythonPropertyRead)) return null;
+    PythonPropertyRead propRead = (PythonPropertyRead) def;
+    SymbolTable st = caller.getIR().getSymbolTable();
+    int memberVn = propRead.getMemberRef();
+    if (!st.isStringConstant(memberVn) || !"dtype".equals(st.getStringValue(memberVn))) return null;
+    int tensorVn = propRead.getObjectRef();
+    try {
+      return this.getDTypes(builder, caller, tensorVn);
+    } catch (IllegalArgumentException e) {
+      // The source tensor's dtype couldn't be resolved; fall through to the default.
+      LOGGER.log(
+          Level.FINE,
+          "getDTypeFromDTypeAttributeArgument: could not resolve .dtype source tensorVn="
+              + tensorVn
+              + " in caller="
+              + caller,
+          e);
+      return null;
+    }
   }
 
   /**
