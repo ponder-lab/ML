@@ -2928,6 +2928,50 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether the edge from a block to a successor is taken only when a value is not {@code None}:
+   * the block's end is reached only then ({@link #excludesNone}), or the block ends in a branch
+   * that, were the value {@code None}, takes another successor. The second is how a default is
+   * filled in, {@code if n is None: n = ...}, after which the φ joining the two paths has, on the
+   * edge from the test, an {@code n} the test has ruled {@code None} out of.
+   *
+   * @param node The node.
+   * @param block The block, of any IR of {@code node}.
+   * @param successor The successor, of any IR of {@code node}.
+   * @param vn The value.
+   * @param dominators The dominators of each IR read so far in this pass, which gains {@code
+   *     node}'s.
+   * @return {@code true} iff the edge is not taken when {@code vn} is {@code None}.
+   */
+  private static boolean excludesNoneOnEdge(
+      CGNode node,
+      ISSABasicBlock block,
+      ISSABasicBlock successor,
+      int vn,
+      Map<IR, Dominators<ISSABasicBlock>> dominators) {
+    if (excludesNone(node, block, vn, dominators)) return true;
+    SSACFG cfg = node.getIR().getControlFlowGraph();
+    // This IR's blocks of those numbers, as in excludesNone (wala/ML#900).
+    block = cfg.getNode(block.getNumber());
+    successor = cfg.getNode(successor.getNumber());
+    if (block.getLastInstructionIndex() < 0
+        || block.getLastInstructionIndex() < block.getFirstInstructionIndex()
+        || !(block.getLastInstruction() instanceof SSAConditionalBranchInstruction branch))
+      return false;
+    Collection<ISSABasicBlock> successors = cfg.getNormalSuccessors(block);
+    ISSABasicBlock target = cfg.getBlockForInstruction(branch.getTarget());
+    if (successors.size() != 2 || target == null || !successors.contains(successor)) return false;
+    Boolean taken =
+        compare(
+            valueIfNone(node, branch.getUse(0), vn, 0),
+            valueIfNone(node, branch.getUse(1), vn, 0),
+            branch.getOperator(),
+            true);
+    // The branch's two successors are distinct, so the edge is not taken when it goes to the
+    // successor that the value's being `None` does not choose.
+    return taken != null && successor.equals(target) != taken;
+  }
+
+  /**
    * A line opening a {@code try} statement or a {@code with} statement, whose context manager may
    * suppress an exception, as {@code contextlib.suppress} does.
    */
@@ -3143,7 +3187,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               localNames(ir, predecessors.get(i).getLastInstructionIndex(), use);
           operandNames.retainAll(names);
           if (!operandNames.isEmpty()) return true;
-        } else if (!excludesNone(node, predecessors.get(i), use, dominators)
+        } else if (!excludesNoneOnEdge(node, predecessors.get(i), block, use, dominators)
             // An operand a test against `None` has ruled out on its path, as `assert x is not None`
             // does, does not carry it, as for a forwarded parameter.
             && isWrittenNone(builder, node, use, noneParams, noneStores, dominators, onWalk))

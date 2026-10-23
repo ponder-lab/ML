@@ -73,6 +73,16 @@ def asserted(x, n=None, start=None):
     return asserted_sink(x, n)
 
 
+def filled_sink(x, n):
+    return x * tf.cast(n, x.dtype)
+
+
+def filled(x, n=None):
+    if n is None:
+        n = tf.constant(2)
+    return filled_sink(x, n)
+
+
 def named_sink(x, n):
     if n is None:
         return x
@@ -186,6 +196,9 @@ except UnboundLocalError:
 
 assert asserted(x, tf.constant(2)).shape == (2,)
 assert asserted(x, start=3).shape == (2,)
+
+assert filled(x).shape == (2,)
+assert filled(x, tf.constant(3)).shape == (2,)
 
 assert named(x, True).shape == (2,)
 assert named(x, False).shape == (2,)

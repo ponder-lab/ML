@@ -319,6 +319,21 @@ public class TestNoneParameter extends AbstractTensorTest {
             Set.of(TensorType.of(INT_32), TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
+  /**
+   * A {@code None} default filled in by {@code if n is None: n = ...} before it is passed on: the φ
+   * after the test has, on the edge from the test, an {@code n} the test has ruled {@code None} out
+   * of.
+   */
+  @Test
+  public void testFilledDefault() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_none_conditional.py",
+        "filled_sink",
+        2,
+        4,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TensorType.of(INT_32))));
+  }
+
   /** A {@code None} written as one arm of a conditional expression assigned to a variable. */
   @Test
   public void testNamedConditionalNone()
