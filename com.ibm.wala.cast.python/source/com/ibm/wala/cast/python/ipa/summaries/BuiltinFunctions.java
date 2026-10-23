@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ipa.summaries;
 import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.loader.AstDynamicField;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -106,9 +107,11 @@ public class BuiltinFunctions {
    * {@code j} is an element of {@code zip}'s argument {@code j}. Iterating the result and unpacking
    * each element (the {@code for a, b in zip(xs, ys)} idiom) then recovers the input lists' element
    * values. Up to four arguments are wired; an unbound argument's element read has an empty
-   * points-to set and contributes nothing. Without this, {@code zip} returned an <em>empty</em>
-   * list and every value flowing through it unraveled (wala/ML#618; the same starvation shape as
-   * {@code range}, wala/ML#599).
+   * points-to set and contributes nothing. A starred argument, {@code zip(*rows)}, is unpacked into
+   * these formals at the call, as a program function's is, so each row is an argument; a row whose
+   * index is not known binds every formal, so each field then holds the elements of every such row.
+   * Without this, {@code zip} returned an <em>empty</em> list and every value flowing through it
+   * unraveled (wala/ML#618; the same starvation shape as {@code range}, wala/ML#599).
    *
    * @param cls The builtin function class whose summary this is.
    * @param name The builtin's name ({@code zip}).
@@ -249,6 +252,58 @@ public class BuiltinFunctions {
     x.addStatement(factory.PropertyWrite(idx++, container, zero, element));
     // The iteration protocol (wala/ML#1010); see `zipSummary`.
     idx = protocolElement(x, factory, idx, 2, container, zero, 16);
+    x.addStatement(factory.ReturnInstruction(idx++, container, false));
+
+    return new PythonSummarizedFunction(ref, x, cls);
+  }
+
+  /**
+   * Builds the summary for {@code list}: a freshly-allocated list whose elements are the elements
+   * of the argument, read the way {@link #reversedSummary} reads them. Iterating or subscripting
+   * the result then reads the argument's elements, so {@code list(zip(xs, ys))[0]} is a tuple
+   * {@code zip} built and {@code list(t)} over a tuple {@code t} holds {@code t}'s fields. Before,
+   * {@code list} returned a fresh, empty list and every value flowing through it was lost (<a
+   * href="https://github.com/wala/ML/issues/1102">wala/ML#1102</a>).
+   *
+   * <p>The elements are written under {@link
+   * PythonSSAPropagationCallGraphBuilder#LIST_APPEND_CONTENTS_FIELD}, the order-free property an
+   * appended or comprehension-built list keeps its elements in (wala/ML#773), rather than under the
+   * index 0 the {@code reversed} summary uses: the copy's length is not known here, and a numbered
+   * element would let a shape reader count it as a one-element list. Under the append property, the
+   * readers that know a list of unknown length read it as one, so {@code tf.concat(list(t), axis)}
+   * keeps its elements' dtype, rank and other extents. A {@code list()} call with no argument reads
+   * nothing and returns an empty list, as before.
+   *
+   * @param cls The builtin function class whose summary this is.
+   * @param name The builtin's name ({@code list}).
+   * @return The populated summary.
+   */
+  private static IMethod listSummary(IClass cls, String name) {
+    TypeReference type = builtinFunction(name);
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int container = 11;
+    int nullKey = 12;
+    int contentsKey = 13;
+    int elementKey = 14;
+    int element = 15;
+    int idx = 0;
+
+    x.addStatement(
+        factory.NewInstruction(idx++, container, NewSiteReference.make(0, PythonTypes.list)));
+    x.addConstant(nullKey, new ConstantValue(null));
+    x.addConstant(
+        contentsKey,
+        new ConstantValue(PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD));
+
+    // The element of the copied argument, read the way `reversed` reads it.
+    x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, 2, nullKey));
+    x.addStatement(factory.PropertyRead(idx++, element, 2, elementKey));
+    x.addStatement(factory.PropertyWrite(idx++, container, contentsKey, element));
+    // The iteration protocol (wala/ML#1010); see `zipSummary`.
+    idx = protocolElement(x, factory, idx, 2, container, contentsKey, 16);
     x.addStatement(factory.ReturnInstruction(idx++, container, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
@@ -525,17 +580,20 @@ public class BuiltinFunctions {
                           // elements; see `reversedSummary` (wala/ML#1099).
                           : name.equals("reversed")
                               ? reversedSummary(this, name)
-                              // `next` must read the yields accumulated on a generator object; see
-                              // `nextSummary` (wala/ML#696).
-                              : name.equals("next")
-                                  ? nextSummary(this, name)
-                                  // `iter` must carry its argument's generator content through the
-                                  // fresh
-                                  // iterator so that `next(iter(gen()))` recovers the yields; see
-                                  // `iterSummary` (wala/ML#698).
-                                  : name.equals("iter")
-                                      ? iterSummary(this, name)
-                                      : typeSummary(this, name, returnedType);
+                              // `list` must copy its argument's elements into the list it
+                              // returns; see `listSummary`.
+                              : name.equals("list")
+                                  ? listSummary(this, name)
+                                  // `next` must read the yields accumulated on a generator
+                                  // object; see `nextSummary` (wala/ML#696).
+                                  : name.equals("next")
+                                      ? nextSummary(this, name)
+                                      // `iter` must carry its argument's generator content
+                                      // through the fresh iterator so that `next(iter(gen()))`
+                                      // recovers the yields; see `iterSummary` (wala/ML#698).
+                                      : name.equals("iter")
+                                          ? iterSummary(this, name)
+                                          : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {

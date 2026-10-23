@@ -3745,10 +3745,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       // `**` argument intact and forwards it still marked, so the target it forwards to unpacks
       // it; unpacking it here as well would spread it twice. A synthesized constructor forwards
       // its own formals to `__init__` positionally and by `__init__`'s names, so a starred or `**`
-      // argument is unpacked at the call to it instead.
+      // argument is unpacked at the call to it instead. A builtin's summary forwards nothing: it
+      // reads its own formals, so a starred argument is unpacked at the call to it, as at a program
+      // function's, and `zip(*rows)` reads each row as its own argument.
       this.forwardingBody =
           method instanceof PythonSummarizedFunction
-              && !(method instanceof PythonConstructorFunction);
+              && !(method instanceof PythonConstructorFunction)
+              && !(method.getDeclaringClass() instanceof BuiltinFunctions.BuiltinFunction);
       this.firstStarred = this.forwardingBody ? -1 : call.firstStarredPosition();
       this.formals = method.getNumberOfParameters();
       // A `*args` formal is a tuple even when no argument reaches it.

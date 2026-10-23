@@ -1285,11 +1285,19 @@ public class TestModelCall extends AbstractTensorTest {
    * classified where they are read. Neither is the outer loop's element {@code tgrads}, a tuple of
    * tensors: it and the outer loop's iterable were 3 more values of the count while the inner
    * loop's temporaries shared the outer loop's names (wala/ML#1106).
+   *
+   * <p>The count is now 3, the {@code expand_dims}, {@code concat} and {@code reduce_mean} results.
+   * {@code zip(*tower_grads)} used to bind {@code tower_grads} whole to {@code zip}'s first
+   * argument, so {@code g} was a tower's whole gradient value rather than one of its gradients. The
+   * starred argument is now unpacked, so {@code g} points to the gradient tensor a tower's gradient
+   * list holds. But a gradient read out of that list through another container carries no type, as
+   * in {@code for g, v in zip(grads, variables)}, so {@code g} and its loop phi are no longer
+   * counted.
    */
   @Test
   public void testMultiGPUTraining2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("multigpu_training.py", "average_gradients", 0, 5);
+    test("multigpu_training.py", "average_gradients", 0, 3);
   }
 
   /**
