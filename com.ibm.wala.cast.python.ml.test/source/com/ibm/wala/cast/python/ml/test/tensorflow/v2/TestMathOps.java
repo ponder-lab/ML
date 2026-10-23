@@ -1102,8 +1102,8 @@ public class TestMathOps extends AbstractTensorTest {
   /**
    * {@code tf.meshgrid(x, y)} returns a list of two tensors of the first input's dtype; the first
    * is read here by a constant subscript of the returned list. The summary stores a fresh tensor
-   * allocation, typed by the {@link com.ibm.wala.cast.python.ml.client.Meshgrid} generator, at the
-   * list's positions, so the element carries {@code float32} alone rather than beside a wholly
+   * allocation, typed by the {@link com.ibm.wala.cast.python.ml.client.Meshgrid} generator, as the
+   * list's element, so the element carries {@code float32} alone rather than beside a wholly
    * unknown member.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
@@ -1136,6 +1136,69 @@ public class TestMathOps extends AbstractTensorTest {
     test(
         "tf2_test_meshgrid_subscript.py",
         "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The elements of {@link #testMeshgridSubscript}'s list unpacked, {@code X, Y = tf.meshgrid(x,
+   * y)}: read through the {@link com.ibm.wala.cast.python.ml.client.Meshgrid} generator, though the
+   * summary stores its element at no numbered position.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridUnpacked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume_unpacked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A stack of {@code tf.meshgrid}'s list, {@code (2, 2, 3)} at run time: the summary stores the
+   * element under the append-contents property, so a reader sees a list of unknown length and the
+   * stacked axis is never a fixed count of summary positions. The element's own shape is not
+   * composed yet, so the result's shape is unknown; it must not be a fixed-length stack.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridStacked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume_stacked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A concatenation of {@code tf.meshgrid}'s list along axis 0, {@code (4, 3)} at run time; as
+   * {@link #testMeshgridStacked()}, its shape is unknown and never a count of summary positions.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridConcatenated()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume_concatenated",
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));

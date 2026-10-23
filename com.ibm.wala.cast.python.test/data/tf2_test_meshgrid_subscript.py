@@ -9,6 +9,18 @@ def consume2(a):
     pass
 
 
+def consume_unpacked(a):
+    assert a.shape == (2, 3) and a.dtype == tf.float32
+
+
+def consume_stacked(a):
+    assert a.shape == (2, 2, 3) and a.dtype == tf.float32
+
+
+def consume_concatenated(a):
+    assert a.shape == (4, 3) and a.dtype == tf.float32
+
+
 # `tf.meshgrid(*xi)` returns a list with one tensor per input, each of
 # the first input's dtype. The elements are read by constant subscript
 # of the returned list rather than by destructuring.
@@ -24,3 +36,10 @@ assert grids[1].dtype == tf.float32
 
 consume(grids[0])
 consume2(grids[1])
+
+# Unpacking reads the elements through the generator; stacking and
+# concatenating read the list, whose length is the number of inputs.
+X, Y = tf.meshgrid(x, y)
+consume_unpacked(X)
+consume_stacked(tf.stack(tf.meshgrid(x, y)))
+consume_concatenated(tf.concat(tf.meshgrid(x, y), 0))

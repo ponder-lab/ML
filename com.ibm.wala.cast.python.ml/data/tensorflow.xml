@@ -2495,13 +2495,11 @@
         </method>
       </class>
       <class name="meshgrid" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/meshgrid. Returns a list of one tensor per input, all of the same shape and dtype, so one fresh tensor stands for every element; the `Meshgrid` generator types it. The element is written to the first three indices to cover the common input counts, as `split` does. A fresh allocation rather than a nested `constant.do` result, which reached the caller beside the generator's answer as a wholly unknown member (wala/ML#380). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/meshgrid. Returns a list of one tensor per input, all of the same shape and dtype, so one fresh tensor stands for every element; the `Meshgrid` generator types it. The element is stored under the order-free append-contents property, as the `list` builtin's summary stores its copy, rather than at numbered positions: the list's length is the number of inputs, which the summary does not know, and numbered positions would let a reader count a fixed length. A fresh allocation rather than a nested `constant.do` result, which reached the caller beside the generator's answer as a wholly unknown member (wala/ML#380). -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *args **kwargs">
           <new def="lst" class="Llist"/>
           <new def="grid" class="Ltensorflow/python/framework/ops/Tensor"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="lst" value="grid"/>
-          <putfield class="LRoot" field="1" fieldType="LRoot" ref="lst" value="grid"/>
-          <putfield class="LRoot" field="2" fieldType="LRoot" ref="lst" value="grid"/>
+          <putfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="lst" value="grid"/>
           <return value="lst"/>
         </method>
       </class>
