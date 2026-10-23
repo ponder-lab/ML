@@ -6430,9 +6430,7 @@ public abstract class TensorGenerator implements Cloneable {
       // on how many times the loop ran, which a single read cannot fold, so the value is ⊤. It is
       // also the resolver's own policy for the same question (its Javadoc: bottom-valued members of
       // a nontrivial SCC are promoted to the unknown-marked element), so the two paths now agree
-      // where they used to differ. The two older guards below return ⊥ on the same path
-      // (wala/ML#928). Paired
-      // with ⊤ on the dtype twin.
+      // where they used to differ. Paired with ⊤ on the dtype twin.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
         return ShapeResult.unknown();
       TensorGenerator generator;
@@ -6482,7 +6480,7 @@ public abstract class TensorGenerator implements Cloneable {
           // far: a manual generator reads its operands through the default set view, whose contract
           // is the resolvable subset (wala/ML#718), so the unknown mark is dropped one hop up and
           // the set stays whatever the other members make it. The value is right wherever a read is
-          // exact; no test witnesses it. The dtype twin deliberately does NOT read ⊤ (see there).
+          // exact; no test witnesses it. The dtype twin reads ⊤ too on this path (wala/ML#862).
           if (applyRecursionGuards
               && this.manualNode != null
               && this.manualNode.equals(readDataNode)) {
@@ -7525,8 +7523,9 @@ public abstract class TensorGenerator implements Cloneable {
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     // Dtype counterpart of the producer-cycle handling in `getShapeResultFromTensor`
     // (wala/ML#718): the engine's bottom for an unconverged dtype read is the empty set rather
-    // than UNKNOWN, since an in-band UNKNOWN would collapse the caller's union to {UNKNOWN} under
-    // the lattice normalization, erasing the sibling members' resolved dtypes.
+    // than UNKNOWN, chosen when an in-band UNKNOWN collapsed the caller's union to {UNKNOWN} and
+    // erased the sibling members' resolved dtypes; the union now keeps them beside an UNKNOWN
+    // member (wala/ML#862).
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback. Unlike the shape
     // side, the transfer keeps the reader's self-recursion guards: an unguarded dtype delegation
@@ -7567,16 +7566,9 @@ public abstract class TensorGenerator implements Cloneable {
     // A slice result allocated at its own call (wala/ML#916); the shape twin above explains.
     PointsToSetVariable sliceSource = sliceCallSource(builder, asin);
     if (sliceSource != null) {
-      // Self-recursion contributes nothing to the dtype union. This REVERSES the dtype half of the
-      // wala/ML#916 guard, which read UNKNOWN when it landed hours earlier, decided before the
-      // poisoning was measured: on the null-engine path an UNKNOWN member collapses the union to
-      // {UNKNOWN} and erases the siblings' correct dtype (the measurement and the reason are at the
-      // producer guards below, wala/ML#928, pending wala/ML#862). The shape twin above keeps ⊤, so
-      // this member pairs a shape value with an empty dtype: the documented exception to the
-      // lattice
-      // table's pairing rule stated at the manual producer guard, ending with wala/ML#862.
+      // Self-recursion: the slice's own result; see selfRecursionDTypes.
       if (applyRecursionGuards && this.getSource() != null && this.getSource().equals(sliceSource))
-        return ret;
+        return selfRecursionDTypes(builder);
       TensorGenerator generator;
       try {
         generator = this.inheritBinding(TensorGeneratorFactory.getGenerator(sliceSource, builder));
@@ -7608,28 +7600,12 @@ public abstract class TensorGenerator implements Cloneable {
             this.inheritBinding(createManualGenerator(readDataNode, asin, builder));
 
         if (generator != null) {
-          // Self-recursion: the self-referential member contributes NOTHING to the dtype union, not
-          // UNKNOWN, although the shape twin reads ⊤ (wala/ML#928). Measured on three loop-carried
-          // producers read on the null-engine path: UNKNOWN here turned every correct float32 into
-          // unknown, because the union's normalization collapses any set containing UNKNOWN to
-          // {UNKNOWN}; the empty contribution kept float32 on all three. That collapse is the
-          // reason
-          // getDTypesFromTensor chose empty over UNKNOWN for an unreadable member, and the cost of
-          // the choice (a short union reads as complete) is wala/ML#862; a dtype axis that can mark
-          // partiality is what would let this read ⊤ without erasing its siblings. Residual: a
-          // producer whose dtype changes across loop iterations would lose a dtype here; none
-          // constructed, none predicted.
-          // DOCUMENTED EXCEPTION to the lattice table's pairing rule (CLAUDE.md, "empty set on one
-          // axis must be paired with empty set on the other"): for this one member the shape twin
-          // contributes ⊤ (a value) and this contributes nothing (empty), the pairing the rule
-          // forbids. It is taken knowingly, for the measured reason above, and it ends when
-          // wala/ML#862 gives the dtype axis a partiality marker, at which point this contributes
-          // the
-          // marked remainder and the pairing is restored. Do not "fix" it to UNKNOWN without that.
+          // Self-recursion: a loop-carried producer reading its own result; see
+          // selfRecursionDTypes.
           if (applyRecursionGuards
               && this.manualNode != null
               && this.manualNode.equals(readDataNode)) {
-            return ret;
+            return selfRecursionDTypes(builder);
           }
           LOGGER.fine("Delegating dtype inference to: " + generator);
           Set<DType> delegated = memoizedDTypes(builder, generator);
@@ -7679,6 +7655,31 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
     return ret;
+  }
+
+  /**
+   * What a dtype producer self-recursion guard in {@link #doGetDTypesFromTensor} contributes for
+   * the self-referential member: a producer reading its own allocation, a loop-carried slice or
+   * operation.
+   *
+   * <p>On the null-engine path (wala/ML#753) the read runs once and ships as read, so the member
+   * contributes {@link DType#UNKNOWN}, the marked remainder of a partial union (wala/ML#862),
+   * paired with the shape twin's ⊤ as the lattice table requires. Contributing nothing there
+   * presented the siblings' dtypes as the whole answer, an optimism nothing revises; it was taken
+   * only while an {@link DType#UNKNOWN} member collapsed the union to {@link DType#UNKNOWN} and
+   * erased the siblings' dtypes (wala/ML#928), and the union now keeps them beside it.
+   *
+   * <p>Under the {@link WorklistTypeResolver}, whose transfer also runs these guards, the member
+   * contributes nothing: the query iterates to a fixpoint, so ⊥ is the iteration's bottom and is
+   * revised, while an {@link DType#UNKNOWN} member could never be, the dtype join being a union.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link DType#UNKNOWN} on the null-engine path, and the empty set under the resolver.
+   */
+  private static Set<DType> selfRecursionDTypes(PropagationCallGraphBuilder builder) {
+    return WorklistTypeResolver.active(builder) == null
+        ? EnumSet.of(UNKNOWN)
+        : EnumSet.noneOf(DType.class);
   }
 
   protected PointsToSetVariable getSource() {
