@@ -1553,6 +1553,178 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The generator of the value a tuple literal holds at a constant index, where the literal reaches
+   * the reading node as a parameter: the join, over every tuple literal in the parameter's
+   * points-to set, of {@link #literalElementGenerator} read in the literal's allocating node. A
+   * literal is immutable, so its own write at the index is the element whichever caller passed it.
+   *
+   * @param source The read's {@link PointsToSetVariable}, anchoring a join.
+   * @param node The node reading the parameter.
+   * @param objRef The parameter's value number.
+   * @param index The constant index read.
+   * @param builder The propagation call graph builder.
+   * @param visited The sources already being dispatched.
+   * @return The join of the literals' element generators, or {@code null} unless every member of
+   *     the parameter's points-to set is a tuple literal whose element at the index has a
+   *     generator: a member of another kind, or an element with none, is typed only through the
+   *     heap, and a join omitting it would type the read as the other members alone.
+   */
+  private static TensorGenerator passedLiteralElementGenerator(
+      PointsToSetVariable source,
+      CGNode node,
+      int objRef,
+      int index,
+      PropagationCallGraphBuilder builder,
+      DispatchPath visited) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (InstanceKey ik :
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, objRef))) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      if (asin == null || !asin.concreteType().getReference().equals(PythonTypes.tuple))
+        return null;
+      IR allocatingIR = asin.getNode().getIR();
+      if (allocatingIR == null) return null;
+      // A site the node's IR does not hold, as a summary's synthesized allocation, has no literal.
+      SSANewInstruction alloc = null;
+      for (SSAInstruction instruction : allocatingIR.getInstructions())
+        if (instruction instanceof SSANewInstruction candidate
+            && candidate.getNewSite().equals(asin.getSite())) alloc = candidate;
+      if (alloc == null) return null;
+      TensorGenerator part =
+          literalElementGenerator(asin.getNode(), alloc.getDef(), index, builder, visited);
+      if (part == null) return null;
+      parts.add(part);
+    }
+    if (parts.isEmpty()) return null;
+    return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
+   * The generator of a parameter read as a subscript's receiver: the join of the generators of its
+   * creators (wala/ML#1009), since the parameter holds whatever any of its callers passed. A
+   * creator with no generator contributes nothing, as in {@link CreatorJoin}.
+   *
+   * @param parameter The parameter's {@link PointsToSetVariable}.
+   * @param builder The propagation call graph builder.
+   * @param visited The sources already being dispatched.
+   * @return The join of the creators' generators; the single-creator dispatch when a creator's
+   *     generator is one {@link #isStructuredReceiver} names; or {@code null} when none has one.
+   */
+  private static TensorGenerator parameterGenerator(
+      PointsToSetVariable parameter, PropagationCallGraphBuilder builder, DispatchPath visited) {
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (PointsToSetVariable creator : findCreators(parameter, builder)) {
+      TensorGenerator part = tryGetGenerator(creator, builder, visited);
+      LOGGER.fine(
+          () ->
+              "Subscript receiver "
+                  + describe(parameter)
+                  + " has creator "
+                  + describe(creator)
+                  + " with generator "
+                  + part
+                  + ".");
+      if (part != null) parts.add(part);
+    }
+    if (parts.isEmpty()) return null;
+    if (parts.size() == 1) return parts.get(0);
+    // The property-read arm's structured cases (a dataset or its element, a `fit` pack, a split, a
+    // model, an enumeration) each read their own creator's structure, and the per-creator element
+    // join below the arm would peel their elements instead. A receiver with such a creator keeps
+    // the single-creator dispatch.
+    for (TensorGenerator part : parts)
+      if (isStructuredReceiver(part)) return tryGetGenerator(parameter, builder, visited);
+    return new CreatorJoin(parameter, parts);
+  }
+
+  /**
+   * Whether a subscript receiver's generator, or a generator it delegates to, is one the
+   * property-read arm reads by its structure rather than by peeling its leading axis.
+   *
+   * @param generator The receiver's generator.
+   * @return {@code true} iff the generator or a delegate is structured.
+   */
+  private static boolean isStructuredReceiver(TensorGenerator generator) {
+    Set<TensorGenerator> seen = HashSetFactory.make();
+    for (TensorGenerator current = generator;
+        current != null && seen.add(current);
+        current =
+            current instanceof DelegatingTensorGenerator delegating
+                ? delegating.getUnderlying()
+                : null)
+      // A dataset generator is a tuple-element provider, so the first test covers datasets too.
+      if (current instanceof TupleElementProvider
+          || current instanceof Split
+          || current instanceof Unstack
+          || current instanceof Model
+          || current instanceof EnumerateGenerator) return true;
+    return false;
+  }
+
+  /**
+   * Whether a subscript's member is an integer index, decided structurally: a constant integer, the
+   * result of a call to the {@code int} or {@code len} builtin, or a loop counter bound from {@code
+   * next(iter(range(...)))}. A member's points-to set does not decide it: a loop counter's set is
+   * often empty, and a {@code slice(...)} result's holds an integer constant, although subscripting
+   * by it keeps the axis. Every other member, a parameter among them, is not an integer index, so
+   * its subscript stays unseeded.
+   *
+   * @param node The node of the subscript.
+   * @param memberRef The member's value number.
+   * @param builder The propagation call graph builder, whose call graph names the calls' targets.
+   * @return {@code true} iff the member is an integer index.
+   */
+  static boolean readsIntegerIndex(
+      CGNode node, int memberRef, PropagationCallGraphBuilder builder) {
+    SymbolTable symtab = node.getIR().getSymbolTable();
+    if (symtab.isConstant(memberRef)) {
+      Object value = symtab.getConstantValue(memberRef);
+      return value instanceof Integer || value instanceof Long;
+    }
+    DefUse du = node.getDU();
+    if (!(du.getDef(memberRef) instanceof SSAAbstractInvokeInstruction call)) return false;
+    if (callsBuiltin(node, call, "int", builder) || callsBuiltin(node, call, "len", builder))
+      return true;
+    // A `for i in range(n)` counter: `next` over `iter` over a `range` call.
+    if (!callsBuiltin(node, call, "next", builder) || call.getNumberOfUses() < 2) return false;
+    if (!(du.getDef(call.getUse(1)) instanceof SSAAbstractInvokeInstruction iter)
+        || !callsBuiltin(node, iter, "iter", builder)
+        || iter.getNumberOfUses() < 2) return false;
+    return du.getDef(iter.getUse(1)) instanceof SSAAbstractInvokeInstruction range
+        && callsBuiltin(node, range, "range", builder);
+  }
+
+  /**
+   * Whether a call's every target is the summary of the named builtin, {@code
+   * Lwala/builtin/<name>}.
+   *
+   * @param node The node of the call.
+   * @param call The call.
+   * @param name The builtin's name.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the call has targets and all are the builtin's.
+   */
+  private static boolean callsBuiltin(
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      String name,
+      PropagationCallGraphBuilder builder) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (targets.isEmpty()) return false;
+    String builtin = "Lwala/builtin/" + name;
+    for (CGNode target : targets)
+      if (!target.getMethod().getDeclaringClass().getName().toString().equals(builtin))
+        return false;
+    return true;
+  }
+
+  /**
    * Returns the constant integer the member reference of a property access resolves to, or {@code
    * null} if it is not a single constant index.
    *
@@ -2775,6 +2947,13 @@ public class TensorGeneratorFactory {
             TensorGenerator literal =
                 literalElementGenerator(node, objRef, listIndex, builder, visited);
             if (literal != null) return literal;
+            // The same read of a parameter the literal was passed to, as a model's `call` unpacks
+            // the tuple its caller built.
+            if (node.getDU().getDef(objRef) == null) {
+              TensorGenerator passed =
+                  passedLiteralElementGenerator(source, node, objRef, listIndex, builder, visited);
+              if (passed != null) return passed;
+            }
           }
         }
 
@@ -2790,7 +2969,15 @@ public class TensorGeneratorFactory {
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = getPointsToSetVariable(objKey, builder);
         if (objSrc == null) return null;
-        TensorGenerator containerGenerator = tryGetGenerator(objSrc, builder, visited);
+        // An integer subscript of a parameter reads an element of whatever any caller passed, so
+        // the receiver is typed by the join of its creators' generators, not by the first creator
+        // the walk reaches (wala/ML#1009). Other reads keep the single-creator dispatch, so the
+        // ubiquitous `self.attr` read never pays the walk.
+        TensorGenerator containerGenerator =
+            node.getDU().getDef(objRef) == null
+                    && readsIntegerIndex(node, propRead.getMemberRef(), builder)
+                ? parameterGenerator(objSrc, builder, visited)
+                : tryGetGenerator(objSrc, builder, visited);
 
         TensorGenerator effectiveGenerator = containerGenerator;
         boolean changed = true;
@@ -3012,6 +3199,21 @@ public class TensorGeneratorFactory {
               return new FancyIndexGenerator(source, containerGenerator, indexGenerator);
             }
           }
+        }
+
+        // A receiver typed by several creators reads an element of each, so the element's shape
+        // stays paired with its own creator's dtype; an element of the join would pair every
+        // creator's shape with every creator's dtype.
+        if (containerGenerator instanceof CreatorJoin join
+            && join.getSource() == objSrc
+            && (propertyName == null || !isNonTensorAttribute(propertyName))) {
+          List<TensorGenerator> elements = new ArrayList<>();
+          for (TensorGenerator part : join.getParts())
+            elements.add(
+                part instanceof DatasetGenerator
+                    ? new DatasetElementGenerator(objSrc, part)
+                    : new TensorElementGenerator(source, part, true));
+          return new CreatorJoin(source, elements);
         }
 
         if (containerGenerator != null

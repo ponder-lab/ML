@@ -1585,9 +1585,43 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   LOGGER.fine(
                       () ->
                           "Added dataflow source from tuple-element read: " + describe(src) + ".");
+                  added = true;
                 }
               } catch (IllegalArgumentException e) {
                 LOGGER.log(Level.FINE, e, () -> "Not a tuple-element read: " + propertyRead + ".");
+              }
+            }
+
+            // An integer subscript of a tensor that arrives as a parameter (`x[0]`, or `x[i]` in a
+            // loop over `range`) reads one element along the receiver's leading axis. The receiver
+            // has no def
+            // in this node, so neither the def-chain walks below nor the dataset check above reach
+            // it; the factory types it as an element of the receiver's own producer, found through
+            // the parameter's creators, and seeds only on that resolution. A parameter holding a
+            // Python list or tuple of tensors has no tensor producer, so its element read stays
+            // unseeded and the pointer analysis carries the stored element to the result. Gated
+            // to integer members, so the `self.attr` reads this branch also visits never pay the
+            // generator walk.
+            if (!added
+                && TensorGeneratorFactory.readsIntegerIndex(
+                    localPointerKeyNode, propertyRead.getMemberRef(), builder)) {
+              try {
+                TensorGenerator generator = getGenerator(src, builder);
+
+                if (isTensorElement(generator)
+                    || (generator instanceof CreatorJoin join
+                        && join.getParts().stream()
+                            .allMatch(PythonTensorAnalysisEngine::isTensorElement))) {
+                  sources.add(src);
+                  LOGGER.fine(
+                      () ->
+                          "Added dataflow source from an integer subscript of a parameter: "
+                              + describe(src)
+                              + ".");
+                }
+              } catch (IllegalArgumentException e) {
+                LOGGER.log(
+                    Level.FINE, e, () -> "Not a tensor subscript of a parameter: " + propertyRead);
               }
             }
           } else if (def instanceof EachElementGetInstruction
@@ -2045,6 +2079,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         return true;
 
     return false;
+  }
+
+  /**
+   * Whether a generator reads an element of a tensor some generator types.
+   *
+   * @param generator The generator.
+   * @return {@code true} iff it is a {@link TensorElementGenerator} with a container generator.
+   */
+  private static boolean isTensorElement(TensorGenerator generator) {
+    return generator instanceof TensorElementGenerator element
+        && element.getContainerGenerator() != null;
   }
 
   /**

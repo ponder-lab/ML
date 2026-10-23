@@ -19,9 +19,38 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
 
   private final TensorGenerator containerGenerator;
 
+  /**
+   * Separates elements of different containers read by one subscript, or {@code null} when the
+   * subscript reads one container.
+   */
+  private final Object containerDiscriminator;
+
   public TensorElementGenerator(PointsToSetVariable source, TensorGenerator containerGenerator) {
+    this(source, containerGenerator, false);
+  }
+
+  /**
+   * Constructs an element of the given container, optionally told apart from the elements of the
+   * other containers one subscript reads. A subscript whose receiver has several creators reads an
+   * element of each, one generator per creator anchored on the same subscript, and the memo key of
+   * an evaluation is the class and the anchor, so without the discriminator every part would replay
+   * the first part's result.
+   *
+   * @param source The subscript's {@link PointsToSetVariable}.
+   * @param containerGenerator The container's generator.
+   * @param perContainer Whether this element is one of several the subscript reads.
+   */
+  TensorElementGenerator(
+      PointsToSetVariable source, TensorGenerator containerGenerator, boolean perContainer) {
     super(source);
     this.containerGenerator = containerGenerator;
+    this.containerDiscriminator =
+        perContainer && containerGenerator != null ? evaluationKey(containerGenerator) : null;
+  }
+
+  @Override
+  protected Object operationDiscriminator() {
+    return this.containerDiscriminator;
   }
 
   public TensorGenerator getContainerGenerator() {
