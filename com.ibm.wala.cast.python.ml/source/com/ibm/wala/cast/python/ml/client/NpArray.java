@@ -178,6 +178,28 @@ public class NpArray extends TensorGenerator {
   }
 
   /**
+   * The shapes of the argument at a position, read as {@link #getDefaultShapeResult} reads {@code
+   * x}'s, for the NumPy functions that read an array-like argument as {@code np.array} would
+   * (wala/ML#1008).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param position The argument's positional index, excluding the callable.
+   * @return The argument's shapes, or {@code null} when they cannot be read.
+   */
+  protected Set<List<Dimension<?>>> getShapesOfArgument(
+      PropagationCallGraphBuilder builder, int position) {
+    int vn = getArgumentValueNumber(position);
+    if (vn <= 0) return null;
+    try {
+      Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), vn);
+      return shapes == null || shapes.isEmpty() ? null : shapes;
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(Level.FINE, "Shape lookup failed for argument vn=" + vn, e);
+      return null;
+    }
+  }
+
+  /**
    * The windowed-batcher arm (wala/ML#851): {@code np.array} over a list built by a comprehension
    * of fixed-length windows, the hand-rolled numpy batcher shape ({@code np.array([get(f, length)
    * for f in random.sample(files, k=batch_size)])}). The content list's element values are opaque
@@ -464,7 +486,6 @@ public class NpArray extends TensorGenerator {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // The explicit `dtype` argument is a token (`np.int32`, the builtin `int`), not a value whose
     // dtype the value walk could compute (that walk deliberately ignores `DType` allocations), so
@@ -483,7 +504,22 @@ public class NpArray extends TensorGenerator {
     // No explicit `dtype` argument: infer from the contents of `x` (arg 0) using numpy's promotion
     // rules. numpy promotes Python `int` to `int64` and `float` to `float64` (not the `int32` /
     // `float32` TF-literal convention), so a numpy-specific walk is needed. wala/ML#626.
-    int sourceVn = getArgumentValueNumber(0);
+    return this.getNumpyDTypesOfArgument(builder, 0);
+  }
+
+  /**
+   * The dtype {@code np.array} gives the argument at a position: a Python scalar or a nested
+   * sequence of them promotes as NumPy promotes it, and an existing array keeps its own dtype.
+   * Shared by the NumPy functions that read an array-like argument as {@code np.array} would
+   * (wala/ML#1008).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param position The argument's positional index, excluding the callable.
+   * @return The argument's NumPy dtypes, or {@code {UNKNOWN}} when they cannot be read.
+   */
+  @SuppressWarnings("unchecked")
+  protected Set<DType> getNumpyDTypesOfArgument(PropagationCallGraphBuilder builder, int position) {
+    int sourceVn = getArgumentValueNumber(position);
     if (sourceVn > 0) {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(getNode(), sourceVn);

@@ -543,10 +543,22 @@ public abstract class TensorGenerator implements Cloneable {
    */
   TensorGenerator copy() {
     try {
-      return (TensorGenerator) this.clone();
+      return this.clone();
     } catch (CloneNotSupportedException e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  /**
+   * A shallow copy of this generator, field for field, as {@link #copy()} replays a memoized
+   * dispatch with.
+   *
+   * @return The copy.
+   * @throws CloneNotSupportedException Never, since this class implements {@link Cloneable}.
+   */
+  @Override
+  protected TensorGenerator clone() throws CloneNotSupportedException {
+    return (TensorGenerator) super.clone();
   }
 
   /**
@@ -8078,6 +8090,23 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * A generator's per-operand-dtype rule, carried on a {@link TypeFeedKind#DTYPE_ONLY} feed
+   * (wala/ML#1008): the result's dtype for one operand dtype, for an operation that maps its
+   * operand's dtype rather than preserving it, such as a NumPy promotion against an argument whose
+   * dtype the generator did read, or an average of integers in {@code float64}.
+   */
+  @FunctionalInterface
+  public interface DTypeTransform {
+    /**
+     * Applies the rule to one operand dtype.
+     *
+     * @param input The operand's dtype.
+     * @return The result's dtype.
+     */
+    DType apply(DType input);
+  }
+
+  /**
    * A type-feed declaration (wala/ML#736, wala/ML#682): how the result composes from its operands
    * and where the operands live.
    *
@@ -8086,13 +8115,44 @@ public abstract class TensorGenerator implements Cloneable {
    *     requires exactly two.
    * @param transform The generator's own shape rule for {@link TypeFeedKind#TRANSFORM}, and {@code
    *     null} for every other kind (wala/ML#905).
+   * @param dtypeTransform The generator's own dtype rule for a {@link TypeFeedKind#DTYPE_ONLY} feed
+   *     whose operation maps its operand's dtype, and {@code null} for one that preserves it and
+   *     for every other kind (wala/ML#1008).
    */
-  public record TypeFeed(TypeFeedKind kind, List<PointerKey> operands, ShapeTransform transform) {
+  public record TypeFeed(
+      TypeFeedKind kind,
+      List<PointerKey> operands,
+      ShapeTransform transform,
+      DTypeTransform dtypeTransform) {
 
     public TypeFeed {
       if ((kind == TypeFeedKind.TRANSFORM) != (transform != null))
         throw new IllegalArgumentException(
             "A shape transform is carried by exactly the TRANSFORM kind: " + kind + ".");
+      if (dtypeTransform != null && kind != TypeFeedKind.DTYPE_ONLY)
+        throw new IllegalArgumentException(
+            "A dtype transform is carried by the DTYPE_ONLY kind only: " + kind + ".");
+    }
+
+    /**
+     * A feed carrying at most a shape rule.
+     *
+     * @param kind The composition kind.
+     * @param operands The operand pointer keys, in operand order.
+     * @param transform The shape rule for {@link TypeFeedKind#TRANSFORM}, else {@code null}.
+     */
+    public TypeFeed(TypeFeedKind kind, List<PointerKey> operands, ShapeTransform transform) {
+      this(kind, operands, transform, null);
+    }
+
+    /**
+     * A {@link TypeFeedKind#DTYPE_ONLY} feed whose fed dtypes map through a rule (wala/ML#1008).
+     *
+     * @param operands The operand pointer keys, in operand order.
+     * @param dtypeTransform The dtype rule.
+     */
+    public TypeFeed(List<PointerKey> operands, DTypeTransform dtypeTransform) {
+      this(TypeFeedKind.DTYPE_ONLY, operands, null, dtypeTransform);
     }
 
     /**
@@ -8102,7 +8162,7 @@ public abstract class TensorGenerator implements Cloneable {
      * @param operands The operand pointer keys, in operand order.
      */
     public TypeFeed(TypeFeedKind kind, List<PointerKey> operands) {
-      this(kind, operands, null);
+      this(kind, operands, null, null);
     }
   }
 

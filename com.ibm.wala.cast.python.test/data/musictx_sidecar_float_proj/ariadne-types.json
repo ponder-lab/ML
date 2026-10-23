@@ -1,0 +1,12 @@
+{
+  "types": [
+    {
+      "module": "data.py",
+      "function": "Data._get_seq",
+      "variable": "data",
+      "dtype": "int64",
+      "shape": "n",
+      "attribution": "The pickles hold lists of Python integers; np.array of one is int64, rank 1."
+    }
+  ]
+}

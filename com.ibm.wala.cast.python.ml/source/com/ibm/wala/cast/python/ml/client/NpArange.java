@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -9,7 +10,13 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayList;
@@ -131,20 +138,146 @@ public class NpArange extends TensorGenerator {
     return (int) Math.ceil((double) numerator / denominator);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>NumPy draws the dtype from the bounds: integers give its default integer, {@code int64}, and
+   * a float among them gives {@code float64}. A bound's value is not enough to tell the two apart,
+   * since {@code -4.0} and {@code -4} resolve to the same number, so each bound's numeric kind is
+   * read from how it is written ({@link #numericKind}). A quotient of integers is either: the front
+   * end translates {@code /} and {@code //} to one operator, so such a bound gives both dtypes, the
+   * sound may-set. A bound whose kind cannot be read gives an unknown dtype (wala/ML#1008).
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Integer bounds draw numpy's default integer dtype; bounds the analysis cannot read may be
-    // floats, whose result would be float64, so the dtype is unknown rather than a guess.
-    boolean allIntegral = true;
     boolean any = false;
+    boolean unknown = false;
+    boolean anyFloat = false;
+    boolean ambiguous = false;
     for (Pair<CGNode, PythonInvokeInstruction> callerInvoke : this.callerInvokes(builder)) {
       any = true;
-      for (int vn : boundValueNumbers(callerInvoke.snd))
-        if (vn >= 0 && resolve(builder, callerInvoke.fst, vn) == null) allIntegral = false;
+      for (int vn : boundValueNumbers(callerInvoke.snd)) {
+        if (vn < 0) continue;
+        NumericKind kind =
+            numericKind(builder, callerInvoke.fst, vn, new HashSet<>(), NUMERIC_KIND_DEPTH_CAP);
+        if (kind == null) unknown = true;
+        else if (kind == NumericKind.FLOAT) anyFloat = true;
+        else if (kind == NumericKind.INT_OR_FLOAT) ambiguous = true;
+      }
     }
-    Set<DType> operandDefault =
-        any && allIntegral ? EnumSet.of(DType.INT64) : EnumSet.of(DType.UNKNOWN);
+    Set<DType> operandDefault;
+    if (!any || unknown) operandDefault = EnumSet.of(DType.UNKNOWN);
+    else if (anyFloat) operandDefault = EnumSet.of(DType.FLOAT64);
+    else if (ambiguous) operandDefault = EnumSet.of(DType.INT64, DType.FLOAT64);
+    else operandDefault = EnumSet.of(DType.INT64);
     return this.dTypeApiDefaultOrUnknown(builder, operandDefault);
+  }
+
+  /** How deep {@link #numericKind} follows a bound's definitions. */
+  private static final int NUMERIC_KIND_DEPTH_CAP = 8;
+
+  /** The numeric kind of a Python number as its writing determines it. */
+  enum NumericKind {
+    /** An {@code int} (or {@code bool}). */
+    INT,
+    /** A {@code float}. */
+    FLOAT,
+    /** One of the two, which the writing does not decide. */
+    INT_OR_FLOAT;
+
+    private NumericKind join(NumericKind other) {
+      return this == other ? this : INT_OR_FLOAT;
+    }
+  }
+
+  /**
+   * The numeric kind of a value as its writing determines it: a literal's own kind, an arithmetic
+   * result's from its operands' (a {@code float} operand makes it a {@code float}, and a quotient
+   * of integers is either kind, since {@code /} and {@code //} share an operator), a negation's
+   * from its operand's, and a lexical read's from the writes that reach it. A value resolving to a
+   * number by another route is either kind.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @param visited The (node, value number) pairs already followed.
+   * @param depth The remaining depth.
+   * @return The kind, or {@code null} when the value is not known to be a number.
+   */
+  static NumericKind numericKind(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (vn <= 0 || depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
+    if (!visited.add(Pair.make(node, vn))) return null;
+    SymbolTable symbols = node.getIR().getSymbolTable();
+    if (symbols.isConstant(vn)) {
+      Object value = symbols.getConstantValue(vn);
+      if (value instanceof Integer || value instanceof Long || value instanceof Boolean)
+        return NumericKind.INT;
+      if (value instanceof Double || value instanceof Float) return NumericKind.FLOAT;
+      return null;
+    }
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction op) {
+      NumericKind left = numericKind(builder, node, op.getUse(0), visited, depth - 1);
+      NumericKind right = numericKind(builder, node, op.getUse(1), visited, depth - 1);
+      if (left == null || right == null) return null;
+      if (left == NumericKind.FLOAT || right == NumericKind.FLOAT) return NumericKind.FLOAT;
+      IBinaryOpInstruction.IOperator operator = op.getOperator();
+      if (operator == IBinaryOpInstruction.Operator.ADD
+          || operator == IBinaryOpInstruction.Operator.SUB
+          || operator == IBinaryOpInstruction.Operator.MUL
+          || operator == IBinaryOpInstruction.Operator.REM) return left.join(right);
+      return NumericKind.INT_OR_FLOAT;
+    }
+    if (def instanceof SSAUnaryOpInstruction op)
+      return numericKind(builder, node, op.getUse(0), visited, depth - 1);
+    if (def instanceof AstLexicalRead) {
+      NumericKind ret = null;
+      for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
+        if (definer.snd > 0
+            && definer.fst.getDU() != null
+            && definer.fst.getDU().getDef(definer.snd) instanceof SSAPhiInstruction) continue;
+        NumericKind kind = numericKind(builder, definer.fst, definer.snd, visited, depth - 1);
+        if (kind == null) return null;
+        ret = ret == null ? kind : ret.join(kind);
+      }
+      if (ret != null) return ret;
+    }
+    if (resolveIntFlowSensitively(
+            builder, node, vn, new HashSet<>(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP)
+        == null) return null;
+    return def instanceof PythonInvokeInstruction call && callsIntBuiltin(builder, node, call)
+        ? NumericKind.INT
+        : NumericKind.INT_OR_FLOAT;
+  }
+
+  /**
+   * Whether a call's only target is the {@code int} builtin, whose result is an {@code int}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph lookup.
+   * @param node The node whose IR holds the call.
+   * @param call The call.
+   * @return {@code true} iff the call can only be {@code int(...)}.
+   */
+  private static boolean callsIntBuiltin(
+      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction call) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    return targets != null
+        && targets.size() == 1
+        && "Lwala/builtin/int"
+            .equals(
+                targets
+                    .iterator()
+                    .next()
+                    .getMethod()
+                    .getDeclaringClass()
+                    .getReference()
+                    .getName()
+                    .toString());
   }
 
   @Override
