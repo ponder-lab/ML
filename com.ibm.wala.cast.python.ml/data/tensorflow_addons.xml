@@ -2,7 +2,7 @@
 <!DOCTYPE summary-spec>
 <summary-spec>
   <classloader name="PythonLoader">
-    <!-- https://www.tensorflow.org/addons/api_docs/python/tfa: TensorFlow Addons, as far as a training script uses it for its optimizer (wala/ML#1050). `import tensorflow_addons as tfa` resolves to this module object. -->
+    <!-- https://www.tensorflow.org/addons/api_docs/python/tfa: TensorFlow Addons, as far as a training script uses it for its optimizer (wala/ML#1050) and its peephole recurrent cell. `import tensorflow_addons as tfa` resolves to this module object. -->
     <class name="tensorflow_addons" allocatable="true">
       <method name="import" static="true" descriptor="()Ltensorflow_addons;">
         <new def="x" class="Ltensorflow_addons"/>
@@ -10,6 +10,10 @@
         <putfield class="LRoot" field="optimizers" fieldType="LRoot" ref="x" value="optimizers"/>
         <new def="lazy_adam" class="Ltensorflow_addons/optimizers/LazyAdam"/>
         <putfield class="LRoot" field="LazyAdam" fieldType="LRoot" ref="optimizers" value="lazy_adam"/>
+        <new def="rnn" class="Lobject"/>
+        <putfield class="LRoot" field="rnn" fieldType="LRoot" ref="x" value="rnn"/>
+        <new def="peephole_lstm_cell" class="Ltensorflow_addons/rnn/PeepholeLSTMCell"/>
+        <putfield class="LRoot" field="PeepholeLSTMCell" fieldType="LRoot" ref="rnn" value="peephole_lstm_cell"/>
         <return value="x"/>
       </method>
     </class>
@@ -19,6 +23,16 @@
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self learning_rate beta_1 beta_2 epsilon amsgrad name">
           <new def="adam" class="Ltensorflow/keras/optimizers/class/Adam"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="adam" arg1="learning_rate" numArgs="2" def="res"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow_addons/rnn">
+      <!-- https://www.tensorflow.org/addons/api_docs/python/tfa/rnn/PeepholeLSTMCell: a subclass of Keras's `LSTMCell` whose gates also read the carry. A step has the same type as an `LSTMCell`'s, so it constructs one through the Keras `LSTMCell` summary, passing `units`, as `LazyAdam` constructs an `Adam`. Parameters are those of tensorflow-addons 0.23. -->
+      <class name="PeepholeLSTMCell" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self units activation recurrent_activation use_bias kernel_initializer recurrent_initializer bias_initializer unit_forget_bias kernel_regularizer recurrent_regularizer bias_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout">
+          <new def="lstm_cell" class="Ltensorflow/keras/layers/class/LSTMCell"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="lstm_cell" arg1="units" numArgs="2" def="res"/>
           <return value="res"/>
         </method>
       </class>

@@ -583,6 +583,12 @@
         <putfield class="LRoot" field="SimpleRNN" fieldType="LRoot" ref="layers" value="SimpleRNNLayerCls"/>
         <new def="RNNLayerCls" class="Ltensorflow/keras/layers/class/RNN"/>
         <putfield class="LRoot" field="RNN" fieldType="LRoot" ref="layers" value="RNNLayerCls"/>
+        <new def="SimpleRNNCellCls" class="Ltensorflow/keras/layers/class/SimpleRNNCell"/>
+        <putfield class="LRoot" field="SimpleRNNCell" fieldType="LRoot" ref="layers" value="SimpleRNNCellCls"/>
+        <new def="GRUCellCls" class="Ltensorflow/keras/layers/class/GRUCell"/>
+        <putfield class="LRoot" field="GRUCell" fieldType="LRoot" ref="layers" value="GRUCellCls"/>
+        <new def="LSTMCellCls" class="Ltensorflow/keras/layers/class/LSTMCell"/>
+        <putfield class="LRoot" field="LSTMCell" fieldType="LRoot" ref="layers" value="LSTMCellCls"/>
         <new def="BidirectionalLayerCls" class="Ltensorflow/keras/layers/class/Bidirectional"/>
         <putfield class="LRoot" field="Bidirectional" fieldType="LRoot" ref="layers" value="BidirectionalLayerCls"/>
         <new def="ConcatenateLayerCls" class="Ltensorflow/keras/layers/class/Concatenate"/>
@@ -2802,6 +2808,13 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="rnn_cell_step" allocatable="true">
+        <!-- Internal to the built-in recurrent cells' summaries: one step of a `SimpleRNNCell`, `GRUCell`, or `LSTMCell`, the step input with its last axis replaced by the cell's `units`, in the float32 compute dtype; paired with `DenseCall`, which reads the cell where it reads a `Dense` layer. A call of its own rather than the cell call's result, since a cell call returns `(output, new_states)`. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self cell inputs">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="squeeze" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; the generator drops the singleton axes named by `axis` (or all statically size-1 axes when `axis` is absent). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input axis name">
@@ -4286,6 +4299,30 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="SimpleRNNCell" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNNCell. `units` is stored on the instance so `DenseCall` can compute a step's output width from it, as for `Dense`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="15" paramNames="self units activation use_bias kernel_initializer recurrent_initializer bias_initializer kernel_regularizer recurrent_regularizer bias_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout">
+          <new def="res" class="Ltensorflow/keras/layers/SimpleRNNCell"/>
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="GRUCell" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRUCell. `units` is stored on the instance so `DenseCall` can compute a step's output width from it, as for `Dense`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self units activation recurrent_activation use_bias kernel_initializer recurrent_initializer bias_initializer kernel_regularizer recurrent_regularizer bias_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout reset_after">
+          <new def="res" class="Ltensorflow/keras/layers/GRUCell"/>
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="LSTMCell" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTMCell. `units` is stored on the instance so `DenseCall` can compute a step's output width from it, as for `Dense`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self units activation recurrent_activation use_bias kernel_initializer recurrent_initializer bias_initializer unit_forget_bias kernel_regularizer recurrent_regularizer bias_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout">
+          <new def="res" class="Ltensorflow/keras/layers/LSTMCell"/>
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="RNN" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/RNN. The cell and `return_sequences` are stored on the instance: the call invokes the cell and the `RnnSequence` generator reads `return_sequences` (wala/ML#973). -->
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self cell return_sequences return_state go_backwards stateful unroll time_major zero_output_for_mask">
@@ -4675,6 +4712,82 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="SimpleRNNCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNNCell. A call is one step: `(output, new_states)`, the output a `(batch, units)` tensor from the internal `rnn_cell_step` op, which `DenseCall` types from the step input and the stored `units`, in the layer's float32 compute dtype, and the new state the output itself, as a one-element list. -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
+          <new def="new_states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="new_states" value="out"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
+          <return value="res"/>
+        </method>
+        <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
+        <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
+          <new def="new_states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="new_states" value="out"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="GRUCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRUCell. A call is one step: `(output, new_states)`, the output a `(batch, units)` tensor from the internal `rnn_cell_step` op, which `DenseCall` types from the step input and the stored `units`, in the layer's float32 compute dtype, and the new state the output itself, as a one-element list. -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
+          <new def="new_states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="new_states" value="out"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
+          <return value="res"/>
+        </method>
+        <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
+        <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
+          <new def="new_states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="new_states" value="out"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="LSTMCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTMCell. A call is one step: `(output, new_states)`, the output a `(batch, units)` tensor from the internal `rnn_cell_step` op, which `DenseCall` types from the step input and the stored `units`, in the layer's float32 compute dtype, and the new states `[h, c]`: the output and a carry of the same type, from a second `rnn_cell_step`. -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="carry"/>
+          <new def="new_states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="new_states" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="new_states" value="carry"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
+          <return value="res"/>
+        </method>
+        <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
+        <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
+          <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="carry"/>
+          <new def="new_states" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="new_states" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="new_states" value="carry"/>
+          <new def="res" class="Llist"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Bidirectional" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
@@ -4769,7 +4882,6 @@
       <class name="Discretization" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Dot" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="ELU" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="GRUCell" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="GaussianDropout" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="GaussianNoise" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="GlobalAveragePooling2D" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4784,7 +4896,6 @@
       <class name="Hashing" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="InputLayer" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="IntegerLookup" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="LSTMCell" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="Lambda" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="LocallyConnected1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="LocallyConnected2D" super="Ltensorflow/keras/layers/Layer"></class>
@@ -4817,7 +4928,6 @@
       <class name="SeparableConv2D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SeparableConvolution1D" super="Ltensorflow/keras/layers/SeparableConv1D"></class>
       <class name="SeparableConvolution2D" super="Ltensorflow/keras/layers/SeparableConv2D"></class>
-      <class name="SimpleRNNCell" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SpatialDropout1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SpatialDropout2D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="SpatialDropout3D" super="Ltensorflow/keras/layers/Layer"></class>
