@@ -3076,6 +3076,9 @@ public class TensorGeneratorFactory {
       return new NpConcatenate(source);
     else if (isType(calledFunction, NumpyTypes.ZEROS.getDeclaringClass()))
       return new NpZeros(source);
+    else if (isType(calledFunction, NumpyTypes.FULL.getDeclaringClass())) return new NpFull(source);
+    else if (isType(calledFunction, NumpyTypes.FULL_LIKE.getDeclaringClass()))
+      return new NpFullLike(source);
     // `np.ndarray(shape, dtype, ...)` is an uninitialized allocation with the `zeros` typing
     // contract (shape from arg 0, dtype from the `dtype` argument), so it reuses `NpZeros`
     // (wala/ML#775).
