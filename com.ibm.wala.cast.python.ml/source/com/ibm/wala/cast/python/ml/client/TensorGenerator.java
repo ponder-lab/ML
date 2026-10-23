@@ -6067,6 +6067,37 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The dtype TensorFlow converts an argument to when the argument is the result of a call to the
+   * {@code float}, {@code int} or {@code bool} builtin, whose points-to set is empty (see {@link
+   * #pythonScalarBuiltinDType}). The argument is read off this generator's own invocation when it
+   * has one, and otherwise off each invocation of its node, all of which must agree.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param position The argument's position.
+   * @param name The argument's keyword name, or {@code null}.
+   * @return The dtype, or {@code null} when the argument is not such a call.
+   */
+  protected DType getArgumentScalarBuiltinDType(
+      PropagationCallGraphBuilder builder, int position, String name) {
+    if (this.getInvokeInstruction() != null) {
+      int vn = this.getArgumentValueNumber(builder, position, name, true);
+      return vn > 0 ? pythonScalarBuiltinDType(builder, this.getNode(), vn) : null;
+    }
+    DType ret = null;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) return null;
+      int vn = name != null ? call.getUse(name) : -1;
+      if (vn == -1 && position >= 0 && position < call.getNumberOfPositionalParameters() - 1)
+        vn = call.getUse(position + 1);
+      DType dtype = vn > 0 ? pythonScalarBuiltinDType(builder, callerInvoke.fst, vn) : null;
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
+  }
+
+  /**
    * The dtype TensorFlow converts a list or tuple literal's element at an index to, when every
    * write of that element in the literal's own method stores the result of one of the {@code
    * float}, {@code int} or {@code bool} builtins, as {@link #pythonScalarBuiltinDType} reads it.

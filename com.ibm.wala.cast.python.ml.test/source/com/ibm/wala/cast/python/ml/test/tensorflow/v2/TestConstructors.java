@@ -2400,4 +2400,28 @@ public class TestConstructors extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_isinstance_float.py", "g", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
+
+  /** NumPy converts a fill value built by {@code float(n)}: {@code np.full((2, 3), float(n))}. */
+  @Test
+  public void testNpFullOfFloatBuiltin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_np_full_float",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 3))));
+  }
+
+  /** NumPy converts a prototype built by {@code float(n)}: {@code np.full_like(float(n), 3)}. */
+  @Test
+  public void testNpFullLikeOfFloatBuiltin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_np_full_like_float",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT64)));
+  }
 }

@@ -97,8 +97,19 @@ public class NpFullLike extends ValueExtractingTensorGenerator {
     OrdinalSet<InstanceKey> prototype =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
+    // A Python scalar built by the `float`, `int` or `bool` builtin has an empty points-to set;
+    // NumPy converts it as a literal of its type.
+    DType scalarBuiltin =
+        prototype == null || prototype.isEmpty()
+            ? this.getArgumentScalarBuiltinDType(
+                builder, this.getValueParameterPosition(), this.getValueParameterName())
+            : null;
     Set<DType> ret =
-        this.dTypeApiDefaultOrUnknown(builder, NpFull.numpyDTypesOfValue(this, builder, prototype));
+        this.dTypeApiDefaultOrUnknown(
+            builder,
+            scalarBuiltin != null
+                ? EnumSet.of(numpyDTypeOfPythonScalar(scalarBuiltin))
+                : NpFull.numpyDTypesOfValue(this, builder, prototype));
 
     LOGGER.fine(() -> "Default dtypes for source: " + describe(source) + " are: " + ret + ".");
 

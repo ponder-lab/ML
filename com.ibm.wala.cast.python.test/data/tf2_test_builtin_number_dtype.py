@@ -104,3 +104,23 @@ m = np.array([int(n)])
 assert m.shape == (1,)
 assert m.dtype == np.int64
 consume_np_int(m)
+
+
+def consume_np_full_float(t):
+    pass
+
+
+def consume_np_full_like_float(t):
+    pass
+
+
+# NumPy's conversion of a builtin-built fill value and prototype.
+fl = np.full((2, 3), float(n))
+assert fl.shape == (2, 3)
+assert fl.dtype == np.float64
+consume_np_full_float(fl)
+
+fll = np.full_like(float(n), 3)
+assert fll.shape == ()
+assert fll.dtype == np.float64
+consume_np_full_like_float(fll)
