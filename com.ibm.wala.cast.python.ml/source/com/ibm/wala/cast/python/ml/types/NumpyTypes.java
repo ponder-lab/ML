@@ -93,6 +93,24 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String ZEROS_SIGNATURE = "numpy.zeros()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.full.html */
+  public static final MethodReference FULL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/full")),
+          AstMethodReference.fnSelector);
+
+  private static final String FULL_SIGNATURE = "numpy.full()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.full_like.html */
+  public static final MethodReference FULL_LIKE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/full_like")),
+          AstMethodReference.fnSelector);
+
+  private static final String FULL_LIKE_SIGNATURE = "numpy.full_like()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.ones.html */
   public static final MethodReference ONES =
       MethodReference.findOrCreate(
@@ -437,6 +455,8 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(ARRAY.getDeclaringClass(), ARRAY_SIGNATURE),
           Map.entry(COPY.getDeclaringClass(), COPY_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
+          Map.entry(FULL.getDeclaringClass(), FULL_SIGNATURE),
+          Map.entry(FULL_LIKE.getDeclaringClass(), FULL_LIKE_SIGNATURE),
           Map.entry(CONCATENATE.getDeclaringClass(), CONCATENATE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(NDARRAY_CONSTRUCTOR.getDeclaringClass(), NDARRAY_CONSTRUCTOR_SIGNATURE),

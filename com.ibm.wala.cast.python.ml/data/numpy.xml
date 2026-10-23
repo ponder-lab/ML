@@ -97,6 +97,10 @@
         <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="concatenate_fn"/>
         <new def="zeros_fn" class="Lnumpy/zeros"/>
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros_fn"/>
+        <new def="full_fn" class="Lnumpy/full"/>
+        <putfield class="LRoot" field="full" fieldType="LRoot" ref="x" value="full_fn"/>
+        <new def="full_like_fn" class="Lnumpy/full_like"/>
+        <putfield class="LRoot" field="full_like" fieldType="LRoot" ref="x" value="full_like_fn"/>
         <new def="arange_fn" class="Lnumpy/arange"/>
         <putfield class="LRoot" field="arange" fieldType="LRoot" ref="x" value="arange_fn"/>
         <new def="pad_fn" class="Lnumpy/pad"/>
@@ -302,6 +306,38 @@
       <!-- Modeled as a class-per-function (same pattern as `array`) so that `np.zeros` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray takes its shape from arg 0 (a shape tuple) and its dtype from the `dtype` argument; see `NpZeros`. -->
       <class name="zeros" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self shape dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.full.html -->
+      <!-- `np.full(shape, fill_value, dtype=None, order='C', *, like=None)`: a fresh ndarray of the given shape, every element `fill_value`. Modeled as a class-per-function (same pattern as `zeros`). The shape comes from the `shape` argument and the dtype from the `dtype` argument, or, without one, from the fill value (a Python int is `int64`, a float `float64`, a bool `bool`, an array or NumPy scalar its own dtype); see `NpFull`. -->
+      <class name="full" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self shape fill_value dtype order like">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.full_like.html -->
+      <!-- `np.full_like(a, fill_value, dtype=None, order='K', subok=True, shape=None)`: a fresh ndarray with `a`'s shape and dtype, every element `fill_value`. An explicit `shape` replaces `a`'s shape and an explicit `dtype` its dtype; the fill value never decides the dtype. See `NpFullLike`. -->
+      <class name="full_like" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self a fill_value dtype order subok shape">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>

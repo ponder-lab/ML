@@ -959,6 +959,129 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFull} with an explicit dtype: {@code
+   * np.full([3], 7, dtype=np.int32)} yields {@code (3,) int32}, the shape from the shape argument
+   * and the dtype from the {@code dtype} argument.
+   */
+  @Test
+  public void testNpFull()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py",
+        "consume_full_int32",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFull}'s fill-value dtype for a Python float:
+   * {@code np.full((2, 3), 1.5)} yields {@code (2, 3) float64}, NumPy's dtype for a Python float.
+   */
+  @Test
+  public void testNpFullFloatFill()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_full.py", "consume_full_float", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT64)));
+  }
+
+  /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFull}'s fill-value dtype for a Python int:
+   * {@code np.full([4], 2)} yields {@code (4,) int64}, not TensorFlow's {@code int32} literal
+   * convention.
+   */
+  @Test
+  public void testNpFullIntFill()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py",
+        "consume_full_int",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFull}'s fill-value dtype for a Python bool:
+   * {@code np.full([2], True)} yields {@code (2,) bool}.
+   */
+  @Test
+  public void testNpFullBoolFill()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py",
+        "consume_full_bool",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 2))));
+  }
+
+  /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFull}'s fill-value dtype for a NumPy scalar:
+   * {@code np.full([2], np.float32(1.0))} yields {@code (2,) float32}, the scalar's own dtype.
+   */
+  @Test
+  public void testNpFullNumpyScalarFill()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py", "consume_full_np_scalar", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFullLike}: {@code np.full_like(arr, 0)} with
+   * {@code arr} a {@code (2, 3) int32} array yields {@code (2, 3) int32}, the shape and the dtype
+   * of {@code arr}.
+   */
+  @Test
+  public void testNpFullLike()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_full.py", "consume_full_like", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Pins that {@link com.ibm.wala.cast.python.ml.client.NpFullLike} takes its dtype from the
+   * prototype, not the fill value: {@code np.full_like(arr, 0.5)} with {@code arr} an {@code int32}
+   * array stays {@code (2, 3) int32}.
+   */
+  @Test
+  public void testNpFullLikeFloatFill()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py",
+        "consume_full_like_float_fill",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Pins {@link com.ibm.wala.cast.python.ml.client.NpFullLike}'s {@code shape} argument: {@code
+   * np.full_like(arr, 1, shape=(4,))} yields {@code (4,) int32}, the given shape with the
+   * prototype's dtype.
+   */
+  @Test
+  public void testNpFullLikeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py",
+        "consume_full_like_shape",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4))));
+  }
+
+  /**
+   * Pins a concatenation of {@code np.full} results: {@code np.concatenate([np.full([n], i,
+   * dtype=np.int32), np.full([m], j, dtype=np.int32)])} with {@code n = 2} and {@code m = 3} yields
+   * {@code (5,) int32}.
+   */
+  @Test
+  public void testNpFullConcatenate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_full.py", "consume_concat", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 5))));
+  }
+
+  /**
    * Guards {@code tf.fill}'s {@code .shape}-argument recovery (<a
    * href="https://github.com/wala/ML/issues/610">wala/ML#610</a>): {@code tf.fill(x.shape, 5.0)}
    * where {@code x} is {@code (2, 2)} yields {@code (2, 2) float32}. The {@code dims} argument is a

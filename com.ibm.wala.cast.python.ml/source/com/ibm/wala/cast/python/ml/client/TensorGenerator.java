@@ -11372,6 +11372,10 @@ public abstract class TensorGenerator implements Cloneable {
       return new NpConcatenate(node);
     } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
       return new NpZeros(node);
+    } else if (type.equals(NumpyTypes.FULL.getDeclaringClass())) {
+      return new NpFull(node);
+    } else if (type.equals(NumpyTypes.FULL_LIKE.getDeclaringClass())) {
+      return new NpFullLike(node);
     } else if (type.equals(NumpyTypes.NDARRAY_CONSTRUCTOR.getDeclaringClass())) {
       // The `np.ndarray(shape, dtype, ...)` constructor shares the `zeros` typing contract
       // (wala/ML#775).
