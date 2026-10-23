@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.MNIST_INPUT;
@@ -22,8 +23,11 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4096_32_32_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4096_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_2_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
@@ -1574,6 +1578,429 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A {@code tf.keras.Model} subclass's {@code build} creates the weight from the input's last axis
+   * with no {@code dtype}: the weight read in {@code call} is {@code (4, 2)} float32, the Keras
+   * default. See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelBuild()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_build",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelBuild()} as {@code tf.matmul}'s second operand:
+   * the product of the {@code (5, 4)} float32 input is {@code (5, 2)} float32. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelBuildMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "matmul_build",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelBuild()} as {@code @}'s right operand: the
+   * product is float32. The shape is unknown because the front end translates {@code @} as an
+   * elementwise multiply, whose broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape;
+   * the dtype is the subject here. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelBuildAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_build",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The model creates the weight in {@code __init__} instead of {@code build}. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelInit()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_init",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelInit()} as {@code @}'s right operand. The shape
+   * is unknown because the front end translates {@code @} as an elementwise multiply, whose
+   * broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape; the dtype is the subject here.
+   * See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelInitAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_init",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The model passes an explicit {@code dtype=tf.float64}: the weight takes the argument's dtype,
+   * not the default. See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelFloat64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_float64",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 4, 2))));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelFloat64()} as {@code tf.matmul}'s second operand,
+   * against a float64 first operand. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelFloat64Matmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "matmul_float64",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_2_FLOAT64)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelFloat64()} as {@code @}'s right operand, against
+   * a float64 left operand. The shape is unknown because the front end translates {@code @} as an
+   * elementwise multiply, whose broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape;
+   * the dtype is the subject here. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelFloat64At()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_float64",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
+  }
+
+  /**
+   * The model passes an initializer that a call returns ({@code
+   * tf.random_normal_initializer(stddev=...)}). See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelInitializerCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_initializer_call",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelInitializerCall()} as {@code @}'s right operand.
+   * The shape is unknown because the front end translates {@code @} as an elementwise multiply,
+   * whose broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape; the dtype is the subject
+   * here. See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelInitializerCallAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_initializer_call",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The model passes no initializer. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelNoInitializer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_no_initializer",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelNoInitializer()} as {@code @}'s right operand.
+   * The shape is unknown because the front end translates {@code @} as an elementwise multiply,
+   * whose broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape; the dtype is the subject
+   * here. See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelNoInitializerAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_no_initializer",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The model passes the weight's name by keyword rather than by position. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelKeywordName()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_keyword_name",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelKeywordName()} as {@code @}'s right operand. The
+   * shape is unknown because the front end translates {@code @} as an elementwise multiply, whose
+   * broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape; the dtype is the subject here.
+   * See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelKeywordNameAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_keyword_name",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The model passes a {@code regularizer}. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelRegularizer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_regularizer",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelRegularizer()} as {@code @}'s right operand. The
+   * shape is unknown because the front end translates {@code @} as an elementwise multiply, whose
+   * broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape; the dtype is the subject here.
+   * See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelRegularizerAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_regularizer",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The model is constructed inside another layer's {@code __init__} and called from that layer's
+   * {@code call}. See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelNested()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_nested",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The weight of {@link #testAddWeightKernelModelNested()} as {@code @}'s right operand. The shape
+   * is unknown because the front end translates {@code @} as an elementwise multiply, whose
+   * broadcast of {@code (5, 4)} against {@code (4, 2)} has no shape; the dtype is the subject here.
+   * See <a href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelModelNestedAt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "at_nested",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The control: a {@code tf.keras.layers.Layer} subclass creating its weight the same way, which
+   * resolved before the model's {@code add_weight} was modeled. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "kernel_layer",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * The control's weight as {@code tf.matmul}'s second operand. See <a
+   * href="https://github.com/wala/ML/issues/938">wala/ML#938</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightKernelLayerMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight_kernel.py",
+        "matmul_layer",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_2_FLOAT32)));
   }
 
   /**

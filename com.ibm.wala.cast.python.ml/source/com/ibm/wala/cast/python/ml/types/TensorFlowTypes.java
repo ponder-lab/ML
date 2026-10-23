@@ -2452,6 +2452,20 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ADD_WEIGHT_SIGNATURE = "tf.keras.layers.Layer.add_weight()";
 
+  /**
+   * https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#add_weight. The model
+   * shell's own copy of {@link #ADD_WEIGHT}: a model is a layer at run time, but the model shell
+   * does not extend the layer shell, so it declares the method itself (wala/ML#938).
+   */
+  public static final MethodReference MODEL_ADD_WEIGHT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/models/Model/add_weight")),
+          AstMethodReference.fnSelector);
+
+  private static final String MODEL_ADD_WEIGHT_SIGNATURE = "tf.keras.Model.add_weight()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/layers/flatten. */
   public static final MethodReference FLATTEN =
       MethodReference.findOrCreate(
@@ -2986,6 +3000,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EMBEDDING_LAYER_CALL.getDeclaringClass(), EMBEDDING_LAYER_CALL_SIGNATURE),
           Map.entry(EMBEDDING_WEIGHT.getDeclaringClass(), EMBEDDING_WEIGHT_SIGNATURE),
           Map.entry(ADD_WEIGHT.getDeclaringClass(), ADD_WEIGHT_SIGNATURE),
+          Map.entry(MODEL_ADD_WEIGHT.getDeclaringClass(), MODEL_ADD_WEIGHT_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
           Map.entry(MAX_POOL.getDeclaringClass(), MAX_POOL_SIGNATURE),
           Map.entry(ADAM_OPTIMIZER.getDeclaringClass(), ADAM_OPTIMIZER_SIGNATURE),

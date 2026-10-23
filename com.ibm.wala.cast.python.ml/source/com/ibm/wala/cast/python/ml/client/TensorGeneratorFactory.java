@@ -149,6 +149,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_ADD_WEIGHT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
@@ -3222,7 +3223,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, SPARSE_CATEGORICAL_CROSSENTROPY_CALL.getDeclaringClass()))
       return new SparseCategoricalCrossentropyCall(source);
-    else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
+    else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())
+        || isType(calledFunction, MODEL_ADD_WEIGHT.getDeclaringClass()))
+      // Registered in tandem with the manual arm in `createManualGenerator` (wala/ML#938).
+      return new AddWeight(source);
     else if (isType(calledFunction, TensorFlowTypes.EMBEDDING_WEIGHT.getDeclaringClass()))
       return new EmbeddingWeight(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);

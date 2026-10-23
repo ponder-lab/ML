@@ -11420,7 +11420,8 @@ public abstract class TensorGenerator implements Cloneable {
       return new Poisson(node);
     } else if (type.equals(TensorFlowTypes.VARIABLE.getDeclaringClass())) {
       return new Variable(node);
-    } else if (type.equals(TensorFlowTypes.ADD_WEIGHT.getDeclaringClass())) {
+    } else if (type.equals(TensorFlowTypes.ADD_WEIGHT.getDeclaringClass())
+        || type.equals(TensorFlowTypes.MODEL_ADD_WEIGHT.getDeclaringClass())) {
       return new AddWeight(node);
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
         || type.getName().toString().equals("Ltensorflow/data/from_tensor_slices")) {
