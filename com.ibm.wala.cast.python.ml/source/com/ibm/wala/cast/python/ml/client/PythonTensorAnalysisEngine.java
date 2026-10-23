@@ -1605,23 +1605,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (!added
                 && TensorGeneratorFactory.readsIntegerIndex(
                     localPointerKeyNode, propertyRead.getMemberRef(), builder)) {
-              try {
-                TensorGenerator generator = getGenerator(src, builder);
-
-                if (isTensorElement(generator)
-                    || (generator instanceof CreatorJoin join
-                        && join.getParts().stream()
-                            .allMatch(PythonTensorAnalysisEngine::isTensorElement))) {
-                  sources.add(src);
-                  LOGGER.fine(
-                      () ->
-                          "Added dataflow source from an integer subscript of a parameter: "
-                              + describe(src)
-                              + ".");
-                }
-              } catch (IllegalArgumentException e) {
-                LOGGER.log(
-                    Level.FINE, e, () -> "Not a tensor subscript of a parameter: " + propertyRead);
+              if (readsTensorElement(src, builder)) {
+                sources.add(src);
+                LOGGER.fine(
+                    () ->
+                        "Added dataflow source from an integer subscript of a parameter: "
+                            + describe(src)
+                            + ".");
               }
             }
           } else if (def instanceof EachElementGetInstruction
@@ -1662,8 +1652,32 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             }
 
             if (!added)
-              processInstruction(
-                  def, du, localPointerKeyNode, src, sources, callGraph, pointerAnalysis);
+              added =
+                  processInstruction(
+                      def, du, localPointerKeyNode, src, sources, callGraph, pointerAnalysis);
+
+            // An integer subscript of a component unpacked from a parameter in this node (`a, gt =
+            // inputs` then `gt[i]`): the receiver's def is the constant-index read of the
+            // parameter, so the parameter arm above does not see it, and the def-chain walk stops
+            // at the parameter. The factory types the subscript as an element of the component's
+            // producer, as it does for a parameter receiver; seed only on that resolution, under
+            // the same integer-index rule, so a list component's element and a slice or tuple
+            // index stay unseeded.
+            if (!added
+                && def instanceof PythonPropertyRead receiverRead
+                && du.getDef(receiverRead.getObjectRef()) == null
+                && isConstantInteger(localPointerKeyNode, receiverRead.getMemberRef())
+                && TensorGeneratorFactory.readsIntegerIndex(
+                    localPointerKeyNode, propertyRead.getMemberRef(), builder)
+                && readsTensorElement(src, builder)) {
+              sources.add(src);
+              LOGGER.fine(
+                  () ->
+                      "Added dataflow source from an integer subscript of a component of a"
+                          + " parameter: "
+                          + describe(src)
+                          + ".");
+            }
           } else if (def instanceof SSABinaryOpInstruction) {
             // The subscript's receiver is an elementwise result (`(x / 255.0)[..., tf.newaxis]`):
             // it carries dataflow state but no allocation, so no points-to walk reaches this
@@ -2079,6 +2093,41 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         return true;
 
     return false;
+  }
+
+  /**
+   * Whether the factory types a subscript as an element of a tensor: as one element, or as a join
+   * of elements, one per creator of the receiver.
+   *
+   * @param src The subscript's {@link PointsToSetVariable}.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the subscript's generator reads an element of a tensor.
+   */
+  private static boolean readsTensorElement(
+      PointsToSetVariable src, PropagationCallGraphBuilder builder) {
+    try {
+      TensorGenerator generator = getGenerator(src, builder);
+      return isTensorElement(generator)
+          || (generator instanceof CreatorJoin join
+              && join.getParts().stream().allMatch(PythonTensorAnalysisEngine::isTensorElement));
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(Level.FINE, e, () -> "Not a tensor subscript: " + describe(src) + ".");
+      return false;
+    }
+  }
+
+  /**
+   * Whether a value is a constant integer, as the index of a tuple unpacking's read is.
+   *
+   * @param node The node of the value.
+   * @param vn The value number.
+   * @return {@code true} iff the value is an {@link Integer} or {@link Long} constant.
+   */
+  private static boolean isConstantInteger(CGNode node, int vn) {
+    SymbolTable symtab = node.getIR().getSymbolTable();
+    if (!symtab.isConstant(vn)) return false;
+    Object value = symtab.getConstantValue(vn);
+    return value instanceof Integer || value instanceof Long;
   }
 
   /**
