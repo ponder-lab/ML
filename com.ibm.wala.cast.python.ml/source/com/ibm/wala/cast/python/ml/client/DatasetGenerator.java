@@ -158,6 +158,12 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   }
 
   @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    return receiver instanceof TupleElementProvider tep && tep.isStructureAt(builder, path);
+  }
+
+  @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
     TensorGenerator receiver = getReceiverGenerator(builder);

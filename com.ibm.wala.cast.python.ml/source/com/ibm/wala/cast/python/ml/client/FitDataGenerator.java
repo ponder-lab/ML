@@ -46,6 +46,10 @@ import java.util.Set;
  * result has {@code data} in slot 0, and index {@code i} is {@code data}'s component {@code i} when
  * {@code data} is a tuple (a pack, a dataset element, or a tuple literal) and {@code data} itself
  * at index 0 otherwise, which is what {@code unpack_x_y_sample_weight} returns.
+ *
+ * <p>An element's component that is itself a structure, as {@code (x, mask)} in a {@code ((x,
+ * mask), y)} element ({@link TupleElementProvider#isStructureAt}), is no tensor (⊥): the step hands
+ * the model that tuple or dict, whose members are read at longer paths.
  */
 public class FitDataGenerator extends TensorGenerator implements TupleElementProvider {
 
@@ -320,6 +324,20 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     Set<DType> dtypes(PropagationCallGraphBuilder builder);
   }
 
+  /** A component that is no tensor (⊥), such as a structure of tensors read whole. */
+  private static final Component NOT_A_TENSOR =
+      new Component() {
+        @Override
+        public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
+          return Collections.emptySet();
+        }
+
+        @Override
+        public Set<DType> dtypes(PropagationCallGraphBuilder b) {
+          return EnumSet.noneOf(DType.class);
+        }
+      };
+
   /** A provider's component at the path. */
   private Component ofProvider(TupleElementProvider provider, List<Object> path) {
     return new Component() {
@@ -370,6 +388,11 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     }
     if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
       if (path.size() > 1 && !tep.resolvesPath(builder, path)) return null;
+      // A component that is itself a structure, as `(x, mask)` in a `((x, mask), y)` element, is
+      // handed to the step as that tuple or dict, which is no tensor: its members are read at the
+      // longer paths, and a provider's reading of the whole would join their types into one
+      // tensor of several shapes, crossed with their dtypes.
+      if (tep.isStructureAt(builder, path)) return NOT_A_TENSOR;
       return this.ofProvider(tep, path);
     }
     if (path.size() > 1) return null;

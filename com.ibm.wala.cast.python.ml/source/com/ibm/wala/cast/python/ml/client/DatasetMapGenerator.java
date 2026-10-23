@@ -475,6 +475,21 @@ public class DatasetMapGenerator extends DatasetGenerator {
   /**
    * {@inheritDoc}
    *
+   * @implNote As {@link #resolvesPath}, a component of {@code map_func}'s return: a structure when
+   *     the return holds only tuples and dicts there, and no values the points-to set cannot hold.
+   */
+  @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
+      return super.isStructureAt(builder, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
+        this.getMappedElementComponent(builder, path);
+    return component.snd.isEmpty() && TupleElementProvider.holdsOnlyStructures(component.fst);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
    * @implNote The union of the shapes of the values {@code map_func} returns at the path, unknown
    *     when any of them is; the receiver's when the return is not known at all or is the input
    *     passed through unchanged.

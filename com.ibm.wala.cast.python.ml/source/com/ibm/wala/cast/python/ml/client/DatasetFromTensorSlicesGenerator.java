@@ -372,6 +372,18 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
   }
 
   /**
+   * {@inheritDoc}
+   *
+   * @implNote The component is a structure when the {@code tensors} argument holds only tuples and
+   *     dicts there, as {@code (x, mask)} in {@code ((x, mask), y)}: each member is sliced on its
+   *     own, and the dataset's element holds the structure of the slices.
+   */
+  @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    return TupleElementProvider.holdsOnlyStructures(this.componentPointsToSet(builder, path));
+  }
+
+  /**
    * The points-to set of the component a path of selectors reaches within the {@code tensors}
    * argument (wala/ML#993): an {@link Integer} selects a tuple's field by index, a {@link String} a
    * dict's field by key, each applied to every container the previous step reached.

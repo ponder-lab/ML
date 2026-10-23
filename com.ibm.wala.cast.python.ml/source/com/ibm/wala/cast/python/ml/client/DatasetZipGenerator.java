@@ -210,6 +210,23 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
   /**
    * {@inheritDoc}
    *
+   * @implNote The rest of the path is every picked dataset's; a zipped dataset's whole element, the
+   *     path of one selector, is not told apart here.
+   */
+  @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    List<TensorGenerator> datasets = this.getDatasetsFor(builder, path.get(0));
+    List<Object> rest = path.subList(1, path.size());
+    if (datasets.isEmpty() || rest.isEmpty()) return false;
+    for (TensorGenerator dataset : datasets)
+      if (!(dataset instanceof TupleElementProvider tep && tep.isStructureAt(builder, rest)))
+        return false;
+    return true;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
    * @implNote The union over the datasets the first selector picks of the shapes at the rest of the
    *     path, unknown when any of them is.
    */
