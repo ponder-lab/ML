@@ -712,7 +712,20 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       List<PointsToSetVariable> operands,
       Set<TensorType> seedMembers,
       Set<TensorOrigin> seedOrigins,
-      TensorGenerator.ShapeTransform transform) {}
+      TensorGenerator.ShapeTransform transform,
+      TensorGenerator.DTypeTransform dtypeTransform) {
+
+    /**
+     * The result's dtype for a fed operand dtype: the operand's own, or the generator's mapping of
+     * it when the feed carries one (wala/ML#1008).
+     *
+     * @param operand The operand member's dtype.
+     * @return The result's dtype.
+     */
+    DType fedDType(DType operand) {
+      return this.dtypeTransform == null ? operand : this.dtypeTransform.apply(operand);
+    }
+  }
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
@@ -962,7 +975,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                     }
                     for (TensorType t : rhs.state)
                       changed |=
-                          lhs.state.add(TensorType.of(t.getDType(), s.getDims(), s.layout()));
+                          lhs.state.add(
+                              TensorType.of(
+                                  this.plan.fedDType(t.getDType()), s.getDims(), s.layout()));
                   }
                   break;
                 case SHAPE_FILL:
@@ -991,7 +1006,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   switch (this.plan.kind()) {
                     case DTYPE_ONLY:
                       for (TensorType t : rhs.state)
-                        changed |= lhs.state.add(new TensorType(t.getDType(), null));
+                        changed |=
+                            lhs.state.add(new TensorType(this.plan.fedDType(t.getDType()), null));
                       break;
                     case RANK_PRESERVING:
                       // The operation guarantees its input's RANK and recomputes the extents from

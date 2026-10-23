@@ -97,7 +97,7 @@ public class Stack extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, Parameters.VALUES.getIndex(), Parameters.VALUES.getName());
+            builder, Parameters.VALUES.getIndex(), this.getValuesParameterName());
     if (valuesPts == null || valuesPts.isEmpty()) return null;
 
     Integer axis = resolveConstantAxis(builder);
@@ -172,7 +172,7 @@ public class Stack extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, Parameters.VALUES.getIndex(), Parameters.VALUES.getName());
+            builder, Parameters.VALUES.getIndex(), this.getValuesParameterName());
     if (valuesPts == null || valuesPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
 
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
@@ -200,6 +200,16 @@ public class Stack extends TensorGenerator {
       if (firstDTypes != null) ret.addAll(firstDTypes);
     }
     return ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
+  }
+
+  /**
+   * Returns the keyword name of the values parameter, which a subclass modeling a function that
+   * spells it differently overrides ({@link NpStack}'s {@code arrays}).
+   *
+   * @return The keyword name of the values parameter.
+   */
+  protected String getValuesParameterName() {
+    return Parameters.VALUES.getName();
   }
 
   /**

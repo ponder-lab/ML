@@ -1,0 +1,12 @@
+{
+  "types": [
+    {
+      "module": "loader.py",
+      "function": "load_mean",
+      "variable": "data",
+      "dtype": "int64",
+      "shape": "n",
+      "attribution": "The pickle holds a list of Python integers; np.array of one is int64, rank 1."
+    }
+  ]
+}

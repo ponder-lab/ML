@@ -182,12 +182,17 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
             "._sample_mask",
             "._get_labels");
 
+    // The nested helpers' `index_ls` is a Python list of indices, no tensor: `split_labels` passes
+    // `sample_train_nodes`'s `train_nodes += cls_sample.tolist()` and slices of a list. While
+    // `np.random.choice` was unmodeled, the list sum read an opaque operand and was typed an
+    // unknown tensor, which reached the parameter; with the draw modeled it no longer is
+    // (wala/ML#1008).
     MethodOrigins sampleMask = methodOrigins.get("._sample_mask");
-    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(sampleMask.parameters()));
+    assertEquals(Map.of(), census(sampleMask.parameters()));
     assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L), census(sampleMask.locals()));
 
     MethodOrigins getLabels = methodOrigins.get("._get_labels");
-    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(getLabels.parameters()));
+    assertEquals(Map.of(), census(getLabels.parameters()));
     assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 4L), census(getLabels.locals()));
 
     MethodOrigins encodeLabels = methodOrigins.get(".Cora.encode_labels.do(");

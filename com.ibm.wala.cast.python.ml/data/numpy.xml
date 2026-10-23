@@ -81,6 +81,10 @@
         <putfield class="LRoot" field="randint" fieldType="LRoot" ref="random" value="np_randint_fn"/>
         <new def="np_permutation_fn" class="Lnumpy/random/permutation"/>
         <putfield class="LRoot" field="permutation" fieldType="LRoot" ref="random" value="np_permutation_fn"/>
+        <new def="np_choice_fn" class="Lnumpy/random/choice"/>
+        <putfield class="LRoot" field="choice" fieldType="LRoot" ref="random" value="np_choice_fn"/>
+        <new def="np_multivariate_normal_fn" class="Lnumpy/random/multivariate_normal"/>
+        <putfield class="LRoot" field="multivariate_normal" fieldType="LRoot" ref="random" value="np_multivariate_normal_fn"/>
         <new def="seed_fn" class="Lnumpy/random/seed"/>
         <putfield class="LRoot" field="seed" fieldType="LRoot" ref="random" value="seed_fn"/>
         <new def="random_state_fn" class="Lnumpy/random/RandomState"/>
@@ -115,6 +119,21 @@
         <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="x" value="np_transpose_fn"/>
         <new def="eye_fn" class="Lnumpy/eye"/>
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="x" value="eye_fn"/>
+        <!-- wala/ML#1008: array constructors and reductions a data-preparation prefix builds its arrays with. -->
+        <new def="outer_fn" class="Lnumpy/outer"/>
+        <putfield class="LRoot" field="outer" fieldType="LRoot" ref="x" value="outer_fn"/>
+        <new def="append_fn" class="Lnumpy/append"/>
+        <putfield class="LRoot" field="append" fieldType="LRoot" ref="x" value="append_fn"/>
+        <new def="stack_fn" class="Lnumpy/stack"/>
+        <putfield class="LRoot" field="stack" fieldType="LRoot" ref="x" value="stack_fn"/>
+        <new def="mean_fn" class="Lnumpy/mean"/>
+        <putfield class="LRoot" field="mean" fieldType="LRoot" ref="x" value="mean_fn"/>
+        <new def="std_fn" class="Lnumpy/std"/>
+        <putfield class="LRoot" field="std" fieldType="LRoot" ref="x" value="std_fn"/>
+        <new def="repeat_fn" class="Lnumpy/repeat"/>
+        <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="repeat_fn"/>
+        <new def="diag_fn" class="Lnumpy/diag"/>
+        <putfield class="LRoot" field="diag" fieldType="LRoot" ref="x" value="diag_fn"/>
         <new def="unique_fn" class="Lnumpy/unique"/>
         <putfield class="LRoot" field="unique" fieldType="LRoot" ref="x" value="unique_fn"/>
         <return value="x"/>
@@ -447,6 +466,111 @@
           <return value="ret"/>
         </method>
       </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.outer.html: `np.outer(a, b)` is a fresh rank-2 array of the flattened lengths of `a` and `b`, with their promoted dtype; see `NpOuter` (wala/ML#1008). -->
+      <class name="outer" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self a b out">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.append.html: `np.append(arr, values, axis=None)` is a fresh array, the flattened `arr` and `values` joined when `axis` is absent, with their promoted dtype; see `NpAppend` (wala/ML#1008). -->
+      <class name="append" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self arr values axis">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.stack.html: `np.stack(arrays, axis=0)` is `tf.stack`'s shape with NumPy's dtype promotion over the arrays; see `NpStack` (wala/ML#1008). -->
+      <class name="stack" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self arrays axis out">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.mean.html: `np.mean(a, axis=None, dtype=None, out=None, keepdims=False)` reduces `a` over `axis`, all axes when it is absent; an integer or bool input averages as `float64`. See `NpMean` (wala/ML#1008). -->
+      <class name="mean" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self a axis dtype out keepdims">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.std.html: `np.std(a, axis=None, dtype=None, out=None, ddof=0, keepdims=False)` is `np.mean`'s reduction with a real result; see `NpMean` (wala/ML#1008). -->
+      <class name="std" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self a axis dtype out ddof keepdims">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.repeat.html: `np.repeat(a, repeats, axis=None)` is the flattened `a` with each element repeated, in `a`'s NumPy dtype; see `NpRepeat` (wala/ML#1008). -->
+      <class name="repeat" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self a repeats axis">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.diag.html: `np.diag(v, k=0)` builds a square matrix from a rank-1 `v` and extracts a diagonal from a rank-2 one, in `v`'s NumPy dtype; see `NpDiag` (wala/ML#1008). -->
+      <class name="diag" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self v k">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
       <!-- Must be declared `allocatable="true"` so that `<new class="Lnumpy/ndarray"/>` in the various array-producing `do()` methods (both here and in `tensorflow.xml`) resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`, cited for its `allocatable` declaration rather than as a body-less example, since it now models the assignment family. The class deliberately has no method body because it is only referenced as a `<new>` target, not invoked directly. -->
       <class name="ndarray" allocatable="true"></class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.unique.html -->
@@ -598,6 +722,10 @@
           <putfield class="LRoot" field="rand" fieldType="LRoot" ref="rs" value="rs_rand"/>
           <new def="rs_permutation" class="Lnumpy/random/permutation"/>
           <putfield class="LRoot" field="permutation" fieldType="LRoot" ref="rs" value="rs_permutation"/>
+          <new def="rs_choice" class="Lnumpy/random/choice"/>
+          <putfield class="LRoot" field="choice" fieldType="LRoot" ref="rs" value="rs_choice"/>
+          <new def="rs_multivariate_normal" class="Lnumpy/random/multivariate_normal"/>
+          <putfield class="LRoot" field="multivariate_normal" fieldType="LRoot" ref="rs" value="rs_multivariate_normal"/>
           <new def="rs_seed" class="Lnumpy/random/seed"/>
           <putfield class="LRoot" field="seed" fieldType="LRoot" ref="rs" value="rs_seed"/>
           <return value="rs"/>
@@ -639,6 +767,36 @@
       <!-- `np.random.randint(low, high, size, dtype)`: the `normal` and `uniform` signature shape, two distribution parameters then `size`, so `NpRandomIntegerDraw` shares their generator and differs only in the integer dtype (wala/ML#909). -->
       <class name="randint" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self low high size dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.choice.html: `np.random.choice(a, size=None, replace=True, p=None)` draws `size` elements of `a`, or of `arange(a)` for an integer `a`, which is then `int64`; see `NpRandomChoice` (wala/ML#1008). -->
+      <class name="choice" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a size replace p">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.multivariate_normal.html: `np.random.multivariate_normal(mean, cov, size=None)` is a `float64` array of shape `size + (len(mean),)`; see `NpRandomMultivariateNormal` (wala/ML#1008). -->
+      <class name="multivariate_normal" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self mean cov size check_valid tol">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>

@@ -84,6 +84,95 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String CONCATENATE_SIGNATURE = "np.concatenate()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.outer.html (wala/ML#1008). */
+  public static final MethodReference OUTER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/outer")),
+          AstMethodReference.fnSelector);
+
+  private static final String OUTER_SIGNATURE = "np.outer()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.append.html (wala/ML#1008). */
+  public static final MethodReference APPEND =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/append")),
+          AstMethodReference.fnSelector);
+
+  private static final String APPEND_SIGNATURE = "np.append()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.stack.html (wala/ML#1008). */
+  public static final MethodReference STACK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/stack")),
+          AstMethodReference.fnSelector);
+
+  private static final String STACK_SIGNATURE = "np.stack()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.mean.html (wala/ML#1008). */
+  public static final MethodReference MEAN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/mean")),
+          AstMethodReference.fnSelector);
+
+  private static final String MEAN_SIGNATURE = "np.mean()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.std.html (wala/ML#1008). */
+  public static final MethodReference STD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/std")),
+          AstMethodReference.fnSelector);
+
+  private static final String STD_SIGNATURE = "np.std()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.repeat.html (wala/ML#1008). */
+  public static final MethodReference REPEAT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/repeat")),
+          AstMethodReference.fnSelector);
+
+  private static final String REPEAT_SIGNATURE = "np.repeat()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.diag.html (wala/ML#1008). */
+  public static final MethodReference DIAG =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/diag")),
+          AstMethodReference.fnSelector);
+
+  private static final String DIAG_SIGNATURE = "np.diag()";
+
+  /**
+   * https://numpy.org/doc/stable/reference/random/generated/numpy.random.choice.html
+   * (wala/ML#1008).
+   */
+  public static final MethodReference RANDOM_CHOICE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/random/choice")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_CHOICE_SIGNATURE = "numpy.random.choice()";
+
+  /**
+   * https://numpy.org/doc/stable/reference/random/generated/numpy.random.multivariate_normal.html
+   * (wala/ML#1008).
+   */
+  public static final MethodReference RANDOM_MULTIVARIATE_NORMAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Lnumpy/random/multivariate_normal")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_MULTIVARIATE_NORMAL_SIGNATURE =
+      "numpy.random.multivariate_normal()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.zeros.html */
   public static final MethodReference ZEROS =
       MethodReference.findOrCreate(
@@ -474,6 +563,16 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE),
           Map.entry(NP_TRANSPOSE.getDeclaringClass(), NP_TRANSPOSE_SIGNATURE),
           Map.entry(NDARRAY_TRANSPOSE.getDeclaringClass(), NDARRAY_TRANSPOSE_SIGNATURE),
+          Map.entry(OUTER.getDeclaringClass(), OUTER_SIGNATURE),
+          Map.entry(APPEND.getDeclaringClass(), APPEND_SIGNATURE),
+          Map.entry(STACK.getDeclaringClass(), STACK_SIGNATURE),
+          Map.entry(MEAN.getDeclaringClass(), MEAN_SIGNATURE),
+          Map.entry(STD.getDeclaringClass(), STD_SIGNATURE),
+          Map.entry(REPEAT.getDeclaringClass(), REPEAT_SIGNATURE),
+          Map.entry(DIAG.getDeclaringClass(), DIAG_SIGNATURE),
+          Map.entry(RANDOM_CHOICE.getDeclaringClass(), RANDOM_CHOICE_SIGNATURE),
+          Map.entry(
+              RANDOM_MULTIVARIATE_NORMAL.getDeclaringClass(), RANDOM_MULTIVARIATE_NORMAL_SIGNATURE),
           Map.entry(TOLIST.getDeclaringClass(), TOLIST_SIGNATURE));
 
   public static final FieldReference FLOAT_32 =

@@ -268,6 +268,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.classLoader.IClass;
@@ -294,6 +295,7 @@ import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
+import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
@@ -756,6 +758,28 @@ public class TensorGeneratorFactory {
     // rather than one at a time (the tandem-registration rule).
     if (isType(type, NumpyTypes.RANDOM_PERMUTATION.getDeclaringClass()))
       return anchor.makeGenerator(NpPermutation::new, NpPermutation::new);
+    // The array constructors and reductions a data-preparation prefix builds its arrays with
+    // (wala/ML#1008).
+    if (isType(type, NumpyTypes.RANDOM_CHOICE.getDeclaringClass()))
+      return anchor.makeGenerator(NpRandomChoice::new, NpRandomChoice::new);
+    if (isType(type, NumpyTypes.RANDOM_MULTIVARIATE_NORMAL.getDeclaringClass()))
+      return anchor.makeGenerator(NpRandomMultivariateNormal::new, NpRandomMultivariateNormal::new);
+    if (isType(type, NumpyTypes.OUTER.getDeclaringClass()))
+      return anchor.makeGenerator(NpOuter::new, NpOuter::new);
+    if (isType(type, NumpyTypes.APPEND.getDeclaringClass()))
+      return anchor.makeGenerator(NpAppend::new, NpAppend::new);
+    if (isType(type, NumpyTypes.STACK.getDeclaringClass()))
+      return anchor.makeGenerator(NpStack::new, NpStack::new);
+    if (isType(type, NumpyTypes.REPEAT.getDeclaringClass()))
+      return anchor.makeGenerator(NpRepeat::new, NpRepeat::new);
+    if (isType(type, NumpyTypes.DIAG.getDeclaringClass()))
+      return anchor.makeGenerator(NpDiag::new, NpDiag::new);
+    if (isType(type, NumpyTypes.MEAN.getDeclaringClass()))
+      return anchor.makeGenerator(
+          source -> new NpMean(source, false), node -> new NpMean(node, false));
+    if (isType(type, NumpyTypes.STD.getDeclaringClass()))
+      return anchor.makeGenerator(
+          source -> new NpMean(source, true), node -> new NpMean(node, true));
 
     // `enumerate` carries index/tuple element semantics its generator models; the manual-side
     // DATA_PACKAGE_PREFIX catch-all would otherwise swallow it into a plain pass-through
@@ -1160,6 +1184,41 @@ public class TensorGeneratorFactory {
         && phiVariable.getPointerKey() instanceof LocalPointerKey phiKey
         && predKey.getNode().equals(phiKey.getNode())
         && arms.contains(predKey.getValueNumber());
+  }
+
+  /**
+   * The element a subscript member is when it is a one-element tuple literal of its own frame,
+   * {@code a[idx,]}: the value written at index {@code 0} of a tuple allocated by the member's
+   * definition and written nowhere else (wala/ML#1008).
+   *
+   * @param node The node whose IR holds the subscript.
+   * @param memberVn The member's value number.
+   * @return The element's value number, or {@code -1} when the member is not such a tuple.
+   */
+  private static int singleTupleElement(CGNode node, int memberVn) {
+    if (memberVn <= 0 || node.getIR() == null || node.getDU() == null) return -1;
+    DefUse du = node.getDU();
+    if (!(du.getDef(memberVn) instanceof SSANewInstruction allocation)
+        || !allocation.getConcreteType().equals(PythonTypes.tuple)) return -1;
+    SymbolTable symbols = node.getIR().getSymbolTable();
+    int element = -1;
+    for (Iterator<SSAInstruction> uses = du.getUses(memberVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      String field;
+      int value;
+      if (use instanceof PythonPropertyWrite write && write.getObjectRef() == memberVn) {
+        int member = write.getMemberRef();
+        field =
+            symbols.isConstant(member) ? String.valueOf(symbols.getConstantValue(member)) : null;
+        value = write.getValue();
+      } else if (use instanceof SSAPutInstruction put && put.getRef() == memberVn) {
+        field = put.getDeclaredField().getName().toString();
+        value = put.getVal();
+      } else continue;
+      if (!"0".equals(field) || element > 0) return -1;
+      element = value;
+    }
+    return element;
   }
 
   /**
@@ -3184,6 +3243,21 @@ public class TensorGeneratorFactory {
             && containerGenerator != null
             && !(containerGenerator instanceof DatasetGenerator)) {
           PointsToSetVariable memberSrc = getPointsToSetVariable(memberRefKey, builder);
+
+          // `a[idx,]` indexes as `a[idx]` does: a one-element tuple index selects as its element.
+          // Read as an element read instead, the array index would peel the receiver's leading
+          // axis (wala/ML#1008).
+          int tupleElement = singleTupleElement(node, memberRef);
+          if (tupleElement > 0) {
+            PointsToSetVariable elementSrc =
+                getPointsToSetVariable(
+                    builder
+                        .getPointerAnalysis()
+                        .getHeapModel()
+                        .getPointerKeyForLocal(node, tupleElement),
+                    builder);
+            if (elementSrc != null) memberSrc = elementSrc;
+          }
 
           if (memberSrc != null) {
             TensorGenerator indexGenerator = tryGetGenerator(memberSrc, builder, visited);
