@@ -171,3 +171,51 @@ def pick_element(flag):
 
 
 pick_element(len(sys.argv) > 5)
+
+
+def consume_slice(x):
+    assert x.shape == (2, 4)
+    assert x.dtype == tf.int32
+
+
+def slice_index(x, s):
+    consume_slice(x[s])
+
+
+slice_index(tf.ones((3, 4), tf.int32), slice(0, 2))
+
+
+def consume_tuple_index(x):
+    assert x.shape == (4,)
+    assert x.dtype == tf.int32
+
+
+def tuple_index(x, s):
+    consume_tuple_index(x[s])
+
+
+tuple_index(tf.ones((3, 4), tf.int32), (0, slice(None)))
+
+
+def consume_int_index(x):
+    assert x.shape == (4,)
+    assert x.dtype == tf.int32
+
+
+def int_index(x, k):
+    consume_int_index(x[int(k)])
+
+
+int_index(tf.ones((3, 4), tf.int32), 1.0)
+
+
+def consume_len_index(x):
+    assert x.shape == (4,)
+    assert x.dtype == tf.int32
+
+
+def len_index(x, ys):
+    consume_len_index(x[len(ys)])
+
+
+len_index(tf.ones((3, 4), tf.int32), [7])

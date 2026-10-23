@@ -819,6 +819,82 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A subscript of a tensor parameter by the result of the {@code int} builtin is an integer index
+   * and peels the leading axis: {@code x[int(k)]} over a {@code (3, 4) int32} argument is {@code
+   * (4,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterIntIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_int_index",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * A subscript of a tensor parameter by the result of the {@code len} builtin is an integer index
+   * and peels the leading axis: {@code x[len(ys)]} over a {@code (3, 4) int32} argument is {@code
+   * (4,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterLenIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_len_index",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * A subscript of a tensor parameter by a {@code slice} object is not an integer index, so it is
+   * not seeded as a peeled element: {@code x[s]} with {@code s = slice(0, 2)} is {@code (2, 4)
+   * int32} at run time, and the analysis reaches the consumer without a tensor type rather than
+   * reading {@code (4,) int32}. The slice's points-to set holds an integer constant, so only a
+   * structural check of the index's definition tells it apart from an integer.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterSliceIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_param.py", "consume_slice", 0, 0, Map.of());
+  }
+
+  /**
+   * A subscript of a tensor parameter by a tuple index is not an integer index, so it is not seeded
+   * as a peeled element: {@code x[s]} with {@code s = (0, slice(None))} is {@code (4,) int32} at
+   * run time, and the analysis reaches the consumer without a tensor type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterTupleIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_param.py", "consume_tuple_index", 0, 0, Map.of());
+  }
+
+  /**
    * A constant subscript of a parameter holding a Python list of tensors reads the element stored
    * at that index, not a peeled tensor: {@code xs[1]} is the {@code (2, 3) float32} element.
    *

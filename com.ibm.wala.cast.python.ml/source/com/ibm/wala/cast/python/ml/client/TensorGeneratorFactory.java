@@ -1665,27 +1665,58 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * Whether a subscript's member is an integer index: a constant integer, or a variable whose
-   * points-to set holds integer constants only, which includes the empty set a loop counter often
-   * has (a counter defined by arithmetic mints no instance keys, wala/ML#805). A member holding any
-   * string constant, as every attribute read's does, or any allocation, is not.
+   * Whether a subscript's member is an integer index, decided structurally: a constant integer, the
+   * result of a call to the {@code int} or {@code len} builtin, or a loop counter bound from {@code
+   * next(iter(range(...)))}. A member's points-to set does not decide it: a loop counter's set is
+   * often empty, and a {@code slice(...)} result's holds an integer constant, although subscripting
+   * by it keeps the axis. Every other member, a parameter among them, is not an integer index, so
+   * its subscript stays unseeded.
    *
    * @param node The node of the subscript.
    * @param memberRef The member's value number.
-   * @param pointerAnalysis The pointer analysis.
+   * @param builder The propagation call graph builder, whose call graph names the calls' targets.
    * @return {@code true} iff the member is an integer index.
    */
   static boolean readsIntegerIndex(
-      CGNode node, int memberRef, PointerAnalysis<InstanceKey> pointerAnalysis) {
+      CGNode node, int memberRef, PropagationCallGraphBuilder builder) {
     SymbolTable symtab = node.getIR().getSymbolTable();
     if (symtab.isConstant(memberRef)) {
       Object value = symtab.getConstantValue(memberRef);
       return value instanceof Integer || value instanceof Long;
     }
-    PointerKey memberKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, memberRef);
-    for (InstanceKey ik : pointerAnalysis.getPointsToSet(memberKey))
-      if (!(ik instanceof ConstantKey<?> constant)
-          || !(constant.getValue() instanceof Integer || constant.getValue() instanceof Long))
+    DefUse du = node.getDU();
+    if (!(du.getDef(memberRef) instanceof SSAAbstractInvokeInstruction call)) return false;
+    if (callsBuiltin(node, call, "int", builder) || callsBuiltin(node, call, "len", builder))
+      return true;
+    // A `for i in range(n)` counter: `next` over `iter` over a `range` call.
+    if (!callsBuiltin(node, call, "next", builder) || call.getNumberOfUses() < 2) return false;
+    if (!(du.getDef(call.getUse(1)) instanceof SSAAbstractInvokeInstruction iter)
+        || !callsBuiltin(node, iter, "iter", builder)
+        || iter.getNumberOfUses() < 2) return false;
+    return du.getDef(iter.getUse(1)) instanceof SSAAbstractInvokeInstruction range
+        && callsBuiltin(node, range, "range", builder);
+  }
+
+  /**
+   * Whether a call's every target is the summary of the named builtin, {@code
+   * Lwala/builtin/<name>}.
+   *
+   * @param node The node of the call.
+   * @param call The call.
+   * @param name The builtin's name.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the call has targets and all are the builtin's.
+   */
+  private static boolean callsBuiltin(
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      String name,
+      PropagationCallGraphBuilder builder) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (targets.isEmpty()) return false;
+    String builtin = "Lwala/builtin/" + name;
+    for (CGNode target : targets)
+      if (!target.getMethod().getDeclaringClass().getName().toString().equals(builtin))
         return false;
     return true;
   }
@@ -2941,8 +2972,7 @@ public class TensorGeneratorFactory {
         // ubiquitous `self.attr` read never pays the walk.
         TensorGenerator containerGenerator =
             node.getDU().getDef(objRef) == null
-                    && readsIntegerIndex(
-                        node, propRead.getMemberRef(), builder.getPointerAnalysis())
+                    && readsIntegerIndex(node, propRead.getMemberRef(), builder)
                 ? parameterGenerator(objSrc, builder, visited)
                 : tryGetGenerator(objSrc, builder, visited);
 

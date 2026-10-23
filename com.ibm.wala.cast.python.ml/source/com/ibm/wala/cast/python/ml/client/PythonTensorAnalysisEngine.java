@@ -1589,7 +1589,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             }
 
             // An integer subscript of a tensor that arrives as a parameter (`x[0]`, or `x[i]` in a
-            // loop) reads one element along the receiver's leading axis. The receiver has no def
+            // loop over `range`) reads one element along the receiver's leading axis. The receiver
+            // has no def
             // in this node, so neither the def-chain walks below nor the dataset check above reach
             // it; the factory types it as an element of the receiver's own producer, found through
             // the parameter's creators, and seeds only on that resolution. A parameter holding a
@@ -1599,7 +1600,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // generator walk.
             if (!added
                 && TensorGeneratorFactory.readsIntegerIndex(
-                    localPointerKeyNode, propertyRead.getMemberRef(), pointerAnalysis)) {
+                    localPointerKeyNode, propertyRead.getMemberRef(), builder)) {
               try {
                 TensorGenerator generator = getGenerator(src, builder);
 
