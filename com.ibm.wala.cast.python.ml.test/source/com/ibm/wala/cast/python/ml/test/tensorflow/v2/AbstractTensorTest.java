@@ -218,6 +218,9 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
   protected static final TensorType TENSOR_NONE_UNRESOLVED_FLOAT32 =
       new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
 
+  protected static final TensorType TENSOR_NONE_INT32 =
+      new TensorType(INT_32, asList(DynamicDim.INSTANCE));
+
   protected static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2)));
 

@@ -31,12 +31,13 @@ public class TestMapFnCallback extends AbstractTensorTest {
 
   /**
    * A function called only by {@code map_fn}, over rows of four {@code float32} values cast from
-   * {@code int32}.
+   * {@code int32}. Its locals are the parameter, the stacked result, and the two scalar elements
+   * {@code bbox[0]} and {@code bbox[2]} that an integer subscript of the parameter reads.
    */
   @Test
   public void testCallbackOnly()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FILE, "unpack", 1, 2, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+    test(FILE, "unpack", 1, 4, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
   /**

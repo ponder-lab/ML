@@ -663,6 +663,182 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A constant integer subscript of a tensor parameter peels the receiver's leading axis: {@code
+   * x[0]} over a {@code (3, 4) int32} argument is {@code (4,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterConstantIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_param.py", "consume_const", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * The loop-index counterpart of {@link #testSubscriptParameterConstantIndex()}: {@code x[i]} with
+   * {@code i} ranging over {@code range(2)} peels the same leading axis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterLoopIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_param.py", "consume_loop", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * A loop-index subscript of a component unpacked from a Keras model's tuple input, passed on as a
+   * parameter: the {@code (2, 5) int32} component's row is {@code (5,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedTupleParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_param.py", "consume_labels", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  /**
+   * The row of {@link #testSubscriptUnpackedTupleParameter()} under {@code tf.boolean_mask} keeps
+   * its dtype and takes a dynamic length: {@code (None,) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptUnpackedTupleParameterMasked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_masked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_INT32)));
+  }
+
+  /**
+   * A subscript of a parameter whose argument is either of two tensors, one per branch, is an
+   * element of either (wala/ML#1009): {@code (4,) int32} from the {@code (3, 4) int32} arm and
+   * {@code (5,) float32} from the {@code (2, 5) float32} arm, not the first arm alone.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterJoinsCreators()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_join",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_INT32, TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * A component destructured from the element of a dataset parameter, where the parameter's
+   * creators are two datasets of the same kind with different dtypes, is the component of either:
+   * {@code (2,) int32} and {@code (2,) float32}. The destructuring read's receiver is the loop's
+   * {@code next} result, not the parameter, so the dataset element arm still types it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterDatasetComponent()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_dataset_component",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_INT32, TENSOR_2_FLOAT32)));
+  }
+
+  /**
+   * A constant subscript of a parameter whose creators are the elements of two datasets of the same
+   * kind with different dtypes reads the component of either element: {@code (2,) int32} and {@code
+   * (2,) float32}. Unlike {@link #testSubscriptParameterDatasetComponent()}, the subscript's
+   * receiver is the parameter itself, so the receiver is the join of its creators.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterDatasetElements()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_element_component",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_INT32, TENSOR_2_FLOAT32)));
+  }
+
+  /**
+   * The joined counterpart of {@link #testSubscriptParameterDatasetElements()}: one call passes
+   * either of two dataset elements, one per branch, so the parameter has two creators in one node,
+   * and its subscript reads the component of either element: {@code (2,) int32} and {@code (2,)
+   * float32}. Today only the first creator's {@code (2,) int32} is read: a dataset element's
+   * component is selected by the property-read arm's structured case, which reads one creator, so
+   * the receiver keeps the single-creator dispatch rather than the per-creator element join.
+   *
+   * <p>TODO: Join a structured receiver's creators too (wala/ML#1009).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSubscriptParameterJoinedDatasetElements()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_joined_element_component",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_INT32, TENSOR_2_FLOAT32)));
+  }
+
+  /**
+   * A constant subscript of a parameter holding a Python list of tensors reads the element stored
+   * at that index, not a peeled tensor: {@code xs[1]} is the {@code (2, 3) float32} element.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptParameterListElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_param.py",
+        "consume_list_element",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * The leading-axis counterpart of {@link #testSubscriptDataflowReceiver()} (wala/ML#953): {@code
    * adj[:2]} over the same dataflow-typed {@code (4, 2) int32} receiver takes the {@code [:k]}
    * form's bound, {@code (2, 2) int32}, through the feed's rule.
