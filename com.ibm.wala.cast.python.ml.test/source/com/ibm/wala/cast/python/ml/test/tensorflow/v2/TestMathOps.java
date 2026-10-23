@@ -1991,6 +1991,86 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * An {@code astype} whose dtype is another array's {@code .dtype}, {@code w.astype(x.dtype)},
+   * takes that array's dtype. The attribute read allocates nothing, so the dtype argument's
+   * points-to set is empty and is recovered from the array the attribute is read off.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypeDTypeAttribute()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_dtype_attribute.py",
+        "consume_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * The keyword spelling of {@link #testAstypeDTypeAttribute()}, {@code w.astype(dtype=x.dtype)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypeDTypeAttributeKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_dtype_attribute.py",
+        "consume_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * As {@link #testAstypeDTypeAttribute()}, inside a method whose two parameters are the arrays,
+   * {@code w_c = w_c.astype(x_c.dtype)}: the attribute is read off a parameter.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypeDTypeAttributeOfParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_dtype_attribute.py",
+        "consume_in_method",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * The control for {@link #testAstypeDTypeAttribute()}: a literal dtype, {@code
+   * w.astype(np.float32)}, in the same fixture.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAstypeLiteralDTypeControl()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_dtype_attribute.py",
+        "consume_literal",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Regression guard for wala/ML#403: chained {@code x.astype(int32).astype(float32)} on an mnist
    * receiver. The first cast's result is a synthetic-method return whose PointerKey is implicit, so
    * the receiver-shape lookup for the second {@code astype} call hits the {@code

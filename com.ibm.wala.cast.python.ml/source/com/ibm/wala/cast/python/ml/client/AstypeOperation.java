@@ -122,14 +122,35 @@ public class AstypeOperation extends TensorGenerator {
    * to look like inference; every other target ({@code astype(np.int32)} and friends) was reported
    * as a confident float32 (wala/ML#849).
    *
-   * <p>{@code astype} requires a dtype at runtime, so an unresolved one means the analysis could
-   * not read it, not that there is a default to supply. It degrades to ⊤ accordingly.
+   * <p>The argument that most often does not resolve is another array's {@code .dtype}, {@code
+   * w.astype(x.dtype)}, whose points-to set is empty because the attribute read allocates nothing.
+   * It is recovered from the array the attribute is read off, as {@link Cast} recovers {@code
+   * tf.cast(x, y.dtype)} (wala/ML#686).
+   *
+   * <p>{@code astype} requires a dtype at runtime, so a dtype that still does not resolve means the
+   * analysis could not read it, not that there is a default to supply. It degrades to ⊤
+   * accordingly.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return {@link DType#UNKNOWN}, singleton.
+   * @return The dtypes of the array whose {@code .dtype} is the argument, or {@link DType#UNKNOWN},
+   *     singleton.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // A source anchor holds the call in its own frame, which is where the attribute read is; the
+    // callers of that frame pass nothing of this call. A manual anchor, the operation's synthetic
+    // body, has no call of its own and finds it among its callers.
+    Set<DType> viaAttribute =
+        this.getInvokeInstruction() != null
+            ? this.getDTypeFromDTypeAttributeArgument(
+                builder,
+                this.getNode(),
+                this.getInvokeInstruction(),
+                this.getDTypeParameterPosition(),
+                this.getDTypeParameterName())
+            : this.getDTypeFromDTypeAttributeArgument(
+                builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+    if (viaAttribute != null && !viaAttribute.isEmpty()) return viaAttribute;
     return EnumSet.of(DType.UNKNOWN);
   }
 
