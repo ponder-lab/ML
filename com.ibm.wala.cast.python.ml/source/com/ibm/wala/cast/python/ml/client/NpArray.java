@@ -488,6 +488,12 @@ public class NpArray extends TensorGenerator {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(getNode(), sourceVn);
       OrdinalSet<InstanceKey> sourcePTS = pa.getPointsToSet(pk);
+      // A scalar built by the `float`, `int` or `bool` builtin has an empty points-to set; it
+      // converts as a literal of its type does.
+      if (sourcePTS == null || sourcePTS.isEmpty()) {
+        DType scalar = pythonScalarBuiltinDType(builder, getNode(), sourceVn);
+        if (scalar != null) return EnumSet.of(numpyDTypeOfPythonScalar(scalar));
+      }
       boolean[] partialUnionDrop = {false};
       Set<DType> inferred = numpyPromotedDTypes(builder, sourcePTS, partialUnionDrop);
       if (!inferred.isEmpty() && !(inferred.size() == 1 && inferred.contains(DType.UNKNOWN))) {
@@ -726,6 +732,16 @@ public class NpArray extends TensorGenerator {
           if ((fieldPTS == null || fieldPTS.isEmpty())
               && isStaticShapeElementWrite(builder, asin, fieldIndex)) {
             leaves.add(DType.INT64);
+            continue;
+          }
+          // An element built by the `float`, `int` or `bool` builtin converts as a literal of its
+          // type does.
+          DType scalarElement =
+              fieldPTS == null || fieldPTS.isEmpty()
+                  ? pythonScalarBuiltinElementDType(builder, asin, fieldIndex)
+                  : null;
+          if (scalarElement != null) {
+            leaves.add(numpyDTypeOfPythonScalar(scalarElement));
             continue;
           }
           if (!collectNumpyLeaves(builder, fieldPTS, leaves, visited, sawUnresolvableTensorLeaf))

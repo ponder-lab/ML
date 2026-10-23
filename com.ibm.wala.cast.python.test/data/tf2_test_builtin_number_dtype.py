@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 
@@ -54,3 +55,52 @@ assert not tf.is_tensor(x)
 consume_number(x)
 consume_number(int(s) - 1)
 consume_number(bool(n))
+
+
+def consume_tf_zeros_float(t):
+    pass
+
+
+def consume_tf_cast_float(t):
+    pass
+
+
+def consume_np_float(t):
+    pass
+
+
+def consume_np_constant_float(t):
+    pass
+
+
+def consume_np_int(t):
+    pass
+
+
+# TensorFlow converts the Python `float` type to float32.
+z = tf.zeros([2], dtype=float)
+assert z.shape == (2,)
+assert z.dtype == tf.float32
+consume_tf_zeros_float(z)
+
+i = tf.constant([1, 2])
+k = tf.cast(i, float)
+assert k.shape == (2,)
+assert k.dtype == tf.float32
+consume_tf_cast_float(k)
+
+# NumPy converts a Python float to float64 and a Python int to int64.
+p = np.array([float(n)])
+assert p.shape == (1,)
+assert p.dtype == np.float64
+consume_np_float(p)
+
+q = tf.constant(np.array([float(n)]))
+assert q.shape == (1,)
+assert q.dtype == tf.float64
+consume_np_constant_float(q)
+
+m = np.array([int(n)])
+assert m.shape == (1,)
+assert m.dtype == np.int64
+consume_np_int(m)

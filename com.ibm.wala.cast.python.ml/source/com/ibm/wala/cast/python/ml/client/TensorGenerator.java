@@ -6009,6 +6009,35 @@ public abstract class TensorGenerator implements Cloneable {
           "Lwala/builtin/float", FLOAT32, "Lwala/builtin/int", INT32, "Lwala/builtin/bool", BOOL);
 
   /**
+   * The dtype NumPy converts a Python scalar to, given the dtype TensorFlow converts it to: NumPy
+   * promotes a Python {@code float} to float64 and an {@code int} to int64 on 64-bit platforms, and
+   * a {@code bool} is the boolean dtype in both.
+   *
+   * @param tensorFlowDType The dtype TensorFlow converts the scalar to, one of {@link
+   *     #PYTHON_SCALAR_BUILTIN_DTYPES}'s values.
+   * @return NumPy's dtype for the scalar.
+   */
+  protected static DType numpyDTypeOfPythonScalar(DType tensorFlowDType) {
+    return switch (tensorFlowDType) {
+      case FLOAT32 -> DType.FLOAT64;
+      case INT32 -> DType.INT64;
+      default -> tensorFlowDType;
+    };
+  }
+
+  /**
+   * Whether this generator reads a Python builtin type passed as a dtype ({@code dtype=float}) as
+   * NumPy does, rather than as TensorFlow does: true for the generators whose result is an ndarray,
+   * those whose {@link #getOrigins} is {@link TensorOrigin#NUMPY} alone.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code true} iff this generator models a NumPy API.
+   */
+  protected boolean readsNumpyDTypeTokens(PropagationCallGraphBuilder builder) {
+    return this.getOrigins(builder).equals(EnumSet.of(TensorOrigin.NUMPY));
+  }
+
+  /**
    * The dtype TensorFlow converts a value to when the value is the result of a call to the {@code
    * float}, {@code int} or {@code bool} builtin. The builtins' summaries allocate a primitive type,
    * for which the heap model makes no instance key, so the result's points-to set is empty and the
@@ -6723,20 +6752,20 @@ public abstract class TensorGenerator implements Cloneable {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
+    Boolean numpyReader = null;
     for (InstanceKey instanceKey : pointsToSet) {
-      // Python builtin type objects passed as dtype tokens (`np.array(x, dtype=int)`): numpy
-      // promotes the builtins to its 64-bit defaults on 64-bit platforms, and `bool` maps to the
-      // boolean dtype (wala/ML#775). Checked before the allocation-site extraction below, which
-      // throws for the builtin's `ConcreteTypeKey`.
+      // Python builtin type objects passed as dtype tokens (`np.array(x, dtype=int)`), checked
+      // before the allocation-site extraction below, which throws for the builtin's
+      // `ConcreteTypeKey`. The two libraries read them differently: numpy promotes the builtins to
+      // its 64-bit defaults on 64-bit platforms (wala/ML#775), while TensorFlow reads `float` as
+      // float32 and cannot convert `int` at all. `bool` is the boolean dtype in both.
       String builtinTypeName = instanceKey.concreteType().getReference().getName().toString();
-      if (builtinTypeName.equals("Lwala/builtin/int")) {
-        ret.add(DType.INT64);
-        continue;
-      } else if (builtinTypeName.equals("Lwala/builtin/float")) {
-        ret.add(DType.FLOAT64);
-        continue;
-      } else if (builtinTypeName.equals("Lwala/builtin/bool")) {
-        ret.add(DType.BOOL);
+      DType builtinTypeDType = PYTHON_SCALAR_BUILTIN_DTYPES.get(builtinTypeName);
+      if (builtinTypeDType != null) {
+        if (numpyReader == null) numpyReader = this.readsNumpyDTypeTokens(builder);
+        if (numpyReader) ret.add(numpyDTypeOfPythonScalar(builtinTypeDType));
+        // TensorFlow raises on the `int` token, so no dtype is knowable for it.
+        else ret.add(builtinTypeDType == INT32 ? DType.UNKNOWN : builtinTypeDType);
         continue;
       }
 

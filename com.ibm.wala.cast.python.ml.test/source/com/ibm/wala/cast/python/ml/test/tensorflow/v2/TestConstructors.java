@@ -2293,4 +2293,111 @@ public class TestConstructors extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_builtin_number_dtype.py", "consume_number", 0, 0);
   }
+
+  /**
+   * TensorFlow reads the Python {@code float} type, {@code tf.zeros([2], dtype=float)}, as float32.
+   */
+  @Test
+  public void testZerosOfFloatToken()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_tf_zeros_float",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /** TensorFlow reads the Python {@code float} type, {@code tf.cast(t, float)}, as float32. */
+  @Test
+  public void testCastToFloatToken()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_tf_cast_float",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * NumPy converts a Python float built by {@code float(n)} to float64: {@code
+   * np.array([float(n)])}.
+   */
+  @Test
+  public void testNpArrayOfFloatBuiltin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_np_float",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 1))));
+  }
+
+  /** {@code tf.constant} of {@code np.array([float(n)])} keeps the array's float64. */
+  @Test
+  public void testConstantOfNpArrayOfFloatBuiltin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_np_constant_float",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 1))));
+  }
+
+  /** NumPy converts a Python int built by {@code int(n)} to int64: {@code np.array([int(n)])}. */
+  @Test
+  public void testNpArrayOfIntBuiltin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_np_int",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 1))));
+  }
+
+  /**
+   * An {@code isinstance(x, float)} guard on a parameter called with a tensor and with a float: the
+   * {@code else} arm's sink.
+   */
+  @Test
+  public void testIsinstanceFloatGuardElse()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_isinstance_float.py",
+        "consume_guard",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
+
+  /**
+   * The {@code isinstance(x, float)} arm's sink. The guard is not pruned, so the tensor argument
+   * reaches this arm too; the value is the same whether {@code float} names the builtin or an
+   * import.
+   */
+  @Test
+  public void testIsinstanceFloatGuardThen()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_isinstance_float.py",
+        "consume_float_arm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
+
+  /**
+   * A function annotated {@code (x: float) -> bool} still analyzes, its parameter typed by the
+   * tensor it is called with and its comparison a second tensor variable, as when {@code float}
+   * named an import.
+   */
+  @Test
+  public void testFloatAnnotatedFunction()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_isinstance_float.py", "g", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
 }
