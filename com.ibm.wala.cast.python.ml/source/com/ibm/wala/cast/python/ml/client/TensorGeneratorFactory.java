@@ -1053,7 +1053,8 @@ public class TensorGeneratorFactory {
         if (def instanceof SSAAbstractInvokeInstruction
             || def instanceof EachElementGetInstruction
             || def instanceof PythonPropertyRead
-            || def instanceof SSABinaryOpInstruction) {
+            || def instanceof SSABinaryOpInstruction
+            || packComponentRead(current, builder) != null) {
           LOGGER.fine(() -> "findCreator found creator instruction: " + def);
           return current;
         }
@@ -1098,7 +1099,7 @@ public class TensorGeneratorFactory {
     while (!queue.isEmpty()) {
       PointsToSetVariable current = queue.poll();
       if (current == null) continue; // An unresolved predecessor; see findCreator (wala/ML#613).
-      if (isCreator(current)) {
+      if (isCreator(current, builder)) {
         creators.add(current);
         continue;
       }
@@ -1161,12 +1162,15 @@ public class TensorGeneratorFactory {
 
   /**
    * Decides whether {@link #findCreator} stops at a variable: a return value, or a local defined by
-   * an invoke, an iteration, a property read or a binary operation.
+   * an invoke, an iteration, a property read, a binary operation or a {@linkplain
+   * #packComponentRead component read} of the data a Keras step is given.
    *
    * @param variable The variable.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
    * @return {@code true} iff the variable is a creator.
    */
-  private static boolean isCreator(PointsToSetVariable variable) {
+  private static boolean isCreator(
+      PointsToSetVariable variable, PropagationCallGraphBuilder builder) {
     PointerKey pk = variable.getPointerKey();
     if (pk instanceof ReturnValueKey) return true;
     if (!(pk instanceof LocalPointerKey)) return false;
@@ -1175,7 +1179,60 @@ public class TensorGeneratorFactory {
     return def instanceof SSAAbstractInvokeInstruction
         || def instanceof EachElementGetInstruction
         || def instanceof PythonPropertyRead
-        || def instanceof SSABinaryOpInstruction;
+        || def instanceof SSABinaryOpInstruction
+        || packComponentRead(variable, builder) != null;
+  }
+
+  /**
+   * A constant-index field read of the data a Keras {@code fit}, {@code evaluate} or {@code
+   * predict} summary packs for the model's step, or of an unpack result (wala/ML#997).
+   *
+   * @param object The variable of the object read.
+   * @param data The pack or unpack allocation.
+   * @param index The index read.
+   */
+  record PackComponentRead(PointsToSetVariable object, AllocationSiteInNode data, int index) {}
+
+  /**
+   * The read a variable is, when it is a {@link PackComponentRead}: a library summary's own field
+   * read by a numeric name, {@code x = data[0]} in the default {@code train_step}, of an object
+   * every member of whose points-to set is such data.
+   *
+   * <p>A user's {@code x, y = data} is a property read and resolves as one. A summary's read is a
+   * field read, which the walk back from a value would otherwise pass through into the heap: the
+   * pointer analysis stores the user's {@code x} in the pack's slot, so the walk reaches the {@code
+   * x} itself, a dataset when {@code fit} is given one, and loses the component the step selected
+   * from the dataset's element. The model's {@code call} then reads its {@code inputs} as the whole
+   * element, its targets included.
+   *
+   * @param variable The variable.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @return The read, or {@code null} when the variable is not such a read.
+   */
+  static PackComponentRead packComponentRead(
+      PointsToSetVariable variable, PropagationCallGraphBuilder builder) {
+    if (!(variable.getPointerKey() instanceof LocalPointerKey lpk)) return null;
+    CGNode node = lpk.getNode();
+    if (!(node.getDU().getDef(lpk.getValueNumber()) instanceof SSAGetInstruction get)
+        || get.isStatic()) return null;
+    int index;
+    try {
+      index = Integer.parseInt(get.getDeclaredField().getName().toString());
+    } catch (NumberFormatException e) {
+      return null;
+    }
+    PointerKey objectKey =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, get.getRef());
+    AllocationSiteInNode data = null;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(objectKey)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
+        return null;
+      if (data == null) data = asin;
+    }
+    if (data == null) return null;
+    PointsToSetVariable object = getPointsToSetVariable(objectKey, builder);
+    return object == null ? null : new PackComponentRead(object, data, index);
   }
 
   /**
@@ -2394,6 +2451,14 @@ public class TensorGeneratorFactory {
         if (data != null && allData) return new FitDataGenerator(data.getNode(), data);
       }
     }
+    // A summary's component read of that data is the component the step selected, read as a user's
+    // `x, y = data` is (wala/ML#997).
+    PackComponentRead packRead = packComponentRead(source, builder);
+    if (packRead != null)
+      return new DatasetTupleElementGenerator(
+          packRead.object(),
+          new FitDataGenerator(packRead.data().getNode(), packRead.data()),
+          packRead.index());
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
       CGNode node = lpk.getNode();

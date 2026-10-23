@@ -1480,6 +1480,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // Binary operations (e.g. +, *) on tensors are also sources.
           sources.add(src);
           LOGGER.fine("Added dataflow source from binary op: " + describe(src) + ".");
+        } else if (inst instanceof SSAGetInstruction
+            && TensorGeneratorFactory.packComponentRead(src, builder) != null) {
+          // The default Keras step's read of the data it is given (wala/ML#997) is a source, so
+          // the component it selects is pinned below, as a user step's `x, y = data` is.
+          sources.add(src);
+          LOGGER.fine("Added dataflow source from a step's data read: " + describe(src) + ".");
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
