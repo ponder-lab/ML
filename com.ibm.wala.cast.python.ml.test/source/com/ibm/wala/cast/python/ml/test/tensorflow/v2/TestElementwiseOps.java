@@ -2790,4 +2790,63 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
   }
+
+  /**
+   * Python's unary {@code -} on an {@code int32} tensor, {@code -tf.ones(n, dtype=tf.int32)}, is a
+   * tensor of the operand's shape and dtype, as {@code tf.negative} is.
+   */
+  @Test
+  public void testUnaryMinusInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unary_minus.py",
+        "consume_int",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 6))));
+  }
+
+  /** Python's unary {@code -} on a {@code float32} tensor held in a variable keeps its type. */
+  @Test
+  public void testUnaryMinusFloat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_unary_minus.py", "consume_float", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * A negated {@code int32} tensor as {@code tf.where}'s {@code y} operand gives an {@code int32}
+   * result of the operands' shape.
+   */
+  @Test
+  public void testUnaryMinusWhere()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unary_minus.py",
+        "consume_where",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 6))));
+  }
+
+  /** Python's unary {@code ~} on an {@code int32} tensor keeps the operand's shape and dtype. */
+  @Test
+  public void testUnaryInvert()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unary_minus.py",
+        "consume_invert",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 6))));
+  }
+
+  /**
+   * Python's unary {@code -} on Python numbers, a literal, a variable and a float, is no tensor:
+   * the sink is reached with no tensor parameter.
+   */
+  @Test
+  public void testUnaryMinusNumber()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_unary_minus.py", "consume_number", 0, 0);
+  }
 }
