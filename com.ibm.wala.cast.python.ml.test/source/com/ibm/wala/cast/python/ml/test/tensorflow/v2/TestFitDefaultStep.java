@@ -50,4 +50,33 @@ public class TestFitDefaultStep extends AbstractTensorTest {
   public void testOverrideInputs() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_override_index", 1, 1, Map.of(2, Set.of(TENSOR_NONE_INT32)));
   }
+
+  /**
+   * A model class fit twice, on datasets whose inputs differ in dtype, has both inputs in {@code
+   * call}, each batch's full and remainder extents.
+   */
+  @Test
+  public void testTwiceFitInputs() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_twice_inputs",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4),
+                TensorType.of(FLOAT_32, 1, 4),
+                TensorType.of(INT_32, 2, 4),
+                TensorType.of(INT_32, 1, 4))));
+  }
+
+  /**
+   * A dict component of the inputs, read by key in {@code call}, is that key's value (<a
+   * href="https://github.com/wala/ML/issues/1002">wala/ML#1002</a>).
+   */
+  @Test
+  public void testDictInputs() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_dict_ids", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 4, 3))));
+  }
 }

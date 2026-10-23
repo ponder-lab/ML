@@ -48,6 +48,14 @@ def consume_override_index(index):
     assert index.shape.rank == 1 and index.dtype == tf.int32
 
 
+def consume_twice_inputs(inputs):
+    assert inputs.shape[1:] == (4,)
+
+
+def consume_dict_ids(ids):
+    assert ids.shape[1:] == (3,) and ids.dtype == tf.int32
+
+
 def loss(y_true, y_pred):
     return tf.reduce_mean(y_pred)
 
@@ -56,6 +64,19 @@ class Flat(tf.keras.Model):
     def call(self, inputs, training=None, mask=None):
         consume_flat_inputs(inputs)
         return tf.reduce_sum(inputs, axis=0, keepdims=True)
+
+
+class Twice(tf.keras.Model):
+    def call(self, inputs, training=None, mask=None):
+        consume_twice_inputs(inputs)
+        return tf.reduce_sum(tf.cast(inputs, tf.float32), axis=0, keepdims=True)
+
+
+class Ranker(tf.keras.Model):
+    def call(self, inputs, training=None, mask=None):
+        ids = inputs["stimulus_set"]
+        consume_dict_ids(ids)
+        return tf.cast(ids, tf.float32)
 
 
 class Nested(tf.keras.Model):
@@ -92,6 +113,37 @@ flat.fit(
         output_types=(tf.float32, tf.int32),
         output_shapes=(tf.TensorShape([None, 4]), tf.TensorShape([None])),
     ),
+    epochs=1,
+    verbose=0,
+)
+
+twice = Twice()
+twice.compile(optimizer="sgd", loss=loss)
+twice.fit(
+    tf.data.Dataset.from_tensor_slices(
+        (tf.ones([3, 4]), tf.zeros([3], tf.int32))
+    ).batch(2),
+    epochs=1,
+    verbose=0,
+)
+twice.fit(
+    tf.data.Dataset.from_tensor_slices(
+        (tf.ones([3, 4], tf.int32), tf.zeros([3], tf.int32))
+    ).batch(2),
+    epochs=1,
+    verbose=0,
+)
+
+ranker = Ranker()
+ranker.compile(optimizer="sgd", loss="mse")
+ranker.fit(
+    tf.data.Dataset.from_tensor_slices(
+        (
+            {"stimulus_set": tf.ones((8, 3), tf.int32)},
+            tf.ones((8, 3)),
+            tf.ones((8,)),
+        )
+    ).batch(4),
     epochs=1,
     verbose=0,
 )

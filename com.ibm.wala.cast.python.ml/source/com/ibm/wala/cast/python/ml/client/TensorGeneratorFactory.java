@@ -1194,9 +1194,10 @@ public class TensorGeneratorFactory {
   record PackComponentRead(PointsToSetVariable object, AllocationSiteInNode data, int index) {}
 
   /**
-   * The read a variable is, when it is a {@link PackComponentRead}: a library summary's own field
-   * read by a numeric name, {@code x = data[0]} in the default {@code train_step}, of an object
-   * every member of whose points-to set is such data.
+   * The read a variable is, when it is a {@link PackComponentRead}: a field read by a numeric name,
+   * such as the default {@code train_step} summary's {@code x = data[0]}, of an object whose
+   * points-to set is a single pack or unpack allocation. The points-to set is what limits the read
+   * to that data; the node may be any.
    *
    * <p>A user's {@code x, y = data} is a property read and resolves as one. A summary's read is a
    * field read, which the walk back from a value would otherwise pass through into the heap: the
@@ -1204,6 +1205,11 @@ public class TensorGeneratorFactory {
    * x} itself, a dataset when {@code fit} is given one, and loses the component the step selected
    * from the dataset's element. The model's {@code call} then reads its {@code inputs} as the whole
    * element, its targets included.
+   *
+   * <p>A set of two distinct allocations is no such read: the selection would be one allocation's,
+   * dropping the other's components, so the walk continues past the read as before, to the joined
+   * values the slots hold. A step's node is anchored on the {@code fit} node that allocates its
+   * data, so a model class fit twice has a step node, and an allocation, per {@code fit}.
    *
    * @param variable The variable.
    * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
@@ -1229,6 +1235,7 @@ public class TensorGeneratorFactory {
       if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
         return null;
       if (data == null) data = asin;
+      else if (!data.equals(asin)) return null;
     }
     if (data == null) return null;
     PointsToSetVariable object = getPointsToSetVariable(objectKey, builder);

@@ -203,7 +203,9 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
    * @param builder The builder.
    * @param path The selectors, outermost first; never empty.
    * @return The components, or {@code null} when the path is longer than one selector and a member
-   *     of the data cannot be followed along it: only a dataset's element and another pack can.
+   *     of the data cannot be followed along it: only a dataset's element and another pack can. One
+   *     such member makes the whole read unknown, though the others resolve, where a single index
+   *     keeps the members that resolve.
    */
   private List<Component> components(PropagationCallGraphBuilder builder, List<Object> path) {
     if (!(path.get(0) instanceof Integer index)) return path.size() == 1 ? List.of() : null;
