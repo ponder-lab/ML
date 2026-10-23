@@ -255,9 +255,13 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                     }
                   }
                 }
+                // A component that is itself a tuple or a dict, as `x` in `((x, mask), y)`, is a
+                // structure of independent tensors, each sliced along its own leading axis; the
+                // base value reading would stack its members into one tensor and slice the stacking
+                // axis instead.
                 if (fieldShapes == null || fieldShapes.isEmpty())
                   fieldShapes =
-                      this.getShapesOfValue(
+                      this.getShapesOfTensorsArgument(
                           builder, builder.getPointerAnalysis().getPointsToSet(pk));
                 if (fieldShapes == null || fieldShapes.isEmpty()) {
                   // Implicit-PK fallback mirroring `getShapesOfTensorsArgument`: when the
@@ -328,7 +332,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 Set<DType> fieldDTypes =
-                    this.getDTypesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                    this.getDTypesOfTensorsArgument(
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk));
                 if (fieldDTypes == null || fieldDTypes.isEmpty()) {
                   // Implicit-PK fallback mirroring `getDTypesOfTensorsArgument`. See
                   // wala/WALA#1889.
@@ -391,7 +396,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       return this.getShapesForIndex(builder, index);
     OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
     if (component == null || component.isEmpty()) return null;
-    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, component);
+    Set<List<Dimension<?>>> shapes = this.getShapesOfTensorsArgument(builder, component);
     if (shapes == null || shapes.isEmpty()) return null;
     // The dataset slices the component along its first axis.
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -409,7 +414,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       return this.getDTypesForIndex(builder, index);
     OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
     if (component == null || component.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-    Set<DType> dtypes = this.getDTypesOfValue(builder, component);
+    Set<DType> dtypes = this.getDTypesOfTensorsArgument(builder, component);
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
   }
 
