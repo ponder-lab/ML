@@ -3490,6 +3490,11 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
 
+    // A Python number or bool built by a builtin, `float(n)`, is a scalar; the builtin's summary
+    // allocates nothing the points-to set can hold, so the call is read structurally.
+    if (partial == null && pythonScalarBuiltinDType(builder, node, valueNumber) != null)
+      return ShapeResult.of(Set.of(emptyList()));
+
     // points-to set is empty. Try to find a generator for this variable.
     boolean implicit = builder.getPropagationSystem().isImplicit(valuePK);
     PointsToSetVariable var = null;
@@ -5995,6 +6000,81 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The dtypes TensorFlow converts a Python scalar to, keyed by the builtin that builds the scalar:
+   * the dtypes {@link #getDTypesOfValue(PropagationCallGraphBuilder, OrdinalSet)} gives a literal
+   * of the builtin's type.
+   */
+  private static final Map<String, DType> PYTHON_SCALAR_BUILTIN_DTYPES =
+      Map.of(
+          "Lwala/builtin/float", FLOAT32, "Lwala/builtin/int", INT32, "Lwala/builtin/bool", BOOL);
+
+  /**
+   * The dtype TensorFlow converts a value to when the value is the result of a call to the {@code
+   * float}, {@code int} or {@code bool} builtin. The builtins' summaries allocate a primitive type,
+   * for which the heap model makes no instance key, so the result's points-to set is empty and the
+   * call is read structurally instead.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph holds the call's
+   *     targets.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @return The dtype, or {@code null} when the value is not defined by such a call, or when the
+   *     call's targets are not all one such builtin.
+   */
+  protected static DType pythonScalarBuiltinDType(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null) return null;
+    if (!(node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call)) return null;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    DType ret = null;
+    for (CGNode target : targets) {
+      DType dtype =
+          PYTHON_SCALAR_BUILTIN_DTYPES.get(
+              target.getMethod().getDeclaringClass().getName().toString());
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
+  }
+
+  /**
+   * The dtype TensorFlow converts a list or tuple literal's element at an index to, when every
+   * write of that element in the literal's own method stores the result of one of the {@code
+   * float}, {@code int} or {@code bool} builtins, as {@link #pythonScalarBuiltinDType} reads it.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph holds the calls'
+   *     targets.
+   * @param literal The literal's allocation.
+   * @param index The element's index.
+   * @return The dtype, or {@code null} when there is no such write, some write stores anything
+   *     else, or the writes disagree.
+   */
+  protected static DType pythonScalarBuiltinElementDType(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode literal, int index) {
+    CGNode node = literal.getNode();
+    IR ir = node.getIR();
+    DefUse du = node.getDU();
+    if (ir == null || du == null) return null;
+    SymbolTable symtab = ir.getSymbolTable();
+    SSANewInstruction alloc = newInstructionOrNull(ir, literal.getSite());
+    if (alloc == null) return null;
+    DType ret = null;
+    for (Iterator<SSAInstruction> uses = du.getUses(alloc.getDef()); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != alloc.getDef())
+        continue;
+      int member = write.getMemberRef();
+      if (!symtab.isConstant(member)
+          || !(symtab.getConstantValue(member) instanceof Number number)
+          || number.intValue() != index) continue;
+      DType dtype = pythonScalarBuiltinDType(builder, node, write.getValue());
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
+  }
+
+  /**
    * Whether a list or tuple literal's element at an index is written, in the literal's own method,
    * from an element of a tensor's static shape: a constant-index read of a {@code shape} attribute,
    * {@code t.shape[k]}, of a value every member of whose points-to set is a TensorFlow or NumPy
@@ -6135,7 +6215,8 @@ public abstract class TensorGenerator implements Cloneable {
             // long as the list.
             Set<List<Dimension<?>>> shapesOfField =
                 (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
-                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
+                        && (isStaticShapeElementWrite(builder, asin, fieldIndex)
+                            || pythonScalarBuiltinElementDType(builder, asin, fieldIndex) != null)
                     ? Set.of(emptyList())
                     : this.readElementShapes(
                             builder, pointerKeyForInstanceField, instanceFieldPointsToSet, exact)
@@ -7116,6 +7197,11 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
 
+    // A Python number or bool built by a builtin converts as a literal of its type does (the shape
+    // read's twin).
+    DType scalarBuiltin = pythonScalarBuiltinDType(builder, node, valueNumber);
+    if (scalarBuiltin != null) return EnumSet.of(scalarBuiltin);
+
     // points-to set is empty or yielded no dtypes. Try to find a generator for this variable.
     PointsToSetVariable var = null;
     if (!builder.getPropagationSystem().isImplicit(valuePK)) {
@@ -7385,12 +7471,18 @@ public abstract class TensorGenerator implements Cloneable {
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
-            // A static shape element, `t.shape[k]`, is a Python int, which converts to int32.
+            // A static shape element, `t.shape[k]`, is a Python int, which converts to int32; a
+            // Python number or bool built by a builtin converts as a literal of its type does.
+            boolean emptyField =
+                instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty();
+            DType scalarElement =
+                emptyField ? pythonScalarBuiltinElementDType(builder, asin, fieldIndex) : null;
             Set<DType> fieldDTypes =
-                (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
-                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
+                emptyField && isStaticShapeElementWrite(builder, asin, fieldIndex)
                     ? EnumSet.of(DType.INT32)
-                    : this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
+                    : scalarElement != null
+                        ? EnumSet.of(scalarElement)
+                        : this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
 

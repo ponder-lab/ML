@@ -2231,4 +2231,66 @@ public class TestConstructors extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 4, 2),
                 new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2))))));
   }
+
+  /**
+   * A Python float built by {@code float(n)}, in a list given to {@code tf.constant}, is float32.
+   */
+  @Test
+  public void testConstantOfFloatBuiltinList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_float_list",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1))));
+  }
+
+  /**
+   * A Python float built by {@code float(n)}, given to {@code tf.constant}, is a float32 scalar.
+   */
+  @Test
+  public void testConstantOfFloatBuiltinScalar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_float_scalar",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /** A Python int built by {@code int(s)}, given to {@code tf.constant}, is an int32 scalar. */
+  @Test
+  public void testConstantOfIntBuiltinScalar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_int_scalar",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /** A Python bool built by {@code bool(n)}, in a list given to {@code tf.constant}, is bool. */
+  @Test
+  public void testConstantOfBoolBuiltinList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_builtin_number_dtype.py",
+        "consume_bool_list",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(BOOL, 1))));
+  }
+
+  /**
+   * The results of {@code float(n)}, {@code int(s) - 1} and {@code bool(n)} are Python values, not
+   * tensors: the sink is reached with no tensor parameter.
+   */
+  @Test
+  public void testScalarBuiltinIsNotTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_builtin_number_dtype.py", "consume_number", 0, 0);
+  }
 }

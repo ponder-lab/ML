@@ -29,9 +29,9 @@ import org.junit.Test;
  * either way, since the rows come from splitting strings of unknown count): what this test pins is
  * the census's count of query evaluations floored by a caught exception, 2 on the previous engine
  * and 0 now, with the values as the equivalence half. The runtime shapes are {@code (2, 3)} int64
- * and {@code (2, 2)} float64; neither array's shape is recovered, and the float array's dtype reads
- * unknown where the int array's reads int64, an asymmetry recorded here and not explained by this
- * unit.
+ * and {@code (2, 2)} float64; neither array's shape is recovered. The float array's dtype reads
+ * float64 as the int array's reads int64: the name {@code float} denotes the builtin, whose type
+ * token the dtype reader maps to numpy's default.
  */
 public class TestArrayBuiltinConversions extends AbstractTensorTest {
 
@@ -41,8 +41,8 @@ public class TestArrayBuiltinConversions extends AbstractTensorTest {
 
   private static final Set<TensorType> UNKNOWN_SHAPE_INT64 = Set.of(new TensorType(INT_64, null));
 
-  private static final Set<TensorType> UNKNOWN_SHAPE_UNKNOWN =
-      Set.of(new TensorType(UNKNOWN, null));
+  private static final Set<TensorType> UNKNOWN_SHAPE_FLOAT64 =
+      Set.of(new TensorType(FLOAT_64, null));
 
   @Test
   public void testIntConversionsReadWithoutAFlooredQuery()
@@ -56,7 +56,7 @@ public class TestArrayBuiltinConversions extends AbstractTensorTest {
   @Test
   public void testFloatConversionsReadWithoutAFlooredQuery()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    String[] census = analyseWithCensus("consume_floats", UNKNOWN_SHAPE_UNKNOWN);
+    String[] census = analyseWithCensus("consume_floats", UNKNOWN_SHAPE_FLOAT64);
     assertEquals("query evaluations floored by a caught exception: " + census[7], "0", census[7]);
   }
 

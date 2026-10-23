@@ -36,7 +36,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_8982_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_8982_OBJECT;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_DYNAMIC_INT64;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
@@ -1084,7 +1083,9 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
-   * The second component of {@link #testDatasetFromGeneratorTupleTypes()}.
+   * The second component of {@link #testDatasetFromGeneratorTupleTypes()}. Its shape is the yielded
+   * {@code np.array([float(i)])}'s, {@code (1,)}, which the eagerly iterated element has at
+   * runtime: the element of {@code float(i)} is read as a scalar.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1099,7 +1100,7 @@ public class TestDatasets extends AbstractTensorTest {
         "consume2",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1))));
   }
 
   /**

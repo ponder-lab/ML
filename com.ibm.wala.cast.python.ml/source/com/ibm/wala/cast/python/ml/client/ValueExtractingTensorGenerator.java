@@ -1,11 +1,16 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static java.util.Collections.emptyList;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
@@ -57,6 +62,8 @@ public abstract class ValueExtractingTensorGenerator extends TensorGenerator {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
+    if ((pointsToSet == null || pointsToSet.isEmpty())
+        && this.getValueScalarBuiltinDType(builder) != null) return Set.of(emptyList());
     Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pointsToSet);
     // An empty result means the shape could not be inferred — treat as unknown (null / ⊤).
     // `getShapesOfValue` documents that it returns `null` (not an empty set) when the
@@ -75,12 +82,47 @@ public abstract class ValueExtractingTensorGenerator extends TensorGenerator {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      DType scalar = this.getValueScalarBuiltinDType(builder);
+      if (scalar != null) return EnumSet.of(scalar);
+    }
     Set<DType> dTypes = this.getDTypesOfValue(builder, pointsToSet);
     // An empty result means the dtype could not be inferred — treat as unknown
     // (⊤). The produced value is always a tensor; we just cannot pin down its dtype.
     // `getDTypesOfValue` documents that it returns `null` (not an empty set) when
     // the value's points-to set is empty; honor that contract instead of NPE-ing.
     return (dTypes == null || dTypes.isEmpty()) ? EnumSet.of(DType.UNKNOWN) : dTypes;
+  }
+
+  /**
+   * The dtype of the value argument when it is the result of a call to the {@code float}, {@code
+   * int} or {@code bool} builtin, whose points-to set is empty (see {@link
+   * TensorGenerator#pythonScalarBuiltinDType}). The argument is read off this generator's own
+   * invocation when it has one, and otherwise off each invocation of its node, all of which must
+   * agree.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype, or {@code null} when the value argument is not such a call.
+   */
+  private DType getValueScalarBuiltinDType(PropagationCallGraphBuilder builder) {
+    int position = this.getValueParameterPosition();
+    String name = this.getValueParameterName();
+    if (this.getInvokeInstruction() != null) {
+      int vn = this.getArgumentValueNumber(builder, position, name, true);
+      return vn > 0 ? pythonScalarBuiltinDType(builder, this.getNode(), vn) : null;
+    }
+    DType ret = null;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) return null;
+      int vn = name != null ? call.getUse(name) : -1;
+      if (vn == -1 && position >= 0 && position < call.getNumberOfPositionalParameters() - 1)
+        vn = call.getUse(position + 1);
+      DType dtype = vn > 0 ? pythonScalarBuiltinDType(builder, callerInvoke.fst, vn) : null;
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
   }
 
   protected int getValueArgumentValueNumber() {
