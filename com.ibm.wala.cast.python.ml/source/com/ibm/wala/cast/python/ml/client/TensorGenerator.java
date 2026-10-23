@@ -7101,8 +7101,9 @@ public abstract class TensorGenerator implements Cloneable {
     if (propDef instanceof PythonPropertyRead) {
       Set<DType> viaField =
           this.dtypesFromInstanceField(builder, node, (PythonPropertyRead) propDef);
-      if (viaField != null && !viaField.isEmpty() && !viaField.equals(EnumSet.of(DType.UNKNOWN)))
-        return viaField;
+      // A partial field read falls through like a ⊤ one, so a complete route below is not
+      // shadowed (wala/ML#862).
+      if (isResolvedDTypes(viaField)) return viaField;
     }
 
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -7467,15 +7468,57 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
 
-    // Normalize the lattice: ⊤ subsumes any concrete dtype, so if any
-    // contributing path produced UNKNOWN (either directly via the
-    // unrecognized-constant short-circuit above, or via a recursive call
-    // for list/tuple element dtypes that propagated UNKNOWN through
-    // `ret.addAll(...)`), collapse to {UNKNOWN}. Without this, recursive
-    // accumulation could yield mixed sets like `{INT32, UNKNOWN}` and
-    // mislead downstream consumers.
-    if (ret.contains(UNKNOWN)) return EnumSet.of(UNKNOWN);
+    // A member that contributed UNKNOWN beside members that resolved leaves a PARTIAL union, the
+    // resolved members plus UNKNOWN for the rest, and it is returned as such (wala/ML#862): an
+    // UNKNOWN member marks the union as partial, the convention the dtype-argument resolver already
+    // uses (wala/ML#860). Collapsing it to {UNKNOWN} erased the members that did resolve, so an
+    // operation over a value known at some of its allocations read as unknown at all of them. A
+    // consumer deciding on a dtype set's size or single member reads a set with an UNKNOWN member
+    // as partial, never as a confident plurality or singleton; see isResolvedDTypes.
     return ret;
+  }
+
+  /**
+   * Whether a dtype resolution is complete: present, non-empty, and with no {@link DType#UNKNOWN}
+   * member. A set with an {@link DType#UNKNOWN} member is ⊤ when that is its only member and
+   * partial otherwise, its other members the dtypes that resolved (wala/ML#862); neither is a
+   * confident answer, so a reader with another route to the same value takes that route for both.
+   *
+   * @param dtypes A dtype resolution, possibly {@code null}.
+   * @return {@code true} iff every member is a known dtype.
+   */
+  protected static boolean isResolvedDTypes(Set<DType> dtypes) {
+    return dtypes != null && !dtypes.isEmpty() && !dtypes.contains(UNKNOWN);
+  }
+
+  /**
+   * Whether a dtype resolution names at least one known dtype: complete or partial, but neither ⊤
+   * nor ⊥ (wala/ML#862).
+   *
+   * @param dtypes A dtype resolution, possibly {@code null}.
+   * @return {@code true} iff some member is a known dtype.
+   */
+  protected static boolean hasKnownDType(Set<DType> dtypes) {
+    return dtypes != null && dtypes.stream().anyMatch(d -> d != UNKNOWN);
+  }
+
+  /**
+   * Chooses between two routes to the same value's dtypes: the first when it is complete, else the
+   * alternative when that is complete, else the first when it is partial, else the alternative
+   * (wala/ML#862). A partial first route still consults the alternative, exactly as a ⊤ one does,
+   * so a route that resolves the value outright is never shadowed by one that resolved it only in
+   * part; only when no route is complete does the partial one stand in for ⊤.
+   *
+   * @param first The first route's dtypes, possibly {@code null}.
+   * @param alternative The alternative route, evaluated only when the first is not complete.
+   * @return The preferred resolution.
+   */
+  protected static Set<DType> preferResolvedDTypes(
+      Set<DType> first, java.util.function.Supplier<Set<DType>> alternative) {
+    if (isResolvedDTypes(first)) return first;
+    Set<DType> other = alternative.get();
+    if (isResolvedDTypes(other) || !hasKnownDType(first)) return other;
+    return first;
   }
 
   protected Set<DType> getDTypesFromTensor(

@@ -100,14 +100,14 @@ public class SparseCategoricalCrossentropyCall extends TensorGenerator {
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(
             builder, Parameters.Y_PRED.getIndex(), Parameters.Y_PRED.getName());
-    if (pts != null && !pts.isEmpty()) {
-      Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
-      if (dtypes != null && !dtypes.isEmpty() && !dtypes.equals(EnumSet.of(DType.UNKNOWN)))
-        return dtypes;
-    }
+    // A partial points-to read falls through like a ⊤ one and stands only when the caller walk
+    // does not resolve either (wala/ML#862).
     Set<DType> viaCallers =
-        this.getArgumentDTypesViaCallers(
-            builder, Parameters.Y_PRED.getIndex(), Parameters.Y_PRED.getName());
+        preferResolvedDTypes(
+            pts == null || pts.isEmpty() ? null : this.getDTypesOfValue(builder, pts),
+            () ->
+                this.getArgumentDTypesViaCallers(
+                    builder, Parameters.Y_PRED.getIndex(), Parameters.Y_PRED.getName()));
     return viaCallers == null || viaCallers.isEmpty() ? EnumSet.of(DType.UNKNOWN) : viaCallers;
   }
 

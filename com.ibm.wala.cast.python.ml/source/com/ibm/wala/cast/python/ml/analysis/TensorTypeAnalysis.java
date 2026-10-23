@@ -676,7 +676,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     /**
      * The generator proved the seed's shape but not its dtype: each retained seed member keeps its
      * dims and takes the operand member's dtype. The dtype is kind-independent, so the declared
-     * kind is not consulted.
+     * kind is not consulted. A member whose dtype the generator did prove, beside one whose dtype
+     * it did not (a partial dtype union, wala/ML#862), is retained verbatim.
      */
     DTYPE_FILL,
 
@@ -951,11 +952,18 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               switch (this.plan.mode()) {
                 case DTYPE_FILL:
                   // An unknown operand dtype composes the member as the seed asserted it, so the
-                  // destination never loses the shape evidence.
-                  for (TensorType t : rhs.state)
-                    for (TensorType s : this.plan.seedMembers())
+                  // destination never loses the shape evidence. A proven seed dtype is kept, as
+                  // SHAPE_FILL keeps one: only the members whose dtype is unknown borrow
+                  // (wala/ML#862).
+                  for (TensorType s : this.plan.seedMembers()) {
+                    if (s.getDType() != DType.UNKNOWN) {
+                      changed |= lhs.state.add(s);
+                      continue;
+                    }
+                    for (TensorType t : rhs.state)
                       changed |=
                           lhs.state.add(TensorType.of(t.getDType(), s.getDims(), s.layout()));
+                  }
                   break;
                 case SHAPE_FILL:
                   for (TensorType composed : this.composeOperandMembers(rhs))

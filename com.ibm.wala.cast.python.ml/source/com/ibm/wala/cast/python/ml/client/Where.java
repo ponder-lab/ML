@@ -115,9 +115,8 @@ public class Where extends TensorGenerator {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     ret.addAll(xDTypes);
     ret.addAll(yDTypes);
-    // Lattice-normalize: if the union contains UNKNOWN, collapse to exactly `{UNKNOWN}` (⊤).
-    // Mixed sets like `{FLOAT32, UNKNOWN}` would violate the dtype lattice convention.
-    if (ret.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+    // An UNKNOWN member from either side keeps the union partial, the other members still the
+    // dtypes that resolved (wala/ML#862).
     // Empty propagates as-is: empty set = ⊥ (provably not a tensor). Don't collapse to
     // `{UNKNOWN}` (⊤) &mdash; that would conflate ⊥ with ⊤.
     return ret;

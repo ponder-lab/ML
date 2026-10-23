@@ -623,8 +623,9 @@ public class WorklistTypeResolverTest {
 
   /**
    * The dtype counterpart: a root that settled {@code float32} and then declines joins in {@link
-   * DType#UNKNOWN}, which the engine's dtype join absorbs, so the root and its reader read unknown
-   * rather than the prior set (wala/ML#1071).
+   * DType#UNKNOWN}, which the engine's dtype join keeps as a member beside {@code float32}, so the
+   * root and its reader read the partial union rather than the prior set (wala/ML#1071), as the
+   * shape twin reads its typed members with an unknown remainder (wala/ML#862).
    */
   @Test
   public void testFailedBindingCheckDeclinesSettledDTypes() {
@@ -640,8 +641,8 @@ public class WorklistTypeResolverTest {
     Object reader = engine.demand("reader", () -> engine.read("root", root, false), false);
 
     assertTrue("The binding was not declined.", engine.isBindingDeclined("binding"));
-    assertEquals(EnumSet.of(DType.UNKNOWN), engine.demand("root", root, false));
-    assertEquals(EnumSet.of(DType.UNKNOWN), reader);
+    assertEquals(EnumSet.of(DType.FLOAT32, DType.UNKNOWN), engine.demand("root", root, false));
+    assertEquals(EnumSet.of(DType.FLOAT32, DType.UNKNOWN), reader);
   }
 
   /** A binding check that passes declines nothing, and the root keeps its typed answer. */

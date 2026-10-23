@@ -94,22 +94,27 @@ public class MatMul extends TensorGenerator {
    * #getTensorTypes} yields no tensor type for the call. The shape query does not read the dtypes,
    * so the engine's shape dependencies stay as they were.
    *
+   * <p>An operand whose dtypes are partial (wala/ML#862), the dtypes it has at the allocations that
+   * resolved plus {@link DType#UNKNOWN} for the rest, is not resolved: a resolved other operand
+   * still proves the result, and otherwise the partial operand's dtypes stand, so the members that
+   * resolved survive into the result rather than reading as unknown.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The common dtypes when both operands resolve (empty when they share none), else the
-   *     dtypes of the first operand when any resolves beyond ⊤, else the second operand's, else
-   *     {@code UNKNOWN}.
+   *     dtypes of the operand that resolves, else those of the first operand when it is partial or
+   *     of the second when it reads anything, else {@code UNKNOWN}.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     Set<DType> aDTypes = dtypesOfArg(builder, 0, "a");
-    if (aDTypes != null && !aDTypes.isEmpty() && !aDTypes.equals(EnumSet.of(DType.UNKNOWN))) {
-      if (isResolved(aDTypes)) {
-        Set<DType> bDTypes = dtypesOfArg(builder, 1, "b");
-        if (isResolved(bDTypes)) return commonDTypes(aDTypes, bDTypes);
-      }
+    if (isResolvedDTypes(aDTypes)) {
+      Set<DType> bDTypes = dtypesOfArg(builder, 1, "b");
+      if (isResolvedDTypes(bDTypes)) return commonDTypes(aDTypes, bDTypes);
       return aDTypes;
     }
     Set<DType> bDTypes = dtypesOfArg(builder, 1, "b");
+    if (isResolvedDTypes(bDTypes)) return bDTypes;
+    if (hasKnownDType(aDTypes)) return aDTypes;
     if (bDTypes != null && !bDTypes.isEmpty()) return bDTypes;
     return aDTypes == null || aDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : aDTypes;
   }
@@ -126,17 +131,6 @@ public class MatMul extends TensorGenerator {
     common.addAll(aDTypes);
     common.retainAll(bDTypes);
     return common;
-  }
-
-  /**
-   * Whether an operand's dtypes are resolved: present, and with no {@code UNKNOWN} member that
-   * would let the operand be any dtype.
-   *
-   * @param dtypes An operand's dtypes.
-   * @return {@code true} iff every member is a known dtype.
-   */
-  private static boolean isResolved(Set<DType> dtypes) {
-    return dtypes != null && !dtypes.isEmpty() && !dtypes.contains(DType.UNKNOWN);
   }
 
   /**
@@ -178,16 +172,14 @@ public class MatMul extends TensorGenerator {
   private Set<DType> dtypesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
-    if (pts != null && !pts.isEmpty()) {
-      Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
-      // A non-empty result that is only ⊤ does not short-circuit: the synthetic `matmul.do` param
-      // PTS is often context-collapsed to a union of unrelated bare tensors (all `UNKNOWN`), so
-      // fall through to the per-context caller-walk, which resolves the actual argument at each
-      // call site. See wala/ML#570.
-      if (dtypes != null && !dtypes.isEmpty() && !dtypes.equals(EnumSet.of(DType.UNKNOWN)))
-        return dtypes;
-    }
-    return this.getArgumentDTypesViaCallers(builder, paramPos, paramName);
+    Set<DType> dtypes = pts == null || pts.isEmpty() ? null : this.getDTypesOfValue(builder, pts);
+    // A result that is ⊤ or partial does not short-circuit: the synthetic `matmul.do` param PTS is
+    // often context-collapsed to a union of unrelated bare tensors (all `UNKNOWN`), so fall
+    // through to the per-context caller-walk, which resolves the actual argument at each call site
+    // (wala/ML#570). A partial points-to read stands only when the walk does not resolve either
+    // (wala/ML#862).
+    return preferResolvedDTypes(
+        dtypes, () -> this.getArgumentDTypesViaCallers(builder, paramPos, paramName));
   }
 
   /**
