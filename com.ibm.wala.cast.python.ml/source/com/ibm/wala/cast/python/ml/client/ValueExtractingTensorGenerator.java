@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static java.util.Collections.emptyList;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -57,6 +59,8 @@ public abstract class ValueExtractingTensorGenerator extends TensorGenerator {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
+    if ((pointsToSet == null || pointsToSet.isEmpty())
+        && this.getValueScalarBuiltinDType(builder) != null) return Set.of(emptyList());
     Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pointsToSet);
     // An empty result means the shape could not be inferred — treat as unknown (null / ⊤).
     // `getShapesOfValue` documents that it returns `null` (not an empty set) when the
@@ -75,12 +79,28 @@ public abstract class ValueExtractingTensorGenerator extends TensorGenerator {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      DType scalar = this.getValueScalarBuiltinDType(builder);
+      if (scalar != null) return EnumSet.of(scalar);
+    }
     Set<DType> dTypes = this.getDTypesOfValue(builder, pointsToSet);
     // An empty result means the dtype could not be inferred — treat as unknown
     // (⊤). The produced value is always a tensor; we just cannot pin down its dtype.
     // `getDTypesOfValue` documents that it returns `null` (not an empty set) when
     // the value's points-to set is empty; honor that contract instead of NPE-ing.
     return (dTypes == null || dTypes.isEmpty()) ? EnumSet.of(DType.UNKNOWN) : dTypes;
+  }
+
+  /**
+   * The dtype of the value argument when it is the result of a call to the {@code float}, {@code
+   * int} or {@code bool} builtin (see {@link #getArgumentScalarBuiltinDType}).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype, or {@code null} when the value argument is not such a call.
+   */
+  private DType getValueScalarBuiltinDType(PropagationCallGraphBuilder builder) {
+    return this.getArgumentScalarBuiltinDType(
+        builder, this.getValueParameterPosition(), this.getValueParameterName());
   }
 
   protected int getValueArgumentValueNumber() {

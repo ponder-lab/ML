@@ -89,8 +89,19 @@ public class NpFull extends NpOnes {
     OrdinalSet<InstanceKey> fillValue =
         this.getArgumentPointsToSet(
             builder, Parameters.FILL_VALUE.getIndex(), Parameters.FILL_VALUE.getName());
+    // A Python scalar built by the `float`, `int` or `bool` builtin has an empty points-to set;
+    // NumPy converts it as a literal of its type.
+    DType scalarBuiltin =
+        fillValue == null || fillValue.isEmpty()
+            ? this.getArgumentScalarBuiltinDType(
+                builder, Parameters.FILL_VALUE.getIndex(), Parameters.FILL_VALUE.getName())
+            : null;
     Set<DType> ret =
-        this.dTypeApiDefaultOrUnknown(builder, numpyDTypesOfValue(this, builder, fillValue));
+        this.dTypeApiDefaultOrUnknown(
+            builder,
+            scalarBuiltin != null
+                ? EnumSet.of(numpyDTypeOfPythonScalar(scalarBuiltin))
+                : numpyDTypesOfValue(this, builder, fillValue));
 
     LOGGER.fine(() -> "Default dtypes for source: " + describe(source) + " are: " + ret + ".");
 

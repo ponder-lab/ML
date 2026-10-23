@@ -484,7 +484,6 @@ public class TensorGeneratorFactory {
         // - Modulo (%): tf.math.mod (IBinaryOpInstruction.Operator.REM)
         // - Power (**): tf.math.pow
         // - Bitwise (&, |, ^): tf.bitwise operations
-        // - Unary (-, ~, abs): tf.negative, etc. (SSAUnaryOpInstruction)
       }
       return lpk.getNode().getMethod().getDeclaringClass().getReference();
     } else if (k instanceof ReturnValueKey) {
@@ -1056,6 +1055,7 @@ public class TensorGeneratorFactory {
             || def instanceof EachElementGetInstruction
             || def instanceof PythonPropertyRead
             || def instanceof SSABinaryOpInstruction
+            || UnaryOperation.isTensorUnaryOperator(def)
             || packComponentRead(current, builder) != null) {
           LOGGER.fine(() -> "findCreator found creator instruction: " + def);
           return current;
@@ -1182,6 +1182,7 @@ public class TensorGeneratorFactory {
         || def instanceof EachElementGetInstruction
         || def instanceof PythonPropertyRead
         || def instanceof SSABinaryOpInstruction
+        || UnaryOperation.isTensorUnaryOperator(def)
         || packComponentRead(variable, builder) != null;
   }
 
@@ -3023,6 +3024,20 @@ public class TensorGeneratorFactory {
     }
 
     if (isTensorNumpyCall(source, builder)) return new TensorNumpyMethod(source);
+
+    // Python's unary `-` and `~` on a tensor are `tf.negative` and `tf.bitwise.invert`: the result
+    // has the operand's shape and dtype. On an operand with no tensor evidence, such as a Python
+    // number, the result is no tensor.
+    if (k instanceof LocalPointerKey unaryKey) {
+      CGNode unaryNode = unaryKey.getNode();
+      SSAInstruction unaryDef = unaryNode.getDU().getDef(unaryKey.getValueNumber());
+      if (UnaryOperation.isTensorUnaryOperator(unaryDef)) {
+        if (!operandHasTensorEvidence(unaryDef.getUse(0), unaryNode, builder, visited, true))
+          throw new IllegalArgumentException(
+              "Unary operator with no tensor operand: " + describe(source) + ".");
+        return new UnaryOperation(source);
+      }
+    }
 
     TypeReference calledFunction = getFunction(source, builder);
     LOGGER.fine("Getting tensor generator for call to: " + calledFunction + ".");

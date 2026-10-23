@@ -1486,6 +1486,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // the component it selects is pinned below, as a user step's `x, y = data` is.
           sources.add(src);
           LOGGER.fine("Added dataflow source from a step's data read: " + describe(src) + ".");
+        } else if (UnaryOperation.isTensorUnaryOperator(inst)) {
+          // Unary `-` and `~` on tensors are sources too; the factory declines non-tensor operands.
+          sources.add(src);
+          LOGGER.fine(() -> "Added dataflow source from unary op: " + describe(src) + ".");
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;

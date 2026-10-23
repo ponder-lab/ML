@@ -3490,6 +3490,11 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
 
+    // A Python number or bool built by a builtin, `float(n)`, is a scalar; the builtin's summary
+    // allocates nothing the points-to set can hold, so the call is read structurally.
+    if (partial == null && pythonScalarBuiltinDType(builder, node, valueNumber) != null)
+      return ShapeResult.of(Set.of(emptyList()));
+
     // points-to set is empty. Try to find a generator for this variable.
     boolean implicit = builder.getPropagationSystem().isImplicit(valuePK);
     PointsToSetVariable var = null;
@@ -5995,6 +6000,141 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The dtypes TensorFlow converts a Python scalar to, keyed by the builtin that builds the scalar:
+   * the dtypes {@link #getDTypesOfValue(PropagationCallGraphBuilder, OrdinalSet)} gives a literal
+   * of the builtin's type.
+   */
+  private static final Map<String, DType> PYTHON_SCALAR_BUILTIN_DTYPES =
+      Map.of(
+          "Lwala/builtin/float", FLOAT32, "Lwala/builtin/int", INT32, "Lwala/builtin/bool", BOOL);
+
+  /**
+   * The dtype NumPy converts a Python scalar to, given the dtype TensorFlow converts it to: NumPy
+   * promotes a Python {@code float} to float64 and an {@code int} to int64 on 64-bit platforms, and
+   * a {@code bool} is the boolean dtype in both.
+   *
+   * @param tensorFlowDType The dtype TensorFlow converts the scalar to, one of {@link
+   *     #PYTHON_SCALAR_BUILTIN_DTYPES}'s values.
+   * @return NumPy's dtype for the scalar.
+   */
+  protected static DType numpyDTypeOfPythonScalar(DType tensorFlowDType) {
+    return switch (tensorFlowDType) {
+      case FLOAT32 -> DType.FLOAT64;
+      case INT32 -> DType.INT64;
+      default -> tensorFlowDType;
+    };
+  }
+
+  /**
+   * Whether this generator reads a Python builtin type passed as a dtype ({@code dtype=float}) as
+   * NumPy does, rather than as TensorFlow does: true for the generators whose result is an ndarray,
+   * those whose {@link #getOrigins} is {@link TensorOrigin#NUMPY} alone.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code true} iff this generator models a NumPy API.
+   */
+  protected boolean readsNumpyDTypeTokens(PropagationCallGraphBuilder builder) {
+    return this.getOrigins(builder).equals(EnumSet.of(TensorOrigin.NUMPY));
+  }
+
+  /**
+   * The dtype TensorFlow converts a value to when the value is the result of a call to the {@code
+   * float}, {@code int} or {@code bool} builtin. The builtins' summaries allocate a primitive type,
+   * for which the heap model makes no instance key, so the result's points-to set is empty and the
+   * call is read structurally instead.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph holds the call's
+   *     targets.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @return The dtype, or {@code null} when the value is not defined by such a call, or when the
+   *     call's targets are not all one such builtin.
+   */
+  protected static DType pythonScalarBuiltinDType(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null) return null;
+    if (!(node.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call)) return null;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    DType ret = null;
+    for (CGNode target : targets) {
+      DType dtype =
+          PYTHON_SCALAR_BUILTIN_DTYPES.get(
+              target.getMethod().getDeclaringClass().getName().toString());
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
+  }
+
+  /**
+   * The dtype TensorFlow converts an argument to when the argument is the result of a call to the
+   * {@code float}, {@code int} or {@code bool} builtin, whose points-to set is empty (see {@link
+   * #pythonScalarBuiltinDType}). The argument is read off this generator's own invocation when it
+   * has one, and otherwise off each invocation of its node, all of which must agree.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param position The argument's position.
+   * @param name The argument's keyword name, or {@code null}.
+   * @return The dtype, or {@code null} when the argument is not such a call.
+   */
+  protected DType getArgumentScalarBuiltinDType(
+      PropagationCallGraphBuilder builder, int position, String name) {
+    if (this.getInvokeInstruction() != null) {
+      int vn = this.getArgumentValueNumber(builder, position, name, true);
+      return vn > 0 ? pythonScalarBuiltinDType(builder, this.getNode(), vn) : null;
+    }
+    DType ret = null;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) return null;
+      int vn = name != null ? call.getUse(name) : -1;
+      if (vn == -1 && position >= 0 && position < call.getNumberOfPositionalParameters() - 1)
+        vn = call.getUse(position + 1);
+      DType dtype = vn > 0 ? pythonScalarBuiltinDType(builder, callerInvoke.fst, vn) : null;
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
+  }
+
+  /**
+   * The dtype TensorFlow converts a list or tuple literal's element at an index to, when every
+   * write of that element in the literal's own method stores the result of one of the {@code
+   * float}, {@code int} or {@code bool} builtins, as {@link #pythonScalarBuiltinDType} reads it.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph holds the calls'
+   *     targets.
+   * @param literal The literal's allocation.
+   * @param index The element's index.
+   * @return The dtype, or {@code null} when there is no such write, some write stores anything
+   *     else, or the writes disagree.
+   */
+  protected static DType pythonScalarBuiltinElementDType(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode literal, int index) {
+    CGNode node = literal.getNode();
+    IR ir = node.getIR();
+    DefUse du = node.getDU();
+    if (ir == null || du == null) return null;
+    SymbolTable symtab = ir.getSymbolTable();
+    SSANewInstruction alloc = newInstructionOrNull(ir, literal.getSite());
+    if (alloc == null) return null;
+    DType ret = null;
+    for (Iterator<SSAInstruction> uses = du.getUses(alloc.getDef()); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != alloc.getDef())
+        continue;
+      int member = write.getMemberRef();
+      if (!symtab.isConstant(member)
+          || !(symtab.getConstantValue(member) instanceof Number number)
+          || number.intValue() != index) continue;
+      DType dtype = pythonScalarBuiltinDType(builder, node, write.getValue());
+      if (dtype == null || (ret != null && ret != dtype)) return null;
+      ret = dtype;
+    }
+    return ret;
+  }
+
+  /**
    * Whether a list or tuple literal's element at an index is written, in the literal's own method,
    * from an element of a tensor's static shape: a constant-index read of a {@code shape} attribute,
    * {@code t.shape[k]}, of a value every member of whose points-to set is a TensorFlow or NumPy
@@ -6135,7 +6275,8 @@ public abstract class TensorGenerator implements Cloneable {
             // long as the list.
             Set<List<Dimension<?>>> shapesOfField =
                 (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
-                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
+                        && (isStaticShapeElementWrite(builder, asin, fieldIndex)
+                            || pythonScalarBuiltinElementDType(builder, asin, fieldIndex) != null)
                     ? Set.of(emptyList())
                     : this.readElementShapes(
                             builder, pointerKeyForInstanceField, instanceFieldPointsToSet, exact)
@@ -6642,20 +6783,20 @@ public abstract class TensorGenerator implements Cloneable {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
+    Boolean numpyReader = null;
     for (InstanceKey instanceKey : pointsToSet) {
-      // Python builtin type objects passed as dtype tokens (`np.array(x, dtype=int)`): numpy
-      // promotes the builtins to its 64-bit defaults on 64-bit platforms, and `bool` maps to the
-      // boolean dtype (wala/ML#775). Checked before the allocation-site extraction below, which
-      // throws for the builtin's `ConcreteTypeKey`.
+      // Python builtin type objects passed as dtype tokens (`np.array(x, dtype=int)`), checked
+      // before the allocation-site extraction below, which throws for the builtin's
+      // `ConcreteTypeKey`. The two libraries read them differently: numpy promotes the builtins to
+      // its 64-bit defaults on 64-bit platforms (wala/ML#775), while TensorFlow reads `float` as
+      // float32 and cannot convert `int` at all. `bool` is the boolean dtype in both.
       String builtinTypeName = instanceKey.concreteType().getReference().getName().toString();
-      if (builtinTypeName.equals("Lwala/builtin/int")) {
-        ret.add(DType.INT64);
-        continue;
-      } else if (builtinTypeName.equals("Lwala/builtin/float")) {
-        ret.add(DType.FLOAT64);
-        continue;
-      } else if (builtinTypeName.equals("Lwala/builtin/bool")) {
-        ret.add(DType.BOOL);
+      DType builtinTypeDType = PYTHON_SCALAR_BUILTIN_DTYPES.get(builtinTypeName);
+      if (builtinTypeDType != null) {
+        if (numpyReader == null) numpyReader = this.readsNumpyDTypeTokens(builder);
+        if (numpyReader) ret.add(numpyDTypeOfPythonScalar(builtinTypeDType));
+        // TensorFlow raises on the `int` token, so no dtype is knowable for it.
+        else ret.add(builtinTypeDType == INT32 ? DType.UNKNOWN : builtinTypeDType);
         continue;
       }
 
@@ -7116,6 +7257,11 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
 
+    // A Python number or bool built by a builtin converts as a literal of its type does (the shape
+    // read's twin).
+    DType scalarBuiltin = pythonScalarBuiltinDType(builder, node, valueNumber);
+    if (scalarBuiltin != null) return EnumSet.of(scalarBuiltin);
+
     // points-to set is empty or yielded no dtypes. Try to find a generator for this variable.
     PointsToSetVariable var = null;
     if (!builder.getPropagationSystem().isImplicit(valuePK)) {
@@ -7385,12 +7531,18 @@ public abstract class TensorGenerator implements Cloneable {
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
-            // A static shape element, `t.shape[k]`, is a Python int, which converts to int32.
+            // A static shape element, `t.shape[k]`, is a Python int, which converts to int32; a
+            // Python number or bool built by a builtin converts as a literal of its type does.
+            boolean emptyField =
+                instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty();
+            DType scalarElement =
+                emptyField ? pythonScalarBuiltinElementDType(builder, asin, fieldIndex) : null;
             Set<DType> fieldDTypes =
-                (instanceFieldPointsToSet == null || instanceFieldPointsToSet.isEmpty())
-                        && isStaticShapeElementWrite(builder, asin, fieldIndex)
+                emptyField && isStaticShapeElementWrite(builder, asin, fieldIndex)
                     ? EnumSet.of(DType.INT32)
-                    : this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
+                    : scalarElement != null
+                        ? EnumSet.of(scalarElement)
+                        : this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
 
