@@ -187,6 +187,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REVERSE_SEQUENCE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RNN_CELL_STEP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RNN_SEQUENCE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RNN_STEP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
@@ -3185,6 +3186,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, RNN_STEP.getDeclaringClass())) return new RnnStep(source);
     else if (isType(calledFunction, RNN_SEQUENCE.getDeclaringClass()))
       return new RnnSequence(source);
+    else if (isType(calledFunction, RNN_CELL_STEP.getDeclaringClass()))
+      // A built-in cell's step is the `Dense` transformation of the step input by the cell's
+      // `units`, which the op takes as its first argument, where `DenseCall` reads the layer.
+      return new DenseCall(source);
     else if (isType(calledFunction, REVERSE_SEQUENCE.getDeclaringClass()))
       return new ReverseSequence(source);
     else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);

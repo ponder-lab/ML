@@ -1634,6 +1634,19 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RNN_SEQUENCE_SIGNATURE = "tf.keras.layers.RNN()";
 
+  /**
+   * The built-in recurrent cells' internal step op: one call of a {@code SimpleRNNCell}, {@code
+   * GRUCell}, or {@code LSTMCell} on a step input; bound on no module.
+   */
+  public static final MethodReference RNN_CELL_STEP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/rnn_cell_step")),
+          AstMethodReference.fnSelector);
+
+  private static final String RNN_CELL_STEP_SIGNATURE = "tf.keras.layers.SimpleRNNCell()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/reverse_sequence. */
   public static final MethodReference REVERSE_SEQUENCE =
       MethodReference.findOrCreate(
@@ -2893,6 +2906,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SQUEEZE.getDeclaringClass(), SQUEEZE_SIGNATURE),
           Map.entry(RNN_STEP.getDeclaringClass(), RNN_STEP_SIGNATURE),
           Map.entry(RNN_SEQUENCE.getDeclaringClass(), RNN_SEQUENCE_SIGNATURE),
+          Map.entry(RNN_CELL_STEP.getDeclaringClass(), RNN_CELL_STEP_SIGNATURE),
           Map.entry(REVERSE_SEQUENCE.getDeclaringClass(), REVERSE_SEQUENCE_SIGNATURE),
           Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
           Map.entry(UNSTACK.getDeclaringClass(), UNSTACK_SIGNATURE),

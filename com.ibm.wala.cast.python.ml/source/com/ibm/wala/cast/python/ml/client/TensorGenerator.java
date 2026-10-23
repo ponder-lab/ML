@@ -11507,6 +11507,9 @@ public abstract class TensorGenerator implements Cloneable {
       return new RnnStep(node);
     } else if (type.equals(TensorFlowTypes.RNN_SEQUENCE.getDeclaringClass())) {
       return new RnnSequence(node);
+    } else if (type.equals(TensorFlowTypes.RNN_CELL_STEP.getDeclaringClass())) {
+      // Registered in tandem with the factory's arm.
+      return new DenseCall(node);
     } else if (type.equals(TensorFlowTypes.REVERSE_SEQUENCE.getDeclaringClass())) {
       return new ReverseSequence(node);
     } else if (type.equals(TensorFlowTypes.CONCAT.getDeclaringClass())) {
