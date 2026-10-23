@@ -1655,8 +1655,8 @@ public class TensorGeneratorFactory {
             current instanceof DelegatingTensorGenerator delegating
                 ? delegating.getUnderlying()
                 : null)
+      // A dataset generator is a tuple-element provider, so the first test covers datasets too.
       if (current instanceof TupleElementProvider
-          || current instanceof DatasetGenerator
           || current instanceof Split
           || current instanceof Unstack
           || current instanceof Model
