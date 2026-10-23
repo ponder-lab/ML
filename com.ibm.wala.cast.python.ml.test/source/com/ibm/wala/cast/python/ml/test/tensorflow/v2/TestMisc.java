@@ -168,7 +168,18 @@ public class TestMisc extends AbstractTensorTest {
   @Test
   public void testTensorList5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tensor_list5.py", "add", 0, 0);
+    // `list(...)` copies its argument's elements: both listed tensors reach `add` through the
+    // iteration, so each parameter carries the union of the two shapes, as in testTensorList3.
+    test(
+        "tf2_test_tensor_list5.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32),
+            3,
+            Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32)));
   }
 
   /**
