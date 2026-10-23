@@ -229,5 +229,32 @@ public class PythonTypes extends AstTypeReference {
         }
       };
 
+  /**
+   * Whether a type is one of the built-in containers whose instances the analysis models as holding
+   * elements: {@link #list}, {@link #tuple}, {@link #set}, {@link #dict} and {@link #enumerate}.
+   * This is the one authority on what a container is, so that a client deciding by type whether a
+   * value holds elements agrees with the analysis rather than keeping its own list.
+   *
+   * @param type The type.
+   * @return {@code true} iff {@code type} is a built-in container type.
+   * @see #isSequence(TypeReference)
+   */
+  public static boolean isContainer(TypeReference type) {
+    return isSequence(type) || set.equals(type) || dict.equals(type) || enumerate.equals(type);
+  }
+
+  /**
+   * Whether a type is a built-in container whose elements are indexed by position: {@link #list}
+   * and {@link #tuple}. A {@link #set}, a {@link #dict} and an {@link #enumerate} object are
+   * containers, but not sequences.
+   *
+   * @param type The type.
+   * @return {@code true} iff {@code type} is {@link #list} or {@link #tuple}.
+   * @see #isContainer(TypeReference)
+   */
+  public static boolean isSequence(TypeReference type) {
+    return list.equals(type) || tuple.equals(type);
+  }
+
   protected PythonTypes() {}
 }
