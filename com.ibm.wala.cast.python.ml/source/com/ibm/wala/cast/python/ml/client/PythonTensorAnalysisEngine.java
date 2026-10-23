@@ -3943,6 +3943,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // seeds under it stay untouched.
         if (types == null) continue;
         boolean anyProvenDType = types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN);
+        boolean anyUnknownDType = types.stream().anyMatch(t -> t.getDType() == DType.UNKNOWN);
         boolean anyTopShape = types.stream().anyMatch(t -> t.getDims() == null);
         TensorTypeAnalysis.FeedMode mode;
         if (types.isEmpty())
@@ -3958,6 +3959,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   ? TensorTypeAnalysis.FeedMode.REPLACE
                   : TensorTypeAnalysis.FeedMode.DTYPE_FILL;
         else if (anyTopShape) mode = TensorTypeAnalysis.FeedMode.SHAPE_FILL;
+        // A partial dtype union (wala/ML#862): the proven-dtype members are retained and only the
+        // unknown-dtype ones take their dtype from the operands, as an all-unknown seed's do.
+        else if (anyUnknownDType) mode = TensorTypeAnalysis.FeedMode.DTYPE_FILL;
         else continue; // Both axes proven on every member: nothing to fill.
         TensorGenerator generator;
         try {

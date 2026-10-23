@@ -48,13 +48,13 @@ import java.util.logging.Logger;
  * every nested query read to {@link #read}, which records the dependency edge and evaluates or
  * consults the state table rather than recursing unboundedly. Values ascend a lattice — {@link
  * ShapeResult} ordered by member inclusion with the unknown mark as a second component, dtype sets
- * by inclusion with the {@code UNKNOWN}-absorbing normalization and the legacy null-⊤ preserved
- * through a sentinel so callers' null-check fallback arms behave as under recursion — via joins at
- * every update, so iteration reaches a fixpoint; scheduling follows the read-version staleness
- * criterion (wala/ML#758): each reader records the version of every value it consumes, a grown
- * value re-enqueues exactly the dependents whose latest evaluation consumed it, a solve-level sweep
- * re-enqueues any reader whose recorded versions still lag before the fixpoint is declared, and the
- * per-key evaluation-count valve pins any oscillator at its current value.
+ * by inclusion with an {@code UNKNOWN} member marking a partial union (wala/ML#862) and the legacy
+ * null-⊤ preserved through a sentinel so callers' null-check fallback arms behave as under
+ * recursion — via joins at every update, so iteration reaches a fixpoint; scheduling follows the
+ * read-version staleness criterion (wala/ML#758): each reader records the version of every value it
+ * consumes, a grown value re-enqueues exactly the dependents whose latest evaluation consumed it, a
+ * solve-level sweep re-enqueues any reader whose recorded versions still lag before the fixpoint is
+ * declared, and the per-key evaluation-count valve pins any oscillator at its current value.
  *
  * <p>Cycles need no guards: reads never recurse. A dependency SCC with no external base stabilizes
  * at the iteration bottom, which would read as "not a tensor," so after each stabilization the
@@ -1866,7 +1866,8 @@ final class WorklistTypeResolver {
       EnumSet<DType> union = EnumSet.noneOf(DType.class);
       union.addAll(a);
       union.addAll(b);
-      if (union.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+      // An UNKNOWN member joins as a member: it marks the union partial without erasing the
+      // members that resolved (wala/ML#862).
       return union;
     }
     return next;

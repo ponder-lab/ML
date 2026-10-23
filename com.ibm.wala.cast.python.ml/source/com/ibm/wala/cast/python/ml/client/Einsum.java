@@ -124,8 +124,9 @@ public class Einsum extends PassThroughUnaryTensorGenerator implements OperandSh
    * The runtime requires einsum's inputs to agree on dtype (promotion happens upstream of the
    * call), so any resolved input proves the output dtype: consult each input in order and return
    * the first that resolves, rather than pinning to the first input alone (wala/ML#737; the
-   * either-operand rationale of the {@code MatMul} dtype fix). Falls back to {@link DType#UNKNOWN}
-   * when no input resolves or the equation's input count is itself unknown.
+   * either-operand rationale of the {@code MatMul} dtype fix). When no input resolves, falls back
+   * to the first partial input's dtypes (wala/ML#862), and to {@link DType#UNKNOWN} when there is
+   * none or the equation's input count is itself unknown.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The output dtypes.
@@ -135,11 +136,15 @@ public class Einsum extends PassThroughUnaryTensorGenerator implements OperandSh
     String equation = this.getEquation(builder);
     ParsedEquation parsed = equation == null ? null : parseEquation(equation);
     int inputCount = parsed == null ? 1 : parsed.inputs().size();
+    Set<DType> partial = null;
     for (int i = 0; i < inputCount; i++) {
       Set<DType> dtypes = this.dtypesOfArg(builder, Parameters.INPUTS.getIndex() + i, null);
-      if (dtypes != null && !dtypes.isEmpty() && !dtypes.contains(DType.UNKNOWN)) return dtypes;
+      if (isResolvedDTypes(dtypes)) return dtypes;
+      // A partial input proves nothing alone, but when no input resolves, the first partial one's
+      // resolved members survive beside UNKNOWN rather than reading as unknown (wala/ML#862).
+      if (partial == null && hasKnownDType(dtypes)) partial = dtypes;
     }
-    return EnumSet.of(DType.UNKNOWN);
+    return partial != null ? partial : EnumSet.of(DType.UNKNOWN);
   }
 
   /**

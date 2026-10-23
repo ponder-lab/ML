@@ -91,21 +91,27 @@ public class TolistOperation extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // See getDefaultShapes on the anchor split.
     int receiverVn = getReceiverVn();
+    Set<DType> viaChain = null;
     if (this.source != null && receiverVn > 0) {
       try {
         Set<DType> dTypes = getDTypes(builder, getNode(), receiverVn);
         LOGGER.fine(
             () -> "Resolved tolist receiver dtypes via the caller-frame chain: " + dTypes + ".");
-        if (dTypes != null && !dTypes.isEmpty() && !dTypes.equals(EnumSet.of(DType.UNKNOWN)))
-          return dTypes;
+        viaChain = dTypes;
       } catch (IllegalArgumentException e) {
         // Fall through to the caller-aware points-to path.
       }
     }
-    OrdinalSet<InstanceKey> receiverPts =
-        getArgumentPointsToSet(
-            builder, Parameters.NDARRAY.getIndex(), Parameters.NDARRAY.getName());
-    Set<DType> preserved = getDTypesOfValue(builder, receiverPts);
+    // A partial chain read falls through like a ⊤ one and stands only when the points-to path
+    // does not resolve either (wala/ML#862).
+    Set<DType> preserved =
+        preferResolvedDTypes(
+            viaChain,
+            () ->
+                getDTypesOfValue(
+                    builder,
+                    getArgumentPointsToSet(
+                        builder, Parameters.NDARRAY.getIndex(), Parameters.NDARRAY.getName())));
     return preserved == null || preserved.isEmpty() ? EnumSet.of(DType.UNKNOWN) : preserved;
   }
 
