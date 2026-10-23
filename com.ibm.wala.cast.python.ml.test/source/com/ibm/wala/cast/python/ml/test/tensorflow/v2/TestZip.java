@@ -93,4 +93,36 @@ public class TestZip extends AbstractTensorTest {
   public void testListOfTensor() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_list_element", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT32, 2))));
   }
+
+  /**
+   * A loop over {@code list(d)} for a dict {@code d} binds its keys, strings here, so the consumer
+   * is reached with no tensor, although the dict's values are tensors.
+   */
+  @Test
+  public void testListOfDictKeys() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_keys", 0, 0);
+  }
+
+  /** The second component of a loop over {@code list(d.items())} is one of the dict's values. */
+  @Test
+  public void testListOfDictItems() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_item_values",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT32, 2), TensorType.of(FLOAT32, 3))));
+  }
+
+  /** A loop over {@code list(s)} for a string {@code s} binds no tensor. */
+  @Test
+  public void testListOfString() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_string", 0, 0);
+  }
+
+  /** A loop over {@code list(range(n))} binds no tensor. */
+  @Test
+  public void testListOfRange() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_range", 0, 0);
+  }
 }

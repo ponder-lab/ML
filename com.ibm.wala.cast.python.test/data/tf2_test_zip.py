@@ -33,6 +33,22 @@ def consume_list_element(t):
     pass
 
 
+def consume_keys(t):
+    pass
+
+
+def consume_item_values(t):
+    pass
+
+
+def consume_string(t):
+    pass
+
+
+def consume_range(t):
+    pass
+
+
 def loop_zip():
     a_list = [tf.ones((1, 60, 2)), tf.ones((1, 60, 2))]
     b_list = [tf.zeros((1, 60, 2), tf.int32), tf.zeros((1, 60, 2), tf.int32)]
@@ -81,7 +97,28 @@ def iterate_list(y):
         assert e.dtype == tf.float32
 
 
+def list_dict():
+    d = {"a": tf.ones([2]), "b": tf.zeros([3])}
+    for k in list(d):
+        consume_keys(k)
+        assert isinstance(k, str)
+    for _, w in list(d.items()):
+        consume_item_values(w)
+        assert w.dtype == tf.float32
+
+
+def list_string_and_range():
+    for c in list("ab"):
+        consume_string(c)
+        assert isinstance(c, str)
+    for i in list(range(3)):
+        consume_range(i)
+        assert isinstance(i, int)
+
+
 loop_zip()
 index_zip()
 star_zip()
 iterate_list(tf.ones((3, 2)))
+list_dict()
+list_string_and_range()

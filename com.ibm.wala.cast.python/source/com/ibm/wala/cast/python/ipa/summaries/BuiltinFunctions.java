@@ -29,6 +29,7 @@ import com.ibm.wala.util.collections.Pair;
 import java.io.Reader;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -274,6 +275,14 @@ public class BuiltinFunctions {
    * keeps its elements' dtype, rank and other extents. A {@code list()} call with no argument reads
    * nothing and returns an empty list, as before.
    *
+   * <p>What is copied depends on the argument's kind, which the summary tells apart by filtering
+   * the argument through a cast to each kind. A list, tuple or set gives its elements. A dict gives
+   * its keys, as {@code list(d)} does at run time: the key the element iteration yields is copied
+   * itself, not the value read under it, so a dict of tensors does not make its copy a list of
+   * tensors. Any other argument gives what the iteration protocol yields, if its class declares
+   * {@code __iter__}, and nothing otherwise; in particular a tensor's rows are not copied (see
+   * wala/ML#1102), nor a string's characters.
+   *
    * @param cls The builtin function class whose summary this is.
    * @param name The builtin's name ({@code list}).
    * @return The populated summary.
@@ -287,8 +296,7 @@ public class BuiltinFunctions {
     int container = 11;
     int nullKey = 12;
     int contentsKey = 13;
-    int elementKey = 14;
-    int element = 15;
+    int v = 14;
     int idx = 0;
 
     x.addStatement(
@@ -298,12 +306,24 @@ public class BuiltinFunctions {
         contentsKey,
         new ConstantValue(PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD));
 
-    // The element of the copied argument, read the way `reversed` reads it.
-    x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, 2, nullKey));
-    x.addStatement(factory.PropertyRead(idx++, element, 2, elementKey));
-    x.addStatement(factory.PropertyWrite(idx++, container, contentsKey, element));
+    // A sequence's elements, read the way `reversed` reads them.
+    for (TypeReference kind : List.of(PythonTypes.list, PythonTypes.tuple, PythonTypes.set)) {
+      int sequence = v++;
+      int elementKey = v++;
+      int element = v++;
+      x.addStatement(factory.CheckCastInstruction(idx++, sequence, 2, kind, true));
+      x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, sequence, nullKey));
+      x.addStatement(factory.PropertyRead(idx++, element, sequence, elementKey));
+      x.addStatement(factory.PropertyWrite(idx++, container, contentsKey, element));
+    }
+    // A dict's keys, which are what iterating it yields.
+    int dictionary = v++;
+    int dictionaryKey = v++;
+    x.addStatement(factory.CheckCastInstruction(idx++, dictionary, 2, PythonTypes.dict, true));
+    x.addStatement(factory.EachElementGetInstruction(idx++, dictionaryKey, dictionary, nullKey));
+    x.addStatement(factory.PropertyWrite(idx++, container, contentsKey, dictionaryKey));
     // The iteration protocol (wala/ML#1010); see `zipSummary`.
-    idx = protocolElement(x, factory, idx, 2, container, contentsKey, 16);
+    idx = protocolElement(x, factory, idx, 2, container, contentsKey, v);
     x.addStatement(factory.ReturnInstruction(idx++, container, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
