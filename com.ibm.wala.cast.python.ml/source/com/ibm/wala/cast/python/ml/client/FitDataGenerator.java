@@ -117,7 +117,7 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     boolean unknown = false;
-    for (Component component : this.components(builder, index)) {
+    for (Component component : this.components(builder, List.of(index))) {
       Set<List<Dimension<?>>> shapes = component.shapes(builder);
       if (shapes == null) unknown = true;
       else ret.addAll(shapes);
@@ -128,7 +128,7 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
-    for (Component component : this.components(builder, index)) {
+    for (Component component : this.components(builder, List.of(index))) {
       Set<DType> dtypes = component.dtypes(builder);
       if (dtypes != null) ret.addAll(dtypes);
     }
@@ -151,8 +151,65 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     return ret;
   }
 
-  /** The values a read of the given index resolves to, each with the way it is read. */
-  private List<Component> components(PropagationCallGraphBuilder builder, int index) {
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A longer path selects within component {@code path[0]}, which this data reaches only
+   *     through a dataset's element or another pack: the step reads {@code inputs, targets = data},
+   *     and a model's {@code call} then reads within {@code inputs}, as in {@code x, mask =
+   *     inputs}.
+   */
+  @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1) return TupleElementProvider.super.resolvesPath(builder, path);
+    List<Component> components = this.components(builder, path);
+    return components != null && !components.isEmpty();
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getShapesForIndex(builder, index);
+    List<Component> components = this.components(builder, path);
+    if (components == null) return null;
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    boolean unknown = false;
+    for (Component component : components) {
+      Set<List<Dimension<?>>> shapes = component.shapes(builder);
+      if (shapes == null) unknown = true;
+      else ret.addAll(shapes);
+    }
+    return unknown && ret.isEmpty() ? null : ret;
+  }
+
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getDTypesForIndex(builder, index);
+    List<Component> components = this.components(builder, path);
+    if (components == null) return EnumSet.of(DType.UNKNOWN);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    for (Component component : components) {
+      Set<DType> dtypes = component.dtypes(builder);
+      if (dtypes != null) ret.addAll(dtypes);
+    }
+    return ret;
+  }
+
+  /**
+   * The values a read of the given path resolves to, each with the way it is read.
+   *
+   * @param builder The builder.
+   * @param path The selectors, outermost first; never empty.
+   * @return The components, or {@code null} when the path is longer than one selector and a member
+   *     of the data cannot be followed along it: only a dataset's element and another pack can. One
+   *     such member makes the whole read unknown, though the others resolve, where a single index
+   *     keeps the members that resolve.
+   */
+  private List<Component> components(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (!(path.get(0) instanceof Integer index)) return path.size() == 1 ? List.of() : null;
+    boolean nested = path.size() > 1;
     List<Component> ret = new ArrayList<>();
     if (this.unpack) {
       // A dataset element read in a loop is the dataset object in the pointer analysis, whose set
@@ -163,15 +220,19 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       for (InstanceKey data : this.slot(builder, 0)) {
         AllocationSiteInNode asin = getAllocationSiteInNode(data);
         if (asin != null && isDataset(asin.concreteType().getReference())) {
-          ret.add(this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), index));
-          return ret;
+          Component element =
+              this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), path);
+          return element == null ? null : List.of(element);
         }
       }
       for (InstanceKey data : this.slot(builder, 0)) {
         AllocationSiteInNode asin = getAllocationSiteInNode(data);
         TypeReference type = asin == null ? null : asin.concreteType().getReference();
-        if (asin != null && describes(type))
-          ret.add(this.ofProvider(new FitDataGenerator(asin.getNode(), asin), index));
+        if (asin != null && describes(type)) {
+          FitDataGenerator pack = new FitDataGenerator(asin.getNode(), asin);
+          if (nested && !pack.resolvesPath(builder, path)) return null;
+          ret.add(this.ofProvider(pack, path));
+        } else if (nested) return null;
         else if (asin != null && PythonTypes.tuple.equals(type))
           ret.add(this.ofValues(this.field(builder, asin, index)));
         else if (index == 0) ret.add(this.ofValues(this.singleton(builder, data)));
@@ -186,11 +247,17 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     for (InstanceKey x : this.slot(builder, 0)) {
       AllocationSiteInNode asin = getAllocationSiteInNode(x);
       if (asin != null && isDataset(asin.concreteType().getReference())) {
-        if (!dataset)
-          ret.add(this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), index));
+        if (!dataset) {
+          Component element =
+              this.ofDataset(builder, this.slotVariable(builder, this.allocation, 0), path);
+          if (element == null) return null;
+          ret.add(element);
+        }
         dataset = true;
-      } else if (index == 0) ret.add(this.ofValues(this.singleton(builder, x)));
+      } else if (nested) return null;
+      else if (index == 0) ret.add(this.ofValues(this.singleton(builder, x)));
     }
+    if (nested) return ret;
     if (index > 0) {
       // The targets and weights of a tensor-fed call are the pack's own later slots; a dataset-fed
       // call's are the element's components, read above.
@@ -253,17 +320,21 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     Set<DType> dtypes(PropagationCallGraphBuilder builder);
   }
 
-  /** A provider's component at the index. */
-  private Component ofProvider(TupleElementProvider provider, int index) {
+  /** A provider's component at the path. */
+  private Component ofProvider(TupleElementProvider provider, List<Object> path) {
     return new Component() {
       @Override
       public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
-        return provider.getShapesForIndex(b, index);
+        return path.size() == 1
+            ? provider.getShapesForIndex(b, (Integer) path.get(0))
+            : provider.getShapesForPath(b, path);
       }
 
       @Override
       public Set<DType> dtypes(PropagationCallGraphBuilder b) {
-        return provider.getDTypesForIndex(b, index);
+        return path.size() == 1
+            ? provider.getDTypesForIndex(b, (Integer) path.get(0))
+            : provider.getDTypesForPath(b, path);
       }
     };
   }
@@ -272,10 +343,14 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
    * A dataset's element component, read through the dataset generator the factory resolves for the
    * slot's variable, so a transformation chain resolves as it does for user code: the element's
    * tuple component at the index when the element is a tuple, the whole element at index 0
-   * otherwise, and no tensor at any other index.
+   * otherwise, and no tensor at any other index. A longer path selects within the element's
+   * component, and reaches it only when the element's structure has it.
+   *
+   * @return The component, or {@code null} for a longer path the element does not resolve.
    */
   private Component ofDataset(
-      PropagationCallGraphBuilder builder, PointsToSetVariable slot, int index) {
+      PropagationCallGraphBuilder builder, PointsToSetVariable slot, List<Object> path) {
+    int index = (Integer) path.get(0);
     TensorGenerator generator = null;
     if (slot != null)
       try {
@@ -293,8 +368,11 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       if (next == null || next == generator) break;
       generator = next;
     }
-    if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder))
-      return this.ofProvider(tep, index);
+    if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
+      if (path.size() > 1 && !tep.resolvesPath(builder, path)) return null;
+      return this.ofProvider(tep, path);
+    }
+    if (path.size() > 1) return null;
     TensorGenerator element = generator;
     return new Component() {
       @Override
