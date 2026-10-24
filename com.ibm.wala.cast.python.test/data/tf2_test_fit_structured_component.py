@@ -361,6 +361,40 @@ fit_split_mixed(True)
 fit_split_mixed(False)
 
 
+def consume_unpack_mixed(x):
+    # A tuple when the structured dataset is chosen and a tensor when the flat one is.
+    assert isinstance(x, (tuple, tf.Tensor))
+
+
+def consume_unpack_scaled(scaled):
+    assert scaled.shape[1:] == (6,) and scaled.dtype == tf.float32
+
+
+class UnpackMixed(tf.keras.Model):
+    def call(self, inputs):
+        return inputs
+
+    def train_step(self, data):
+        x, y, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
+        consume_unpack_mixed(x)
+        if isinstance(x, tf.Tensor):
+            # Read only where the flat dataset was chosen; the analysis reads both.
+            consume_unpack_scaled(x * 2.0)
+        return {}
+
+
+def fit_unpack_mixed(flag):
+    model = UnpackMixed()
+    model.compile(optimizer="sgd", loss=loss)
+    ds = pair_dataset() if flag else flat_dataset()
+    model.fit(ds, epochs=1, verbose=0)
+
+
+# One call site, so one frame where the choice is either dataset.
+for flag in (True, False):
+    fit_unpack_mixed(flag)
+
+
 # An iterator over the dataset.
 def consume_iter_pair_inputs(inputs):
     assert isinstance(inputs, tuple) and len(inputs) == 2

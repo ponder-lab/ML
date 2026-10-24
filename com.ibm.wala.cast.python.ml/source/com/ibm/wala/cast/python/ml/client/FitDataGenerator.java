@@ -131,6 +131,22 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
 
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    Set<DType> ret = this.tensorDTypesForIndex(builder, index);
+    // A component that may also be a structure has the tensors' dtypes as a partial union, which
+    // the UNKNOWN marker records (wala/ML#862), so a dtype reader takes none of them as certain.
+    if (this.mayBeStructure(builder, index)) ret.add(DType.UNKNOWN);
+    return ret;
+  }
+
+  /**
+   * The dtypes of the tensors a component read at an index may be, without the marker of a
+   * component that may also be a structure.
+   *
+   * @param builder The builder.
+   * @param index The index.
+   * @return The dtypes.
+   */
+  private Set<DType> tensorDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (Component component : this.components(builder, List.of(index))) {
       Set<DType> dtypes = component.dtypes(builder);
@@ -139,10 +155,25 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     return ret;
   }
 
+  /**
+   * Whether a component read at an index is a tensor on some of the datasets the data may come from
+   * and a structure on others.
+   *
+   * @param builder The builder.
+   * @param index The index.
+   * @return {@code true} iff the component may be either.
+   */
+  private boolean mayBeStructure(PropagationCallGraphBuilder builder, int index) {
+    List<Component> components = this.components(builder, List.of(index));
+    if (components == null) return false;
+    for (Component component : components) if (component.mayBeStructure(builder)) return true;
+    return false;
+  }
+
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
-    Set<DType> dtypes = this.getDTypesForIndex(builder, index);
+    Set<DType> dtypes = this.tensorDTypesForIndex(builder, index);
     Set<TensorType> ret = HashSetFactory.make();
     if (shapes == null) {
       for (DType dtype : dtypes)
@@ -155,8 +186,7 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     // A component that is a structure on some of its datasets and a tensor on others is, at run
     // time, either; a wholly unknown member beside the tensors keeps a reader from taking the
     // tensors for all of it.
-    List<Component> components = this.components(builder, List.of(index));
-    if (components != null && components.stream().anyMatch(Component::mayBeStructure))
+    if (this.mayBeStructure(builder, index))
       ret.add(new TensorType(DType.UNKNOWN.name().toLowerCase(Locale.ROOT), null));
     return ret;
   }
@@ -332,10 +362,11 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     /**
      * Whether the component may also be a structure, which its shapes and dtypes do not show.
      *
+     * @param builder The builder.
      * @return {@code true} iff the component is a tensor on some of its datasets and a structure on
      *     others.
      */
-    default boolean mayBeStructure() {
+    default boolean mayBeStructure(PropagationCallGraphBuilder builder) {
       return false;
     }
   }
@@ -398,7 +429,7 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
   private static Component union(List<Component> components, boolean structure) {
     return new Component() {
       @Override
-      public boolean mayBeStructure() {
+      public boolean mayBeStructure(PropagationCallGraphBuilder b) {
         return structure;
       }
 
@@ -438,9 +469,22 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
 
       @Override
       public Set<DType> dtypes(PropagationCallGraphBuilder b) {
+        // Another pack's tensor dtypes, without its marker of a component that may be a structure,
+        // which this component carries instead.
+        if (path.size() == 1 && provider instanceof FitDataGenerator pack)
+          return pack.tensorDTypesForIndex(b, (Integer) path.get(0));
         return path.size() == 1
             ? provider.getDTypesForIndex(b, (Integer) path.get(0))
             : provider.getDTypesForPath(b, path);
+      }
+
+      // Another pack's component, as an unpack of the step's data reads it, may be a structure
+      // where that pack's is.
+      @Override
+      public boolean mayBeStructure(PropagationCallGraphBuilder b) {
+        return path.size() == 1
+            && provider instanceof FitDataGenerator pack
+            && pack.mayBeStructure(b, (Integer) path.get(0));
       }
     };
   }

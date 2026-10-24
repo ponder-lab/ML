@@ -324,4 +324,40 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
     test(
         FILE, "consume_split_mixed_inputs", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
   }
+
+  /**
+   * A {@code train_step} override's {@code x} unpacked from the step's data, where the dataset is
+   * chosen by a branch between a tuple component and a flat one in one frame, is that component
+   * read through the unpack: the flat dataset's tensor, {@code (2, 6)}, beside a wholly unknown
+   * member, as {@link #testBranchMixedInputs()} reads it in {@code call}.
+   */
+  @Test
+  public void testUnpackMixed() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_unpack_mixed",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * An elementwise product of the {@code x} of {@link #testUnpackMixed()} reads its operand's dtype
+   * as a partial union, {@code float32} beside the {@code UNKNOWN} marker, since the component may
+   * be a structure, and not as a certain {@code float32}. Its shape is the resolvable subset,
+   * {@code (2, 6)}.
+   */
+  @Test
+  public void testUnpackScaled() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_unpack_scaled",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 6),
+                new TensorType(UNKNOWN, List.of(new NumericDim(2), new NumericDim(6))))));
+  }
 }
