@@ -108,7 +108,8 @@ public class TestShapeOperandRank extends TestPythonMLCallGraphShape {
 
   /**
    * A list whose element is a computed int, {@code [x.shape[0] * x.shape[1]]}: the element has no
-   * instance key (wala/ML#805), and is read as the scalar it must be.
+   * evidence, and is read as a scalar, since a non-scalar element would make the reshape fail
+   * eagerly as well as in a graph.
    */
   @Test
   public void testListOfComputed() {

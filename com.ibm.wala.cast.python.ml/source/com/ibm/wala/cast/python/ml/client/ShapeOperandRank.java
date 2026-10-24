@@ -142,10 +142,14 @@ public final class ShapeOperandRank {
   }
 
   /**
-   * Whether every element of a list or tuple may be only a scalar. An element with no points-to
-   * members and no tensor state is read as one: every list, tuple and tensor the analysis sees has
-   * an allocation, so such an element is a computed primitive (<a
-   * href="https://github.com/wala/ML/issues/805">wala/ML#805</a>), such as {@code x.shape[0]}.
+   * Whether every element of a list or tuple may be only a scalar. An element the analysis gives no
+   * evidence for, with no points-to members and no tensor state, is read as one, as is an element
+   * the container's keys may not name. Either may in fact be a non-scalar, but a shape with a
+   * non-scalar element has rank 2 or more, or no rank at all, and {@code Reshape} rejects it
+   * eagerly as well as in a graph. So reading such an element as a scalar can misreport only a call
+   * that fails in both modes. An element with no evidence is today typically a computed primitive,
+   * which has no instance key (<a href="https://github.com/wala/ML/issues/805">wala/ML#805</a>),
+   * such as {@code x.shape[0]}.
    *
    * @param builder The builder.
    * @param analysis The solved {@link TensorTypeAnalysis}.
