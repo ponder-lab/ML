@@ -29,6 +29,7 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -500,6 +501,20 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     if (signature != null) return TupleElementProvider.holdsOnlyStructures(signature);
     return TupleElementProvider.holdsOnlyStructures(
         this.component(builder, Parameters.OUTPUT_TYPES, path));
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The length of the literal tuple the {@code output_signature}, or else the legacy
+   *     {@code output_types}, holds at the path, as {@link #isStructureAt} reads it.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    OrdinalSet<InstanceKey> signature = this.component(builder, Parameters.OUTPUT_SIGNATURE, path);
+    if (signature != null) return TupleElementProvider.declaredArityOf(builder, signature);
+    return TupleElementProvider.declaredArityOf(
+        builder, this.component(builder, Parameters.OUTPUT_TYPES, path));
   }
 
   /**

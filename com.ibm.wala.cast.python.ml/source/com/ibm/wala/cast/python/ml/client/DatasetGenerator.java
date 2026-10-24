@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -189,6 +190,27 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
       if (!(receiver instanceof TupleElementProvider tep && tep.isStructureAt(builder, path)))
         return false;
     return true;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A receiver that may be several datasets declares a length at the path only where each
+   *     of them declares the same one; where they disagree, or one declares none, the component may
+   *     be either, so none is declared.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    List<TensorGenerator> receivers = this.receivers(builder);
+    if (receivers.isEmpty()) return OptionalInt.empty();
+    int ret = -1;
+    for (TensorGenerator receiver : receivers) {
+      if (!(receiver instanceof TupleElementProvider tep)) return OptionalInt.empty();
+      OptionalInt arity = tep.declaredArity(builder, path);
+      if (arity.isEmpty() || (ret >= 0 && ret != arity.getAsInt())) return OptionalInt.empty();
+      ret = arity.getAsInt();
+    }
+    return OptionalInt.of(ret);
   }
 
   @Override

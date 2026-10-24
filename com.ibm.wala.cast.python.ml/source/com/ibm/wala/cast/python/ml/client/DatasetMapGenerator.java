@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -543,6 +544,28 @@ public class DatasetMapGenerator extends DatasetGenerator {
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
     return component.snd.isEmpty() && TupleElementProvider.holdsOnlyStructures(component.fst);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote As {@link #isStructureAt}: the length of the literal tuple {@code map_func} returns
+   *     at the path, when its return holds no values the points-to set cannot hold; the receiver's
+   *     at the returned component's path when the function returns one of its component parameters,
+   *     and at the path itself when the return is not known at all or is the input passed through
+   *     unchanged.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.declaredArity(builder, withinComponent(returned, path));
+    if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
+      return super.declaredArity(builder, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
+        this.getMappedElementComponent(builder, path);
+    return component.snd.isEmpty()
+        ? TupleElementProvider.declaredArityOf(builder, component.fst)
+        : OptionalInt.empty();
   }
 
   /**

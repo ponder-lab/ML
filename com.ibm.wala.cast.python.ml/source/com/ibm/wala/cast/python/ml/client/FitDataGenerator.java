@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -566,40 +567,9 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
   private Component ofDataset(
       PropagationCallGraphBuilder builder, PointsToSetVariable slot, List<Object> path) {
     int index = (Integer) path.get(0);
-    TensorGenerator generator = null;
-    if (slot != null)
-      try {
-        generator = TensorGeneratorFactory.getGenerator(slot, builder);
-      } catch (IllegalArgumentException e) {
-        generator = null;
-      }
-    // A dataset element read in a loop resolves to an element generator delegating to its dataset;
-    // unwrap to the dataset's own generator, as the factory does before its tuple-element dispatch.
-    // A pass-through transformation's generator (`shuffle`, `prefetch`, ...) needs no unwrapping:
-    // it
-    // forwards every provider read to its receiver itself.
-    while (generator instanceof DelegatingTensorGenerator dtg) {
-      TensorGenerator next = dtg.getUnderlying();
-      if (next == null || next == generator) break;
-      generator = next;
-    }
-    // The slot's creators, the datasets the user's code may have passed, read the slot in its own
-    // frame: a `fit` whose dataset is chosen as `a if flag else b` has, in a frame where the choice
-    // is known, the chosen dataset as its one creator, which the factory's generator for the slot
-    // may not be. Where the choice is either, the slot has a creator per dataset, and its element
-    // is their join.
-    List<TensorGenerator> parts = datasetCreators(builder, slot);
-    // A transformation of a dataset that is itself either of several, as `(a if flag else
-    // b).batch(2)`, is the slot's one creator, and its reads forward to one of its receiver's
-    // datasets; applied to each of them on its own, it is a part of the join like a creator.
-    List<TensorGenerator> spread =
-        spreadOverReceivers(
-            builder, parts != null ? parts : generator == null ? List.of() : List.of(generator));
-    if (spread != null) parts = spread;
-    if (parts != null && parts.size() == 1) {
-      generator = parts.get(0);
-      parts = null;
-    } else if (parts != null) generator = new DatasetCreatorJoin(slot, parts);
+    Dataset dataset = dataset(builder, slot);
+    TensorGenerator generator = dataset.generator();
+    List<TensorGenerator> parts = dataset.parts();
     if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
       if (path.size() > 1 && !tep.resolvesPath(builder, path)) return null;
       // A component that is itself a structure, as `(x, mask)` in a `((x, mask), y)` element, is
@@ -643,6 +613,90 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
         return element.getDTypes(b);
       }
     };
+  }
+
+  /**
+   * The dataset a slot's variable holds, read as {@link #ofDataset} reads it.
+   *
+   * @param generator The dataset's generator, or a join of the slot's datasets.
+   * @param parts The slot's datasets when there are several, or {@code null}.
+   */
+  private record Dataset(TensorGenerator generator, List<TensorGenerator> parts) {}
+
+  /**
+   * The dataset a slot's variable holds: the generator the factory resolves for it, unwrapped to
+   * the dataset's own, or the slot's creators read in their own frame.
+   *
+   * @param builder The builder.
+   * @param slot The slot's variable, possibly {@code null}.
+   * @return The dataset.
+   */
+  private static Dataset dataset(PropagationCallGraphBuilder builder, PointsToSetVariable slot) {
+    TensorGenerator generator = null;
+    if (slot != null)
+      try {
+        generator = TensorGeneratorFactory.getGenerator(slot, builder);
+      } catch (IllegalArgumentException e) {
+        generator = null;
+      }
+    // A dataset element read in a loop resolves to an element generator delegating to its dataset;
+    // unwrap to the dataset's own generator, as the factory does before its tuple-element dispatch.
+    // A pass-through transformation's generator (`shuffle`, `prefetch`, ...) needs no unwrapping:
+    // it
+    // forwards every provider read to its receiver itself.
+    while (generator instanceof DelegatingTensorGenerator dtg) {
+      TensorGenerator next = dtg.getUnderlying();
+      if (next == null || next == generator) break;
+      generator = next;
+    }
+    // The slot's creators, the datasets the user's code may have passed, read the slot in its own
+    // frame: a `fit` whose dataset is chosen as `a if flag else b` has, in a frame where the choice
+    // is known, the chosen dataset as its one creator, which the factory's generator for the slot
+    // may not be. Where the choice is either, the slot has a creator per dataset, and its element
+    // is their join.
+    List<TensorGenerator> parts = datasetCreators(builder, slot);
+    // A transformation of a dataset that is itself either of several, as `(a if flag else
+    // b).batch(2)`, is the slot's one creator, and its reads forward to one of its receiver's
+    // datasets; applied to each of them on its own, it is a part of the join like a creator.
+    List<TensorGenerator> spread =
+        spreadOverReceivers(
+            builder, parts != null ? parts : generator == null ? List.of() : List.of(generator));
+    if (spread != null) parts = spread;
+    if (parts != null && parts.size() == 1) {
+      generator = parts.get(0);
+      parts = null;
+    } else if (parts != null) generator = new DatasetCreatorJoin(slot, parts);
+    return new Dataset(generator, parts);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A dataset fed to the step declares the structure of its element: the selector picks
+   *     the element's component, the inputs at {@code 0}, and the rest of the path is the
+   *     dataset's. Datasets that the slot may hold either of must declare one length. A tensor fed
+   *     to the step declares none.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.isEmpty() || !(path.get(0) instanceof Integer)) return OptionalInt.empty();
+    for (InstanceKey x : this.slot(builder, 0)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(x);
+      if (asin == null || !isDataset(asin.concreteType().getReference()))
+        return OptionalInt.empty();
+    }
+    Dataset dataset = dataset(builder, this.slotVariable(builder, this.allocation, 0));
+    List<TensorGenerator> providers =
+        dataset.parts() != null ? dataset.parts() : Collections.singletonList(dataset.generator());
+    int ret = -1;
+    for (TensorGenerator provider : providers) {
+      if (!(provider instanceof TupleElementProvider tep) || !tep.yieldsTuple(builder))
+        return OptionalInt.empty();
+      OptionalInt arity = tep.declaredArity(builder, path);
+      if (arity.isEmpty() || (ret >= 0 && ret != arity.getAsInt())) return OptionalInt.empty();
+      ret = arity.getAsInt();
+    }
+    return ret < 0 ? OptionalInt.empty() : OptionalInt.of(ret);
   }
 
   /** The values' own types. */

@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -381,6 +382,17 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
     return TupleElementProvider.holdsOnlyStructures(this.componentPointsToSet(builder, path));
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The length of the literal tuple the {@code tensors} argument holds at the path: each
+   *     of its members is sliced on its own, so the element holds a tuple of that length there.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    return TupleElementProvider.declaredArityOf(builder, this.componentPointsToSet(builder, path));
   }
 
   /**
