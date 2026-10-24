@@ -92,6 +92,12 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     super(node);
   }
 
+  /** A batch stacks its receiver's element, component by component. */
+  @Override
+  public boolean elementFollowsReceiver() {
+    return true;
+  }
+
   protected OrdinalSet<InstanceKey> getReceiverPTS(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);

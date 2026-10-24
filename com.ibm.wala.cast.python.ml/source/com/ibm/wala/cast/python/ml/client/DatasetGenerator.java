@@ -18,6 +18,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -30,6 +31,12 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class DatasetGenerator extends TensorGenerator implements TupleElementProvider {
+
+  /**
+   * The receiver this view is fixed to ({@link #overReceiver}), or {@code null} to resolve it from
+   * the call.
+   */
+  private TensorGenerator receiver;
 
   public DatasetGenerator(PointsToSetVariable source) {
     super(source);
@@ -126,11 +133,26 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
 
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
-    TensorGenerator receiver = getReceiverGenerator(builder);
-    if (receiver instanceof TupleElementProvider tep) {
-      return tep.yieldsTuple(builder);
-    }
-    return false;
+    List<TensorGenerator> receivers = this.receivers(builder);
+    if (receivers.isEmpty()) return false;
+    for (TensorGenerator receiver : receivers)
+      if (!(receiver instanceof TupleElementProvider tep && tep.yieldsTuple(builder))) return false;
+    return true;
+  }
+
+  /**
+   * The receivers this transformation's element follows: the one this view is fixed to, every
+   * dataset the receiver may be ({@link #getReceiverGenerators}), or, when those do not all
+   * resolve, the first that does.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The receivers' generators, empty when none resolves.
+   */
+  private List<TensorGenerator> receivers(PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> receivers = this.getReceiverGenerators(builder);
+    if (receivers != null && !receivers.isEmpty()) return receivers;
+    TensorGenerator receiver = this.getReceiverGenerator(builder);
+    return receiver == null ? List.of() : List.of(receiver);
   }
 
   @Override
@@ -159,8 +181,14 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
 
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
-    TensorGenerator receiver = getReceiverGenerator(builder);
-    return receiver instanceof TupleElementProvider tep && tep.isStructureAt(builder, path);
+    // A receiver that may be several datasets has a structure at the path only where each of them
+    // does; where they disagree, the component is either, which a reader of its parts marks.
+    List<TensorGenerator> receivers = this.receivers(builder);
+    if (receivers.isEmpty()) return false;
+    for (TensorGenerator receiver : receivers)
+      if (!(receiver instanceof TupleElementProvider tep && tep.isStructureAt(builder, path)))
+        return false;
+    return true;
   }
 
   @Override
@@ -202,57 +230,124 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   }
 
   /**
-   * Resolves the receiver (the dataset this one is derived from) to a {@link TensorGenerator}.
+   * Resolves the receiver (the dataset this one is derived from) to a {@link TensorGenerator}: the
+   * receiver this view is fixed to ({@link #overReceiver}), if any, and otherwise the first member
+   * of the receiver's points-to set that resolves; {@link #getReceiverGenerators} resolves them
+   * all.
    *
    * @param builder The propagation call graph builder used for analysis.
    * @return The generator for the receiver dataset, or {@code null} if it cannot be resolved.
    */
   public TensorGenerator getReceiverGenerator(PropagationCallGraphBuilder builder) {
+    if (this.receiver != null) return this.receiver;
     OrdinalSet<InstanceKey> receiverPTS =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       for (InstanceKey valueIK : receiverPTS) {
-        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-        if (asin != null) {
-          // A mapped-dataset receiver is allocated in `map.do()` as a generic `Dataset`, so the
-          // default dispatch below would resolve it to a plain `DatasetGenerator` that inherits
-          // from
-          // `map.do()`'s own receiver (the upstream base), dropping `map_func`'s return. Resolve it
-          // to a `DatasetMapGenerator` reading the `element` field off this receiver instance so
-          // the
-          // mapped type survives a downstream pass-through transform. wala/ML#649.
-          if (asin.getNode()
-              .getMethod()
-              .getDeclaringClass()
-              .getReference()
-              .equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
-            return new DatasetMapGenerator(asin.getNode(), asin);
-          }
-          int vn = findDefinition(asin.getNode(), asin);
-          if (vn > 0) {
-            PointerKey pk =
-                builder
-                    .getPointerAnalysis()
-                    .getHeapModel()
-                    .getPointerKeyForLocal(asin.getNode(), vn);
-            PointsToSetVariable var = null;
-            if (!builder.getPropagationSystem().isImplicit(pk)) {
-              var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
-            }
-            TensorGenerator generator = null;
-            if (var != null) {
-              generator = TensorGeneratorFactory.getGenerator(var, builder);
-            } else {
-              generator = createManualGenerator(asin.getNode(), builder);
-            }
-            if (generator != null) {
-              return generator;
-            }
-          }
-        }
+        TensorGenerator generator = receiverGenerator(builder, valueIK);
+        if (generator != null) return generator;
       }
     }
     return null;
+  }
+
+  /**
+   * Resolves every dataset the receiver may be to its {@link TensorGenerator}, where {@link
+   * #getReceiverGenerator} resolves the first: a transformation applied to {@code a if flag else b}
+   * has a receiver that is either dataset, and its element is the join of the two (wala/ML#1009).
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The receivers' generators, without duplicates, or {@code null} when this view is fixed
+   *     to one receiver, the receiver has no member, or a member does not resolve.
+   */
+  public List<TensorGenerator> getReceiverGenerators(PropagationCallGraphBuilder builder) {
+    if (this.receiver != null) return null;
+    OrdinalSet<InstanceKey> receiverPTS =
+        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    if (receiverPTS == null || receiverPTS.isEmpty()) return null;
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (InstanceKey valueIK : receiverPTS) {
+      TensorGenerator generator;
+      try {
+        generator = receiverGenerator(builder, valueIK);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      if (generator == null) return null;
+      if (!ret.contains(generator)) ret.add(generator);
+    }
+    return ret;
+  }
+
+  /**
+   * Whether this transformation's element is its receiver's element, transformed per component
+   * through {@link #getReceiverGenerator}, so that it applies to each dataset the receiver may be
+   * on its own ({@link #overReceiver}). A pass-through transformation ({@code shuffle}, {@code
+   * prefetch}, {@code repeat}, ...) and a batch are; a transformation building its own element
+   * ({@code map}, {@code zip}, {@code enumerate}) or a source is not.
+   *
+   * @return {@code true} iff the element follows the receiver's.
+   */
+  public boolean elementFollowsReceiver() {
+    return this.getClass() == DatasetGenerator.class;
+  }
+
+  /**
+   * This transformation applied to the given receiver alone, one of {@link #getReceiverGenerators}.
+   *
+   * @param receiver The receiver's generator.
+   * @return A view of this generator whose receiver is the given one.
+   */
+  public DatasetGenerator overReceiver(TensorGenerator receiver) {
+    DatasetGenerator ret = (DatasetGenerator) this.copy();
+    ret.receiver = receiver;
+    return ret;
+  }
+
+  /**
+   * The generator of a receiver allocation.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @param valueIK A member of the receiver's points-to set.
+   * @return The generator, or {@code null} if the member does not resolve to one.
+   */
+  private static TensorGenerator receiverGenerator(
+      PropagationCallGraphBuilder builder, InstanceKey valueIK) {
+    AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+    if (asin == null) return null;
+    // A mapped-dataset receiver is allocated in `map.do()` as a generic `Dataset`, so the default
+    // dispatch below would resolve it to a plain `DatasetGenerator` that inherits from `map.do()`'s
+    // own receiver (the upstream base), dropping `map_func`'s return. Resolve it to a
+    // `DatasetMapGenerator` reading the `element` field off this receiver instance so the mapped
+    // type survives a downstream pass-through transform. wala/ML#649.
+    if (asin.getNode()
+        .getMethod()
+        .getDeclaringClass()
+        .getReference()
+        .equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
+      return new DatasetMapGenerator(asin.getNode(), asin);
+    }
+    int vn = findDefinition(asin.getNode(), asin);
+    if (vn <= 0) return null;
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(asin.getNode(), vn);
+    PointsToSetVariable var = null;
+    if (!builder.getPropagationSystem().isImplicit(pk)) {
+      var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+    }
+    return var != null
+        ? TensorGeneratorFactory.getGenerator(var, builder)
+        : createManualGenerator(asin.getNode(), builder);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return super.equals(obj) && this.receiver == ((DatasetGenerator) obj).receiver;
+  }
+
+  @Override
+  public int hashCode() {
+    return 31 * super.hashCode() + System.identityHashCode(this.receiver);
   }
 
   /**

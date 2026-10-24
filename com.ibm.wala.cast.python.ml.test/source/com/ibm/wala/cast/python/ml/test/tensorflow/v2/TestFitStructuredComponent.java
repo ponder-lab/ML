@@ -22,6 +22,9 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_fit_structured_component.py";
 
+  /** Datasets chosen by a branch and then transformed. */
+  private static final String BATCHED_FILE = "tf2_test_fit_structured_component_batched.py";
+
   /**
    * A {@code float32} batch of rows of the given width whose batch extent is the reshape-style
    * placeholder, as a zipped dataset's batch reads its remainder.
@@ -359,5 +362,103 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
             Set.of(
                 TensorType.of(FLOAT_32, 2, 6),
                 new TensorType(UNKNOWN, List.of(new NumericDim(2), new NumericDim(6))))));
+  }
+
+  /**
+   * As {@link #testBranchMixedInputs()}, with the batch applied after the branch, {@code (a if flag
+   * else b).batch(2)}: the batch's receiver is either dataset, so the component is the flat
+   * dataset's tensor, batched, {@code (2, 6)}, beside a wholly unknown member for the tuple, and
+   * not the tensor of whichever receiver is read first.
+   */
+  @Test
+  public void testBatchedMixedInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        BATCHED_FILE,
+        "consume_mixed_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * As {@link #testBranchTupleInputs()}, with the batch applied after the branch: a tuple component
+   * on both datasets is no tensor.
+   */
+  @Test
+  public void testBatchedTupleInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(BATCHED_FILE, "consume_pair_batched", 0, 0, Map.of());
+  }
+
+  /**
+   * A flat component on both datasets of a branch, batched after it, is either dataset's tensor,
+   * batched: {@code (2, 6)} and {@code (2, 7)}.
+   */
+  @Test
+  public void testBatchedFlatInputs() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        BATCHED_FILE,
+        "consume_flat_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), TensorType.of(FLOAT_32, 2, 7))));
+  }
+
+  /**
+   * As {@link #testBatchedMixedInputs()}, under two transformations, {@code (a if flag else
+   * b).shuffle(4).batch(2)}: the batch's receiver is one shuffle, whose receiver is either dataset.
+   */
+  @Test
+  public void testShuffledMixedInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        BATCHED_FILE,
+        "consume_mixed_shuffled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * A tuple component on both datasets of a branch, of different arities, under two
+   * transformations, is no tensor: each receiver has a structure there.
+   */
+  @Test
+  public void testShuffledPairOrTripleInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(BATCHED_FILE, "consume_pair_or_triple_shuffled", 0, 0, Map.of());
+  }
+
+  /**
+   * As {@link #testShuffledMixedInputs()}, with the flat dataset as the branch's first choice: the
+   * reading does not depend on which receiver comes first.
+   */
+  @Test
+  public void testShuffledFlatOrPairInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        BATCHED_FILE,
+        "consume_flat_or_pair_shuffled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * A {@code map} whose function takes the element's components as parameters, {@code lambda inp,
+   * y: inp}, returns one component and not the element, so the mapped element is that component,
+   * the tuple {@code (x, mask)}, and its inputs component is the tensor {@code x}, batched, {@code
+   * (2, 4)}, not the structure the receiver's element has there.
+   */
+  @Test
+  public void testMapComponentInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        BATCHED_FILE,
+        "consume_map_component",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
 }

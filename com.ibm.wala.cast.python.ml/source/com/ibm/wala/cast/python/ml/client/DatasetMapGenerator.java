@@ -33,6 +33,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -316,6 +317,9 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
+    // A mapped element that is a component of the receiver's is a tuple where that component is.
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.isStructureAt(builder, List.of(returned));
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
     if (elementPTS != null && !elementPTS.isEmpty()) {
       for (InstanceKey ik : elementPTS) {
@@ -330,6 +334,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.getShapesForPath(builder, List.of(returned, index));
     OrdinalSet<InstanceKey> componentPTS = getMappedElementComponentPointsToSet(builder, index);
     if (componentPTS != null && !componentPTS.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, componentPTS);
@@ -355,6 +361,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.getDTypesForPath(builder, List.of(returned, index));
     OrdinalSet<InstanceKey> componentPTS = getMappedElementComponentPointsToSet(builder, index);
     if (componentPTS != null && !componentPTS.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, componentPTS);
@@ -375,22 +383,60 @@ public class DatasetMapGenerator extends DatasetGenerator {
   }
 
   /**
-   * Whether {@code map_func} returns its input unchanged: every return is one of the callback's
-   * parameters, and nothing in the callback could change it, neither a write of one of its
-   * properties nor a call it is passed to or whose method it supplies, such as {@code
-   * e.update(...)}. The mapped element is then the receiver's element, so the receiver answers a
-   * path into it.
+   * Whether {@code map_func} returns its input unchanged: every return is the callback's one
+   * parameter, the whole element, and nothing in the callback could change it ({@link
+   * #returnedParameter}). The mapped element is then the receiver's element, so the receiver
+   * answers a path into it.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
    * @return {@code true} iff the callback has a return and each one passes its input through.
    */
   private boolean returnsInputUnchanged(PropagationCallGraphBuilder builder) {
+    int[] returned = this.returnedParameter(builder);
+    return returned != null && returned[1] == 1;
+  }
+
+  /**
+   * The component of the receiver's element {@code map_func} returns unchanged, when it takes the
+   * element's components as several parameters, as {@code lambda x, y: x} does a pair: the mapped
+   * element is then the receiver's component at that position, not its element.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @return The component's position, or {@code -1} unless every return passes the same one of
+   *     several parameters through unchanged.
+   */
+  private int returnedComponent(PropagationCallGraphBuilder builder) {
+    int[] returned = this.returnedParameter(builder);
+    return returned != null && returned[1] > 1 ? returned[0] : -1;
+  }
+
+  /**
+   * The parameter every return of {@code map_func} is, when nothing in the callback could change
+   * it, neither a write of one of its properties nor a call it is passed to or whose method it
+   * supplies, such as {@code e.update(...)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @return The parameter's position among the callback's own parameters, after its function
+   *     object, and their number, or {@code null} unless the callback has a return and every one
+   *     passes the same parameter through unchanged.
+   */
+  private int[] returnedParameter(PropagationCallGraphBuilder builder) {
     Set<Pair<CGNode, Integer>> returns = getCallbackReturnValueNumbers(builder);
-    if (returns.isEmpty()) return false;
+    if (returns.isEmpty()) return null;
+    int[] ret = null;
     for (Pair<CGNode, Integer> returnValue : returns) {
       IR ir = returnValue.fst.getIR();
-      if (ir == null || !ir.getSymbolTable().isParameter(returnValue.snd)) return false;
+      if (ir == null || !ir.getSymbolTable().isParameter(returnValue.snd)) return null;
       int input = returnValue.snd;
+      // Parameter 0 is the function object; the element's are the ones after it, one for the
+      // whole element or one per component.
+      int parameters = ir.getSymbolTable().getNumberOfParameters() - 1;
+      int position = -1;
+      for (int i = 1; i <= parameters; i++)
+        if (ir.getSymbolTable().getParameter(i) == input) position = i - 1;
+      if (position < 0) return null;
+      if (ret == null) ret = new int[] {position, parameters};
+      else if (ret[0] != position || ret[1] != parameters) return null;
       // The values read off the input, any of which may be a method of it.
       Set<Integer> readOffInput = HashSetFactory.make();
       for (SSAInstruction instruction : ir.getInstructions())
@@ -402,14 +448,22 @@ public class DatasetMapGenerator extends DatasetGenerator {
         if ((instruction instanceof AstPropertyWrite write && write.getObjectRef() == input)
             || (instruction instanceof SSAPutInstruction put
                 && !put.isStatic()
-                && put.getRef() == input)) return false;
+                && put.getRef() == input)) return null;
         if (instruction instanceof SSAAbstractInvokeInstruction invoke)
           for (int i = 0; i < invoke.getNumberOfUses(); i++)
             if (invoke.getUse(i) == input || (i == 0 && readOffInput.contains(invoke.getUse(i))))
-              return false;
+              return null;
       }
     }
-    return true;
+    return ret;
+  }
+
+  /** The path into the receiver's element of a path into the given component of it. */
+  private static List<Object> withinComponent(int component, List<Object> path) {
+    List<Object> ret = new ArrayList<>(path.size() + 1);
+    ret.add(component);
+    ret.addAll(path);
+    return ret;
   }
 
   /**
@@ -465,6 +519,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   @Override
   public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.resolvesPath(builder, withinComponent(returned, path));
     if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
       return super.resolvesPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
@@ -480,6 +536,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.isStructureAt(builder, withinComponent(returned, path));
     if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
       return super.isStructureAt(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
@@ -497,6 +555,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.getShapesForPath(builder, withinComponent(returned, path));
     if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
       return super.getShapesForPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
@@ -524,6 +584,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   @Override
   public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    int returned = this.returnedComponent(builder);
+    if (returned >= 0) return super.getDTypesForPath(builder, withinComponent(returned, path));
     if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
       return super.getDTypesForPath(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =

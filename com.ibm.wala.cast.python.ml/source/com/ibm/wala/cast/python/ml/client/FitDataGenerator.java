@@ -418,6 +418,71 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     return ret;
   }
 
+  /** How deep {@link #spreadOverReceivers} follows a chain of transformations. */
+  private static final int SPREAD_DEPTH = 16;
+
+  /**
+   * The datasets the given ones are, with each transformation whose receiver may be several
+   * datasets applied to each of them on its own ({@link DatasetGenerator#overReceiver}), through a
+   * chain of such transformations, so that {@code (a if flag else b).shuffle(4).batch(2)} is the
+   * batch of the shuffle of {@code a} and that of {@code b}: the join of both, never the first
+   * (wala/ML#1009).
+   *
+   * @param builder The builder.
+   * @param generators The datasets' generators.
+   * @return The spread datasets, each yielding a tuple element, or {@code null} when none of the
+   *     given ones is several, or when a spread one yields no tuple element or a chain is cyclic or
+   *     deeper than {@link #SPREAD_DEPTH}, which the given reading keeps.
+   */
+  private static List<TensorGenerator> spreadOverReceivers(
+      PropagationCallGraphBuilder builder, List<TensorGenerator> generators) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    boolean spread = false;
+    for (TensorGenerator generator : generators) {
+      List<TensorGenerator> parts = spread(builder, generator, new ArrayList<>());
+      if (parts == null) return null;
+      if (parts.size() != 1 || parts.get(0) != generator) spread = true;
+      for (TensorGenerator part : parts)
+        if (!(part instanceof TupleElementProvider tep && tep.yieldsTuple(builder))) return null;
+        else if (!ret.contains(part)) ret.add(part);
+    }
+    return spread && ret.size() > 1 ? ret : null;
+  }
+
+  /**
+   * One dataset spread over its receivers, as {@link #spreadOverReceivers} does.
+   *
+   * @param path The transformations the chain has passed through to reach the given one.
+   * @return The datasets, the given one alone when it is not spread, or {@code null} when the chain
+   *     reaches a transformation again or is deeper than {@link #SPREAD_DEPTH}.
+   */
+  private static List<TensorGenerator> spread(
+      PropagationCallGraphBuilder builder, TensorGenerator generator, List<TensorGenerator> path) {
+    if (!(generator instanceof DatasetGenerator dg && dg.elementFollowsReceiver()))
+      return List.of(generator);
+    if (path.contains(generator) || path.size() >= SPREAD_DEPTH) return null;
+    List<TensorGenerator> receivers = dg.getReceiverGenerators(builder);
+    if (receivers == null || receivers.isEmpty()) return List.of(generator);
+    path.add(generator);
+    List<TensorGenerator> spreadReceivers = new ArrayList<>();
+    for (TensorGenerator receiver : receivers) {
+      while (receiver instanceof DelegatingTensorGenerator dtg) {
+        TensorGenerator next = dtg.getUnderlying();
+        if (next == null || next == receiver) break;
+        receiver = next;
+      }
+      List<TensorGenerator> parts = spread(builder, receiver, path);
+      if (parts == null) return null; // Abandons the whole spread, so the path is not reused.
+      for (TensorGenerator part : parts)
+        if (!spreadReceivers.contains(part)) spreadReceivers.add(part);
+    }
+    path.remove(path.size() - 1);
+    if (spreadReceivers.size() <= 1) return List.of(generator);
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator receiver : spreadReceivers) ret.add(dg.overReceiver(receiver));
+    return ret;
+  }
+
   /**
    * The union of components: unknown when one is unknown and no other contributes.
    *
@@ -524,6 +589,13 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     // may not be. Where the choice is either, the slot has a creator per dataset, and its element
     // is their join.
     List<TensorGenerator> parts = datasetCreators(builder, slot);
+    // A transformation of a dataset that is itself either of several, as `(a if flag else
+    // b).batch(2)`, is the slot's one creator, and its reads forward to one of its receiver's
+    // datasets; applied to each of them on its own, it is a part of the join like a creator.
+    List<TensorGenerator> spread =
+        spreadOverReceivers(
+            builder, parts != null ? parts : generator == null ? List.of() : List.of(generator));
+    if (spread != null) parts = spread;
     if (parts != null && parts.size() == 1) {
       generator = parts.get(0);
       parts = null;
