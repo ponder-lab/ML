@@ -304,19 +304,6 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
     return false;
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @implNote A structure in every dataset the element may come from.
-   */
-  @Override
-  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
-    List<TupleElementProvider> providers = providers();
-    if (providers.isEmpty()) return false;
-    for (TupleElementProvider tep : providers) if (!tep.isStructureAt(builder, path)) return false;
-    return true;
-  }
-
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {

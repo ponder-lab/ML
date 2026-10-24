@@ -105,9 +105,8 @@ public interface TupleElementProvider {
       } catch (IllegalArgumentException e) {
         return false;
       }
-      if (asin == null) return false;
-      TypeReference type = asin.concreteType().getReference();
-      if (!type.equals(PythonTypes.tuple) && !type.equals(PythonTypes.dict)) return false;
+      TypeReference type = asin == null ? null : asin.concreteType().getReference();
+      if (!PythonTypes.tuple.equals(type) && !PythonTypes.dict.equals(type)) return false;
     }
     return true;
   }

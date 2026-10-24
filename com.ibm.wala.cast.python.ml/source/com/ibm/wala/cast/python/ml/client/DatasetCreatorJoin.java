@@ -103,20 +103,6 @@ public class DatasetCreatorJoin extends CreatorJoin implements TupleElementProvi
     return true;
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @implNote A structure in every joined provider.
-   */
-  @Override
-  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
-    List<TupleElementProvider> providers = this.providers();
-    if (providers == null || providers.isEmpty()) return false;
-    for (TupleElementProvider provider : providers)
-      if (!provider.isStructureAt(builder, path)) return false;
-    return true;
-  }
-
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
