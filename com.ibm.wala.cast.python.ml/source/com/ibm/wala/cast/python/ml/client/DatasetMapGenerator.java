@@ -430,9 +430,9 @@ public class DatasetMapGenerator extends DatasetGenerator {
       int input = returnValue.snd;
       // Parameter 0 is the function object; the element's are the ones after it, one for the
       // whole element or one per component. A bound method's own receiver, as for
-      // `ds.map(obj.method)`, would sit among them and shift the position by one; no such callback
-      // reaches here today, since the analysis does not yet resolve a bound method passed to
-      // `map`, and a fix for that must discount the receiver.
+      // `ds.map(obj.method)`, would sit among them and shift the position by one. A bound method
+      // passed to `map` reads as an unknown tensor today; whoever makes it read its type must
+      // discount the receiver here.
       int parameters = ir.getSymbolTable().getNumberOfParameters() - 1;
       int position = -1;
       for (int i = 1; i <= parameters; i++)
