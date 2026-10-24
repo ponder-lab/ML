@@ -702,6 +702,25 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String FILL_SIGNATURE = "tf.fill()";
 
+  private static final String SHAPE_OF_SIGNATURE = "tf.shape()";
+
+  /**
+   * https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/Tensor#set_shape. The method a
+   * tensor allocation carries as its {@code set_shape} field; it returns its receiver.
+   */
+  public static final MethodReference SET_SHAPE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
+          AstMethodReference.fnSelector);
+
+  private static final String SET_SHAPE_SIGNATURE = "tf.Tensor.set_shape()";
+
+  private static final String FLOATX_SIGNATURE = "tf.keras.backend.floatx()";
+
+  private static final String SET_FLOATX_SIGNATURE = "tf.keras.backend.set_floatx()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/linspace. */
   public static final MethodReference LINSPACE =
       MethodReference.findOrCreate(
@@ -2297,7 +2316,7 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/log")),
           AstMethodReference.fnSelector);
 
-  private static final String LOG_SIGNATURE = "tf.log()";
+  private static final String LOG_SIGNATURE = "tf.math.log()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_sum. */
   public static final MethodReference REDUCE_SUM =
@@ -2771,9 +2790,130 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/data/Dataset/from_tensor_slices")),
           AstMethodReference.fnSelector);
 
-  /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
+  /**
+   * The type of a summary class, by its name, for a {@link #TYPE_REFERENCE_TO_SIGNATURE} entry of a
+   * class no other member here refers to.
+   *
+   * @param name The class's type name, such as {@code Ltensorflow/functions/map_fn}.
+   * @return The type.
+   */
+  private static TypeReference summaryClass(String name) {
+    return TypeReference.findOrCreate(PythonTypes.pythonLoader, TypeName.string2TypeName(name));
+  }
+
+  /**
+   * The summary classes that model no API a program calls, so {@link
+   * com.ibm.wala.cast.python.ml.client.TensorFlowApis} never names them even when {@link
+   * #TYPE_REFERENCE_TO_SIGNATURE} gives them a signature or their class path looks like an API's:
+   *
+   * <ul>
+   *   <li>operations internal to other summaries, such as a recurrent layer's step and sequence and
+   *       {@code fit}'s data pack, whose signatures name the API that uses them;
+   *   <li>allocation types, which are never called, such as a dataset's or a directory iterator's;
+   *   <li>classes shared by several APIs, such as every Keras application's model;
+   *   <li>classes whose signature names no API that exists, such as a TensorFlow 1 tutorial reader.
+   * </ul>
+   */
+  public static final Set<TypeReference> NOT_API_CLASSES =
+      Set.of(
+          RNN_CELL_STEP.getDeclaringClass(),
+          RNN_SEQUENCE.getDeclaringClass(),
+          RNN_STEP.getDeclaringClass(),
+          summaryClass("Ltensorflow/functions/map_fn_element"),
+          summaryClass("Ltensorflow/keras/FitData"),
+          summaryClass("Ltensorflow/keras/UnpackedData"),
+          summaryClass("Ltensorflow/functions/ndarray"),
+          summaryClass("Ltensorflow/examples/tutorials/mnist/read_data_sets"),
+          summaryClass("Ltensorflow/data/Dataset"),
+          summaryClass("Ltensorflow/data/ListFilesDataset"),
+          summaryClass("Ltensorflow/keras/preprocessing/image/directory_iterator_images"),
+          summaryClass("Ltensorflow/keras/preprocessing/image/directory_iterator_labels"),
+          summaryClass("Ltensorflow/keras/applications/Application/__call__"),
+          summaryClass("Ltensorflow/keras/applications/Application/call"),
+          summaryClass("Ltensorflow/keras/layers/Embedding/weight"));
+
+  /**
+   * A mapping from a {@link TypeReference} to its associated TensorFlow signature. A signature of
+   * the form {@code tf.name()} also names the API the class models, which {@link
+   * com.ibm.wala.cast.python.ml.client.TensorFlowApis} reports to clients, so it must be the API's
+   * canonical Python name; a class that models no API a program calls belongs in {@link
+   * #NOT_API_CLASSES}.
+   */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
+          Map.entry(summaryClass("Ltensorflow/functions/map_fn"), "tf.map_fn()"),
+          Map.entry(summaryClass("Ltensorflow/functions/cond"), "tf.cond()"),
+          Map.entry(summaryClass("Ltensorflow/functions/while_loop"), "tf.while_loop()"),
+          Map.entry(summaryClass("Ltensorflow/functions/conv2d"), "tf.nn.conv2d()"),
+          Map.entry(summaryClass("Ltensorflow/functions/conv3d"), "tf.nn.conv3d()"),
+          Map.entry(summaryClass("Ltensorflow/functions/bias_add"), "tf.nn.bias_add()"),
+          Map.entry(summaryClass("Ltensorflow/functions/sort"), "tf.sort()"),
+          Map.entry(summaryClass("Ltensorflow/functions/TensorArray"), "tf.TensorArray()"),
+          Map.entry(
+              summaryClass("Ltensorflow/functions/dynamic_partition"), "tf.dynamic_partition()"),
+          Map.entry(summaryClass("Ltensorflow/functions/dynamic_stitch"), "tf.dynamic_stitch()"),
+          Map.entry(
+              summaryClass("Ltensorflow/functions/clip_by_global_norm"),
+              "tf.clip_by_global_norm()"),
+          Map.entry(
+              summaryClass("Ltensorflow/functions/assert_equal"), "tf.debugging.assert_equal()"),
+          Map.entry(
+              summaryClass("Ltensorflow/functions/executing_eagerly"), "tf.executing_eagerly()"),
+          Map.entry(summaryClass("Ltensorflow/functions/group"), "tf.group()"),
+          Map.entry(summaryClass("Ltensorflow/functions/no_op"), "tf.no_op()"),
+          Map.entry(summaryClass("Ltensorflow/functions/print"), "tf.print()"),
+          Map.entry(summaryClass("Ltensorflow/functions/eigh"), "tf.linalg.eigh()"),
+          Map.entry(
+              summaryClass("Ltensorflow/functions/parse_single_example"),
+              "tf.io.parse_single_example()"),
+          Map.entry(summaryClass("Ltensorflow/functions/shuffle"), "tf.random.shuffle()"),
+          Map.entry(
+              summaryClass("Ltensorflow/functions/shuffle_batch"), "tf.train.shuffle_batch()"),
+          Map.entry(summaryClass("Ltensorflow/functions/Graph"), "tf.Graph()"),
+          Map.entry(summaryClass("Ltensorflow/math/tanh"), "tf.math.tanh()"),
+          Map.entry(summaryClass("Ltensorflow/math/acos"), "tf.math.acos()"),
+          Map.entry(summaryClass("Ltensorflow/math/add_n"), "tf.math.add_n()"),
+          Map.entry(summaryClass("Ltensorflow/math/l2_normalize"), "tf.math.l2_normalize()"),
+          Map.entry(summaryClass("Ltensorflow/framework/TensorShape"), "tf.TensorShape()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/write"),
+              "tf.TensorArray.write()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/read"),
+              "tf.TensorArray.read()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/stack"),
+              "tf.TensorArray.stack()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/unstack"),
+              "tf.TensorArray.unstack()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/gather"),
+              "tf.TensorArray.gather()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/scatter"),
+              "tf.TensorArray.scatter()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/tensor_array_ops/TensorArray/concat"),
+              "tf.TensorArray.concat()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/variables/Variable/assign"),
+              "tf.Variable.assign()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/variables/Variable/assign_add"),
+              "tf.Variable.assign_add()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/variables/Variable/assign_sub"),
+              "tf.Variable.assign_sub()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/variables/Variable/scatter_add"),
+              "tf.Variable.scatter_add()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/variables/Variable/scatter_sub"),
+              "tf.Variable.scatter_sub()"),
+          Map.entry(
+              summaryClass("Ltensorflow/python/ops/variables/Variable/scatter_update"),
+              "tf.Variable.scatter_update()"),
           Map.entry(DATASET, DATASET_SIGNATURE),
           Map.entry(DATASET_BATCH_TYPE, DATASET_BATCH_SIGNATURE),
           Map.entry(DATASET_PADDED_BATCH_TYPE, DATASET_PADDED_BATCH_SIGNATURE),
@@ -2814,6 +2954,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ZEROS_LIKE.getDeclaringClass(), ZEROS_LIKE_SIGNATURE),
           Map.entry(ONES_LIKE.getDeclaringClass(), ONES_LIKE_SIGNATURE),
           Map.entry(FILL.getDeclaringClass(), FILL_SIGNATURE),
+          Map.entry(SHAPE_OF.getDeclaringClass(), SHAPE_OF_SIGNATURE),
+          Map.entry(SET_SHAPE.getDeclaringClass(), SET_SHAPE_SIGNATURE),
+          Map.entry(FLOATX.getDeclaringClass(), FLOATX_SIGNATURE),
+          Map.entry(SET_FLOATX.getDeclaringClass(), SET_FLOATX_SIGNATURE),
           Map.entry(SCATTER_ND.getDeclaringClass(), SCATTER_ND_SIGNATURE),
           Map.entry(LINSPACE.getDeclaringClass(), LINSPACE_SIGNATURE),
           Map.entry(BROADCAST_TO.getDeclaringClass(), BROADCAST_TO_SIGNATURE),

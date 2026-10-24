@@ -11,12 +11,16 @@
         <putfield class="LRoot" field="diags" fieldType="LRoot" ref="sparse" value="diags_fn"/>
         <new def="vstack_fn" class="Lscipy/sparse/vstack"/>
         <putfield class="LRoot" field="vstack" fieldType="LRoot" ref="sparse" value="vstack_fn"/>
+        <new def="special" class="Lscipy/special"/>
+        <putfield class="LRoot" field="special" fieldType="LRoot" ref="x" value="special"/>
         <return value="x"/>
       </method>
     </class>
     <package name="scipy">
       <!-- The `scipy.sparse` submodule object, reachable as a field of the `scipy` module so that both `import scipy.sparse as sp` (an `import("scipy")` followed by an `OBJECT_REF` on `sparse`) and `from scipy import sparse` resolve to it. Declared `allocatable="true"` for the same reason as `numpy/ndarray`: it is only referenced as a `<new>` target inside `scipy`'s `import()`. -->
       <class name="sparse" allocatable="true"></class>
+      <!-- The `scipy.special` submodule object, a field of the `scipy` module in the same way as `sparse`, so that `from scipy import special` and `scipy.special` after `import scipy` resolve to a module object. Its functions are not modeled. -->
+      <class name="special" allocatable="true"></class>
     </package>
     <package name="scipy/sparse">
       <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.diags.html -->
