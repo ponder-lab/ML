@@ -2096,8 +2096,9 @@ public abstract class TensorGenerator implements Cloneable {
     }
 
     if (def instanceof PythonInvokeInstruction) {
-      // `int(x)` over an integral argument is the identity, and it is the ordinary way a Python
-      // program turns a `/` quotient back into an index. Chasing through it is what lets a bound
+      // `int(x)` over an integral argument is the identity, over a float it truncates, and it is
+      // the ordinary way a Python program turns a `/` quotient back into an index. Chasing through
+      // it is what lets a bound
       // like `int(total / parts)` resolve (wala/ML#841).
       Integer viaCoercion =
           resolveIntThroughIntBuiltin(builder, node, (PythonInvokeInstruction) def, visited, depth);
@@ -2267,7 +2268,13 @@ public abstract class TensorGenerator implements Cloneable {
             .getName()
             .toString();
     if (!INT_BUILTIN_TYPE_NAME.equals(callee)) return null;
-    return resolveIntFlowSensitively(builder, node, call.getUse(1), visited, depth - 1);
+    int argument = call.getUse(1);
+    // The front end folds a float-valued operation over literals to its float (wala/ML#1143), so
+    // `int(4096 / 3)` wraps 1365.33..., which `int` truncates.
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (st.isNumberConstant(argument) && st.getConstantValue(argument) instanceof Double value)
+      return intTruncationOrNull(value);
+    return resolveIntFlowSensitively(builder, node, argument, visited, depth - 1);
   }
 
   /** The Python {@code int} builtin's declared type, as the front end names it. */
@@ -10579,6 +10586,20 @@ public abstract class TensorGenerator implements Cloneable {
     long longValue = value.longValue();
     if (doubleValue != longValue || longValue != (int) longValue) return null;
     return (int) longValue;
+  }
+
+  /**
+   * The value of {@code int(x)} for a float {@code x}, which Python truncates toward zero: {@code
+   * int(-1365.33)} is -1365, not the floor -1366.
+   *
+   * @param value The float.
+   * @return The truncation, or {@code null} when {@code value} is not finite or its truncation is
+   *     not an {@code int}.
+   */
+  private static Integer intTruncationOrNull(double value) {
+    if (!Double.isFinite(value)) return null;
+    long truncation = (long) value; // Java's cast truncates toward zero, as Python's `int` does.
+    return truncation == (int) truncation ? (int) truncation : null;
   }
 
   /**
