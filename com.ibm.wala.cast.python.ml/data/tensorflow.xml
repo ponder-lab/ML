@@ -3747,8 +3747,10 @@
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="constraint" arg1="wt" numArgs="2" def="constrained"/>
           <return value="w"/>
         </method>
-        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` records nothing the analysis reads. -->
+        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` stores the loss and the optimizer on the instance, as Keras does (`self.loss = loss or {}`, `self.optimizer = self._get_optimizer(optimizer)`), so a step that calls `self.loss(...)` or `self.optimizer.apply_gradients(...)` reaches them (wala/ML#1146). Keras keeps the metrics only inside a container, `compiled_metrics`, so `metrics` is not stored. -->
         <method name="compile" descriptor="()LRoot;" numArgs="10" paramNames="func self optimizer loss metrics loss_weights weighted_metrics run_eagerly steps_per_execution jit_compile">
+          <putfield class="LRoot" field="loss" fieldType="LRoot" ref="self" value="loss"/>
+          <putfield class="LRoot" field="optimizer" fieldType="LRoot" ref="self" value="optimizer"/>
           <new def="none" class="Lobject"/>
           <return value="none"/>
         </method>
