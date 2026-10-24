@@ -71,7 +71,9 @@ public class TestWrapperReentryContexts extends AbstractTensorTest {
     for (String node : nodes) {
       // A node the wrapper's call makes is anchored on it directly. A node beneath one of those,
       // such as a built-in layer's build (wala/ML#1145), names the wrapper's call deeper in its
-      // context, and is the callee's own, not a re-entry of the wrapper.
+      // context, and is the callee's own, not a re-entry of the wrapper. A re-entry keyed on its
+      // caller multiplies these direct nodes themselves: with the receiver keying disabled, this
+      // count reads 5,352.
       if (!node.contains(
           "@ Anchored: Node: <Code body of function Lscript " + FIXTURE + "/LayerWrapper/call>"))
         continue;

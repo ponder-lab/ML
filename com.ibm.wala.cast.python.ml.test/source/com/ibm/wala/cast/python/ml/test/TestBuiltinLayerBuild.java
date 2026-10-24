@@ -6,8 +6,11 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.CallTargets;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.TensorFlowApis;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
 import java.io.File;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -29,6 +32,8 @@ public class TestBuiltinLayerBuild extends TestPythonMLCallGraphShape {
   /** The name of the model of {@code Layer.add_weight}, which creates a layer's variables. */
   private static final String ADD_WEIGHT = "Ltensorflow/keras/layers/Layer/add_weight";
 
+  private static PythonSSAPropagationCallGraphBuilder builder;
+
   private static CallGraph callGraph;
 
   @BeforeClass
@@ -36,7 +41,7 @@ public class TestBuiltinLayerBuild extends TestPythonMLCallGraphShape {
     PythonTensorAnalysisEngine engine =
         new TestBuiltinLayerBuild()
             .makeEngine(Collections.<File>emptyList(), "tf2_test_builtin_layer_build.py");
-    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder = engine.defaultCallGraphBuilder();
     callGraph = builder.makeCallGraph(builder.getOptions());
   }
 
@@ -86,5 +91,25 @@ public class TestBuiltinLayerBuild extends TestPythonMLCallGraphShape {
   @Test
   public void testFlatten() {
     assertFalse(reachesAddWeight("FlattenModel"));
+  }
+
+  /**
+   * The build's call of {@code add_weight} names the API as a user layer's call does, so a client
+   * that names the calls of the nodes it walks finds the variable creation by its API.
+   */
+  @Test
+  public void testBuildNamesAddWeight() {
+    Set<String> apis = new HashSet<>();
+    for (CGNode node : callGraph)
+      if (node.getMethod()
+              .getDeclaringClass()
+              .getName()
+              .toString()
+              .equals("Ltensorflow/keras/layers/first_call_build")
+          && node.getIR() != null)
+        for (SSAInstruction instruction : node.getIR().getInstructions())
+          if (instruction instanceof SSAAbstractInvokeInstruction call)
+            apis.addAll(TensorFlowApis.of(builder, node, call));
+    assertTrue(apis.toString(), apis.contains("tensorflow.keras.layers.Layer.add_weight"));
   }
 }
