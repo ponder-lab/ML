@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.logging.Logger;
 import org.python.core.PyException;
+import org.python.core.PyFloat;
 import org.python.core.PyObject;
 import org.python.core.PyUnicode;
 import org.python.util.PythonInterpreter;
@@ -129,6 +130,16 @@ public class Python3Loader extends PythonLoader {
                   // surface).
                   logger.log(WARNING, e, () -> "Could not evaluate expression: " + unicode);
                   return null;
+                }
+
+                // A float folds to the `Double` the parser gives a float literal, never to a
+                // truncated integer: `0.5 + 0.25` is 0.75, not 0 (wala/ML#1143). A result with no
+                // literal form, such as an infinity, is left unfolded.
+                if (x instanceof PyFloat) {
+                  double value = x.asDouble();
+                  if (!Double.isFinite(value)) return null;
+                  logger.info(() -> s + " -> " + value);
+                  return value;
                 }
 
                 if (x.isNumberType()) {

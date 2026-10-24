@@ -68,6 +68,30 @@ def consume_inexact(x):
     pass
 
 
+def consume_negative_inexact(x):
+    pass
+
+
+def consume_parameter_inexact(x):
+    pass
+
+
+def consume_attribute_inexact(x):
+    pass
+
+
+def take(t, n):
+    return t[: int(n)]
+
+
+class Holder:
+    def __init__(self):
+        self.n = 4096 / 3
+
+    def take(self, t):
+        return t[: int(self.n)]
+
+
 # A negative bound counts from the end rather than clamping to zero.
 negative = y[:-1024]
 assert negative.shape == (3072,), negative.shape
@@ -81,8 +105,22 @@ consume_added(added)
 subbed = y[: 2048 - 1024]
 assert subbed.shape == (1024,), subbed.shape
 
-# An inexact quotient, which Python truncates. The front end folds arithmetic over literals, so
-# this resolves through the points-to read rather than through the fold.
+# An inexact quotient, which `int` truncates toward zero. The front end folds the quotient to
+# its float.
 inexact = y[: int(4096 / 3)]
 assert inexact.shape == (1365,), inexact.shape
 consume_inexact(inexact)
+
+# A negative inexact quotient truncates toward zero too, to -1365 rather than the floor -1366.
+negative_inexact = y[: int(-4096 / 3)]
+assert negative_inexact.shape == (2731,), negative_inexact.shape
+consume_negative_inexact(negative_inexact)
+
+# A quotient that reaches `int` through a parameter, and through an attribute.
+parameter_inexact = take(y, 4096 / 3)
+assert parameter_inexact.shape == (1365,), parameter_inexact.shape
+consume_parameter_inexact(parameter_inexact)
+
+attribute_inexact = Holder().take(y)
+assert attribute_inexact.shape == (1365,), attribute_inexact.shape
+consume_attribute_inexact(attribute_inexact)

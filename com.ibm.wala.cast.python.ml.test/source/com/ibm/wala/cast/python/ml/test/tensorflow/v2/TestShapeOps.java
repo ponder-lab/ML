@@ -2721,14 +2721,13 @@ public class TestShapeOps extends AbstractTensorTest {
 
   /**
    * A bound written as {@code int(4096 / 3)} resolves to the truncated 1365 that Python computes
-   * (wala/ML#841), which is worth pinning because it does NOT go through the arithmetic fold. The
-   * front end folds arithmetic over literals, so the points-to read answers first and the fold is
-   * never consulted.
+   * (wala/ML#841). The front end folds the quotient to its float, 1365.33..., and the bound reader
+   * truncates it toward zero, as {@code int} does (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>).
    *
-   * <p>That matters for reading the fold's own conservatism: it declines an inexact quotient, on
-   * the grounds that Python's {@code /} is true division and inventing a truncation would be
-   * guessing rather than computing. This test does not exercise that decline, and no fixture here
-   * does, because forcing it needs an inexact division whose operands the front end cannot fold.
+   * <p>The arithmetic fold's own conservatism, declining an inexact quotient because Python's
+   * {@code /} is true division, is not exercised here, and no fixture here does, because forcing it
+   * needs an inexact division whose operands the front end cannot fold.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2736,11 +2735,74 @@ public class TestShapeOps extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    */
   @Test
-  public void testSliceInexactQuotientDegrades()
+  public void testSliceInexactQuotientTruncates()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_slice_computed_bounds.py",
         "consume_inexact",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));
+  }
+
+  /**
+   * A bound written as {@code int(-4096 / 3)} truncates toward zero, to -1365, so the slice keeps
+   * 2731 elements; the floor -1366 would keep 2730 (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceNegativeInexactQuotientTruncates()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_negative_inexact",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 2731))));
+  }
+
+  /**
+   * A quotient {@code 4096 / 3} that reaches a bound's {@code int} through a parameter, {@code
+   * t[:int(n)]}, truncates to 1365 there (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceParameterInexactQuotientTruncates()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_parameter_inexact",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));
+  }
+
+  /**
+   * A quotient {@code 4096 / 3} stored in an attribute and read by a bound's {@code int}, {@code
+   * t[:int(self.n)]}, truncates to 1365 there (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceAttributeInexactQuotientTruncates()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_attribute_inexact",
         1,
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));

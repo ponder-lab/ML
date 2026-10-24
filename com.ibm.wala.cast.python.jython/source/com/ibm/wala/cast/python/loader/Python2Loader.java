@@ -31,6 +31,7 @@ import com.ibm.wala.classLoader.SourceModule;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import java.io.IOException;
 import java.util.List;
+import org.python.core.PyFloat;
 import org.python.core.PyObject;
 
 public class Python2Loader extends PythonLoader {
@@ -95,6 +96,12 @@ public class Python2Loader extends PythonLoader {
                 try {
                   PyObject x =
                       Python2Interpreter.getInterp().eval(lhs + " " + op.getValue() + " " + rhs);
+                  // As in `Python3Loader`, a float folds to its `Double` rather than a truncated
+                  // integer (wala/ML#1143).
+                  if (x instanceof PyFloat) {
+                    double value = x.asDouble();
+                    return Double.isFinite(value) ? value : null;
+                  }
                   if (x.isNumberType()) {
                     System.err.println(lhs + " " + op.getValue() + " " + rhs + " -> " + x.asInt());
                     return x.asInt();
