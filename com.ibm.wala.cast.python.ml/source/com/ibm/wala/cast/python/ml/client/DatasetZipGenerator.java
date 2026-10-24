@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 
 /** A generator for datasets created by {@code tf.data.Dataset.zip}. */
@@ -226,6 +227,29 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
         return false;
     }
     return true;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The first selector picks zipped datasets, and the rest of the path is every picked
+   *     dataset's, whose declared lengths must agree. The zipped tuple itself, the empty path, is
+   *     not reported.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.isEmpty()) return OptionalInt.empty();
+    List<TensorGenerator> datasets = this.getDatasetsFor(builder, path.get(0));
+    if (datasets.isEmpty()) return OptionalInt.empty();
+    List<Object> rest = path.subList(1, path.size());
+    int ret = -1;
+    for (TensorGenerator dataset : datasets) {
+      if (!(dataset instanceof TupleElementProvider tep)) return OptionalInt.empty();
+      OptionalInt arity = tep.declaredArity(builder, rest);
+      if (arity.isEmpty() || (ret >= 0 && ret != arity.getAsInt())) return OptionalInt.empty();
+      ret = arity.getAsInt();
+    }
+    return OptionalInt.of(ret);
   }
 
   /**

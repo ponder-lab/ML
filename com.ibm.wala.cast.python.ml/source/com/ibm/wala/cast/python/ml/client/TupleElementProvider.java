@@ -15,6 +15,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -86,6 +87,45 @@ public interface TupleElementProvider {
    */
   default boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
     return false;
+  }
+
+  /**
+   * The number of components of the tuple a path of selectors reaches within the generated element,
+   * when the program declares that tuple: the literal tuple a dataset's structure argument holds
+   * there, such as {@code (x, mask)} in {@code from_tensor_slices(((x, mask), y))}. Unlike {@link
+   * #resolvesPath}, which a provider may answer for any index, this reports only a declared
+   * structure, so a client may read exactly the indices below it with {@link
+   * #getTensorTypesForPath}. A dict has no declared order, so it has no arity here.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param path The selectors, outermost first; empty for the whole element.
+   * @return The tuple's length, or empty when the path reaches no tuple the program declares, or
+   *     the provider cannot tell.
+   */
+  default OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    return OptionalInt.empty();
+  }
+
+  /**
+   * The length of the tuples a points-to set holds, when it holds only tuple displays that program
+   * code allocates, all of one length ({@link ContainerElements#arity()}).
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param pointsToSet The points-to set, possibly {@code null}.
+   * @return The tuples' length, or empty when the set is empty, holds anything else, or its tuples
+   *     differ in length.
+   */
+  static OptionalInt declaredArityOf(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null || pointsToSet.isEmpty()) return OptionalInt.empty();
+    int ret = -1;
+    for (InstanceKey ik : pointsToSet) {
+      if (!PythonTypes.tuple.equals(ik.concreteType().getReference())) return OptionalInt.empty();
+      OptionalInt arity = ContainerElements.of(builder, ik).arity();
+      if (arity.isEmpty() || (ret >= 0 && ret != arity.getAsInt())) return OptionalInt.empty();
+      ret = arity.getAsInt();
+    }
+    return OptionalInt.of(ret);
   }
 
   /**

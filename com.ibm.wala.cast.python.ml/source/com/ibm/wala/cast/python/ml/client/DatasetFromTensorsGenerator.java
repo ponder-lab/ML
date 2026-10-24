@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -90,6 +91,23 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       }
     }
     return false;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The length of the literal tuple the {@code tensors} argument holds at the path, which
+   *     the dataset's one element holds whole.
+   */
+  @Override
+  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
+    return TupleElementProvider.declaredArityOf(
+        builder,
+        selectComponent(
+            builder,
+            this.getArgumentPointsToSet(
+                builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName()),
+            path));
   }
 
   /**

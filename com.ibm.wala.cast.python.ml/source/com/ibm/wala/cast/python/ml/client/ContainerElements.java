@@ -18,6 +18,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
@@ -231,17 +232,315 @@ public final class ContainerElements {
   /** The builder whose pointer analysis holds the keys. */
   private final PropagationCallGraphBuilder builder;
 
+  /**
+   * How a value's elements are read when they are not read off {@link #allElements} and {@link
+   * #positions}: a {@link #ofValue value} that is a structured component, or one of several
+   * containers. {@code null} for an instance's elements.
+   */
+  private final Reader reader;
+
+  /** A reading of elements that are not the keys of one container instance. */
+  private interface Reader {
+
+    List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis);
+
+    Set<TensorType> elementTypes(TensorTypeAnalysis analysis);
+
+    boolean mayHoldNone();
+  }
+
   private ContainerElements(
       int arity,
       List<PointerKey> positions,
       Set<PointerKey> allElements,
       boolean complete,
       PropagationCallGraphBuilder builder) {
+    this(arity, positions, allElements, complete, builder, null);
+  }
+
+  private ContainerElements(
+      int arity,
+      List<PointerKey> positions,
+      Set<PointerKey> allElements,
+      boolean complete,
+      PropagationCallGraphBuilder builder,
+      Reader reader) {
     this.arity = arity;
     this.positions = Collections.unmodifiableList(positions);
     this.allElements = Collections.unmodifiableSet(allElements);
     this.complete = complete;
     this.builder = builder;
+    this.reader = reader;
+  }
+
+  /**
+   * A dataset element's component, the value a generator reads at a path of selectors within the
+   * element a {@link TupleElementProvider} generates: the inputs a Keras step hands to {@code call}
+   * when {@code fit} is given a dataset, or the components a loop over a dataset unpacks.
+   *
+   * @param provider The element's provider.
+   * @param path The selectors, outermost first.
+   * @param generator The generator reading the component.
+   */
+  public record DatasetComponent(
+      TupleElementProvider provider, List<Object> path, TensorGenerator generator) {
+
+    /**
+     * The length of the tuple this component is, when the program declares that tuple ({@link
+     * TupleElementProvider#declaredArity}).
+     *
+     * @param builder The builder.
+     * @return The length, or empty when the component is no declared tuple.
+     */
+    public OptionalInt declaredArity(PropagationCallGraphBuilder builder) {
+      return this.provider.declaredArity(builder, this.path);
+    }
+  }
+
+  /**
+   * The dataset element's component a value is, when the factory's generator for it reads one: a
+   * {@link DatasetTupleElementGenerator} over a {@link TupleElementProvider}.
+   *
+   * @param builder The builder.
+   * @param value The value.
+   * @return The component, or {@code null} when the value is no such component.
+   */
+  public static DatasetComponent datasetComponent(
+      PropagationCallGraphBuilder builder, PointerKey value) {
+    if (builder.getPropagationSystem().isImplicit(value)) return null;
+    TensorGenerator generator;
+    try {
+      generator =
+          TensorGeneratorFactory.getGenerator(
+              builder.getPropagationSystem().findOrCreatePointsToSet(value), builder);
+    } catch (IllegalArgumentException | UnimplementedError e) {
+      return null;
+    }
+    return generator instanceof DatasetTupleElementGenerator element
+            && element.getUnderlying() instanceof TupleElementProvider provider
+        ? new DatasetComponent(provider, element.getPath(), element)
+        : null;
+  }
+
+  /**
+   * Reads the elements of a value, whatever the instances it may hold. The value's points-to set
+   * need not name a container: a dataset element's component, such as the {@code inputs} a Keras
+   * step hands to {@code call} when {@code fit} is given {@code from_tensor_slices(((x, mask),
+   * y))}, is a tuple at run time that no allocation in the pointer analysis stands for.
+   *
+   * <ul>
+   *   <li>A value that is a dataset element's component ({@link #datasetComponent}) the program
+   *       declares as a tuple ({@link TupleElementProvider#declaredArity}) has that tuple's length.
+   *       Its {@link #positionTypes} are the types the element's provider gives each declared
+   *       position, read only below that length; no flow-graph variable holds a position, so they
+   *       are the provider's reading rather than the dataflow's. Its {@link #positions()} are
+   *       empty, as it has no element keys. It is {@linkplain #isComplete() complete} only when
+   *       each position is known to be a tensor: its types are read, none is wholly unknown, and
+   *       the provider does not take it for a structure ({@link
+   *       TupleElementProvider#isStructureAt}).
+   *   <li>A value that is a component the program does not declare as a tuple, such as a tensor, or
+   *       a tuple on one branch and a tensor on another, has no length. Its {@link #elementTypes}
+   *       are the component's own types. It is complete only when it is known to be a tensor, as a
+   *       declared position is: no types, a wholly unknown one, which a component that may be a
+   *       structure carries, or a structure the provider reports leave it incomplete.
+   *   <li>Any other value merges the {@link #of containers} its points-to set holds: their common
+   *       length, when they agree, the union of their types, and completeness only when each is
+   *       complete. Its {@link #positions()} are those of its one container, and empty for several.
+   *       A value whose points-to set is empty has no length and is not complete.
+   * </ul>
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis models the value.
+   * @param value The value.
+   * @return Its elements.
+   */
+  public static ContainerElements ofValue(PropagationCallGraphBuilder builder, PointerKey value) {
+    DatasetComponent component = datasetComponent(builder, value);
+    if (component != null) {
+      OptionalInt declared = component.declaredArity(builder);
+      if (declared.isPresent()) {
+        List<Set<TensorType>> positions = new ArrayList<>(declared.getAsInt());
+        boolean complete = true;
+        for (int i = 0; i < declared.getAsInt(); i++) {
+          List<Object> at = new ArrayList<>(component.path());
+          at.add(i);
+          Set<TensorType> types = pathTypes(builder, component.provider(), at);
+          positions.add(types == null ? null : Collections.unmodifiableSet(new HashSet<>(types)));
+          complete &= isTensor(builder, component.provider(), at, types);
+        }
+        return new ContainerElements(
+            declared.getAsInt(), List.of(), Set.of(), complete, builder, structure(positions));
+      }
+      Set<TensorType> types = componentTypes(builder, component);
+      return new ContainerElements(
+          -1,
+          List.of(),
+          Set.of(),
+          isTensor(builder, component.provider(), component.path(), types),
+          builder,
+          flat(types));
+    }
+    List<ContainerElements> parts = new ArrayList<>();
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value))
+      parts.add(of(builder, ik));
+    if (parts.size() == 1) return parts.get(0);
+    if (parts.isEmpty())
+      return new ContainerElements(-1, List.of(), Set.of(), false, builder, flat(Set.of()));
+    int arity = parts.get(0).arity;
+    boolean complete = true;
+    Set<PointerKey> allElements = new LinkedHashSet<>();
+    for (ContainerElements part : parts) {
+      if (part.arity != arity) arity = -1;
+      complete &= part.complete;
+      allElements.addAll(part.allElements);
+    }
+    return new ContainerElements(
+        arity, List.of(), allElements, complete, builder, merged(parts, arity));
+  }
+
+  /**
+   * Whether a component is known to be a tensor of the types read for it: the types are read, none
+   * is wholly unknown, and the provider does not take the component for a structure. Any other
+   * component may be a structure, whose members its types do not show, or may be anything.
+   *
+   * @param provider The element's provider.
+   * @param path The component's selectors.
+   * @param types The types read for the component, {@code null} when unreadable.
+   * @return {@code true} iff the component is known to be a tensor of those types.
+   */
+  private static boolean isTensor(
+      PropagationCallGraphBuilder builder,
+      TupleElementProvider provider,
+      List<Object> path,
+      Set<TensorType> types) {
+    if (types == null || types.isEmpty() || types.stream().anyMatch(ContainerElements::isTop))
+      return false;
+    try {
+      return !provider.isStructureAt(builder, path);
+    } catch (IllegalArgumentException | UnimplementedError e) {
+      return false;
+    }
+  }
+
+  /**
+   * A provider's types at a path.
+   *
+   * @return The types, or {@code null} when the provider cannot read them.
+   */
+  private static Set<TensorType> pathTypes(
+      PropagationCallGraphBuilder builder, TupleElementProvider provider, List<Object> path) {
+    try {
+      return provider.getTensorTypesForPath(builder, path);
+    } catch (IllegalArgumentException | UnimplementedError e) {
+      return null;
+    }
+  }
+
+  /** Whether a type is wholly unknown: no known shape and no known dtype. */
+  private static boolean isTop(TensorType type) {
+    return type.getDims() == null && type.getDType() == DType.UNKNOWN;
+  }
+
+  /**
+   * A component's own tensor types, as its provider reads them. A single index is read with {@link
+   * TupleElementProvider#getTensorTypesForIndex}, which marks a component that is a tensor on some
+   * of the joined datasets and a structure on others with a wholly unknown member.
+   *
+   * @return The types, or {@code null} when the provider cannot read them.
+   */
+  private static Set<TensorType> componentTypes(
+      PropagationCallGraphBuilder builder, DatasetComponent component) {
+    List<Object> path = component.path();
+    if (!(path.size() == 1 && path.get(0) instanceof Integer index))
+      return pathTypes(builder, component.provider(), path);
+    try {
+      return component.provider().getTensorTypesForIndex(builder, index);
+    } catch (IllegalArgumentException | UnimplementedError e) {
+      return null;
+    }
+  }
+
+  /**
+   * The reading of a declared tuple component: its provider's types at each declared index.
+   *
+   * @param positions Per declared index, the types read there, {@code null} when unreadable.
+   */
+  private static Reader structure(List<Set<TensorType>> positions) {
+    return new Reader() {
+      @Override
+      public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
+        List<Set<TensorType>> ret = new ArrayList<>();
+        for (Set<TensorType> types : positions) ret.add(types == null ? Set.of() : types);
+        return Collections.unmodifiableList(ret);
+      }
+
+      @Override
+      public Set<TensorType> elementTypes(TensorTypeAnalysis analysis) {
+        Set<TensorType> ret = new HashSet<>();
+        for (Set<TensorType> types : this.positionTypes(analysis)) ret.addAll(types);
+        return Collections.unmodifiableSet(ret);
+      }
+
+      @Override
+      public boolean mayHoldNone() {
+        // A dataset's component may be None (tf.data's NoneTensorSpec), which its type shows; a
+        // position the provider cannot read, or reads as wholly unknown, may be anything.
+        for (Set<TensorType> types : positions)
+          if (types == null || types.stream().anyMatch(t -> t.isNone() || isTop(t))) return true;
+        return false;
+      }
+    };
+  }
+
+  /** The reading of a component that is no declared tuple: its own types, and no positions. */
+  private static Reader flat(Set<TensorType> types) {
+    return new Reader() {
+      @Override
+      public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
+        return List.of();
+      }
+
+      @Override
+      public Set<TensorType> elementTypes(TensorTypeAnalysis analysis) {
+        return types == null ? Set.of() : Collections.unmodifiableSet(new HashSet<>(types));
+      }
+
+      @Override
+      public boolean mayHoldNone() {
+        return types == null || types.stream().anyMatch(t -> t.isNone() || isTop(t));
+      }
+    };
+  }
+
+  /** The reading of several containers: per position and in all, the union of theirs. */
+  private static Reader merged(List<ContainerElements> parts, int arity) {
+    return new Reader() {
+      @Override
+      public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
+        if (arity < 0) return List.of();
+        List<Set<TensorType>> ret = new ArrayList<>(arity);
+        for (int i = 0; i < arity; i++) ret.add(new HashSet<>());
+        for (ContainerElements part : parts) {
+          List<Set<TensorType>> types = part.positionTypes(analysis);
+          for (int i = 0; i < arity && i < types.size(); i++) ret.get(i).addAll(types.get(i));
+        }
+        List<Set<TensorType>> unmodifiable = new ArrayList<>(arity);
+        for (Set<TensorType> types : ret) unmodifiable.add(Collections.unmodifiableSet(types));
+        return Collections.unmodifiableList(unmodifiable);
+      }
+
+      @Override
+      public Set<TensorType> elementTypes(TensorTypeAnalysis analysis) {
+        Set<TensorType> ret = new HashSet<>();
+        for (ContainerElements part : parts) ret.addAll(part.elementTypes(analysis));
+        return Collections.unmodifiableSet(ret);
+      }
+
+      @Override
+      public boolean mayHoldNone() {
+        for (ContainerElements part : parts) if (part.mayHoldNone()) return true;
+        return false;
+      }
+    };
   }
 
   /**
@@ -350,7 +649,8 @@ public final class ContainerElements {
    * The key of the element at each position.
    *
    * @return The keys of positions {@code 0..n-1}, where {@code n} is {@link #arity()}; empty when
-   *     the length is not known.
+   *     the length is not known, and for a {@linkplain #ofValue value} that is a dataset element's
+   *     component or may be one of several containers, whose positions have no single key.
    */
   public List<PointerKey> positions() {
     return this.positions;
@@ -388,6 +688,7 @@ public final class ContainerElements {
    *     #isComplete()}.
    */
   public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
+    if (this.reader != null) return this.reader.positionTypes(analysis);
     List<Set<TensorType>> ret = new ArrayList<>(this.positions.size());
     for (PointerKey key : this.positions) {
       Set<TensorType> types = new HashSet<>();
@@ -409,6 +710,7 @@ public final class ContainerElements {
    *     and the client chooses the conservative reading for its own question.
    */
   public Set<TensorType> elementTypes(TensorTypeAnalysis analysis) {
+    if (this.reader != null) return this.reader.elementTypes(analysis);
     Set<TensorType> ret = new HashSet<>();
     for (PointerKey key : this.allElements) this.addTypes(analysis, key, ret);
     return Collections.unmodifiableSet(ret);
@@ -439,6 +741,7 @@ public final class ContainerElements {
    */
   public boolean mayHoldNone() {
     if (!this.complete) return true;
+    if (this.reader != null) return this.reader.mayHoldNone();
     for (PointerKey key : this.allElements)
       if (TensorGenerator.anyNullConstant(this.builder.getPointerAnalysis().getPointsToSet(key)))
         return true;
