@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
@@ -239,7 +239,7 @@ public final class TensorFlowApis {
       PointerAnalysis<InstanceKey> pointerAnalysis, CGNode node, int vn) {
     String ret = null;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pointerAnalysis.getPointsToSet(
                 pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, vn)))) {
       String module = MODULES.get(ik.concreteType().getReference());

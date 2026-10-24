@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -353,7 +353,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
             .getHeapModel()
             .getPointerKeyForLocal(view.callerNode(), view.receiverVn());
     for (InstanceKey member :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(receiver))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(receiver))) {
       AllocationSiteInNode site = getAllocationSiteInNode(member);
       if (site == null) continue;
       TypeReference type = site.concreteType().getReference();
@@ -387,7 +387,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       PointerKey pk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, useVn);
       OrdinalSet<InstanceKey> pts =
-          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+          withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
       if (pts == null || pts.isEmpty()) continue;
       for (InstanceKey ik : pts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
@@ -440,7 +440,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
             .getHeapModel()
             .getPointerKeyForLocal(view.callerNode(), view.receiverVn());
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(receiver));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(receiver));
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey member : pts) {
       AllocationSiteInNode site = getAllocationSiteInNode(member);
@@ -587,7 +587,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (vn <= 0) return false;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey ik : pts) {
       if (!(ik instanceof ConstantKey)) return false;
@@ -653,7 +653,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (vn <= 0) return null;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     Integer result = null;
     if (pts != null && !pts.isEmpty()) {
       for (InstanceKey ik : pts) {
@@ -792,7 +792,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
     if (vn <= 0) return null;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
-    return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+    return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
   }
 
   /**

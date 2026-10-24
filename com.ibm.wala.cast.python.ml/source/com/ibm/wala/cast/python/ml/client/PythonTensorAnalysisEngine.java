@@ -12,7 +12,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
@@ -43,6 +43,7 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -278,7 +279,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           new DatasetIteratorElementGenerator(
               node,
               DatasetIteratorElementGenerator.datasetsIn(
-                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(receiver)),
+                  withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(receiver)),
                   builder));
       List<Object> path = List.of(fieldKey.getField().getName().toString());
       if (!element.resolvesPath(builder, path)) continue;
@@ -727,7 +728,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     if (!dataflow.containsNode(var)) return;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Set<InstanceKey> held = HashSetFactory.make();
-    for (InstanceKey ik : withoutPythonScalarKeys(pa.getPointsToSet(var.getPointerKey())))
+    for (InstanceKey ik : withoutClientOnlyKeys(pa.getPointsToSet(var.getPointerKey())))
       held.add(ik);
     if (held.isEmpty()) {
       // Nothing to compare against, as distinct from a walk that found no same-value seed.
@@ -809,7 +810,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean holdsOnly(
       PointerAnalysis<InstanceKey> pa, PointsToSetVariable v, Set<InstanceKey> held) {
     boolean any = false;
-    for (InstanceKey ik : withoutPythonScalarKeys(pa.getPointsToSet(v.getPointerKey()))) {
+    for (InstanceKey ik : withoutClientOnlyKeys(pa.getPointsToSet(v.getPointerKey()))) {
       if (!held.contains(ik)) return false;
       any = true;
     }
@@ -952,7 +953,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                     "sources", PythonTypes.tuple))));
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
-    builder.setFreshArrayAttributes(Map.of(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_ATTRIBUTES));
+    // A tensor's `shape` attribute reads its static shape, whose `as_list()` is a list of Python
+    // ints, so a points-to client can tell those ints from a tensor (wala/ML#1104). The shape and
+    // its method are for points-to clients only: the generators read a shape structurally, as they
+    // did before, through `Util.withoutClientOnlyKeys`.
+    Map<TypeReference, TypeReference> shapeTypes = new HashMap<>();
+    shapeTypes.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    shapeTypes.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
+      shapeTypes.put(component, TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    builder.setFreshAttributeTypes(Map.of("shape", shapeTypes));
+    Util.registerClientOnlyType(TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    Util.registerClientOnlyType(TensorFlowTypes.STATIC_TENSOR_SHAPE_AS_LIST);
+    builder.setFreshArrayAttributes(
+        Map.of(
+            NumpyTypes.NDARRAY_TYPE,
+            NumpyTypes.NDARRAY_ATTRIBUTES,
+            TensorFlowTypes.STATIC_TENSOR_SHAPE,
+            Map.of("as_list", TensorFlowTypes.STATIC_TENSOR_SHAPE_AS_LIST)));
 
     final ContextSelector base = builder.getContextSelector();
     final ContextSelector targetedCFA =
@@ -1411,7 +1429,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // a condition is still typed in the tests, by another route, but nothing shows that every
       // such operand is (wala/ML#1086).
       if (builder.getPropagationSystem().isImplicit(key)) continue;
-      for (InstanceKey instance : withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(key))) {
+      for (InstanceKey instance : withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(key))) {
         TypeReference allocated =
             instance instanceof AllocationSiteInNode site
                 ? site.concreteType().getReference()
@@ -1574,7 +1592,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 && (readsConstantIntegerMember(propertyRead, localPointerKeyNode, pointerAnalysis)
                     || (readsConstantStringMember(
                             propertyRead, localPointerKeyNode, pointerAnalysis)
-                        && withoutPythonScalarKeys(
+                        && withoutClientOnlyKeys(
                                 pointerAnalysis.getPointsToSet(
                                     pointerAnalysis
                                         .getHeapModel()
@@ -1753,7 +1771,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         int target = instruction.getUse(0);
         PointerKey targetKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, target);
 
-        for (InstanceKey ik : withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(targetKey))) {
+        for (InstanceKey ik : withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(targetKey))) {
           if (ik instanceof ConcreteTypeKey) {
             ConcreteTypeKey ctk = (ConcreteTypeKey) ik;
             IClass type = ctk.type();
@@ -1790,7 +1808,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   PointerKey iterPK =
                       pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, iterator);
                   for (InstanceKey iterIK :
-                      withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(iterPK))) {
+                      withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(iterPK))) {
                     if (ret) break;
                     AllocationSiteInNode asin = findAllocationSiteInNode(iterIK);
                     if (asin != null) {
@@ -1943,7 +1961,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // Look up the use in the pointer analysis to see if it points to a dataset.
     PointerKey usePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, use);
 
-    for (InstanceKey ik : withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(usePointerKey))) {
+    for (InstanceKey ik : withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(usePointerKey))) {
       if (ik instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = (AllocationSiteInNode) ik;
         IClass concreteType = asin.concreteType();
@@ -1991,7 +2009,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, invocationUse);
 
         for (InstanceKey functionInstance :
-            withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(invocationUsePointerKey))) {
+            withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(invocationUsePointerKey))) {
           if (functionInstance instanceof ConcreteTypeKey) {
             ConcreteTypeKey typeKey = (ConcreteTypeKey) functionInstance;
             IClass type = typeKey.type();
@@ -2012,7 +2030,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, srcDef.getMemberRef());
 
               for (InstanceKey memberInstance :
-                  withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(memberRefPointerKey))) {
+                  withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(memberRefPointerKey))) {
                 ConstantKey<?> constant = (ConstantKey<?>) memberInstance;
                 Object value = constant.getValue();
 
@@ -2092,7 +2110,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PointerKey memberKey =
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef());
 
-    for (InstanceKey ik : withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(memberKey)))
+    for (InstanceKey ik : withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(memberKey)))
       if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof Number)
         return true;
 
@@ -2158,7 +2176,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PointerKey memberKey =
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef());
 
-    for (InstanceKey ik : withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(memberKey)))
+    for (InstanceKey ik : withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(memberKey)))
       if (ik instanceof ConstantKey<?> constant && constant.getValue() instanceof String)
         return true;
 
@@ -2228,7 +2246,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         PointerKey defPointerKey =
             pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, defVn);
         OrdinalSet<InstanceKey> defPointsToSet =
-            withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(defPointerKey));
+            withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(defPointerKey));
 
         for (InstanceKey ik : defPointsToSet) {
           AllocationSiteInNode asin = findAllocationSiteInNode(ik);
@@ -2342,7 +2360,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (builder.getPropagationSystem().isImplicit(key)) return true; // A constant or literal.
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key));
     return pts != null && !pts.isEmpty();
   }
 
@@ -2511,7 +2529,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // The syntactic `set_shape` pattern itself is strong evidence in the TF source files
         // this analyzer targets, so pinning on empty PTS is correct-on-balance.
         OrdinalSet<InstanceKey> recvPts =
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(receiverKey));
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(receiverKey));
         boolean receiverEligible = recvPts == null || recvPts.isEmpty();
         if (!receiverEligible) {
           for (InstanceKey ik : recvPts) {
@@ -2605,7 +2623,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointerKey usePK =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, use);
       for (InstanceKey useIK :
-          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(usePK)))
+          withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(usePK)))
         if (findAllocationSiteInNode(useIK) != null) return false;
     }
     // Classify by application context: a consumer that applies this slice to a list or tuple is
@@ -2625,7 +2643,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, appliedTo);
       boolean sawAllocation = false;
       for (InstanceKey appliedToIK :
-          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(appliedToPK))) {
+          withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(appliedToPK))) {
         AllocationSiteInNode asin = findAllocationSiteInNode(appliedToIK);
         if (asin == null) continue;
         sawAllocation = true;
@@ -2678,7 +2696,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean isKerasModelObject(
       PointsToSetVariable v, PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(v.getPointerKey()));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(v.getPointerKey()));
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey ik : pts) {
       // Only an allocation names a class here. A points-to set carrying anything else (a constant,
@@ -3333,11 +3351,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // `None` in `__init__` and to a tensor in `build` also reaches the read as the tensor, and the
     // read may run only after the reassignment.
     if (!onlyNone(
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, vn)))))
       return false;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForLocal(node, ref))))
       if (noneStores.contains(Pair.make(ik, member))) return true;
     return false;
@@ -3400,7 +3418,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     IField field = builder.getClassHierarchy().resolveField(global);
     if (field == null) return false;
     return holdsNone(
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(builder.getPointerKeyForStaticField(field))));
@@ -3446,7 +3464,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } else continue;
         if (member == null) continue;
         for (InstanceKey ik :
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 builder
                     .getPointerAnalysis()
                     .getPointsToSet(builder.getPointerKeyForLocal(node, ref))))
@@ -3601,7 +3619,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, value);
     boolean any = false;
     for (InstanceKey instance :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key))) {
       IClass type = instance.concreteType();
       if (type == null) return false;
       if (!type.getReference().equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE)) {
@@ -3833,7 +3851,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             .getPointerKeyForLocal(node, outer.getMemberRef());
     boolean isFirstElement = false;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
       if (ik instanceof ConstantKey
           && Integer.valueOf(0).equals(((ConstantKey<?>) ik).getValue())) {
         isFirstElement = true;

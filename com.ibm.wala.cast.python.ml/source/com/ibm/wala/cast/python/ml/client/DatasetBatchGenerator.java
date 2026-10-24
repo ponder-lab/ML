@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -120,12 +120,12 @@ public class DatasetBatchGenerator extends DatasetGenerator {
         int objVn = ((SSAGetInstruction) def).getRef();
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, objVn);
-        return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(objKey));
+        return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objKey));
       } else if (def instanceof PythonPropertyRead) {
         int objVn = ((PythonPropertyRead) def).getObjectRef();
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, objVn);
-        return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(objKey));
+        return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objKey));
       }
     }
     return OrdinalSet.empty();

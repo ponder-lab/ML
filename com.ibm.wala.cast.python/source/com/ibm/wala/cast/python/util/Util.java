@@ -41,6 +41,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -369,27 +371,63 @@ public class Util {
   }
 
   /**
-   * A points-to set without its Python scalar keys ({@link #isPythonScalarKey(InstanceKey)}). Such
-   * a key says that a value is a Python scalar but carries no value, so a reader that wants a
-   * value, such as a size or a constant argument, reads the set as it was before the keys existed
-   * and takes the same fallback for a value that has none (<a
+   * The types of the keys the builder adds for points-to clients only, which carry no value a
+   * reader of tensor values can use; see {@link #withoutClientOnlyKeys(OrdinalSet)}.
+   */
+  private static final Set<TypeReference> CLIENT_ONLY_TYPES = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Registers a type whose keys are for points-to clients only, such as the shape object a tensor's
+   * {@code shape} attribute reads (<a
+   * href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>).
+   *
+   * @param type The type.
+   */
+  public static void registerClientOnlyType(TypeReference type) {
+    CLIENT_ONLY_TYPES.add(type);
+  }
+
+  /**
+   * Whether an instance key is for points-to clients only: a Python scalar's type-level key ({@link
+   * #isPythonScalarKey(InstanceKey)}), a key of a type {@link #registerClientOnlyType} names, or a
+   * key the summary of such a type's method allocates.
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return {@code true} iff the key is for points-to clients only.
+   */
+  public static boolean isClientOnlyKey(InstanceKey instanceKey) {
+    if (isPythonScalarKey(instanceKey)
+        || CLIENT_ONLY_TYPES.contains(instanceKey.concreteType().getReference())) return true;
+    // A key a client-only method's summary allocates, such as the list a static shape's
+    // `as_list()` returns, is one too (wala/ML#1104).
+    AllocationSiteInNode site = findAllocationSiteInNode(instanceKey);
+    return site != null
+        && CLIENT_ONLY_TYPES.contains(
+            site.getNode().getMethod().getDeclaringClass().getReference());
+  }
+
+  /**
+   * A points-to set without its keys for points-to clients only ({@link
+   * #isClientOnlyKey(InstanceKey)}). Such a key says what kind of value a value is, a Python scalar
+   * or a tensor's static shape, but carries no value, so a reader that wants a value, such as a
+   * size or a constant argument, reads the set as it was before the keys existed and takes the same
+   * fallback for a value that has none (<a
    * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
    *
    * @param pointsToSet The points-to set, possibly {@code null}.
-   * @return The set without its scalar keys, or {@code pointsToSet} itself when it has none.
+   * @return The set without those keys, or {@code pointsToSet} itself when it has none.
    */
-  public static OrdinalSet<InstanceKey> withoutPythonScalarKeys(
-      OrdinalSet<InstanceKey> pointsToSet) {
+  public static OrdinalSet<InstanceKey> withoutClientOnlyKeys(OrdinalSet<InstanceKey> pointsToSet) {
     if (pointsToSet == null || pointsToSet.isEmpty()) return pointsToSet;
     boolean any = false;
     for (InstanceKey ik : pointsToSet)
-      if (isPythonScalarKey(ik)) {
+      if (isClientOnlyKey(ik)) {
         any = true;
         break;
       }
     if (!any) return pointsToSet;
     List<InstanceKey> kept = new ArrayList<>();
-    for (InstanceKey ik : pointsToSet) if (!isPythonScalarKey(ik)) kept.add(ik);
+    for (InstanceKey ik : pointsToSet) if (!isClientOnlyKey(ik)) kept.add(ik);
     return kept.isEmpty()
         ? OrdinalSet.empty()
         : OrdinalSet.toOrdinalSet(kept, pointsToSet.getMapping());

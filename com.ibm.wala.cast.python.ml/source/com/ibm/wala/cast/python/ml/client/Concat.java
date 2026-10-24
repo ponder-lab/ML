@@ -4,7 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.logging.Logger.getLogger;
 
@@ -158,7 +158,7 @@ public class Concat extends TensorGenerator {
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                       .getPointerKeyForObjectCatalog(asin)));
@@ -238,7 +238,7 @@ public class Concat extends TensorGenerator {
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                       .getPointerKeyForObjectCatalog(asin)));
@@ -547,8 +547,7 @@ public class Concat extends TensorGenerator {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     // A literal list's key is implicitly represented; the pointer analysis computes its contents.
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(
-            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
+        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey valIk : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
@@ -556,7 +555,7 @@ public class Concat extends TensorGenerator {
       TypeReference ref = asin.concreteType().getReference();
       if (!(ref.equals(list) || ref.equals(tuple))) return false;
       OrdinalSet<InstanceKey> catalog =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                       .getPointerKeyForObjectCatalog(asin)));
@@ -609,7 +608,7 @@ public class Concat extends TensorGenerator {
       if (f == null) continue;
       PointerKey pk = builder.getPointerKeyForInstanceField(listAsin, f);
       if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
-      return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+      return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     }
     return null;
   }
@@ -713,7 +712,7 @@ public class Concat extends TensorGenerator {
       TypeReference ref = asin.concreteType().getReference();
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
       OrdinalSet<InstanceKey> catalog =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                       .getPointerKeyForObjectCatalog(asin)));

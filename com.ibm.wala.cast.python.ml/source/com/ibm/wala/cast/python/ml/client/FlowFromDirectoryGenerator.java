@@ -1,7 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -356,7 +356,7 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
         PointerKey yTrueKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, yTrueVn);
         OrdinalSet<InstanceKey> yTruePts =
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(yTrueKey));
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(yTrueKey));
         boolean reaches = false;
         if (yTruePts != null)
           for (InstanceKey ik : yTruePts) if (labelsKeys.contains(ik)) reaches = true;
@@ -466,7 +466,7 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     PointerKey calleeKey =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, call.getUse(0));
     OrdinalSet<InstanceKey> calleePts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(calleeKey));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(calleeKey));
     if (calleePts == null) return false;
     for (InstanceKey ik : calleePts) {
       // A callee may also be a builtin function (a ConcreteTypeKey the allocation-site extractor
@@ -501,7 +501,7 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
       if (!call.hasDef()) continue;
       PointerKey key =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(anchor, call.getDef());
-      return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key));
+      return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key));
     }
     return null;
   }

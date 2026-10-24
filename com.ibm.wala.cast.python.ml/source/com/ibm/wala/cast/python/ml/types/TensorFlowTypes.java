@@ -452,6 +452,20 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/TensorShape"));
 
+  /**
+   * The shape a tensor's {@code shape} attribute reads, a type of its own apart from a {@link
+   * #TENSOR_SHAPE} the program constructs (<a
+   * href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>).
+   */
+  public static final TypeReference STATIC_TENSOR_SHAPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/StaticTensorShape"));
+
+  /** The {@code as_list} method of a {@link #STATIC_TENSOR_SHAPE} (wala/ML#1104). */
+  public static final TypeReference STATIC_TENSOR_SHAPE_AS_LIST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/StaticTensorShape/as_list"));
+
   /** The {@code dims} argument the {@code TensorShape} constructor stores (wala/ML#789). */
   public static final FieldReference TENSOR_SHAPE_DIMS =
       FieldReference.findOrCreate(TENSOR_SHAPE, findOrCreateAsciiAtom("dims"), Root);

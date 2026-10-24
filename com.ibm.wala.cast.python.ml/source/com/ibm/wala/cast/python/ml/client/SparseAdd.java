@@ -2,7 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -109,7 +109,7 @@ public class SparseAdd extends ElementWiseOperation {
         if (field != null) {
           PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
           OrdinalSet<InstanceKey> fieldPointsTo =
-              withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+              withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
           // Soundness: empty `dense_shape` PTS is "shape unknown" (the field exists but the
           // analysis couldn't recover any concrete shape values), not "skip this SparseTensor".
           // Skipping would conflate ⊤ with ⊥ and under-approximate the result for the whole
@@ -160,7 +160,7 @@ public class SparseAdd extends ElementWiseOperation {
         if (field != null) {
           PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
           OrdinalSet<InstanceKey> fieldPointsTo =
-              withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+              withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
           ret.addAll(this.getDTypesOfValue(builder, fieldPointsTo));
         }
       }

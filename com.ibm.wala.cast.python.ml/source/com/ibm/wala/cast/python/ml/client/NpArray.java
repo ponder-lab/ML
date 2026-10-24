@@ -5,7 +5,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -524,7 +524,7 @@ public class NpArray extends TensorGenerator {
     if (sourceVn > 0) {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(getNode(), sourceVn);
-      OrdinalSet<InstanceKey> sourcePTS = withoutPythonScalarKeys(pa.getPointsToSet(pk));
+      OrdinalSet<InstanceKey> sourcePTS = withoutClientOnlyKeys(pa.getPointsToSet(pk));
       // A scalar built by the `float`, `int` or `bool` builtin has an empty points-to set; it
       // converts as a literal of its type does.
       if (sourcePTS == null || sourcePTS.isEmpty()) {
@@ -749,7 +749,7 @@ public class NpArray extends TensorGenerator {
         }
 
         OrdinalSet<InstanceKey> catalogPTS =
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 pa.getPointsToSet(
                     ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                         .getPointerKeyForObjectCatalog(asin)));
@@ -764,7 +764,7 @@ public class NpArray extends TensorGenerator {
           if (f == null) continue;
 
           OrdinalSet<InstanceKey> fieldPTS =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
           // A static shape element, `t.shape[k]`, is a Python int, which NumPy converts to int64
           // as it does an integer literal.

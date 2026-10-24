@@ -78,6 +78,16 @@ def by_list_or_vector_element(x, flat):
     return tf.reshape(x, shape)
 
 
+def by_length(x, xs):
+    # The length of a list is a Python int, so the shape is a scalar (wala/ML#1148).
+    return tf.reshape(x, len(xs))
+
+
+def by_static_shape_list(x, y):
+    # A static shape's list holds Python ints, so the shape is a vector (wala/ML#1104).
+    return tf.reshape(x, y.shape.as_list())
+
+
 x = tf.zeros([3, 4])
 for f in (
     by_literal,
@@ -109,3 +119,11 @@ for f in (by_list, by_list_of_computed, by_numpy_vector):
     assert tf.function(f)(x).shape == (12,)
 assert tf.function(by_tuple)(tf.zeros([12])).shape == (3, 4)
 assert tf.function(by_shape_tensor)(tf.zeros([12]), x).shape == (3, 4)
+assert by_static_shape_list(x, tf.zeros([4, 3])).shape == (4, 3)
+assert tf.function(by_static_shape_list)(x, tf.zeros([4, 3])).shape == (4, 3)
+assert by_length(x, [0] * 12).shape == (12,)
+try:
+    tf.function(by_length)(x, [0] * 12)
+    raise AssertionError("A scalar shape is rejected while tracing.")
+except ValueError as e:
+    assert "Shape must be rank 1 but is rank 0" in str(e), e

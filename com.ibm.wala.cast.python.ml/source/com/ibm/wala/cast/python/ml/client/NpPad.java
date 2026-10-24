@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -341,7 +341,7 @@ public class NpPad extends TensorGenerator {
       PythonInvokeInstruction call,
       List<TypeReference> classes) {
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(builder.getPointerKeyForLocal(node, call.getUse(0))));

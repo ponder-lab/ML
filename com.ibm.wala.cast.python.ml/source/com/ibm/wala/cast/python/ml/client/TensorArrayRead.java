@@ -1,7 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_ARRAY_READS;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -64,7 +64,7 @@ public class TensorArrayRead extends TensorGenerator {
         if (!(instruction instanceof SSAGetInstruction get)
             || !get.getDeclaredField().getName().toString().equals("dtype")) continue;
         OrdinalSet<InstanceKey> pts =
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 builder
                     .getPointerAnalysis()
                     .getPointsToSet(builder.getPointerKeyForLocal(body, get.getDef())));

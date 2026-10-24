@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -174,7 +174,7 @@ public class RaggedRange extends Range {
               if (ref.equals(PythonTypes.list) || ref.equals(PythonTypes.tuple)) {
                 hasVector = true;
                 OrdinalSet<InstanceKey> catalog =
-                    withoutPythonScalarKeys(
+                    withoutClientOnlyKeys(
                         pointerAnalysis.getPointsToSet(
                             ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                                 .getPointerKeyForObjectCatalog(asin)));

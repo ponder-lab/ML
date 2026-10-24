@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 
@@ -128,7 +128,7 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
 
           if (reference.equals(list) || reference.equals(tuple)) {
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-                withoutPythonScalarKeys(
+                withoutClientOnlyKeys(
                     pointerAnalysis.getPointsToSet(
                         ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                             .getPointerKeyForObjectCatalog(asin)));
@@ -146,7 +146,7 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 OrdinalSet<InstanceKey> firstElemPts =
-                    withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                    withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
                 if (firstElemPts != null && !firstElemPts.isEmpty()) {
                   Set<List<Dimension<?>>> shapesOfFirstElem =
                       this.getShapesOfValue(builder, firstElemPts);

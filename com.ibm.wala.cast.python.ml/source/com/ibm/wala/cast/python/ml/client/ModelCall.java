@@ -9,7 +9,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -193,7 +193,7 @@ public class ModelCall extends TensorGenerator {
 
       if (reference != null && (reference.equals(tuple) || reference.equals(list))) {
         OrdinalSet<InstanceKey> catalogPTS =
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 builder
                     .getPointerAnalysis()
                     .getPointsToSet(
@@ -214,7 +214,7 @@ public class ModelCall extends TensorGenerator {
           if (field == null) continue;
 
           OrdinalSet<InstanceKey> elementPTS =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   builder
                       .getPointerAnalysis()
                       .getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
@@ -299,7 +299,7 @@ public class ModelCall extends TensorGenerator {
           outputsPTS =
               OrdinalSet.unify(
                   outputsPTS,
-                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(outputsPK)));
+                  withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(outputsPK)));
         }
       } else outputsPTS = getConstructionOutputs(builder, selfIK).outputs();
 
@@ -376,7 +376,7 @@ public class ModelCall extends TensorGenerator {
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, argVn);
       ret =
           OrdinalSet.unify(
-              ret, withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPK)));
+              ret, withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(argPK)));
     }
     return ret;
   }
@@ -465,7 +465,7 @@ public class ModelCall extends TensorGenerator {
               .getPointerKeyForLocal(init, ir.getParameter(1));
       boolean ofInstance = false;
       for (InstanceKey ik :
-          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(selfPK)))
+          withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(selfPK)))
         if (ik.equals(selfIK)) ofInstance = true;
       if (!ofInstance) continue;
       for (Pair<CGNode, SSAAbstractInvokeInstruction> call : getCallerInvokes(builder, init))
@@ -502,7 +502,7 @@ public class ModelCall extends TensorGenerator {
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(call.fst, argVn);
       outputs =
           OrdinalSet.unify(
-              outputs, withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPK)));
+              outputs, withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(argPK)));
     }
     return new ConstructionOutputs(outputs, !calls.isEmpty() && !read && !unknown);
   }

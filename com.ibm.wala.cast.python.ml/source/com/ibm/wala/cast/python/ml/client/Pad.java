@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -111,7 +111,7 @@ public class Pad extends PassThroughUnaryTensorGenerator {
       if (!(outer instanceof AllocationSiteInNode outerSite)) return null;
       int rows =
           integerCatalogSize(
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   builder
                       .getPointerAnalysis()
                       .getPointsToSet(
