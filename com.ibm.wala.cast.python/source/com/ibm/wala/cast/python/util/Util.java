@@ -399,7 +399,9 @@ public class Util {
     if (isPythonScalarKey(instanceKey)
         || CLIENT_ONLY_TYPES.contains(instanceKey.concreteType().getReference())) return true;
     // A key a client-only method's summary allocates, such as the list a static shape's
-    // `as_list()` returns, is one too (wala/ML#1104).
+    // `as_list()` returns, is one too (wala/ML#1104). Only the method's own node counts, not its
+    // callees: a client-only summary that calls another model must register that model's types
+    // too, or what the callee allocates reaches the generators.
     AllocationSiteInNode site = findAllocationSiteInNode(instanceKey);
     return site != null
         && CLIENT_ONLY_TYPES.contains(

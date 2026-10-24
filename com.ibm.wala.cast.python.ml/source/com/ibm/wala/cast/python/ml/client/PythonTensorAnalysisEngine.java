@@ -43,7 +43,6 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
-import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -955,16 +954,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     // A tensor's `shape` attribute reads its static shape, whose `as_list()` is a list of Python
     // ints, so a points-to client can tell those ints from a tensor (wala/ML#1104). The shape and
-    // its method are for points-to clients only: the generators read a shape structurally, as they
-    // did before, through `Util.withoutClientOnlyKeys`.
+    // its method are for points-to clients only, as `TensorFlowTypes` registers them: the
+    // generators read a shape structurally, as they did before, through
+    // `Util.withoutClientOnlyKeys`.
     Map<TypeReference, TypeReference> shapeTypes = new HashMap<>();
     shapeTypes.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     shapeTypes.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
       shapeTypes.put(component, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     builder.setFreshAttributeTypes(Map.of("shape", shapeTypes));
-    Util.registerClientOnlyType(TensorFlowTypes.STATIC_TENSOR_SHAPE);
-    Util.registerClientOnlyType(TensorFlowTypes.STATIC_TENSOR_SHAPE_AS_LIST);
     builder.setFreshArrayAttributes(
         Map.of(
             NumpyTypes.NDARRAY_TYPE,
