@@ -875,7 +875,7 @@ public class TestMathOps extends AbstractTensorTest {
    * consumer accepts, so this is a confidently-wrong result, not an imprecise one. A tensor with no
    * evidence cannot be recovered, so the sound answer, and the one asserted here, is an unknown
    * shape; the runtime {@code (1, 2, 3)} is pinned by the fixture's own assertions. The stage now
-   * declines this caller by the callee's provenance (the receiver of {@code ensure_shape} is the
+   * declines this caller by the callee's provenance (the receiver of {@code clip_by_norm} is the
    * {@code tensorflow} module), wala/ML#911. The assertion pins the dtype as unknown too: folding
    * provenance into the element-wise dispatch gate instead would type this value through the
    * broadcast path with the literal's {@code int} as its dtype, and this test would fail on it.
@@ -893,7 +893,7 @@ public class TestMathOps extends AbstractTensorTest {
 
   /**
    * The from-import form of {@link #testExpandDimsOfListPlusLostTensor()}: {@code from tensorflow
-   * import ensure_shape} binds the unmodeled callee to a name with no receiver read at the call, so
+   * import clip_by_norm} binds the unmodeled callee to a name with no receiver read at the call, so
    * the provenance predicate must reach the binding site to see the {@code tensorflow} module
    * (wala/ML#911). Asserts the sound unknown shape, as the direct form does.
    */

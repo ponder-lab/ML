@@ -4,7 +4,7 @@ add of shape `(2, 3)` and `tf.expand_dims` yields `(1, 2, 3)`.
 """
 
 import tensorflow as tf
-from tensorflow import ensure_shape
+from tensorflow import clip_by_norm
 
 
 def f(a):
@@ -12,7 +12,7 @@ def f(a):
 
 
 def g():
-    lost = ensure_shape(tf.ones((2, 3)), (2, 3))
+    lost = clip_by_norm(tf.ones((2, 3)), 10.0)
     y = tf.expand_dims([1] + lost, 0)
     assert isinstance(y, tf.Tensor)
     assert y.shape == (1, 2, 3)

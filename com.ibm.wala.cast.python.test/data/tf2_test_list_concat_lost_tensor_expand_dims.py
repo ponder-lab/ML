@@ -1,5 +1,5 @@
 """The uncovered caller of the wala/ML#907 sequence-concatenation stage: `[1] + lost` where `lost` is
-a tensor the analysis has no evidence for (here the result of an unmodeled API, `tf.ensure_shape`).
+a tensor the analysis has no evidence for (here the result of an unmodeled API, `tf.clip_by_norm`).
 
 At runtime Python tries the tensor's `__radd__` before list concatenation, so the value is a
 broadcast add of shape `(2, 3)` and `tf.expand_dims` yields `(1, 2, 3)`. The analysis sees no
@@ -15,7 +15,7 @@ def f(a):
 
 
 def g():
-    lost = tf.ensure_shape(tf.ones((2, 3)), (2, 3))
+    lost = tf.clip_by_norm(tf.ones((2, 3)), 10.0)
     y = tf.expand_dims([1] + lost, 0)
     assert isinstance(y, tf.Tensor)
     assert y.shape == (1, 2, 3)
