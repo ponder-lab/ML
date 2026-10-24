@@ -38,4 +38,19 @@ public class TestCompileStore extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FIXTURE, "Schedule.__call__", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
+
+  /**
+   * A model that overrides {@code train_on_batch}, not {@code train_step}, and calls {@code
+   * self.loss} from a private method: the loss given to {@code compile} is reached there too.
+   */
+  @Test
+  public void testLossCalledFromPrivateStep()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FIXTURE,
+        "BatchLoss.call",
+        2,
+        5,
+        Map.of(3, Set.of(TENSOR_4_3_FLOAT32), 4, Set.of(TENSOR_4_3_FLOAT32)));
+  }
 }
