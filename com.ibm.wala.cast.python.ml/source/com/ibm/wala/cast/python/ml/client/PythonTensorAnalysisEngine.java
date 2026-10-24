@@ -3975,7 +3975,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // predecessors contribute.
         boolean allRanked = true;
         for (TensorType type : types) if (type.getDims() == null) allRanked = false;
-        if (!allRanked) continue;
+        // A step's component read is the step's selection whole, so its set replaces the pack
+        // slot's
+        // values even with an unknown member, which marks a component that may be a structure.
+        if (!allRanked && !fitComponent) continue;
         // Pin the whole set, not just a singleton (wala/ML#813). A subscript evaluated in several
         // calling contexts legitimately resolves to one member per context — `x[:, 0]` over a
         // padded batch yields both the concrete-batch and the unresolved-batch column — and

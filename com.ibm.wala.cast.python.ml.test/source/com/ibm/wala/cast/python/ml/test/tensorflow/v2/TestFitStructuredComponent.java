@@ -210,9 +210,10 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   }
 
   /**
-   * A dataset chosen by a branch between a tuple component and a flat one may be a tensor: the flat
-   * dataset's {@code (2, 6)}, and nothing from the tuple, which is no tensor. The join of the two
-   * requires both to be structures for the whole component to be none.
+   * A dataset chosen by a branch between a tuple component and a flat one, in one frame where the
+   * choice is either, is either at run time: the flat dataset's tensor, {@code (2, 6)}, or the
+   * tuple, which is no tensor. The read keeps the tensor and adds a wholly unknown member, so no
+   * reader takes {@code (2, 6)} for every value the component has.
    */
   @Test
   public void testBranchMixedInputs() throws ClassHierarchyException, CancelException, IOException {
@@ -221,7 +222,7 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
         "consume_branch_mixed_inputs",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
   }
 
   /**

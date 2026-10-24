@@ -152,6 +152,12 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     for (List<Dimension<?>> shape : shapes)
       for (DType dtype : dtypes)
         ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), shape));
+    // A component that is a structure on some of its datasets and a tensor on others is, at run
+    // time, either; a wholly unknown member beside the tensors keeps a reader from taking the
+    // tensors for all of it.
+    List<Component> components = this.components(builder, List.of(index));
+    if (components != null && components.stream().anyMatch(Component::mayBeStructure))
+      ret.add(new TensorType(DType.UNKNOWN.name().toLowerCase(Locale.ROOT), null));
     return ret;
   }
 
@@ -322,6 +328,16 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder builder);
 
     Set<DType> dtypes(PropagationCallGraphBuilder builder);
+
+    /**
+     * Whether the component may also be a structure, which its shapes and dtypes do not show.
+     *
+     * @return {@code true} iff the component is a tensor on some of its datasets and a structure on
+     *     others.
+     */
+    default boolean mayBeStructure() {
+      return false;
+    }
   }
 
   /** A component that is no tensor (⊥), such as a structure of tensors read whole. */
@@ -371,9 +387,21 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     return ret;
   }
 
-  /** The union of components: unknown when one is unknown and no other contributes. */
-  private static Component union(List<Component> components) {
+  /**
+   * The union of components: unknown when one is unknown and no other contributes.
+   *
+   * @param components The components.
+   * @param structure Whether some of the joined datasets have a structure there and others a
+   *     tensor.
+   * @return The union.
+   */
+  private static Component union(List<Component> components, boolean structure) {
     return new Component() {
+      @Override
+      public boolean mayBeStructure() {
+        return structure;
+      }
+
       @Override
       public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
         Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -464,18 +492,23 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       // tensor of several shapes, crossed with their dtypes.
       if (tep.isStructureAt(builder, path)) return NOT_A_TENSOR;
       // Each joined dataset whose component is a structure contributes no tensor, so datasets that
-      // all have a structure there make the component none, and datasets that disagree make it a
-      // tensor only where it is one.
+      // all have a structure there make the component none. Datasets that disagree make it the
+      // tensors where it is one, and also possibly a structure, which the read marks.
       if (parts != null) {
         List<Component> components = new ArrayList<>();
+        boolean structure = false;
+        boolean tensor = false;
         for (TensorGenerator part : parts) {
           TupleElementProvider provider = (TupleElementProvider) part;
-          components.add(
-              provider.isStructureAt(builder, path)
-                  ? NOT_A_TENSOR
-                  : this.ofProvider(provider, path));
+          if (provider.isStructureAt(builder, path)) {
+            structure = true;
+            components.add(NOT_A_TENSOR);
+          } else {
+            tensor = true;
+            components.add(this.ofProvider(provider, path));
+          }
         }
-        return union(components);
+        return union(components, structure && tensor);
       }
       return this.ofProvider(tep, path);
     }
