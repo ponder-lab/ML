@@ -1060,15 +1060,10 @@ public class TestMathOps extends AbstractTensorTest {
    * Tier-5 generator (wala/ML#449): {@code tf.meshgrid(*xi)}. Returns N tensors (one per input)
    * sharing the broadcast of input shapes and the first input's dtype. The dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Meshgrid} generator implements {@link
-   * com.ibm.wala.cast.python.ml.client.TupleElementProvider}, but the XML only allocates one tuple
-   * slot (field 0); the second meshgrid output ({@code Y} in the fixture) doesn't have a backing
-   * alloc, so it falls through to ⊤/UNKNOWN and the aggregate union leaks the {@code
-   * float32}/{@code unknown} pair. See <a href="https://github.com/wala/ML/issues/480">
-   * wala/ML#480</a>.
-   *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands (or the
-   * meshgrid XML is updated to allocate per-input tuple slots), narrow the assertion to {@code
-   * Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)}.
+   * com.ibm.wala.cast.python.ml.client.TupleElementProvider}. The summary stores one fresh tensor
+   * allocation at the returned list's first three positions, so each destructured output carries
+   * the generator's {@code float32} with an unknown shape (the broadcast shape is not yet
+   * composed).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1078,30 +1073,15 @@ public class TestMathOps extends AbstractTensorTest {
   @Test
   public void testMeshgrid()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_meshgrid.py",
-        "f",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test("tf2_test_meshgrid.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
    * Companion to {@link #testMeshgrid}: 2-parameter sink {@code f(X, Y)} so the analyzer's
    * per-parameter typing on `tf.meshgrid`'s tuple result can be observed at distinct value numbers.
-   * The two parameters split the leak asymmetrically:
-   *
-   * <ul>
-   *   <li>vn=2 ({@code X}) shows the full {@code float32}/⊤-dtype union &mdash; the meshgrid XML
-   *       only allocates field-0 of the tuple, so when {@code X} aliases that slot through PA
-   *       propagation it picks up both the precise float32 alloc and the ⊤ tuple-slot leak.
-   *   <li>vn=3 ({@code Y}) collapses to just the precise {@code float32} &mdash; the second
-   *       meshgrid output's allocation site doesn't reach this parameter through the PA graph, so
-   *       the ⊤ leak doesn't surface.
-   * </ul>
-   *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow
-   * vn=2's assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (vn=3 is already there).
+   * Both parameters carry the generator's {@code float32} alone: the summary's list holds one fresh
+   * tensor allocation at its first three positions rather than a nested {@code constant.do} result,
+   * which had added a wholly unknown member to {@code X}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1116,9 +1096,112 @@ public class TestMathOps extends AbstractTensorTest {
         "f",
         2,
         2,
-        Map.of(
-            2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
-            3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32), 3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * {@code tf.meshgrid(x, y)} returns a list of two tensors of the first input's dtype; the first
+   * is read here by a constant subscript of the returned list. The summary stores a fresh tensor
+   * allocation, typed by the {@link com.ibm.wala.cast.python.ml.client.Meshgrid} generator, as the
+   * list's element, so the element carries {@code float32} alone rather than beside a wholly
+   * unknown member.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridSubscript()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The second element of {@link #testMeshgridSubscript}'s list, read by subscript {@code 1}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridSubscript2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The elements of {@link #testMeshgridSubscript}'s list unpacked, {@code X, Y = tf.meshgrid(x,
+   * y)}: read through the {@link com.ibm.wala.cast.python.ml.client.Meshgrid} generator, though the
+   * summary stores its element at no numbered position.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridUnpacked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume_unpacked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A stack of {@code tf.meshgrid}'s list, {@code (2, 2, 3)} at run time: the summary stores the
+   * element under the append-contents property, so a reader sees a list of unknown length and the
+   * stacked axis is never a fixed count of summary positions. The element's own shape is not
+   * composed yet, so the result's shape is unknown; it must not be a fixed-length stack.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridStacked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume_stacked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A concatenation of {@code tf.meshgrid}'s list along axis 0, {@code (4, 3)} at run time; as
+   * {@link #testMeshgridStacked()}, its shape is unknown and never a count of summary positions.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridConcatenated()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_subscript.py",
+        "consume_concatenated",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -1183,26 +1266,58 @@ public class TestMathOps extends AbstractTensorTest {
    * Here the input is shape {@code (4,)} float32, so the precise expected result is {@code (4,)
    * float32}. See {@link com.ibm.wala.cast.python.ml.client.TensorScatterNdUpdate} (wala/ML#449).
    *
-   * <p>Post-master-merge of wala/ML#380's `tensor_scatter_nd_update` inlining (#237), the analysis
-   * also produces an additional fully-⊤ context — likely a context where the input arg's PTS isn't
-   * recovered through the inlined synthetic body, so the passthrough returns ⊤/UNKNOWN. The
-   * assertion captures both contexts (per the prefer-observed-assertion convention from
-   * `CONTRIBUTING.md`); a precision improvement that eliminates the ⊤ context will narrow the
-   * actual to just {@code TENSOR_4_FLOAT32} and this test will fail with a clear "expected union,
-   * got per-context" diff — that's the cue to update.
-   *
-   * <p>TODO(wala/ML#474): Once the additional fully-⊤ context for the inlined-passthrough path is
-   * investigated/eliminated, narrow the assertion to {@code Set.of(TENSOR_4_FLOAT32)}.
+   * <p>The summary returns a fresh tensor allocation. It previously returned a nested {@code
+   * constant.do} result, which reached the caller beside the generator's answer as a wholly unknown
+   * member (<a href="https://github.com/wala/ML/issues/474">wala/ML#474</a>).
    */
   @Test
   public void testTensorScatterNdUpdate()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tensor_scatter_nd_update.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /**
+   * {@code tf.tensor_scatter_nd_update} on a rank-3 float32 {@code tf.zeros} tensor returns that
+   * tensor's shape and dtype alone. The summary returns a fresh tensor allocation that only the
+   * {@link com.ibm.wala.cast.python.ml.client.TensorScatterNdUpdate} generator types, so no second,
+   * wholly unknown member reaches the result (<a
+   * href="https://github.com/wala/ML/issues/474">wala/ML#474</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTensorScatterNdUpdateZeros()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_tensor_scatter_nd_update.py",
-        "f",
+        "tf2_test_tensor_scatter_nd_update_zeros.py",
+        "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(TENSOR_4_3_4_FLOAT32)));
+  }
+
+  /**
+   * {@code tf.tensor_scatter_nd_update} on an int32 tensor returns an int32 tensor of the input's
+   * shape, with no wholly unknown member beside it (<a
+   * href="https://github.com/wala/ML/issues/474">wala/ML#474</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTensorScatterNdUpdateInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tensor_scatter_nd_update_int.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_6_INT32)));
   }
 
   /**

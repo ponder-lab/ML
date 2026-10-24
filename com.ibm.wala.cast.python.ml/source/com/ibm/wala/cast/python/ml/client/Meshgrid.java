@@ -21,9 +21,10 @@ import java.util.Set;
  *
  * <p>Implements {@link TupleElementProvider} so that destructuring (e.g. {@code X, Y =
  * tf.meshgrid(x, y)}) resolves to the right per-element shape and dtype regardless of how many
- * indices the user accesses. The XML allocates only a 1-element list (post-wala/ML#380 inlining);
- * the {@link TupleElementProvider} wrap in {@link TensorGeneratorFactory#getGenerator} answers any
- * index with the per-element type, even when the XML-side tuple is undersized.
+ * indices the user accesses. The summary stores one fresh tensor allocation as the returned list's
+ * element, at no numbered position, since the list's length is the number of inputs; the {@link
+ * TupleElementProvider} wrap in {@link TensorGeneratorFactory#getGenerator} answers any index with
+ * the per-element type.
  *
  * <p>Output shape is currently ⊤ — computing the precise broadcast shape requires reading every
  * input's shape (PA-resolvable for many cases; bounded by {@code len(xi)}). A follow-up can compose
