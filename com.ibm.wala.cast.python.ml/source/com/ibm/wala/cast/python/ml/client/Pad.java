@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
@@ -109,11 +111,12 @@ public class Pad extends PassThroughUnaryTensorGenerator {
       if (!(outer instanceof AllocationSiteInNode outerSite)) return null;
       int rows =
           integerCatalogSize(
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(outerSite)));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(outerSite))));
       // A `paddings` with no indexed row is a tensor or an unread container, whose row count is
       // not known here.
       if (rows == 0) return null;

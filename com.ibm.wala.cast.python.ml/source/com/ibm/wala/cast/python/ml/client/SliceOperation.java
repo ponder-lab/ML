@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -69,13 +71,14 @@ public class SliceOperation extends TensorGenerator {
         // Inspect the slice tuple to see if we are adding a dimension (None/newaxis)
         boolean addsDimension = false;
         OrdinalSet<InstanceKey> slicePts =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(
-                    builder
-                        .getPointerAnalysis()
-                        .getHeapModel()
-                        .getPointerKeyForLocal(node, sliceTupleVn));
+            withoutPythonScalarKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        builder
+                            .getPointerAnalysis()
+                            .getHeapModel()
+                            .getPointerKeyForLocal(node, sliceTupleVn)));
 
         for (InstanceKey ik : slicePts) {
           if (ik instanceof ConstantKey) {

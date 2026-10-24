@@ -198,7 +198,7 @@ public class BuiltinFunctions {
         factory.NewInstruction(idx++, tuple, NewSiteReference.make(1, PythonTypes.tuple)));
     // The counter `enumerate` supplies, which is an int regardless of what is being enumerated.
     x.addStatement(
-        factory.NewInstruction(idx++, index, NewSiteReference.make(2, TypeReference.Int)));
+        factory.NewInstruction(idx++, index, NewSiteReference.make(2, PythonTypes.PYTHON_INT)));
     x.addConstant(nullKey, new ConstantValue(null));
     x.addConstant(zero, new ConstantValue(0));
     x.addConstant(one, new ConstantValue(1));
@@ -587,7 +587,7 @@ public class BuiltinFunctions {
               // `range` must return an iterable (non-empty) container so that loops and
               // comprehensions over it can recover element keys. See wala/ML#599.
               : name.equals("range")
-                  ? iterableSummary(this, name, returnedType, TypeReference.Int)
+                  ? iterableSummary(this, name, returnedType, PythonTypes.PYTHON_INT)
                   // `zip` must return a list of tuples wiring the inputs' elements through;
                   // see `zipSummary` (wala/ML#618).
                   : name.equals("zip")
@@ -796,13 +796,13 @@ public class BuiltinFunctions {
     // sequence's elements and the `for i, x in enumerate(xs)` destructuring read empty fields off
     // one of them.
     builtinFunctions.put("enumerate", Either.forLeft(PythonTypes.list));
-    builtinFunctions.put("int", Either.forLeft(TypeReference.Int));
+    builtinFunctions.put("int", Either.forLeft(PythonTypes.PYTHON_INT));
     // https://docs.python.org/3/library/functions.html#float
-    builtinFunctions.put("float", Either.forLeft(TypeReference.Double));
+    builtinFunctions.put("float", Either.forLeft(PythonTypes.PYTHON_FLOAT));
     // https://docs.python.org/3/library/functions.html#bool
-    builtinFunctions.put("bool", Either.forLeft(TypeReference.Boolean));
+    builtinFunctions.put("bool", Either.forLeft(PythonTypes.PYTHON_BOOL));
     builtinFunctions.put("round", Either.forLeft(TypeReference.Int));
-    builtinFunctions.put("len", Either.forLeft(TypeReference.Int));
+    builtinFunctions.put("len", Either.forLeft(PythonTypes.PYTHON_INT));
     builtinFunctions.put("list", Either.forLeft(PythonTypes.list));
     builtinFunctions.put("range", Either.forLeft(PythonTypes.list));
     builtinFunctions.put("reversed", Either.forLeft(PythonTypes.list));
@@ -830,7 +830,7 @@ public class BuiltinFunctions {
     // https://docs.python.org/3/library/functions.html#next
     builtinFunctions.put("next", Either.forLeft(PythonTypes.object));
     // https://docs.python.org/3/library/functions.html#isinstance
-    builtinFunctions.put("isinstance", Either.forLeft(TypeReference.Boolean));
+    builtinFunctions.put("isinstance", Either.forLeft(PythonTypes.PYTHON_BOOL));
   }
 
   public static Set<String> builtins() {

@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -129,11 +130,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -181,11 +183,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -201,7 +204,9 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
                 if (!addShapesOrTop(
                     ret,
                     this.getShapesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)))) return null;
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)))))
+                  return null;
               }
             }
           }
@@ -236,11 +241,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -255,7 +261,8 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 ret.addAll(
                     this.getDTypesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
               }
             }
           }
@@ -317,11 +324,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           // It's a structured element. We return the union of all possible shapes of its members.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -337,7 +345,9 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
                 if (!addShapesOrTop(
                     ret,
                     this.getShapesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)))) return null;
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)))))
+                  return null;
               }
             }
           }
@@ -385,11 +395,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           // It's a structured element. We return the union of all possible dtypes of its members.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -404,7 +415,8 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 ret.addAll(
                     this.getDTypesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
               }
             }
           }

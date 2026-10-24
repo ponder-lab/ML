@@ -132,6 +132,21 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference tuple =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltuple"));
 
+  /**
+   * Python's {@code int}. A value of this type whose value is not a literal points to one
+   * type-level instance key (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
+   */
+  public static final TypeReference PYTHON_INT =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lint"));
+
+  /** Python's {@code float}, keyed as {@link #PYTHON_INT} is. */
+  public static final TypeReference PYTHON_FLOAT =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lfloat"));
+
+  /** Python's {@code bool}, a subclass of {@link #PYTHON_INT}, keyed as {@link #PYTHON_INT} is. */
+  public static final TypeReference PYTHON_BOOL =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lbool"));
+
   public static final TypeReference enumerate =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lenumerate"));
 
@@ -254,6 +269,20 @@ public class PythonTypes extends AstTypeReference {
    */
   public static boolean isSequence(TypeReference type) {
     return list.equals(type) || tuple.equals(type);
+  }
+
+  /**
+   * Whether a type is one of the Python scalar types whose values of unknown value share one
+   * type-level instance key: {@link #PYTHON_INT}, {@link #PYTHON_FLOAT} and {@link #PYTHON_BOOL}
+   * (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>). Such a key says that the
+   * value is a Python scalar, so it is evidence that the value is not a tensor.
+   *
+   * @param type The type.
+   * @return {@code true} iff {@code type} is {@link #PYTHON_INT}, {@link #PYTHON_FLOAT} or {@link
+   *     #PYTHON_BOOL}.
+   */
+  public static boolean isScalar(TypeReference type) {
+    return PYTHON_INT.equals(type) || PYTHON_FLOAT.equals(type) || PYTHON_BOOL.equals(type);
   }
 
   protected PythonTypes() {}

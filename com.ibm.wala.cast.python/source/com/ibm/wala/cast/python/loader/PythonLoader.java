@@ -755,6 +755,15 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       new PythonCoreClass(PythonTypes.tuple.getName(), PythonTypes.object.getName(), this, null);
   final PythonCoreClass string =
       new PythonCoreClass(PythonTypes.string.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass intClass =
+      new PythonCoreClass(
+          PythonTypes.PYTHON_INT.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass floatClass =
+      new PythonCoreClass(
+          PythonTypes.PYTHON_FLOAT.getName(), PythonTypes.object.getName(), this, null);
+  final PythonCoreClass boolClass =
+      new PythonCoreClass(
+          PythonTypes.PYTHON_BOOL.getName(), PythonTypes.PYTHON_INT.getName(), this, null);
   final PythonCoreClass trampoline =
       new PythonCoreClass(
           PythonTypes.trampoline.getName(), PythonTypes.CodeBody.getName(), this, null);

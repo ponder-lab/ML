@@ -15,12 +15,14 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -32,6 +34,7 @@ import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -366,6 +369,47 @@ public class Util {
   }
 
   /**
+   * A points-to set without its Python scalar keys ({@link #isPythonScalarKey(InstanceKey)}). Such
+   * a key says that a value is a Python scalar but carries no value, so a reader that wants a
+   * value, such as a size or a constant argument, reads the set as it was before the keys existed
+   * and takes the same fallback for a value that has none (<a
+   * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
+   *
+   * @param pointsToSet The points-to set, possibly {@code null}.
+   * @return The set without its scalar keys, or {@code pointsToSet} itself when it has none.
+   */
+  public static OrdinalSet<InstanceKey> withoutPythonScalarKeys(
+      OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null || pointsToSet.isEmpty()) return pointsToSet;
+    boolean any = false;
+    for (InstanceKey ik : pointsToSet)
+      if (isPythonScalarKey(ik)) {
+        any = true;
+        break;
+      }
+    if (!any) return pointsToSet;
+    List<InstanceKey> kept = new ArrayList<>();
+    for (InstanceKey ik : pointsToSet) if (!isPythonScalarKey(ik)) kept.add(ik);
+    return kept.isEmpty()
+        ? OrdinalSet.empty()
+        : OrdinalSet.toOrdinalSet(kept, pointsToSet.getMapping());
+  }
+
+  /**
+   * Whether an instance key is the type-level key of a Python scalar of unknown value, such as the
+   * result of {@code len(xs)} (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
+   * A literal is a {@link ConstantKey} instead.
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return {@code true} iff {@code instanceKey} is a {@link ConcreteTypeKey} of a Python scalar
+   *     type.
+   */
+  public static boolean isPythonScalarKey(InstanceKey instanceKey) {
+    return instanceKey instanceof ConcreteTypeKey
+        && PythonTypes.isScalar(instanceKey.concreteType().getReference());
+  }
+
+  /**
    * Finds the {@link AllocationSiteInNode} behind the given {@link InstanceKey}, or returns {@code
    * null} when there is none (wala/ML#925). The scheme is {@link
    * #getAllocationSiteInNode(InstanceKey)}'s: the key itself when it is an allocation site, the
@@ -422,6 +466,10 @@ public class Util {
                 + ".");
     } else if (instanceKey instanceof ConstantKey) {
       return getAllocationSiteInNode((ConstantKey<?>) instanceKey);
+    } else if (isPythonScalarKey(instanceKey)) {
+      // Like a constant, a Python scalar of unknown value is an ordinary points-to member with no
+      // allocation behind it (wala/ML#1148).
+      return null;
     } else
       throw new IllegalArgumentException(
           "Can't extract AllocationSiteInNode from: "

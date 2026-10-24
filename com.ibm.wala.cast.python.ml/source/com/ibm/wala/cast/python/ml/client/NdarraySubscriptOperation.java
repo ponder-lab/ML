@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -243,7 +244,8 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     int memberVn = propRead.getMemberRef();
     PointerKey memberKey =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberVn);
-    OrdinalSet<InstanceKey> memberPts = builder.getPointerAnalysis().getPointsToSet(memberKey);
+    OrdinalSet<InstanceKey> memberPts =
+        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey));
 
     AllocationSiteInNode tupleAsin = null;
     for (InstanceKey ik : memberPts) {
@@ -274,7 +276,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     AstPointerKeyFactory pkf = (AstPointerKeyFactory) builder.getPointerKeyFactory();
     OrdinalSet<InstanceKey> catalog =
-        pa.getPointsToSet(pkf.getPointerKeyForObjectCatalog(tupleAsin));
+        withoutPythonScalarKeys(pa.getPointsToSet(pkf.getPointerKeyForObjectCatalog(tupleAsin)));
     int fieldCount = catalog.size();
     if (fieldCount == 0) return null;
 
@@ -293,7 +295,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
       if (f == null) return null;
 
       PointerKey fieldPk = builder.getPointerKeyForInstanceField(tupleAsin, f);
-      OrdinalSet<InstanceKey> fieldPts = pa.getPointsToSet(fieldPk);
+      OrdinalSet<InstanceKey> fieldPts = withoutPythonScalarKeys(pa.getPointsToSet(fieldPk));
 
       SubscriptField classified = classifyField(fieldPts);
       if (classified == null) return null; // unsupported element

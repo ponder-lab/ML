@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.lang.Math.max;
 import static java.util.Collections.emptySet;
@@ -179,9 +180,10 @@ public class RaggedConstant extends Constant {
       // A `list` or `tuple`.
       if (reference.equals(list) || reference.equals(tuple)) {
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            pointerAnalysis.getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                pointerAnalysis.getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin)));
 
         assert objectCatalogPointsToSet.iterator().hasNext();
 
@@ -203,7 +205,7 @@ public class RaggedConstant extends Constant {
         PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
         OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-            pointerAnalysis.getPointsToSet(pointerKey);
+            withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKey));
 
         boolean containsAllListsOrTuples =
             StreamSupport.stream(instanceFieldPointsToSet.spliterator(), false)
@@ -237,9 +239,10 @@ public class RaggedConstant extends Constant {
       // A `list` or `tuple`.
       if (reference.equals(list) || reference.equals(tuple)) {
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            pointerAnalysis.getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                pointerAnalysis.getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin)));
 
         ret.add(objectCatalogPointsToSet.size());
       } else throw new UnresolvableRaggedElement(reference);
@@ -259,9 +262,10 @@ public class RaggedConstant extends Constant {
       // A nested `list`, `tuple`, or `np.ndarray`.
       if (reference.equals(list) || reference.equals(tuple)) {
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            pointerAnalysis.getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                pointerAnalysis.getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin)));
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -277,7 +281,7 @@ public class RaggedConstant extends Constant {
           PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
           OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-              pointerAnalysis.getPointsToSet(pointerKey);
+              withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKey));
 
           for (InstanceKey fieldIK : instanceFieldPointsToSet)
             if (containsScalars(builder, fieldIK)) return true;
@@ -299,9 +303,10 @@ public class RaggedConstant extends Constant {
     // A nested `list` or `tuple`.
     if (reference.equals(list) || reference.equals(tuple)) {
       OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-          pointerAnalysis.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
 
       for (InstanceKey catalogIK : objectCatalogPointsToSet) {
         ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -317,7 +322,7 @@ public class RaggedConstant extends Constant {
         PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
         OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-            pointerAnalysis.getPointsToSet(pointerKey);
+            withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKey));
 
         if (instanceFieldPointsToSet.isEmpty())
           // An empty list at this field.
@@ -346,9 +351,10 @@ public class RaggedConstant extends Constant {
       // A nested `list`, `tuple`, or `np.ndarray`.
       if (reference.equals(list) || reference.equals(tuple)) {
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            pointerAnalysis.getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                pointerAnalysis.getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin)));
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -364,7 +370,7 @@ public class RaggedConstant extends Constant {
           PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
           OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-              pointerAnalysis.getPointsToSet(pointerKey);
+              withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKey));
 
           for (InstanceKey fieldIK : instanceFieldPointsToSet) {
             int depthOfField = getMaximumDepthOfScalars(builder, fieldIK);

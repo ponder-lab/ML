@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -211,11 +212,12 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -263,7 +265,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                 if (fieldShapes == null || fieldShapes.isEmpty())
                   fieldShapes =
                       this.getShapesOfTensorsArgument(
-                          builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                          builder,
+                          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)));
                 if (fieldShapes == null || fieldShapes.isEmpty()) {
                   // Implicit-PK fallback mirroring `getShapesOfTensorsArgument`: when the
                   // tuple-field's PTS is empty because the stored value is a synthetic-method
@@ -315,11 +318,12 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -334,7 +338,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 Set<DType> fieldDTypes =
                     this.getDTypesOfTensorsArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)));
                 if (fieldDTypes == null || fieldDTypes.isEmpty()) {
                   // Implicit-PK fallback mirroring `getDTypesOfTensorsArgument`. See
                   // wala/WALA#1889.
@@ -529,11 +534,12 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       if (asin.concreteType().getReference().equals(dict)) {
         sawTuple = true;
         OrdinalSet<InstanceKey> dictCatalog =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(
-                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                        .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
         for (InstanceKey catalogIK : dictCatalog) {
           if (!(catalogIK instanceof ConstantKey<?> constant)
               || !(constant.getValue() instanceof String key)) continue;
@@ -546,9 +552,10 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
           Set<List<Dimension<?>>> valueShapes =
               this.getShapesOfTensorsArgument(
                   builder,
-                  builder
-                      .getPointerAnalysis()
-                      .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)),
+                  withoutPythonScalarKeys(
+                      builder
+                          .getPointerAnalysis()
+                          .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f))),
                   withOnWalk(onWalk, asin));
           if (valueShapes != null) ret.addAll(valueShapes);
         }
@@ -559,11 +566,12 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       }
       sawTuple = true;
       OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-          builder
-              .getPointerAnalysis()
-              .getPointsToSet(
-                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                      .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin)));
 
       LOGGER.fine(
           DatasetFromTensorSlicesGenerator.class.getName()
@@ -579,7 +587,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         IField f = builder.getClassHierarchy().resolveField(subscript);
         if (f == null) continue;
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-        OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+        OrdinalSet<InstanceKey> fieldPts =
+            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
         Set<List<Dimension<?>>> fieldShapes =
             this.getShapesOfTensorsArgument(builder, fieldPts, withOnWalk(onWalk, asin));
         if (fieldShapes == null || fieldShapes.isEmpty()) {
@@ -670,7 +679,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       int objectVn = write.getUse(0);
       PointerKey objPk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
-      OrdinalSet<InstanceKey> objPts = builder.getPointerAnalysis().getPointsToSet(objPk);
+      OrdinalSet<InstanceKey> objPts =
+          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(objPk));
       if (objPts.isEmpty()) continue;
       boolean matchesAsin = false;
       for (InstanceKey ik : objPts) {
@@ -688,7 +698,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       PointerKey memberPk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberVn);
       boolean memberMatches = false;
-      for (InstanceKey memberIk : builder.getPointerAnalysis().getPointsToSet(memberPk)) {
+      for (InstanceKey memberIk :
+          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberPk))) {
         if (!(memberIk instanceof ConstantKey)) continue;
         Object value = ((ConstantKey<?>) memberIk).getValue();
         if (value != null && targetMember.equals(value.toString())) {
@@ -739,11 +750,12 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       if (asin.concreteType().getReference().equals(dict)) {
         sawTuple = true;
         OrdinalSet<InstanceKey> dictCatalog =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(
-                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                        .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
         for (InstanceKey catalogIK : dictCatalog) {
           if (!(catalogIK instanceof ConstantKey<?> constant)
               || !(constant.getValue() instanceof String key)) continue;
@@ -756,9 +768,10 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
           Set<DType> valueDTypes =
               this.getDTypesOfTensorsArgument(
                   builder,
-                  builder
-                      .getPointerAnalysis()
-                      .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)),
+                  withoutPythonScalarKeys(
+                      builder
+                          .getPointerAnalysis()
+                          .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f))),
                   withOnWalk(onWalk, asin));
           if (valueDTypes != null) ret.addAll(valueDTypes);
         }
@@ -769,11 +782,12 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       }
       sawTuple = true;
       OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-          builder
-              .getPointerAnalysis()
-              .getPointsToSet(
-                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                      .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin)));
 
       for (InstanceKey catalogIK : objectCatalogPointsToSet) {
         Integer fieldIndex =
@@ -784,7 +798,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         IField f = builder.getClassHierarchy().resolveField(subscript);
         if (f == null) continue;
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-        OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+        OrdinalSet<InstanceKey> fieldPts =
+            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
         Set<DType> fieldDTypes =
             this.getDTypesOfTensorsArgument(builder, fieldPts, withOnWalk(onWalk, asin));
         if (fieldDTypes == null || fieldDTypes.isEmpty()) {

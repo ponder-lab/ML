@@ -9,6 +9,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
@@ -126,7 +127,8 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
             IField f = builder.getClassHierarchy().resolveField(subscript);
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-              OrdinalSet<InstanceKey> firstElemPts = pointerAnalysis.getPointsToSet(pk);
+              OrdinalSet<InstanceKey> firstElemPts =
+                  withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
               for (InstanceKey valKey : getEffectiveInstances(builder, firstElemPts)) {
                 if (valKey instanceof ConstantKey) {
                   Object val = ((ConstantKey<?>) valKey).getValue();
@@ -166,9 +168,10 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
           if (reference.equals(list) || reference.equals(tuple)) {
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-                pointerAnalysis.getPointsToSet(
-                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                        .getPointerKeyForObjectCatalog(asin));
+                withoutPythonScalarKeys(
+                    pointerAnalysis.getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
             int k = objectCatalogPointsToSet.size();
             possibleK.add(k);
 
@@ -181,7 +184,8 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                 IField f = builder.getClassHierarchy().resolveField(subscript);
                 if (f != null) {
                   PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                  OrdinalSet<InstanceKey> firstElemPts = pointerAnalysis.getPointsToSet(pk);
+                  OrdinalSet<InstanceKey> firstElemPts =
+                      withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
 
                   Long max = null;
                   boolean foundAny = false;
@@ -192,9 +196,10 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                       TypeReference innerRef = innerAsin.concreteType().getReference();
                       if (innerRef.equals(list) || innerRef.equals(tuple)) {
                         OrdinalSet<InstanceKey> innerObjectCatalog =
-                            pointerAnalysis.getPointsToSet(
-                                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                                    .getPointerKeyForObjectCatalog(innerAsin));
+                            withoutPythonScalarKeys(
+                                pointerAnalysis.getPointsToSet(
+                                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                                        .getPointerKeyForObjectCatalog(innerAsin)));
 
                         for (InstanceKey catKey : innerObjectCatalog) {
                           ConstantKey<?> ck = (ConstantKey<?>) catKey;
@@ -208,7 +213,8 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                           if (innerF != null) {
                             PointerKey valPk =
                                 builder.getPointerKeyForInstanceField(innerAsin, innerF);
-                            OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(valPk);
+                            OrdinalSet<InstanceKey> valPts =
+                                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(valPk));
                             for (InstanceKey valKey : getEffectiveInstances(builder, valPts)) {
                               if (valKey instanceof ConstantKey) {
                                 Object val = ((ConstantKey<?>) valKey).getValue();
@@ -346,7 +352,8 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
         // CG-walk equivalent that recovers the same PTS.
         IField f = builder.getClassHierarchy().resolveField(CONSTANT_VALUE);
         PointerKey pk = builder.getPointerKeyForInstanceField(ik, f);
-        OrdinalSet<InstanceKey> valuePts = builder.getPointerAnalysis().getPointsToSet(pk);
+        OrdinalSet<InstanceKey> valuePts =
+            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
         if (valuePts == null || valuePts.isEmpty()) {
           valuePts = getConstantCallValueArgPTS(asin, builder);
         }

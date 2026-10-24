@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 
 import com.ibm.wala.cast.python.ml.client.DenseCall.Parameters;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -174,7 +175,8 @@ public class Model extends TensorGenerator {
     // in its list (wala/ML#832).
     if (this.getSource() != null)
       for (InstanceKey modelIK :
-          builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey())) {
+          withoutPythonScalarKeys(
+              builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey()))) {
         AllocationSiteInNode model = getAllocationSiteInNode(modelIK);
         if (model == null
             || !model

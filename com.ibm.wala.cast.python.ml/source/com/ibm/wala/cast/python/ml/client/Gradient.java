@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -156,11 +157,12 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
         if (!ref.equals(list) && !ref.equals(tuple)) continue;
 
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(
-                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                        .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           if (!(catalogIK instanceof ConstantKey)) continue;
@@ -177,7 +179,9 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
 
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
           Set<List<Dimension<?>>> fieldShapes =
-              this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+              this.getShapesOfValue(
+                  builder,
+                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)));
           if (fieldShapes == null || fieldShapes.isEmpty()) return null;
           ret.addAll(fieldShapes);
         }
@@ -210,11 +214,12 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
         if (!ref.equals(list) && !ref.equals(tuple)) continue;
 
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(
-                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                        .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           if (!(catalogIK instanceof ConstantKey)) continue;
@@ -231,7 +236,9 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
 
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
           Set<DType> fieldDTypes =
-              this.getDTypesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+              this.getDTypesOfValue(
+                  builder,
+                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)));
           if (fieldDTypes == null || fieldDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
           ret.addAll(fieldDTypes);
         }

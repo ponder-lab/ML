@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -86,7 +87,9 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   static List<AllocationSiteInNode> elementAllocations(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     List<AllocationSiteInNode> ret = new ArrayList<>();
-    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())) {
+    for (InstanceKey ik :
+        withoutPythonScalarKeys(
+            builder.getPointerAnalysis().getPointsToSet(source.getPointerKey()))) {
       AllocationSiteInNode asin;
       try {
         asin = getAllocationSiteInNode(ik);
@@ -113,9 +116,10 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
     IField field = builder.getClassHierarchy().resolveField(DATASET_FIELD);
     if (field == null) return ret;
     OrdinalSet<InstanceKey> held =
-        builder
-            .getPointerAnalysis()
-            .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field));
+        withoutPythonScalarKeys(
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field)));
     if (held == null) return ret;
     for (InstanceKey ik : held) {
       AllocationSiteInNode dataset = getAllocationSiteInNode(ik);
@@ -141,9 +145,10 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
     if (field == null) return ret;
     for (AllocationSiteInNode allocation : allocations) {
       OrdinalSet<InstanceKey> held =
-          builder
-              .getPointerAnalysis()
-              .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field));
+          withoutPythonScalarKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field)));
       if (held == null) continue;
       for (TensorGenerator generator : datasetsIn(held, builder))
         if (!ret.contains(generator)) ret.add(generator);

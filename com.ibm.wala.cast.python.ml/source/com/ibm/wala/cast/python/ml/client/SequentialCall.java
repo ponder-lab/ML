@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -277,14 +278,16 @@ public class SequentialCall extends ModelCall {
       AllocationSiteInNode container =
           this.soleContainer(
               builder,
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      builder
-                          .getPointerAnalysis()
-                          .getHeapModel()
-                          .getPointerKeyForLocal(
-                              selfASIN.getNode(), ir.getParameter(LAYERS_PARAMETER_IR_INDEX))));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          builder
+                              .getPointerAnalysis()
+                              .getHeapModel()
+                              .getPointerKeyForLocal(
+                                  selfASIN.getNode(),
+                                  ir.getParameter(LAYERS_PARAMETER_IR_INDEX)))));
       if (container == null) return null;
 
       OrdinalSet<InstanceKey> appended = getAppendedContentsPts(builder, container);
@@ -706,7 +709,9 @@ public class SequentialCall extends ModelCall {
               .getPointerKeyForLocal(constructorNode, ir.getParameter(LAYERS_PARAMETER_IR_INDEX));
 
       List<InstanceKey> ordered =
-          this.readContainer(builder, builder.getPointerAnalysis().getPointsToSet(layersPK));
+          this.readContainer(
+              builder,
+              withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(layersPK)));
 
       return ordered == null ? null : List.of(ordered);
     }
@@ -804,13 +809,14 @@ public class SequentialCall extends ModelCall {
       if (!ADD_METHOD_NAME.equals(symbolTable.getStringValue(read.getMemberRef()))) continue;
 
       OrdinalSet<InstanceKey> layerPTS =
-          builder
-              .getPointerAnalysis()
-              .getPointsToSet(
-                  builder
-                      .getPointerAnalysis()
-                      .getHeapModel()
-                      .getPointerKeyForLocal(frame, call.getUse(1)));
+          withoutPythonScalarKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(frame, call.getUse(1))));
 
       // One layer per call, as the source has it. A smeared argument is a call the walk cannot
       // turn into a position in the chain.
@@ -1077,11 +1083,12 @@ public class SequentialCall extends ModelCall {
     Set<Integer> ret = HashSetFactory.make();
 
     for (InstanceKey catalogIK :
-        builder
-            .getPointerAnalysis()
-            .getPointsToSet(
-                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                    .getPointerKeyForObjectCatalog(container))) {
+        withoutPythonScalarKeys(
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(container)))) {
       if (!(catalogIK instanceof ConstantKey)) continue;
       Integer index = getFieldIndex((ConstantKey<?>) catalogIK);
       if (index != null) ret.add(index);
@@ -1125,9 +1132,10 @@ public class SequentialCall extends ModelCall {
       if (field == null) return null;
 
       OrdinalSet<InstanceKey> elementPTS =
-          builder
-              .getPointerAnalysis()
-              .getPointsToSet(builder.getPointerKeyForInstanceField(container, field));
+          withoutPythonScalarKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(builder.getPointerKeyForInstanceField(container, field)));
 
       // One layer per position. A smeared position — the shape a loop-built list takes when its
       // elements collapse — is exactly the case where folding what is visible would compose a

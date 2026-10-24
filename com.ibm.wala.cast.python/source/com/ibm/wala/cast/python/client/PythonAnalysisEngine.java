@@ -24,6 +24,7 @@ import com.ibm.wala.cast.loader.AstDynamicField;
 import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonClassMethodTrampolineTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonInstanceKeys;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonInstanceMethodTrampolineTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonScopeMappingInstanceKeys;
@@ -973,7 +974,7 @@ public abstract class PythonAnalysisEngine<T>
     builder.setInstanceKeys(
         new PythonScopeMappingInstanceKeys(
             builder,
-            new ZeroXInstanceKeys(options, cha, interpreter, ZeroXInstanceKeys.ALLOCATIONS)));
+            new PythonInstanceKeys(options, cha, interpreter, ZeroXInstanceKeys.ALLOCATIONS)));
 
     new PythonSuper(cha).handleSuperCalls(builder, options);
 

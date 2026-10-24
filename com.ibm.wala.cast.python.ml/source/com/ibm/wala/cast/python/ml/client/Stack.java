@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.logging.Logger.getLogger;
 
@@ -113,9 +114,10 @@ public class Stack extends TensorGenerator {
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
       int n = catalog.size();
       if (n == 0) continue;
 
@@ -185,9 +187,10 @@ public class Stack extends TensorGenerator {
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
       OrdinalSet<InstanceKey> firstElemPts = getFirstElementPts(builder, asin, catalog);
       // A static shape element, `t.shape[k]`, is a Python int, which converts to int32.
       if ((firstElemPts == null || firstElemPts.isEmpty())
@@ -268,7 +271,7 @@ public class Stack extends TensorGenerator {
       IField f = builder.getClassHierarchy().resolveField(subscript);
       if (f == null) continue;
       PointerKey pk = builder.getPointerKeyForInstanceField(listAsin, f);
-      return builder.getPointerAnalysis().getPointsToSet(pk);
+      return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     }
     return null;
   }

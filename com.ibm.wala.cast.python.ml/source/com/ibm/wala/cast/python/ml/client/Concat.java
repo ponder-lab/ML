@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.logging.Logger.getLogger;
 
@@ -157,9 +158,10 @@ public class Concat extends TensorGenerator {
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
       ShapeResult outShape =
           catalog.size() == 0
               ? ShapeResult.bottom()
@@ -236,9 +238,10 @@ public class Concat extends TensorGenerator {
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
       OrdinalSet<InstanceKey> firstElemPts = getElementPts(builder, asin, catalog, 0);
       // An append-populated list has no numeric catalog; union the dtypes of the values
       // accumulated under the synthetic append-contents field instead (wala/ML#570).
@@ -544,7 +547,8 @@ public class Concat extends TensorGenerator {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     // A literal list's key is implicitly represented; the pointer analysis computes its contents.
     OrdinalSet<InstanceKey> pts =
-        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn));
+        withoutPythonScalarKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey valIk : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
@@ -552,9 +556,10 @@ public class Concat extends TensorGenerator {
       TypeReference ref = asin.concreteType().getReference();
       if (!(ref.equals(list) || ref.equals(tuple))) return false;
       OrdinalSet<InstanceKey> catalog =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
       if (!cannotExecute(builder, asin, catalog)) return false;
     }
     return true;
@@ -604,7 +609,7 @@ public class Concat extends TensorGenerator {
       if (f == null) continue;
       PointerKey pk = builder.getPointerKeyForInstanceField(listAsin, f);
       if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
-      return builder.getPointerAnalysis().getPointsToSet(pk);
+      return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     }
     return null;
   }
@@ -708,9 +713,10 @@ public class Concat extends TensorGenerator {
       TypeReference ref = asin.concreteType().getReference();
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
       OrdinalSet<InstanceKey> catalog =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin)));
       for (InstanceKey catalogIK : catalog) {
         if (!(catalogIK instanceof ConstantKey)) continue;
         Integer idx = getFieldIndex((ConstantKey<?>) catalogIK);
