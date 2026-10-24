@@ -82,22 +82,19 @@ public class TestFitDefaultStep extends AbstractTensorTest {
 
   /**
    * A tuple of inputs, {@code (x, mask)} in a {@code ((x, mask), y)} element of a batched {@code
-   * from_tensor_slices} dataset, reaches {@code call} as one batch of each member: {@code (2, 4)}
-   * and {@code (2, 3)}, each member sliced along its own leading axis, and not the members stacked
-   * into one tensor whose stacking axis is sliced, which read {@code (2, 8, 4)} and {@code (2, 8,
-   * 3)}.
+   * from_tensor_slices} dataset, reaches {@code call} as that tuple, which is no tensor: not one
+   * tensor of its members' shapes, {@code (2, 4)} and {@code (2, 3)}, nor the members stacked into
+   * one tensor whose stacking axis is sliced, which read {@code (2, 8, 4)} and {@code (2, 8, 3)}.
    */
   @Test
   public void testTupleInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        "tf2_test_fit_structured_inputs.py",
-        "consume_pair",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(FLOAT_32, 2, 3))));
+    test("tf2_test_fit_structured_inputs.py", "consume_pair", 0, 0, Map.of());
   }
 
-  /** A member of the tuple inputs of {@link #testTupleInputs()}, read in {@code call}. */
+  /**
+   * A member of the tuple inputs of {@link #testTupleInputs()}, read in {@code call}: one batch of
+   * that member, sliced along its own leading axis.
+   */
   @Test
   public void testTupleInputsMember() throws ClassHierarchyException, CancelException, IOException {
     test(
@@ -110,16 +107,11 @@ public class TestFitDefaultStep extends AbstractTensorTest {
 
   /**
    * A dict of inputs, {@code {"ids": ids}} in a {@code ({"ids": ids}, y)} element, reaches {@code
-   * call} as one batch of its value, {@code (4, 3) int32}, and not a join with the targets' types
-   * and an unknown.
+   * call} as that dict, which is no tensor: not its value's type, {@code (4, 3) int32}, nor a join
+   * with the targets' types and an unknown.
    */
   @Test
   public void testDictInputsWhole() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        "tf2_test_fit_structured_inputs.py",
-        "consume_dict",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(INT_32, 4, 3))));
+    test("tf2_test_fit_structured_inputs.py", "consume_dict", 0, 0, Map.of());
   }
 }

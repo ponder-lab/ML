@@ -1,10 +1,17 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -63,6 +70,45 @@ public interface TupleElementProvider {
    */
   default boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
     return path.size() == 1 && path.get(0) instanceof Integer && this.yieldsTuple(builder);
+  }
+
+  /**
+   * Whether the component a path of selectors reaches within the generated element is itself a
+   * structure, a tuple or a dict of components, rather than a tensor: {@code x} in a {@code ((x,
+   * mask), y)} element is a tuple of two tensors, so the path {@code [0]} reaches a structure while
+   * {@code [0, 0]} reaches a tensor. A value read whole at such a path is no tensor; its members
+   * are read at the longer paths.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param path The selectors, outermost first; never empty.
+   * @return {@code true} iff the path is known to reach a structure; {@code false} when it reaches
+   *     a tensor, reaches nothing, or the provider cannot tell.
+   */
+  default boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    return false;
+  }
+
+  /**
+   * Whether a points-to set holds only structures a dataset element is built from: tuples and
+   * dicts, which {@code tf.data} reads as structures of components, where a list is converted to a
+   * tensor.
+   *
+   * @param pointsToSet The points-to set, possibly {@code null}.
+   * @return {@code true} iff the set is non-empty and every member is a tuple or a dict allocation.
+   */
+  static boolean holdsOnlyStructures(OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null || pointsToSet.isEmpty()) return false;
+    for (InstanceKey ik : pointsToSet) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
+      TypeReference type = asin == null ? null : asin.concreteType().getReference();
+      if (!PythonTypes.tuple.equals(type) && !PythonTypes.dict.equals(type)) return false;
+    }
+    return true;
   }
 
   /**

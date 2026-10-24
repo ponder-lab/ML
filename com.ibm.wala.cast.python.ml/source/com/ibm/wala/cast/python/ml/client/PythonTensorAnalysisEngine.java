@@ -3940,6 +3940,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         initOrigins.remove(recv);
       }
 
+      // A step's component read that is no tensor, as the `(x, mask)` of a `((x, mask), y)`
+      // element is a tuple, is dropped below: the pin cannot carry an empty set, and without one
+      // the element's types would leak into the read through the pack's slot.
+      Set<PointsToSetVariable> nonTensorFitComponents = HashSetFactory.make();
+
       // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
       // predecessor types rather than unioning them — the receiver's pre-subscript shape would
       // otherwise leak in via the PA assignment graph (wala/ML#405).
@@ -3962,6 +3967,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             && !(generator instanceof NdarraySubscriptOperation)
             && !fitComponent) continue;
         Set<TensorType> types = init.get(src);
+        if (fitComponent && types != null && types.isEmpty()) nonTensorFitComponents.add(src);
         if (types == null || types.isEmpty()) continue;
         // Every member must carry dimensions. A ⊤-shape member says nothing about the subscript's
         // result, so pinning a set containing one would assert "the receiver's shape does not flow
@@ -3969,7 +3975,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // predecessors contribute.
         boolean allRanked = true;
         for (TensorType type : types) if (type.getDims() == null) allRanked = false;
-        if (!allRanked) continue;
+        // A step's component read is the step's selection whole, so its set replaces the pack
+        // slot's
+        // values even with an unknown member, which marks a component that may be a structure.
+        if (!allRanked && !fitComponent) continue;
         // Pin the whole set, not just a singleton (wala/ML#813). A subscript evaluated in several
         // calling contexts legitimately resolves to one member per context — `x[:, 0]` over a
         // padded batch yields both the concrete-batch and the unresolved-batch column — and
@@ -4155,6 +4164,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // graph offers it a tensor type once a layer call in its chain is modeled (wala/ML#842).
         else if (isKerasModelObject(v, builder)) drops.add(v);
       }
+      drops.addAll(nonTensorFitComponents);
       // Semantically non-tensor iteration machinery pins to empty-and-fixed too (wala/ML#732):
       // a slice constructor over non-tensor bounds (all-constant `slice(None, None, None)` under
       // `x[:, 0]`, or a dynamic integer bound like the shape-element read under `x[:, :n, :]`,

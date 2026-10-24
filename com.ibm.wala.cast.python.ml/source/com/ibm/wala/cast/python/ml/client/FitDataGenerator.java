@@ -46,6 +46,10 @@ import java.util.Set;
  * result has {@code data} in slot 0, and index {@code i} is {@code data}'s component {@code i} when
  * {@code data} is a tuple (a pack, a dataset element, or a tuple literal) and {@code data} itself
  * at index 0 otherwise, which is what {@code unpack_x_y_sample_weight} returns.
+ *
+ * <p>An element's component that is itself a structure, as {@code (x, mask)} in a {@code ((x,
+ * mask), y)} element ({@link TupleElementProvider#isStructureAt}), is no tensor (⊥): the step hands
+ * the model that tuple or dict, whose members are read at longer paths.
  */
 public class FitDataGenerator extends TensorGenerator implements TupleElementProvider {
 
@@ -148,6 +152,12 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     for (List<Dimension<?>> shape : shapes)
       for (DType dtype : dtypes)
         ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), shape));
+    // A component that is a structure on some of its datasets and a tensor on others is, at run
+    // time, either; a wholly unknown member beside the tensors keeps a reader from taking the
+    // tensors for all of it.
+    List<Component> components = this.components(builder, List.of(index));
+    if (components != null && components.stream().anyMatch(Component::mayBeStructure))
+      ret.add(new TensorType(DType.UNKNOWN.name().toLowerCase(Locale.ROOT), null));
     return ret;
   }
 
@@ -318,6 +328,102 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder builder);
 
     Set<DType> dtypes(PropagationCallGraphBuilder builder);
+
+    /**
+     * Whether the component may also be a structure, which its shapes and dtypes do not show.
+     *
+     * @return {@code true} iff the component is a tensor on some of its datasets and a structure on
+     *     others.
+     */
+    default boolean mayBeStructure() {
+      return false;
+    }
+  }
+
+  /** A component that is no tensor (⊥), such as a structure of tensors read whole. */
+  private static final Component NOT_A_TENSOR =
+      new Component() {
+        @Override
+        public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
+          return Collections.emptySet();
+        }
+
+        @Override
+        public Set<DType> dtypes(PropagationCallGraphBuilder b) {
+          return EnumSet.noneOf(DType.class);
+        }
+      };
+
+  /**
+   * The generators of the datasets a slot is filled from.
+   *
+   * @param builder The builder.
+   * @param slot The slot's variable, possibly {@code null}.
+   * @return The creators' generators, unwrapped to the datasets', or {@code null} unless the walk
+   *     reaches a creator other than the slot itself and each is a dataset yielding a tuple
+   *     element.
+   */
+  private static List<TensorGenerator> datasetCreators(
+      PropagationCallGraphBuilder builder, PointsToSetVariable slot) {
+    if (slot == null) return null;
+    Set<PointsToSetVariable> creators = TensorGeneratorFactory.findCreators(slot, builder);
+    if (creators.isEmpty() || creators.contains(slot)) return null;
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (PointsToSetVariable creator : creators) {
+      TensorGenerator part;
+      try {
+        part = TensorGeneratorFactory.getGenerator(creator, builder);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      while (part instanceof DelegatingTensorGenerator dtg) {
+        TensorGenerator next = dtg.getUnderlying();
+        if (next == null || next == part) break;
+        part = next;
+      }
+      if (!(part instanceof TupleElementProvider tep && tep.yieldsTuple(builder))) return null;
+      ret.add(part);
+    }
+    return ret;
+  }
+
+  /**
+   * The union of components: unknown when one is unknown and no other contributes.
+   *
+   * @param components The components.
+   * @param structure Whether some of the joined datasets have a structure there and others a
+   *     tensor.
+   * @return The union.
+   */
+  private static Component union(List<Component> components, boolean structure) {
+    return new Component() {
+      @Override
+      public boolean mayBeStructure() {
+        return structure;
+      }
+
+      @Override
+      public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
+        Set<List<Dimension<?>>> ret = HashSetFactory.make();
+        boolean unknown = false;
+        for (Component component : components) {
+          Set<List<Dimension<?>>> shapes = component.shapes(b);
+          if (shapes == null) unknown = true;
+          else ret.addAll(shapes);
+        }
+        return unknown && ret.isEmpty() ? null : ret;
+      }
+
+      @Override
+      public Set<DType> dtypes(PropagationCallGraphBuilder b) {
+        Set<DType> ret = EnumSet.noneOf(DType.class);
+        for (Component component : components) {
+          Set<DType> dtypes = component.dtypes(b);
+          if (dtypes != null) ret.addAll(dtypes);
+        }
+        return ret;
+      }
+    };
   }
 
   /** A provider's component at the path. */
@@ -368,8 +474,42 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
       if (next == null || next == generator) break;
       generator = next;
     }
+    // The slot's creators, the datasets the user's code may have passed, read the slot in its own
+    // frame: a `fit` whose dataset is chosen as `a if flag else b` has, in a frame where the choice
+    // is known, the chosen dataset as its one creator, which the factory's generator for the slot
+    // may not be. Where the choice is either, the slot has a creator per dataset, and its element
+    // is their join.
+    List<TensorGenerator> parts = datasetCreators(builder, slot);
+    if (parts != null && parts.size() == 1) {
+      generator = parts.get(0);
+      parts = null;
+    } else if (parts != null) generator = new DatasetCreatorJoin(slot, parts);
     if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
       if (path.size() > 1 && !tep.resolvesPath(builder, path)) return null;
+      // A component that is itself a structure, as `(x, mask)` in a `((x, mask), y)` element, is
+      // handed to the step as that tuple or dict, which is no tensor: its members are read at the
+      // longer paths, and a provider's reading of the whole would join their types into one
+      // tensor of several shapes, crossed with their dtypes.
+      if (tep.isStructureAt(builder, path)) return NOT_A_TENSOR;
+      // Each joined dataset whose component is a structure contributes no tensor, so datasets that
+      // all have a structure there make the component none. Datasets that disagree make it the
+      // tensors where it is one, and also possibly a structure, which the read marks.
+      if (parts != null) {
+        List<Component> components = new ArrayList<>();
+        boolean structure = false;
+        boolean tensor = false;
+        for (TensorGenerator part : parts) {
+          TupleElementProvider provider = (TupleElementProvider) part;
+          if (provider.isStructureAt(builder, path)) {
+            structure = true;
+            components.add(NOT_A_TENSOR);
+          } else {
+            tensor = true;
+            components.add(this.ofProvider(provider, path));
+          }
+        }
+        return union(components, structure && tensor);
+      }
       return this.ofProvider(tep, path);
     }
     if (path.size() > 1) return null;
