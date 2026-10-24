@@ -374,4 +374,62 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(of.elementTypes(analysis), value.elementTypes(analysis));
     assertEquals(of.mayHoldNone(), value.mayHoldNone());
   }
+
+  /**
+   * A value that is either of two local pairs merges them: a length of 2, each position the union
+   * of both pairs' types, and complete since both are.
+   */
+  @Test
+  public void testLocalJoin() {
+    ContainerElements elements = ofValue("consume_local_join");
+    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(
+        List.of(
+            Set.of(TensorType.of(FLOAT32, 2, 3), TensorType.of(FLOAT32, 2, 5)),
+            Set.of(TensorType.of(FLOAT32, 2, 4), TensorType.of(FLOAT32, 2, 6))),
+        elements.positionTypes(analysis));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
+  }
+
+  /** A value that is a local pair or a local triple has no one length, but both are complete. */
+  @Test
+  public void testLocalLengths() {
+    ContainerElements elements = ofValue("consume_local_lengths");
+    assertEquals(OptionalInt.empty(), elements.arity());
+    assertTrue(elements.positionTypes(analysis).isEmpty());
+    assertEquals(
+        Set.of(
+            TensorType.of(FLOAT32, 2, 3),
+            TensorType.of(FLOAT32, 2, 4),
+            TensorType.of(FLOAT32, 2, 5)),
+        elements.elementTypes(analysis));
+    assertTrue(elements.isComplete());
+  }
+
+  /**
+   * A {@code map} that builds {@code ((x, x * 2.0), y)}: {@code fit} takes the built pair for the
+   * inputs, which the mapped element declares, so it has a length of 2. Its second position reads
+   * as wholly unknown (wala/ML#1142), so it is incomplete.
+   */
+  @Test
+  public void testMappedBuilt() {
+    ContainerElements elements = ofValue("consume_mapped_built");
+    assertEquals(OptionalInt.of(2), elements.arity());
+    assertFalse(elements.isComplete());
+  }
+
+  /**
+   * As {@link #testMappedBuilt()}, the built pair's positions: each is {@code (2, 4)} float32.
+   *
+   * <p>TODO: The first position also carries the targets' shape, and the second reads as wholly
+   * unknown, until wala/ML#1142 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testMappedBuiltPositions() {
+    ContainerElements elements = ofValue("consume_mapped_built");
+    assertEquals(
+        List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 4))),
+        elements.positionTypes(analysis));
+  }
 }

@@ -462,3 +462,61 @@ def consume_local(t):
 
 
 consume_local((tf.ones([2, 3]), 1))
+
+
+def consume_local_join(t):
+    # Either of two pairs, so a length of 2 with each position either pair's.
+    assert isinstance(t, tuple) and len(t) == 2
+    assert t[0].shape in ((2, 3), (2, 5)) and t[0].dtype == tf.float32
+    assert t[1].shape in ((2, 4), (2, 6)) and t[1].dtype == tf.float32
+
+
+def local_join(flag):
+    consume_local_join(
+        (tf.ones([2, 3]), tf.ones([2, 4]))
+        if flag
+        else (tf.zeros([2, 5]), tf.ones([2, 6]))
+    )
+
+
+for flag in (True, False):
+    local_join(flag)
+
+
+def consume_local_lengths(t):
+    # A pair or a triple, so no one length.
+    assert isinstance(t, tuple) and len(t) in (2, 3)
+    assert t[0].shape == (2, 3) and t[0].dtype == tf.float32
+
+
+def local_lengths(flag):
+    consume_local_lengths(
+        (tf.ones([2, 3]), tf.ones([2, 4]))
+        if flag
+        else (tf.ones([2, 3]), tf.ones([2, 4]), tf.ones([2, 5]))
+    )
+
+
+for flag in (True, False):
+    local_lengths(flag)
+
+
+def consume_mapped_built(inputs):
+    # `map` builds `((x, x * 2.0), y)`, so `fit` takes the built pair for the inputs.
+    assert isinstance(inputs, tuple) and len(inputs) == 2
+    assert inputs[0].shape[1:] == (4,) and inputs[0].dtype == tf.float32
+    assert inputs[1].shape[1:] == (4,) and inputs[1].dtype == tf.float32
+
+
+class MappedBuilt(tf.keras.Model):
+    def call(self, inputs):
+        consume_mapped_built(inputs)
+        return inputs[0]
+
+
+fit(
+    MappedBuilt(),
+    tf.data.Dataset.from_tensor_slices((tf.ones([8, 4]), tf.zeros([8])))
+    .map(lambda x, y: ((x, x * 2.0), y))
+    .batch(2),
+)
