@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -145,11 +146,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             && (asin.concreteType().getReference().equals(tuple)
                 || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -161,7 +163,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
-                OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+                OrdinalSet<InstanceKey> fieldPts =
+                    withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
                 // Soundness: empty field PTS would throw `IllegalArgumentException` from the
                 // helper; treat as ⊤ for this index instead. Same for an unparseable result.
                 if (fieldPts == null || fieldPts.isEmpty()) return null;
@@ -190,11 +193,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             && (asin.concreteType().getReference().equals(tuple)
                 || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -206,7 +210,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
-                OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+                OrdinalSet<InstanceKey> fieldPts =
+                    withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
                 // Same empty-PTS guard as the structured-signature path above.
                 if (fieldPts == null || fieldPts.isEmpty()) return null;
                 Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
@@ -306,11 +311,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
           // This results in the dataset elements being identified as having any of
           // the types/shapes present in the signature.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -321,7 +327,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
               if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
-              OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+              OrdinalSet<InstanceKey> fieldPts =
+                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
               // Soundness: empty field PTS would throw `IllegalArgumentException` from the
               // helper; treat as ⊤ instead. Same for an unparseable result.
               if (fieldPts == null || fieldPts.isEmpty()) return null;
@@ -390,11 +397,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             && (asin.concreteType().getReference().equals(tuple)
                 || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -408,7 +416,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
                 if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
                 ret.addAll(
                     this.getDTypesFromDTypeArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
               }
             }
           }
@@ -431,11 +440,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             && (asin.concreteType().getReference().equals(tuple)
                 || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -449,7 +459,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
                 if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
                 ret.addAll(
                     this.getDTypesFromDTypeArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder,
+                        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
               }
             }
           }
@@ -616,11 +627,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
           // This results in the dataset elements being identified as having any of
           // the dtypes present in the signature.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -633,7 +645,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
               ret.addAll(
                   this.getDTypesFromDTypeArgument(
-                      builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                      builder,
+                      withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
             }
           }
         } else {

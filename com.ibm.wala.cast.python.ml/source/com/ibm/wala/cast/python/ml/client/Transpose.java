@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -148,7 +149,8 @@ public class Transpose extends PassThroughUnaryTensorGenerator implements Operan
       int permVn = invoke.getUse(2);
       PointerKey permKey =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, permVn);
-      OrdinalSet<InstanceKey> permPts = builder.getPointerAnalysis().getPointsToSet(permKey);
+      OrdinalSet<InstanceKey> permPts =
+          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(permKey));
       if (isAbsentOrNone(permPts)) continue;
       List<Integer> perm = resolvePermList(builder, permPts);
       if (perm == null || perm.isEmpty()) continue;

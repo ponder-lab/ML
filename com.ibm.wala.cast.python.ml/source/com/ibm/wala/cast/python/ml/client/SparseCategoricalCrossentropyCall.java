@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -208,7 +209,8 @@ public class SparseCategoricalCrossentropyCall extends TensorGenerator {
     IField field = builder.getClassHierarchy().resolveField(reductionRef);
     if (field != null) {
       PointerKey fieldKey = builder.getPointerKeyForInstanceField(selfAsin, field);
-      OrdinalSet<InstanceKey> reductionPts = builder.getPointerAnalysis().getPointsToSet(fieldKey);
+      OrdinalSet<InstanceKey> reductionPts =
+          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(fieldKey));
       if (reductionPts != null && !reductionPts.isEmpty()) {
         Set<Object> values = getConstantValues(reductionPts, true);
         if (values == null || values.isEmpty()) return Reduction.UNRESOLVED;

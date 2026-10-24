@@ -9,6 +9,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -192,11 +193,12 @@ public class ModelCall extends TensorGenerator {
 
       if (reference != null && (reference.equals(tuple) || reference.equals(list))) {
         OrdinalSet<InstanceKey> catalogPTS =
-            builder
-                .getPointerAnalysis()
-                .getPointsToSet(
-                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                        .getPointerKeyForObjectCatalog(asin));
+            withoutPythonScalarKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                            .getPointerKeyForObjectCatalog(asin)));
 
         for (InstanceKey catalogIK : catalogPTS) {
           if (!(catalogIK instanceof ConstantKey)) continue;
@@ -212,9 +214,10 @@ public class ModelCall extends TensorGenerator {
           if (field == null) continue;
 
           OrdinalSet<InstanceKey> elementPTS =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(builder.getPointerKeyForInstanceField(asin, field));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
           Set<List<Dimension<?>>> elementShapes = this.getShapesOfValue(builder, elementPTS);
           if (elementShapes != null) ret.addAll(elementShapes);
         }
@@ -294,7 +297,9 @@ public class ModelCall extends TensorGenerator {
                   .getHeapModel()
                   .getPointerKeyForLocal(modelDoNode, outputsVn);
           outputsPTS =
-              OrdinalSet.unify(outputsPTS, builder.getPointerAnalysis().getPointsToSet(outputsPK));
+              OrdinalSet.unify(
+                  outputsPTS,
+                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(outputsPK)));
         }
       } else outputsPTS = getConstructionOutputs(builder, selfIK).outputs();
 
@@ -369,7 +374,9 @@ public class ModelCall extends TensorGenerator {
 
       PointerKey argPK =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, argVn);
-      ret = OrdinalSet.unify(ret, builder.getPointerAnalysis().getPointsToSet(argPK));
+      ret =
+          OrdinalSet.unify(
+              ret, withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPK)));
     }
     return ret;
   }
@@ -457,7 +464,8 @@ public class ModelCall extends TensorGenerator {
               .getHeapModel()
               .getPointerKeyForLocal(init, ir.getParameter(1));
       boolean ofInstance = false;
-      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPK))
+      for (InstanceKey ik :
+          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(selfPK)))
         if (ik.equals(selfIK)) ofInstance = true;
       if (!ofInstance) continue;
       for (Pair<CGNode, SSAAbstractInvokeInstruction> call : getCallerInvokes(builder, init))
@@ -492,7 +500,9 @@ public class ModelCall extends TensorGenerator {
       read = true;
       PointerKey argPK =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(call.fst, argVn);
-      outputs = OrdinalSet.unify(outputs, builder.getPointerAnalysis().getPointsToSet(argPK));
+      outputs =
+          OrdinalSet.unify(
+              outputs, withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPK)));
     }
     return new ConstructionOutputs(outputs, !calls.isEmpty() && !read && !unknown);
   }

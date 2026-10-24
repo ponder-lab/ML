@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -97,7 +98,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   private OrdinalSet<InstanceKey> selfInstances(PropagationCallGraphBuilder builder) {
     if (this.getSource() != null) {
-      return builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey());
+      return withoutPythonScalarKeys(
+          builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey()));
     }
     if (this.mapResultInstance != null) {
       return OrdinalSet.toOrdinalSet(
@@ -131,7 +133,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) continue;
       OrdinalSet<InstanceKey> fieldPTS =
-          pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
       if (fieldPTS != null) ret = OrdinalSet.unify(ret, fieldPTS);
     }
     return ret;
@@ -156,11 +159,12 @@ public class DatasetMapGenerator extends DatasetGenerator {
       TypeReference reference = asin.concreteType().getReference();
       if (!reference.equals(tuple) && !reference.equals(list)) continue;
       OrdinalSet<InstanceKey> catalogPTS =
-          builder
-              .getPointerAnalysis()
-              .getPointsToSet(
-                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                      .getPointerKeyForObjectCatalog(asin));
+          withoutPythonScalarKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin)));
       for (InstanceKey catalogIK : catalogPTS) {
         if (!(catalogIK instanceof ConstantKey)) continue;
         Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -310,7 +314,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) continue;
       OrdinalSet<InstanceKey> componentPTS =
-          pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field));
+          withoutPythonScalarKeys(
+              pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
       if (componentPTS != null) ret = OrdinalSet.unify(ret, componentPTS);
     }
     return ret;
@@ -503,13 +508,14 @@ public class DatasetMapGenerator extends DatasetGenerator {
     if (path.size() == 1)
       for (Pair<CGNode, Integer> value :
           getMappedElementComponentValueNumbers(builder, path.get(0)))
-        if (builder
-            .getPointerAnalysis()
-            .getPointsToSet(
+        if (withoutPythonScalarKeys(
                 builder
                     .getPointerAnalysis()
-                    .getHeapModel()
-                    .getPointerKeyForLocal(value.fst, value.snd))
+                    .getPointsToSet(
+                        builder
+                            .getPointerAnalysis()
+                            .getHeapModel()
+                            .getPointerKeyForLocal(value.fst, value.snd)))
             .isEmpty()) stored.add(value);
     return Pair.make(component == null ? OrdinalSet.empty() : component, stored);
   }

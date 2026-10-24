@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -169,11 +170,12 @@ public class Split extends PassThroughUnaryTensorGenerator {
         if (packed == null) return super.getDefaultShapes(builder);
         int count =
             integerCatalogSize(
-                builder
-                    .getPointerAnalysis()
-                    .getPointsToSet(
-                        ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                            .getPointerKeyForObjectCatalog(asin)));
+                withoutPythonScalarKeys(
+                    builder
+                        .getPointerAnalysis()
+                        .getPointsToSet(
+                            ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                                .getPointerKeyForObjectCatalog(asin))));
         for (List<Dimension<?>> shape : packed) {
           List<Dimension<?>> out = new ArrayList<>(shape.size() + 1);
           out.add(new NumericDim(count));

@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -137,11 +138,12 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
             && (asin.concreteType().getReference().equals(list)
                 || asin.concreteType().getReference().equals(tuple))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -178,7 +180,7 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
 
                 if (!preciseTypesFound) {
                   OrdinalSet<InstanceKey> fieldPTS =
-                      builder.getPointerAnalysis().getPointsToSet(fieldPK);
+                      withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
                   ret.addAll(this.getDTypesOfValue(builder, fieldPTS));
                 }
               }
@@ -264,11 +266,12 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
             && (asin.concreteType().getReference().equals(list)
                 || asin.concreteType().getReference().equals(tuple))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              builder
-                  .getPointerAnalysis()
-                  .getPointsToSet(
-                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                          .getPointerKeyForObjectCatalog(asin));
+              withoutPythonScalarKeys(
+                  builder
+                      .getPointerAnalysis()
+                      .getPointsToSet(
+                          ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                              .getPointerKeyForObjectCatalog(asin)));
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
@@ -306,7 +309,7 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
 
                 if (!preciseTypesFound) {
                   OrdinalSet<InstanceKey> fieldPTS =
-                      builder.getPointerAnalysis().getPointsToSet(fieldPK);
+                      withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
                   if (!addShapesOrTop(ret, this.getShapesOfValue(builder, fieldPTS))) return null;
                 }
               }

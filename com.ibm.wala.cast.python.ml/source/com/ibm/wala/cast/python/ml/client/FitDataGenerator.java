@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PRE
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIT_DATA_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNPACKED_DATA_TYPE;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -340,7 +341,10 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     IField f = this.slotField(builder, index);
     if (f == null) return OrdinalSet.empty();
     OrdinalSet<InstanceKey> pts =
-        builder.getPointerAnalysis().getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
+        withoutPythonScalarKeys(
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
     return pts == null ? OrdinalSet.empty() : pts;
   }
 
