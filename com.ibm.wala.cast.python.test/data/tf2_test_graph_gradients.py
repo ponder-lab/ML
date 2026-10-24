@@ -1,6 +1,7 @@
 # Test https://github.com/wala/ML/issues/1144: the gradient APIs that work only while a graph is
 # being built are modeled, so their calls have callees and their gradients are typed.
 import tensorflow as tf
+from tensorflow import gradients as aliased_gradients
 
 v = tf.Variable(1.0)
 optimizer = tf.keras.optimizers.SGD()
@@ -30,4 +31,11 @@ def step():
     optimizer.get_updates(loss, [v])
 
 
+@tf.function
+def aliased_step():
+    # `tf.gradients` read through an alias, not through the module.
+    return aliased_gradients(v * v, [v])
+
+
 step()
+assert aliased_step()[0].dtype == tf.float32

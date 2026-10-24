@@ -2430,6 +2430,20 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String GRADIENT_SIGNATURE = "tf.GradientTape.gradient()";
 
+  /**
+   * https://www.tensorflow.org/api_docs/python/tf/gradients, which {@code
+   * tf.keras.backend.gradients} shares (<a
+   * href="https://github.com/wala/ML/issues/1144">wala/ML#1144</a>).
+   */
+  public static final MethodReference GRADIENTS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/gradients")),
+          AstMethodReference.fnSelector);
+
+  private static final String GRADIENTS_SIGNATURE = "tf.gradients()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax. */
   public static final MethodReference SOFTMAX =
       MethodReference.findOrCreate(
@@ -3172,6 +3186,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(IDENTITY.getDeclaringClass(), IDENTITY_SIGNATURE),
           Map.entry(STOP_GRADIENT.getDeclaringClass(), STOP_GRADIENT_SIGNATURE),
           Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
+          Map.entry(GRADIENTS.getDeclaringClass(), GRADIENTS_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(CONV2D_CALL.getDeclaringClass(), CONV2D_CALL_SIGNATURE),
           Map.entry(CONV1D_CALL.getDeclaringClass(), CONV1D_CALL_SIGNATURE),
