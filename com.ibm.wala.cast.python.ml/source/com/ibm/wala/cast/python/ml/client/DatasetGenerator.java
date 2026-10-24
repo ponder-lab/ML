@@ -351,6 +351,39 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   }
 
   /**
+   * {@inheritDoc}
+   *
+   * @implNote A view fixed to one receiver ({@link #overReceiver}) is keyed on that receiver, by
+   *     identity as {@link #equals} compares it, so views over different receivers, and the view
+   *     and its unfixed original, never share a memoized result. Today every memoized read of a
+   *     view reads the union of its receivers and so agrees across them; the key keeps that true
+   *     once a whole-element read honors the fixed receiver.
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    return this.receiver == null
+        ? super.operationDiscriminator()
+        : new FixedReceiver(this.receiver);
+  }
+
+  /**
+   * The receiver a view is fixed to, compared by identity.
+   *
+   * @param receiver The receiver.
+   */
+  private record FixedReceiver(TensorGenerator receiver) {
+    @Override
+    public boolean equals(Object obj) {
+      return obj instanceof FixedReceiver other && this.receiver == other.receiver;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(this.receiver);
+    }
+  }
+
+  /**
    * Retrieves the sizes (number of elements) of the dataset represented by this generator. By
    * default, it recursively queries the receiver (the dataset this one is derived from).
    *

@@ -429,7 +429,10 @@ public class DatasetMapGenerator extends DatasetGenerator {
       if (ir == null || !ir.getSymbolTable().isParameter(returnValue.snd)) return null;
       int input = returnValue.snd;
       // Parameter 0 is the function object; the element's are the ones after it, one for the
-      // whole element or one per component.
+      // whole element or one per component. A bound method's own receiver, as for
+      // `ds.map(obj.method)`, would sit among them and shift the position by one; no such callback
+      // reaches here today, since the analysis does not yet resolve a bound method passed to
+      // `map`, and a fix for that must discount the receiver.
       int parameters = ir.getSymbolTable().getNumberOfParameters() - 1;
       int position = -1;
       for (int i = 1; i <= parameters; i++)
