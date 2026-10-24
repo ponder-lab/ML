@@ -2735,7 +2735,7 @@ public class TestShapeOps extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    */
   @Test
-  public void testSliceInexactQuotientDegrades()
+  public void testSliceInexactQuotientTruncates()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_slice_computed_bounds.py",
@@ -2764,6 +2764,48 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 2731))));
+  }
+
+  /**
+   * A quotient {@code 4096 / 3} that reaches a bound's {@code int} through a parameter, {@code
+   * t[:int(n)]}, truncates to 1365 there (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceParameterInexactQuotientTruncates()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_parameter_inexact",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));
+  }
+
+  /**
+   * A quotient {@code 4096 / 3} stored in an attribute and read by a bound's {@code int}, {@code
+   * t[:int(self.n)]}, truncates to 1365 there (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceAttributeInexactQuotientTruncates()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_attribute_inexact",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));
   }
 
   /**

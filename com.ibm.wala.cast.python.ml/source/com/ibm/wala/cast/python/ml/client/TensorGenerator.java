@@ -2082,10 +2082,38 @@ public abstract class TensorGenerator implements Cloneable {
       int vn,
       Set<Pair<CGNode, Integer>> visited,
       int depth) {
+    return resolveIntFlowSensitively(builder, node, vn, visited, depth, false);
+  }
+
+  /**
+   * {@link #resolveIntFlowSensitively(PropagationCallGraphBuilder, CGNode, int, Set, int)}, which
+   * either requires an exact integer or, under {@code int(x)}, truncates a float toward zero as
+   * {@code int} does. The front end folds a float-valued operation over literals to its float (<a
+   * href="https://github.com/wala/ML/issues/1143">wala/ML#1143</a>), so {@code int(n)} may reach a
+   * float through a parameter, an attribute or a lexical read. The truncation carries through those
+   * hops, which pass a value on unchanged, and not into an arithmetic operand, whose float the
+   * operation reads exactly.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to resolve.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @param truncate Whether a float truncates toward zero rather than declining.
+   * @return The flow-refined integer constant, or {@code null} when the chase declines.
+   */
+  private static Integer resolveIntFlowSensitively(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth,
+      boolean truncate) {
     if (vn <= 0 || depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
     if (!visited.add(Pair.make(node, vn))) return null;
     SymbolTable st = node.getIR().getSymbolTable();
-    if (st.isNumberConstant(vn)) return intProjectionOrNull((Number) st.getConstantValue(vn));
+    if (st.isNumberConstant(vn))
+      return intProjectionOrNull((Number) st.getConstantValue(vn), truncate);
 
     SSAInstruction def = node.getDU().getDef(vn);
 
@@ -2098,8 +2126,7 @@ public abstract class TensorGenerator implements Cloneable {
     if (def instanceof PythonInvokeInstruction) {
       // `int(x)` over an integral argument is the identity, over a float it truncates, and it is
       // the ordinary way a Python program turns a `/` quotient back into an index. Chasing through
-      // it is what lets a bound
-      // like `int(total / parts)` resolve (wala/ML#841).
+      // it is what lets a bound like `int(total / parts)` resolve (wala/ML#841).
       Integer viaCoercion =
           resolveIntThroughIntBuiltin(builder, node, (PythonInvokeInstruction) def, visited, depth);
       if (viaCoercion != null) return viaCoercion;
@@ -2114,15 +2141,16 @@ public abstract class TensorGenerator implements Cloneable {
 
       if (node.getMethod().getNumberOfParameters() >= 2 && objectVn == node.getIR().getParameter(1))
         return resolveSelfAttributeIntFlowSensitively(
-            builder, node, objectVn, attributeName, visited, depth);
+            builder, node, objectVn, attributeName, visited, depth, truncate);
 
       Integer viaObject =
           resolveObjectAttributeIntFlowSensitively(
-              builder, node, objectVn, attributeName, visited, depth);
+              builder, node, objectVn, attributeName, visited, depth, truncate);
       if (viaObject != null) return viaObject;
 
       Integer viaArgparse =
-          resolveArgparseDefaultInt(builder, node, objectVn, attributeName, visited, depth);
+          resolveArgparseDefaultInt(
+              builder, node, objectVn, attributeName, visited, depth, truncate);
       if (viaArgparse != null) return viaArgparse;
       // No chased write resolved: fall through to the points-to fallback below.
     }
@@ -2141,7 +2169,8 @@ public abstract class TensorGenerator implements Cloneable {
             && definer.fst.getDU() != null
             && definer.fst.getDU().getDef(definer.snd) instanceof SSAPhiInstruction) continue;
         Integer viaDefiner =
-            resolveIntFlowSensitively(builder, definer.fst, definer.snd, visited, depth - 1);
+            resolveIntFlowSensitively(
+                builder, definer.fst, definer.snd, visited, depth - 1, truncate);
         if (viaDefiner == null) return null;
         if (agreed != null && !agreed.equals(viaDefiner)) return null; // Disagreeing definers.
         agreed = viaDefiner;
@@ -2171,7 +2200,12 @@ public abstract class TensorGenerator implements Cloneable {
           boolean forwardingHop = isTrampolineNode(node) || isTrampolineNode(callerInvoke.fst);
           Integer viaCaller =
               resolveIntFlowSensitively(
-                  builder, callerInvoke.fst, argVn, visited, forwardingHop ? depth : depth - 1);
+                  builder,
+                  callerInvoke.fst,
+                  argVn,
+                  visited,
+                  forwardingHop ? depth : depth - 1,
+                  truncate);
           if (viaCaller == null) return null;
           if (agreed != null && !agreed.equals(viaCaller)) return null; // Disagreeing callers.
           agreed = viaCaller;
@@ -2189,7 +2223,7 @@ public abstract class TensorGenerator implements Cloneable {
     InstanceKey only = pts.iterator().next();
     if (!(only instanceof ConstantKey) || !(((ConstantKey<?>) only).getValue() instanceof Number))
       return null;
-    return intProjectionOrNull((Number) ((ConstantKey<?>) only).getValue());
+    return intProjectionOrNull((Number) ((ConstantKey<?>) only).getValue(), truncate);
   }
 
   /**
@@ -2268,13 +2302,9 @@ public abstract class TensorGenerator implements Cloneable {
             .getName()
             .toString();
     if (!INT_BUILTIN_TYPE_NAME.equals(callee)) return null;
-    int argument = call.getUse(1);
-    // The front end folds a float-valued operation over literals to its float (wala/ML#1143), so
-    // `int(4096 / 3)` wraps 1365.33..., which `int` truncates.
-    SymbolTable st = node.getIR().getSymbolTable();
-    if (st.isNumberConstant(argument) && st.getConstantValue(argument) instanceof Double value)
-      return intTruncationOrNull(value);
-    return resolveIntFlowSensitively(builder, node, argument, visited, depth - 1);
+    // `int` truncates a float argument, such as the folded 1365.33... of `int(4096 / 3)`, toward
+    // zero (wala/ML#1143).
+    return resolveIntFlowSensitively(builder, node, call.getUse(1), visited, depth - 1, true);
   }
 
   /** The Python {@code int} builtin's declared type, as the front end names it. */
@@ -2292,6 +2322,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param attributeName The attribute being read.
    * @param visited The {@code (node, vn)} pairs already on this chase.
    * @param depth The remaining recursion budget.
+   * @param truncate Whether a float truncates toward zero, under {@code int(x)}.
    * @return The flow-refined constant, or {@code null} when the chase declines.
    */
   private static Integer resolveSelfAttributeIntFlowSensitively(
@@ -2300,7 +2331,8 @@ public abstract class TensorGenerator implements Cloneable {
       int objectVn,
       String attributeName,
       Set<Pair<CGNode, Integer>> visited,
-      int depth) {
+      int depth,
+      boolean truncate) {
     PointerKey selfPk =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
     Integer agreed = null;
@@ -2337,7 +2369,8 @@ public abstract class TensorGenerator implements Cloneable {
               || !candidateSt.isStringConstant(memberVn)
               || !attributeName.equals(candidateSt.getStringValue(memberVn))) continue;
           Integer stored =
-              resolveIntFlowSensitively(builder, candidate, write.getValue(), visited, depth - 1);
+              resolveIntFlowSensitively(
+                  builder, candidate, write.getValue(), visited, depth - 1, truncate);
           if (stored == null) return null; // An unresolvable write declines the attribute.
           if (perInstance != null && !perInstance.equals(stored)) return null; // Conflict.
           perInstance = stored;
@@ -2410,6 +2443,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param attributeName The attribute being read.
    * @param visited The {@code (node, vn)} pairs already on this chase.
    * @param depth The remaining recursion budget.
+   * @param truncate Whether a float truncates toward zero, under {@code int(x)}.
    * @return The flow-refined constant, or {@code null} when no chased write resolves or distinct
    *     writes disagree.
    */
@@ -2419,10 +2453,11 @@ public abstract class TensorGenerator implements Cloneable {
       int objectVn,
       String attributeName,
       Set<Pair<CGNode, Integer>> visited,
-      int depth) {
+      int depth,
+      boolean truncate) {
     if (depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
     Integer sameBody =
-        resolveSameBodyStoreInt(builder, node, objectVn, attributeName, visited, depth);
+        resolveSameBodyStoreInt(builder, node, objectVn, attributeName, visited, depth, truncate);
     if (sameBody != null) return sameBody;
 
     // The object is a parameter: the write may live in the frame the object came from.
@@ -2444,7 +2479,7 @@ public abstract class TensorGenerator implements Cloneable {
       if (argVn <= 0) return null;
       Integer viaCaller =
           resolveObjectAttributeIntFlowSensitively(
-              builder, callerInvoke.fst, argVn, attributeName, visited, depth - 1);
+              builder, callerInvoke.fst, argVn, attributeName, visited, depth - 1, truncate);
       if (viaCaller == null) return null;
       if (agreed != null && !agreed.equals(viaCaller)) return null; // Disagreeing callers.
       agreed = viaCaller;
@@ -2481,6 +2516,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param attributeName The attribute being read.
    * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
    * @param depth The remaining recursion budget.
+   * @param truncate Whether a float truncates toward zero, under {@code int(x)}.
    * @return The literal default, or {@code null} when the chase declines.
    */
   private static Integer resolveArgparseDefaultInt(
@@ -2489,7 +2525,8 @@ public abstract class TensorGenerator implements Cloneable {
       int objectVn,
       String attributeName,
       Set<Pair<CGNode, Integer>> visited,
-      int depth) {
+      int depth,
+      boolean truncate) {
     if (depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
     IR ir = node.getIR();
     SymbolTable st = ir.getSymbolTable();
@@ -2547,7 +2584,8 @@ public abstract class TensorGenerator implements Cloneable {
 
       if (!call.getKeywords().contains("default")) return null; // Matching argument, no default.
       Integer viaDefault =
-          resolveIntFlowSensitively(builder, node, call.getUse("default"), visited, depth - 1);
+          resolveIntFlowSensitively(
+              builder, node, call.getUse("default"), visited, depth - 1, truncate);
       if (viaDefault == null) return null;
       if (agreed != null && !agreed.equals(viaDefault)) return null; // Disagreeing defaults.
       agreed = viaDefault;
@@ -2578,6 +2616,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param attributeName The attribute being read.
    * @param visited The {@code (node, vn)} pairs already on this chase.
    * @param depth The remaining recursion budget.
+   * @param truncate Whether a float truncates toward zero, under {@code int(x)}.
    * @return The flow-refined constant, or {@code null} when no same-body write resolves or distinct
    *     writes disagree.
    */
@@ -2587,7 +2626,8 @@ public abstract class TensorGenerator implements Cloneable {
       int objectVn,
       String attributeName,
       Set<Pair<CGNode, Integer>> visited,
-      int depth) {
+      int depth,
+      boolean truncate) {
     SymbolTable st = node.getIR().getSymbolTable();
     Integer found = null;
     for (Iterator<SSAInstruction> uses = node.getDU().getUses(objectVn); uses.hasNext(); ) {
@@ -2599,7 +2639,7 @@ public abstract class TensorGenerator implements Cloneable {
           || !st.isStringConstant(memberVn)
           || !attributeName.equals(st.getStringValue(memberVn))) continue;
       Integer stored =
-          resolveIntFlowSensitively(builder, node, write.getValue(), visited, depth - 1);
+          resolveIntFlowSensitively(builder, node, write.getValue(), visited, depth - 1, truncate);
       if (stored == null) return null; // An unresolvable write makes the attribute unresolvable.
       if (found != null && !found.equals(stored)) return null; // Conflicting writes.
       found = stored;
@@ -10586,6 +10626,19 @@ public abstract class TensorGenerator implements Cloneable {
     long longValue = value.longValue();
     if (doubleValue != longValue || longValue != (int) longValue) return null;
     return (int) longValue;
+  }
+
+  /**
+   * {@link #intProjectionOrNull(Number)}, or under {@code int(x)} the truncation of a float.
+   *
+   * @param value The number.
+   * @param truncate Whether a float truncates toward zero, as {@code int} does.
+   * @return The integer, or {@code null} when there is none.
+   */
+  private static Integer intProjectionOrNull(Number value, boolean truncate) {
+    return truncate && value instanceof Double real
+        ? intTruncationOrNull(real)
+        : intProjectionOrNull(value);
   }
 
   /**
