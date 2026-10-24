@@ -292,6 +292,9 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reshape -->
         <new def="reshape" class="Ltensorflow/functions/reshape"/>
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/ensure_shape -->
+        <new def="ensure_shape" class="Ltensorflow/functions/ensure_shape"/>
+        <putfield class="LRoot" field="ensure_shape" fieldType="LRoot" ref="x" value="ensure_shape"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/pad -->
         <new def="pad" class="Ltensorflow/functions/pad"/>
         <putfield class="LRoot" field="pad" fieldType="LRoot" ref="x" value="pad"/>
@@ -1206,6 +1209,9 @@
         <putfield class="LRoot" field="one_hot" fieldType="LRoot" ref="backend" value="one_hot"/>
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="backend" value="gather"/>
         <putfield class="LRoot" field="dropout" fieldType="LRoot" ref="backend" value="pass_through"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend/int_shape. Returns the input's static shape as a Python tuple of ints and `None`s, never a tensor; see the `int_shape` class. -->
+        <new def="int_shape" class="Ltensorflow/functions/int_shape"/>
+        <putfield class="LRoot" field="int_shape" fieldType="LRoot" ref="backend" value="int_shape"/>
         <!-- `tf.keras.backend.floatx()` returns the backend's default float dtype, documented as `float32`. It is a CALL, not a module field, so the dtype-argument resolver's field-identity match cannot see it; the paired resolver arm recognizes a `DType` allocated in this function's node as `float32` (wala/ML#870). `tf.keras.backend.set_floatx` can change that default program-wide, which this arm does not yet read (wala/ML#871). -->
         <new def="floatx" class="Ltensorflow/functions/floatx"/>
         <putfield class="LRoot" field="floatx" fieldType="LRoot" ref="backend" value="floatx"/>
@@ -2283,6 +2289,19 @@
       <class name="set_shape" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self shape">
           <return value="self"/>
+        </method>
+      </class>
+      <class name="ensure_shape" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/ensure_shape. Allocates its result, paired with the `EnsureShape` generator: the input's dtype, and the declared shape refined against the input's, a `None` in the declared shape keeping the input's extent at that position. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x shape name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="int_shape" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend/int_shape. The result is the input's static shape as a Python tuple of ints and `None`s, which is no tensor and whose elements are no tensors. Like `t.shape`, it allocates nothing: a tuple allocation with no element would read as the empty shape of a scalar, and any other allocation as a shape argument no reader resolves. An allocator whose shape argument is such a call reads the input's shape, as for `t.shape` (see `TensorGenerator.getShapeFromShapeAttributeArgument`). The call is modeled so that it resolves. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self x">
+          <return/>
         </method>
       </class>
       <class name="pad" allocatable="true">

@@ -8523,12 +8523,19 @@ public abstract class TensorGenerator implements Cloneable {
       }
       if (argVn <= 0) continue;
       SSAInstruction def = caller.getDU().getDef(argVn);
-      if (!(def instanceof PythonPropertyRead)) continue;
-      PythonPropertyRead propRead = (PythonPropertyRead) def;
-      SymbolTable st = caller.getIR().getSymbolTable();
-      int memberVn = propRead.getMemberRef();
-      if (!st.isStringConstant(memberVn) || !"shape".equals(st.getStringValue(memberVn))) continue;
-      int tensorVn = propRead.getObjectRef();
+      int tensorVn;
+      if (def instanceof PythonPropertyRead propRead) {
+        SymbolTable st = caller.getIR().getSymbolTable();
+        int memberVn = propRead.getMemberRef();
+        if (!st.isStringConstant(memberVn) || !"shape".equals(st.getStringValue(memberVn)))
+          continue;
+        tensorVn = propRead.getObjectRef();
+      } else if (def instanceof SSAAbstractInvokeInstruction call
+          && call.getNumberOfUses() > 1
+          && callsOnly(builder, caller, call, TensorFlowTypes.INT_SHAPE.getDeclaringClass()))
+        // `tf.keras.backend.int_shape(t)` is `t`'s static shape as a tuple, read as `t.shape` is.
+        tensorVn = call.getUse(1);
+      else continue;
       try {
         Set<List<Dimension<?>>> tensorShapes = this.getShapes(builder, caller, tensorVn);
         if (tensorShapes != null && !tensorShapes.isEmpty()) {
@@ -11789,6 +11796,8 @@ public abstract class TensorGenerator implements Cloneable {
       return new Reshape(node);
     } else if (type.equals(TensorFlowTypes.PAD.getDeclaringClass())) {
       return new Pad(node);
+    } else if (type.equals(TensorFlowTypes.ENSURE_SHAPE.getDeclaringClass())) {
+      return new EnsureShape(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
       return new Squeeze(node);
     } else if (type.equals(TensorFlowTypes.RNN_STEP.getDeclaringClass())) {

@@ -3,18 +3,24 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
+import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
+import com.ibm.wala.cast.python.ml.types.NumpyTypes;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -25,10 +31,12 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -649,10 +657,101 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
       return resultDTypes(builder, yDTypes);
     }
 
+    // A list or tuple display of Python numbers or bools on the LEFT of a tensor or an array
+    // follows
+    // that partner's library, member by member. `[1] + t` runs a TensorFlow `t.__radd__`, which
+    // converts the sequence with `t`'s dtype as its hint, so the result has `t`'s dtype; read as
+    // its
+    // own dtype, the display's integers imposed int32 on a float32 `t`. NumPy makes the sequence an
+    // array of its default dtype and promotes, so an array partner gives that promotion. A partner
+    // with a member of neither kind keeps the rule below.
+    if (yVn > 0) {
+      DType displayDType = numberSequenceDisplayDType(node, xVn);
+      if (displayDType != null && numberSequenceDisplayDType(node, yVn) == null) {
+        Set<DType> converted = this.displayPartnerDTypes(builder, node, yVn, displayDType);
+        if (converted != null) return resultDTypes(builder, converted);
+      }
+    }
+
     Set<DType> xDTypes = this.getOperandDTypes(builder, xVn);
     if (yVn > 0) xDTypes = this.broadcastingMemberDTypes(builder, xVn, yVn, xDTypes);
     LOGGER.fine("ElementWiseOperation getDefaultDTypes dtypes: " + xDTypes);
     return resultDTypes(builder, xDTypes);
+  }
+
+  /**
+   * The dtype NumPy gives an array built from a value, when the value is a list or tuple display,
+   * allocated in its own node, whose every element is a Python number or bool: {@code bool} when
+   * all are bools, {@code float64} when any is a float, and {@code int64} otherwise.
+   *
+   * @param node The node whose IR defines the value.
+   * @param vn The value's value number.
+   * @return The dtype, or {@code null} when the value is not such a display with an element.
+   */
+  private static DType numberSequenceDisplayDType(CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null) return null;
+    if (!(node.getDU().getDef(vn) instanceof SSANewInstruction alloc)) return null;
+    TypeReference allocated = alloc.getNewSite().getDeclaredType();
+    if (!allocated.equals(PythonTypes.list) && !allocated.equals(PythonTypes.tuple)) return null;
+    SymbolTable symtab = node.getIR().getSymbolTable();
+    boolean any = false;
+    boolean allBools = true;
+    boolean anyFloat = false;
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(vn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof AstPropertyWrite write) || write.getObjectRef() != vn) continue;
+      int value = write.getValue();
+      if (!symtab.isConstant(value)) return null;
+      Object constant = symtab.getConstantValue(value);
+      if (constant instanceof Boolean) {
+        any = true;
+        continue;
+      }
+      if (!(constant instanceof Number)) return null;
+      any = true;
+      allBools = false;
+      if (constant instanceof Double || constant instanceof Float) anyFloat = true;
+    }
+    if (!any) return null;
+    return allBools ? DType.BOOL : anyFloat ? DType.FLOAT64 : DType.INT64;
+  }
+
+  /**
+   * The dtypes of a display of Python numbers or bools combined on the left of a partner, member by
+   * member of the partner's points-to set: a TensorFlow tensor converts the display with its own
+   * dtype, and a NumPy array promotes with the array NumPy makes of the display.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose IR defines the partner.
+   * @param vn The partner's value number.
+   * @param displayDType The dtype NumPy gives the display ({@link #numberSequenceDisplayDType}).
+   * @return The result's dtypes; {@link DType#UNKNOWN} when the partner has no member; or {@code
+   *     null} when it has a member that is neither a TensorFlow tensor nor a NumPy array.
+   */
+  private Set<DType> displayPartnerDTypes(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, DType displayDType) {
+    PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    // A partner with no member, typed only by the dataflow, shows neither library, so the display's
+    // own dtype is no evidence for the result: it is unknown, and the dataflow decides.
+    if (builder.getPointerAnalysis().getPointsToSet(key).isEmpty())
+      return EnumSet.of(DType.UNKNOWN);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    for (InstanceKey member : builder.getPointerAnalysis().getPointsToSet(key)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(member);
+      if (asin == null) return null;
+      TypeReference type = asin.concreteType().getReference();
+      boolean tensor = type.equals(TensorFlowTypes.TENSOR_TYPE);
+      boolean array = type.equals(NumpyTypes.NDARRAY_TYPE);
+      if (!tensor && !array) return null;
+      Set<DType> dtypes = this.getDTypesFromTensor(builder, asin);
+      if (dtypes == null || dtypes.isEmpty()) {
+        ret.add(DType.UNKNOWN);
+        continue;
+      }
+      for (DType dtype : dtypes)
+        ret.add(tensor ? dtype : NpConcatenate.promote(displayDType, dtype));
+    }
+    return ret;
   }
 
   /**

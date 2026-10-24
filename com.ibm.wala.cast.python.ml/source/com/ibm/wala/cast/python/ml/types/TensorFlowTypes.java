@@ -2755,6 +2755,28 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String PAD_SIGNATURE = "tf.pad()";
 
+  /** {@code tf.ensure_shape}: the input with the declared static shape. */
+  public static final MethodReference ENSURE_SHAPE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/ensure_shape")),
+          AstMethodReference.fnSelector);
+
+  private static final String ENSURE_SHAPE_SIGNATURE = "tf.ensure_shape()";
+
+  /**
+   * {@code tf.keras.backend.int_shape}: the input's static shape as a Python tuple, never a tensor.
+   */
+  public static final MethodReference INT_SHAPE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/int_shape")),
+          AstMethodReference.fnSelector);
+
+  private static final String INT_SHAPE_SIGNATURE = "tf.keras.backend.int_shape()";
+
   public static final MethodReference DATASET_BATCH =
       MethodReference.findOrCreate(DATASET, AstMethodReference.fnSelector);
 
@@ -2807,6 +2829,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(RAGGED_TENSOR_SPEC, RAGGED_TENSOR_SPEC_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(PAD.getDeclaringClass(), PAD_SIGNATURE),
+          Map.entry(ENSURE_SHAPE.getDeclaringClass(), ENSURE_SHAPE_SIGNATURE),
+          Map.entry(INT_SHAPE.getDeclaringClass(), INT_SHAPE_SIGNATURE),
           Map.entry(CONSTANT.getDeclaringClass(), CONSTANT_SIGNATURE),
           Map.entry(RANGE.getDeclaringClass(), RANGE_SIGNATURE),
           Map.entry(NORMAL.getDeclaringClass(), NORMAL_SIGNATURE),

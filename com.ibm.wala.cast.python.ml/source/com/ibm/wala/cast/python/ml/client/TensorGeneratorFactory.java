@@ -2290,7 +2290,7 @@ public class TensorGeneratorFactory {
    * submodule such as {@code tf.image} as a plain object rather than under the library's namespace:
    * {@code tf.image.rgb_to_grayscale} reads an attribute of an attribute of the {@code tensorflow}
    * module, and only the module carries the namespace. A lexical read at any hop, such as the name
-   * a from-import binds ({@code from tensorflow import ensure_shape}: the module body bound it to
+   * a from-import binds ({@code from tensorflow import clip_by_norm}: the module body bound it to
    * an attribute read on the imported module), follows to its definers' written values through
    * {@link TensorGenerator#lexicalDefiners} (the wala/ML#796 walk). The walk is bounded.
    *
@@ -3343,6 +3343,8 @@ public class TensorGeneratorFactory {
         || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
     else if (isType(calledFunction, TensorFlowTypes.PAD.getDeclaringClass()))
       return new Pad(source);
+    else if (isType(calledFunction, TensorFlowTypes.ENSURE_SHAPE.getDeclaringClass()))
+      return new EnsureShape(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
     else if (isType(calledFunction, SCATTER_ND.getDeclaringClass())) return new ScatterNd(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))

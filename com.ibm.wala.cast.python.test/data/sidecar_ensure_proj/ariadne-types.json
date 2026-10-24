@@ -1,0 +1,12 @@
+{
+  "types": [
+    {
+      "module": "loader.py",
+      "function": "load_ensured",
+      "variable": "data",
+      "dtype": "float32",
+      "shape": "2 3",
+      "attribution": "The pickle holds a float32 tensor of shape (2, 3)."
+    }
+  ]
+}
