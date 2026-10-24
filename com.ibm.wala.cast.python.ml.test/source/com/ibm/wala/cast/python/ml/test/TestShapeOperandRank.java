@@ -151,4 +151,29 @@ public class TestShapeOperandRank extends TestPythonMLCallGraphShape {
   public void testListOrUnclassified() {
     assertEquals(Set.of(UNKNOWN), ranksIn("by_list_or_unclassified"));
   }
+
+  /**
+   * A starred argument, {@code tf.reshape(*leading, y, -1)} with {@code leading} empty: the slot
+   * after the tensor's holds the vector {@code y}, while the shape is the scalar {@code -1}, so the
+   * operand cannot be aligned.
+   */
+  @Test
+  public void testStarred() {
+    assertEquals(Set.of(UNKNOWN), ranksIn("by_starred"));
+  }
+
+  /** A list on one path and a list with a list element on another, {@code [[12]]}. */
+  @Test
+  public void testListOrNested() {
+    assertEquals(Set.of(UNKNOWN), ranksIn("by_list_or_nested"));
+  }
+
+  /**
+   * A list on one path and a list with a rank-1 tensor element on another, {@code
+   * [tf.constant([12])]}.
+   */
+  @Test
+  public void testListOrVectorElement() {
+    assertEquals(Set.of(UNKNOWN), ranksIn("by_list_or_vector_element"));
+  }
 }

@@ -59,6 +59,25 @@ def by_list_or_unclassified(x, flat):
     return tf.reshape(x, shape)
 
 
+def by_starred(y):
+    # The starred argument puts the operands out of alignment: the slot after the tensor's
+    # holds `y`, a vector, while the shape is the scalar `-1`.
+    leading = []
+    return tf.reshape(*leading, y, -1)
+
+
+def by_list_or_nested(x, flat):
+    # Only the flat list is passed here; the other has a list element.
+    shape = [-1] if flat else [[12]]
+    return tf.reshape(x, shape)
+
+
+def by_list_or_vector_element(x, flat):
+    # Only the flat list is passed here; the other has a rank-1 tensor element.
+    shape = [-1] if flat else [tf.constant([12])]
+    return tf.reshape(x, shape)
+
+
 x = tf.zeros([3, 4])
 for f in (
     by_literal,
@@ -76,6 +95,9 @@ assert by_shape_tensor(tf.zeros([12]), x).shape == (3, 4)
 assert by_either(x, True).shape == (12,)
 assert by_either(x, False).shape == (3, 4)
 assert by_list_or_unclassified(x, True).shape == (12,)
+assert by_starred(tf.zeros([12])).shape == (12,)
+assert by_list_or_nested(x, True).shape == (12,)
+assert by_list_or_vector_element(x, True).shape == (12,)
 
 for f in (by_literal, by_keyword, by_scalar_tensor, by_numpy_scalar, by_computed_int):
     try:
