@@ -2,7 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -88,7 +88,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     List<AllocationSiteInNode> ret = new ArrayList<>();
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder.getPointerAnalysis().getPointsToSet(source.getPointerKey()))) {
       AllocationSiteInNode asin;
       try {
@@ -116,7 +116,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
     IField field = builder.getClassHierarchy().resolveField(DATASET_FIELD);
     if (field == null) return ret;
     OrdinalSet<InstanceKey> held =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field)));
@@ -145,7 +145,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
     if (field == null) return ret;
     for (AllocationSiteInNode allocation : allocations) {
       OrdinalSet<InstanceKey> held =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field)));

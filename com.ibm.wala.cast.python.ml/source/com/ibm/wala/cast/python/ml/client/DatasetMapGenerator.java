@@ -4,7 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -98,7 +98,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   private OrdinalSet<InstanceKey> selfInstances(PropagationCallGraphBuilder builder) {
     if (this.getSource() != null) {
-      return withoutPythonScalarKeys(
+      return withoutClientOnlyKeys(
           builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey()));
     }
     if (this.mapResultInstance != null) {
@@ -133,7 +133,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) continue;
       OrdinalSet<InstanceKey> fieldPTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
       if (fieldPTS != null) ret = OrdinalSet.unify(ret, fieldPTS);
     }
@@ -159,7 +159,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
       TypeReference reference = asin.concreteType().getReference();
       if (!reference.equals(tuple) && !reference.equals(list)) continue;
       OrdinalSet<InstanceKey> catalogPTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(
@@ -314,7 +314,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) continue;
       OrdinalSet<InstanceKey> componentPTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
       if (componentPTS != null) ret = OrdinalSet.unify(ret, componentPTS);
     }
@@ -508,7 +508,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
     if (path.size() == 1)
       for (Pair<CGNode, Integer> value :
           getMappedElementComponentValueNumbers(builder, path.get(0)))
-        if (withoutPythonScalarKeys(
+        if (withoutClientOnlyKeys(
                 builder
                     .getPointerAnalysis()
                     .getPointsToSet(

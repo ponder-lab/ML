@@ -29,7 +29,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 
@@ -657,7 +657,7 @@ public abstract class TensorGenerator implements Cloneable {
             .getPointerKeyForLocal(binding.sourceNode(), binding.sourceValueNumber());
     return selectComponent(
         builder,
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(sourceKey)),
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(sourceKey)),
         binding.path());
   }
 
@@ -881,7 +881,7 @@ public abstract class TensorGenerator implements Cloneable {
           // recurse into each value and union the results, mirroring the dict-structured dtype
           // handling (wala/ML#615). See wala/ML#673.
           OrdinalSet<InstanceKey> dictCatalogPts =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   pointerAnalysis.getPointsToSet(
                       ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                           .getPointerKeyForObjectCatalog(asin)));
@@ -899,7 +899,7 @@ public abstract class TensorGenerator implements Cloneable {
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
               OrdinalSet<InstanceKey> fieldPts =
-                  withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                  withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
               if (fieldPts == null || fieldPts.isEmpty()) continue;
               Set<List<Dimension<?>>> sub = this.readNestedShapeArgument(builder, fieldPts, onWalk);
               if (sub == null) return null;
@@ -912,7 +912,7 @@ public abstract class TensorGenerator implements Cloneable {
         if (reference.equals(list) || reference.equals(tuple)) {
           // We have a list of integers that represent the shape.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   pointerAnalysis.getPointsToSet(
                       ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                           .getPointerKeyForObjectCatalog(asin)));
@@ -953,7 +953,7 @@ public abstract class TensorGenerator implements Cloneable {
 
             // Get the points-to set for the instance field.
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
+                withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
@@ -1178,7 +1178,7 @@ public abstract class TensorGenerator implements Cloneable {
             IField valueField =
                 builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
             PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
-            valuePts = withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(valuePK));
+            valuePts = withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(valuePK));
           }
           if (valuePts == null || valuePts.isEmpty()) return null;
           Set<List<Dimension<?>>> constantShapes =
@@ -1203,7 +1203,7 @@ public abstract class TensorGenerator implements Cloneable {
                               : TensorFlowTypes.TENSOR_SHAPE_DIMS);
           PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
           OrdinalSet<InstanceKey> shapePts =
-              withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(shapePK));
+              withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(shapePK));
           if (shapePts == null || shapePts.isEmpty()) return null;
           Set<List<Dimension<?>>> specShapes =
               this.readNestedShapeArgument(builder, shapePts, onWalk);
@@ -1319,7 +1319,7 @@ public abstract class TensorGenerator implements Cloneable {
   protected static boolean hasUnpositionedElements(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     OrdinalSet<InstanceKey> catalog =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(
@@ -1796,7 +1796,7 @@ public abstract class TensorGenerator implements Cloneable {
                 .getPointerKeyForLocal(caller, prop.getObjectRef());
         boolean receiverMatches = false;
         for (InstanceKey ik :
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(receiverKey))) {
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(receiverKey))) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
           if (asin != null
               && asin.getNode()
@@ -1916,7 +1916,7 @@ public abstract class TensorGenerator implements Cloneable {
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
     Dimension<?> found = null;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(selfPk))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(selfPk))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) return null;
       // A user Python object allocates as `Lobject` inside its class's synthetic constructor, so
@@ -2229,7 +2229,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (pk == null || builder.getPropagationSystem().isImplicit(pk)) return null;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
     if (!(only instanceof ConstantKey) || !(((ConstantKey<?>) only).getValue() instanceof Number))
@@ -2349,7 +2349,7 @@ public abstract class TensorGenerator implements Cloneable {
     Integer agreed = null;
     boolean any = false;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(selfPk))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(selfPk))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) return null;
       String classPrefix =
@@ -2360,7 +2360,7 @@ public abstract class TensorGenerator implements Cloneable {
         // Receiver matching: only bodies whose `self` may alias the read's instance write it.
         boolean aliases = false;
         for (InstanceKey writerSelf :
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 builder
                     .getPointerAnalysis()
                     .getPointsToSet(
@@ -2924,7 +2924,7 @@ public abstract class TensorGenerator implements Cloneable {
         if (call.getNumberOfUses() < 2) continue;
         int valueVn = call.getUse(1);
         PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(caller, valueVn);
-        for (InstanceKey ik : withoutPythonScalarKeys(pa.getPointsToSet(pk))) all.add(ik);
+        for (InstanceKey ik : withoutClientOnlyKeys(pa.getPointsToSet(pk))) all.add(ik);
       }
     }
     return OrdinalSet.toOrdinalSet(all, pa.getInstanceKeyMapping());
@@ -3321,7 +3321,7 @@ public abstract class TensorGenerator implements Cloneable {
             .getHeapModel()
             .getPointerKeyForLocal(node, read.getMemberRef());
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey)))
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberKey)))
       if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String)
         return true;
     return false;
@@ -3351,7 +3351,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet =
-        withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(valuePK));
+        withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(valuePK));
 
     LOGGER.fine(
         () ->
@@ -4535,7 +4535,7 @@ public abstract class TensorGenerator implements Cloneable {
 
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
@@ -4559,7 +4559,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     String fieldName = null;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(
                 pa.getHeapModel().getPointerKeyForLocal(node, propRead.getMemberRef())))) {
       if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String) {
@@ -4583,7 +4583,7 @@ public abstract class TensorGenerator implements Cloneable {
     }
     Object constant = null;
     for (InstanceKey objIK :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(
                 pa.getHeapModel().getPointerKeyForLocal(node, propRead.getObjectRef())))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(objIK);
@@ -4592,8 +4592,7 @@ public abstract class TensorGenerator implements Cloneable {
         return null;
       }
       OrdinalSet<InstanceKey> fieldPts =
-          withoutPythonScalarKeys(
-              pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
+          withoutClientOnlyKeys(pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
       if (fieldPts == null || fieldPts.size() != 1) {
         LOGGER.fine(
             () ->
@@ -4946,7 +4945,7 @@ public abstract class TensorGenerator implements Cloneable {
       PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(
                 pa.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef())))) {
       if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String)
@@ -5047,7 +5046,7 @@ public abstract class TensorGenerator implements Cloneable {
     if (st.isConstant(vn)) return st.getConstantValue(vn);
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
@@ -5075,7 +5074,7 @@ public abstract class TensorGenerator implements Cloneable {
     IField f = builder.getClassHierarchy().resolveField(global);
     if (f == null) return null;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f)));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f)));
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
     // A `@click.option` default is written under a global of its own, but it reaches this one
@@ -5742,7 +5741,7 @@ public abstract class TensorGenerator implements Cloneable {
       PropagationCallGraphBuilder builder, AllocationSiteInNode container) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     OrdinalSet<InstanceKey> catalog =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pointerAnalysis.getPointsToSet(
                 ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                     .getPointerKeyForObjectCatalog(container)));
@@ -5759,7 +5758,7 @@ public abstract class TensorGenerator implements Cloneable {
       if (field == null) return null;
       PointerKey key = builder.getPointerKeyForInstanceField(container, field);
       OrdinalSet<InstanceKey> elementPts =
-          withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(key));
+          withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(key));
       // A static shape element, `t.shape[k]`, is a scalar, as the value walk reads it.
       Set<List<Dimension<?>>> shapes =
           (elementPts == null || elementPts.isEmpty())
@@ -6260,7 +6259,7 @@ public abstract class TensorGenerator implements Cloneable {
           || !symtab.isStringConstant(shape.getMemberRef())
           || !"shape".equals(symtab.getStringValue(shape.getMemberRef()))) return false;
       OrdinalSet<InstanceKey> receiver =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(builder.getPointerKeyForLocal(node, shape.getObjectRef())));
@@ -6323,7 +6322,7 @@ public abstract class TensorGenerator implements Cloneable {
 
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   pointerAnalysis.getPointsToSet(
                       ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                           .getPointerKeyForObjectCatalog(asin)));
@@ -6352,7 +6351,7 @@ public abstract class TensorGenerator implements Cloneable {
                     + ".");
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
+                withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
@@ -6843,7 +6842,7 @@ public abstract class TensorGenerator implements Cloneable {
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         if (pk == null) continue; // No key for the None constant's fields (wala/ML#964).
         OrdinalSet<InstanceKey> fieldPts =
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
         if (fieldPts == null) continue;
         next = next == null ? fieldPts : OrdinalSet.unify(next, fieldPts);
       }
@@ -6933,7 +6932,7 @@ public abstract class TensorGenerator implements Cloneable {
                     pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(ownerIK, field);
 
                 OrdinalSet<InstanceKey> pts =
-                    withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                    withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
                 if (pts != null) {
                   for (InstanceKey ik : pts)
                     if (ik.equals(instanceKey)) {
@@ -7064,7 +7063,7 @@ public abstract class TensorGenerator implements Cloneable {
             builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_DTYPE);
         PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
         OrdinalSet<InstanceKey> valuePts =
-            withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(valuePK));
+            withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(valuePK));
         if (valuePts != null && !valuePts.isEmpty()) {
           ret.addAll(this.getDTypesFromDTypeArgument(builder, valuePts));
         }
@@ -7081,13 +7080,13 @@ public abstract class TensorGenerator implements Cloneable {
                         : TensorFlowTypes.RAGGED_SPEC_DTYPE);
         PointerKey dtypePK = builder.getPointerKeyForInstanceField(instanceKey, dtypeField);
         OrdinalSet<InstanceKey> dtypePts =
-            withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(dtypePK));
+            withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(dtypePK));
         if (dtypePts != null && !dtypePts.isEmpty()) {
           ret.addAll(this.getDTypesFromDTypeArgument(builder, dtypePts));
         }
       } else if (typeReference.equals(tuple) || typeReference.equals(list)) {
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 pointerAnalysis.getPointsToSet(
                     ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                         .getPointerKeyForObjectCatalog(asin)));
@@ -7106,7 +7105,7 @@ public abstract class TensorGenerator implements Cloneable {
           if (f != null) {
             PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
             OrdinalSet<InstanceKey> fieldPts =
-                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
             ret.addAll(this.getDTypesFromDTypeArgument(builder, fieldPts));
           }
         }
@@ -7117,7 +7116,7 @@ public abstract class TensorGenerator implements Cloneable {
         // union the results, mirroring the tuple/list handling above. See
         // https://github.com/wala/ML/issues/615.
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-            withoutPythonScalarKeys(
+            withoutClientOnlyKeys(
                 pointerAnalysis.getPointsToSet(
                     ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                         .getPointerKeyForObjectCatalog(asin)));
@@ -7135,7 +7134,7 @@ public abstract class TensorGenerator implements Cloneable {
           if (f != null) {
             PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
             OrdinalSet<InstanceKey> fieldPts =
-                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
             ret.addAll(this.getDTypesFromDTypeArgument(builder, fieldPts));
           }
         }
@@ -7343,7 +7342,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet =
-        withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(valuePK));
+        withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(valuePK));
 
     if (valuePointsToSet != null && !valuePointsToSet.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, valuePointsToSet);
@@ -7457,7 +7456,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     String fieldName = null;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(
                 pa.getHeapModel().getPointerKeyForLocal(node, propRead.getMemberRef())))) {
       if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String) {
@@ -7474,14 +7473,13 @@ public abstract class TensorGenerator implements Cloneable {
     if (f == null) return null;
     Set<DType> ret = null;
     for (InstanceKey objIK :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(
                 pa.getHeapModel().getPointerKeyForLocal(node, propRead.getObjectRef())))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(objIK);
       if (asin == null) continue;
       OrdinalSet<InstanceKey> fieldPTS =
-          withoutPythonScalarKeys(
-              pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
+          withoutClientOnlyKeys(pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
       Set<DType> d = this.getDTypesOfValue(builder, fieldPTS);
       if (d != null && !d.isEmpty()) {
         if (ret == null) ret = EnumSet.noneOf(DType.class);
@@ -7599,7 +7597,7 @@ public abstract class TensorGenerator implements Cloneable {
 
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   pointerAnalysis.getPointsToSet(
                       ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                           .getPointerKeyForObjectCatalog(asin)));
@@ -7628,7 +7626,7 @@ public abstract class TensorGenerator implements Cloneable {
                     + ".");
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
+                withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
@@ -7993,7 +7991,7 @@ public abstract class TensorGenerator implements Cloneable {
     if (f == null) return null;
     PointerKey pk = builder.getPointerKeyForInstanceField(listAsin, f);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     return pts == null || pts.isEmpty() ? null : pts;
   }
 
@@ -8288,7 +8286,7 @@ public abstract class TensorGenerator implements Cloneable {
   protected void addContainerElementOperands(
       PropagationCallGraphBuilder builder, PointerKey argument, List<PointerKey> operands) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    for (InstanceKey ik : withoutPythonScalarKeys(pa.getPointsToSet(argument))) {
+    for (InstanceKey ik : withoutClientOnlyKeys(pa.getPointsToSet(argument))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null) continue;
       TypeReference reference = asin.concreteType().getReference();
@@ -8303,7 +8301,7 @@ public abstract class TensorGenerator implements Cloneable {
       if (contentsField != null)
         operands.add(builder.getPointerKeyForInstanceField(asin, contentsField));
       OrdinalSet<InstanceKey> catalogPTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               pa.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                       .getPointerKeyForObjectCatalog(asin)));
@@ -8886,7 +8884,7 @@ public abstract class TensorGenerator implements Cloneable {
     String attributeName = st.getStringValue(read.getMemberRef());
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     OrdinalSet<InstanceKey> receivers =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef())));
     if (receivers == null || receivers.isEmpty()) return null;
     Set<InstanceKey> receiverKeys = HashSetFactory.make();
@@ -9087,8 +9085,7 @@ public abstract class TensorGenerator implements Cloneable {
       PointerAnalysis<InstanceKey> pa, CGNode node, int vn, Set<InstanceKey> keys) {
     if (vn <= 0) return false;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(
-            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
+        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
     if (pts == null) return false;
     for (InstanceKey ik : pts) if (keys.contains(ik)) return true;
     return false;
@@ -10643,7 +10640,7 @@ public abstract class TensorGenerator implements Cloneable {
             .getPointerKeyForLocal(node, invoke.getUse(useIndex));
     if (pk == null || builder.getPropagationSystem().isImplicit(pk)) return null;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.isEmpty()) return null;
     Set<Integer> candidates = new LinkedHashSet<>();
     for (InstanceKey ik : pts) {
@@ -10761,7 +10758,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (pk == null) return UNRESOLVED_BOUND;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     Integer found = null;
     boolean sawNone = false;
     for (InstanceKey ik : pts) {
@@ -10993,7 +10990,7 @@ public abstract class TensorGenerator implements Cloneable {
         PointerKey argPk =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, argValNum);
         OrdinalSet<InstanceKey> argPts =
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPk));
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(argPk));
         if (argPts != null && !argPts.isEmpty()) {
           return argPts;
         }
@@ -11011,7 +11008,7 @@ public abstract class TensorGenerator implements Cloneable {
       if (argValNum > 0) {
         PointerKey argPk =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, argValNum);
-        return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPk));
+        return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(argPk));
       }
       return OrdinalSet.empty();
     }
@@ -11081,7 +11078,7 @@ public abstract class TensorGenerator implements Cloneable {
                     .getHeapModel()
                     .getPointerKeyForLocal(caller, argValNum);
             OrdinalSet<InstanceKey> argPts =
-                withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(argPk));
+                withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(argPk));
             if (argPts != null && !argPts.isEmpty()) {
               combinedPts = OrdinalSet.unify(combinedPts, argPts);
               found = true;
@@ -11134,7 +11131,7 @@ public abstract class TensorGenerator implements Cloneable {
       PointerKey pk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valNum);
       OrdinalSet<InstanceKey> pts =
-          withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+          withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
       if (pts != null && !pts.isEmpty()) {
         return pts;
       }
@@ -11369,7 +11366,7 @@ public abstract class TensorGenerator implements Cloneable {
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
     Set<Double> fromPts =
         getPossibleDoubleValues(
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)));
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk)));
     // A non-constant key means the value is not statically resolvable (wala/ML#669); a partial
     // result would falsely claim exhaustiveness.
     if (fromPts == null) return null;
@@ -11463,7 +11460,7 @@ public abstract class TensorGenerator implements Cloneable {
     IField field = builder.getClassHierarchy().resolveField(fieldRef);
     if (field == null) return null;
     PointerKey fieldPK = builder.getPointerKeyForInstanceField(instance, field);
-    return withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
+    return withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
   }
 
   /**

@@ -1463,7 +1463,20 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/framework/StaticTensorShape">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/TensorShape#as_list. Each element of a static shape's list is a Python int, its axis's size, so the list holds the int's type-level key under the channel of elements whose position is unknown (wala/ML#1104). An axis of unknown size gives `None` at run time, which this summary cannot construct, so the list does not hold it. -->
+      <class name="as_list" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="lst" class="Llist"/>
+          <new def="size" class="Lint"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="lst" value="size"/>
+          <return value="lst"/>
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/framework">
+      <!-- The shape a tensor's `shape` attribute reads (wala/ML#1104): the builder allocates one for each such read (`setFreshAttributeTypes`) and attaches its `as_list` method. It is a type of its own, apart from a `TensorShape` the program constructs, whose `dims` the shape-argument reader reads. -->
+      <class name="StaticTensorShape" allocatable="true"/>
       <class name="TensorShape" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/TensorShape. The constructor stores its dims argument on the result so the shape-argument parser can recurse into the wrapped list (wala/ML#789), mirroring TensorSpec's shape field. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self dims name">

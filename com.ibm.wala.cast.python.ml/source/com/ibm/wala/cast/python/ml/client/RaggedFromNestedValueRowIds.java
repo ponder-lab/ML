@@ -9,7 +9,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
@@ -128,7 +128,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
               OrdinalSet<InstanceKey> firstElemPts =
-                  withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                  withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
               for (InstanceKey valKey : getEffectiveInstances(builder, firstElemPts)) {
                 if (valKey instanceof ConstantKey) {
                   Object val = ((ConstantKey<?>) valKey).getValue();
@@ -168,7 +168,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
           if (reference.equals(list) || reference.equals(tuple)) {
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-                withoutPythonScalarKeys(
+                withoutClientOnlyKeys(
                     pointerAnalysis.getPointsToSet(
                         ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                             .getPointerKeyForObjectCatalog(asin)));
@@ -185,7 +185,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                 if (f != null) {
                   PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                   OrdinalSet<InstanceKey> firstElemPts =
-                      withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(pk));
+                      withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
 
                   Long max = null;
                   boolean foundAny = false;
@@ -196,7 +196,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                       TypeReference innerRef = innerAsin.concreteType().getReference();
                       if (innerRef.equals(list) || innerRef.equals(tuple)) {
                         OrdinalSet<InstanceKey> innerObjectCatalog =
-                            withoutPythonScalarKeys(
+                            withoutClientOnlyKeys(
                                 pointerAnalysis.getPointsToSet(
                                     ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                                         .getPointerKeyForObjectCatalog(innerAsin)));
@@ -214,7 +214,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                             PointerKey valPk =
                                 builder.getPointerKeyForInstanceField(innerAsin, innerF);
                             OrdinalSet<InstanceKey> valPts =
-                                withoutPythonScalarKeys(pointerAnalysis.getPointsToSet(valPk));
+                                withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(valPk));
                             for (InstanceKey valKey : getEffectiveInstances(builder, valPts)) {
                               if (valKey instanceof ConstantKey) {
                                 Object val = ((ConstantKey<?>) valKey).getValue();
@@ -353,7 +353,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
         IField f = builder.getClassHierarchy().resolveField(CONSTANT_VALUE);
         PointerKey pk = builder.getPointerKeyForInstanceField(ik, f);
         OrdinalSet<InstanceKey> valuePts =
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
         if (valuePts == null || valuePts.isEmpty()) {
           valuePts = getConstantCallValueArgPTS(asin, builder);
         }

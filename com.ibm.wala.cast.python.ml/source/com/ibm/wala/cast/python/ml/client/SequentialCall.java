@@ -6,7 +6,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -278,7 +278,7 @@ public class SequentialCall extends ModelCall {
       AllocationSiteInNode container =
           this.soleContainer(
               builder,
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   builder
                       .getPointerAnalysis()
                       .getPointsToSet(
@@ -711,7 +711,7 @@ public class SequentialCall extends ModelCall {
       List<InstanceKey> ordered =
           this.readContainer(
               builder,
-              withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(layersPK)));
+              withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(layersPK)));
 
       return ordered == null ? null : List.of(ordered);
     }
@@ -809,7 +809,7 @@ public class SequentialCall extends ModelCall {
       if (!ADD_METHOD_NAME.equals(symbolTable.getStringValue(read.getMemberRef()))) continue;
 
       OrdinalSet<InstanceKey> layerPTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(
@@ -1083,7 +1083,7 @@ public class SequentialCall extends ModelCall {
     Set<Integer> ret = HashSetFactory.make();
 
     for (InstanceKey catalogIK :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(
@@ -1132,7 +1132,7 @@ public class SequentialCall extends ModelCall {
       if (field == null) return null;
 
       OrdinalSet<InstanceKey> elementPTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(builder.getPointerKeyForInstanceField(container, field)));

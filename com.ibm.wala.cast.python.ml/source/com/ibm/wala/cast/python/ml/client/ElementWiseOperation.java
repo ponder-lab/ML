@@ -4,7 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static java.util.logging.Logger.getLogger;
@@ -440,7 +440,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     PointerKey scalarPk =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> scalarPts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(scalarPk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(scalarPk));
     if (scalarPts != null && !scalarPts.isEmpty()) {
       boolean allNumericConstants = true;
       for (InstanceKey ik : scalarPts)
@@ -735,11 +735,11 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     // A partner with no member, typed only by the dataflow, shows neither library, so the display's
     // own dtype is no evidence for the result: it is unknown, and the dataflow decides.
-    if (withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key)).isEmpty())
+    if (withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key)).isEmpty())
       return EnumSet.of(DType.UNKNOWN);
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (InstanceKey member :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(member);
       if (asin == null) return null;
       TypeReference type = asin.concreteType().getReference();
@@ -805,7 +805,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
       return dtypes;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(this.getNode(), vn)));
     if (pts == null || pts.size() < 2) return dtypes;
     Set<List<Dimension<?>>> otherShapes = this.getOperandShapes(builder, otherVn);
@@ -1002,8 +1002,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     if (!(def instanceof SSAAbstractInvokeInstruction invoke)) return false;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     OrdinalSet<InstanceKey> evidence =
-        withoutPythonScalarKeys(
-            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
+        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
     if (evidence == null || evidence.isEmpty()) return false;
     int[] counts = new int[2]; // arms seen, arms absent
     this.countUncoveredReturnArms(builder, node, invoke, evidence, HashSetFactory.make(), counts);
@@ -1075,8 +1074,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     counts[0]++;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(
-            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
+        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
     boolean covered = pts != null && !pts.isEmpty();
     if (covered)
       for (InstanceKey ik : pts)
@@ -1123,7 +1121,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   private static boolean isScalarLiteral(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (node.getDU().getDef(vn) != null) return false;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    if (!withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk)).isEmpty())
+    if (!withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk)).isEmpty())
       return false;
     return node.getIR().getSymbolTable().isConstant(vn);
   }
@@ -1309,7 +1307,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     }
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey ik : pts)
       if (!(ik instanceof ConstantKey<?> constant) || !(constant.getValue() instanceof String))
@@ -1386,7 +1384,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     if (isRangeElement(builder, node, def)) return true;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
     if (pts == null || pts.isEmpty())
       return isParameterVn(node, vn)
           && isPythonNumberParameter(builder, node, vn, depth, parameters);

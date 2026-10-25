@@ -344,6 +344,26 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The attribute reads that get an allocation of their own (<a
+   * href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>): per attribute name, each
+   * concrete receiver type mapped to the type of the value the attribute reads, as a tensor's
+   * {@code shape} is a shape object. The value receives the attributes {@link
+   * #freshArrayAttributes} names for its type. Empty by default; see {@link
+   * #setFreshAttributeTypes}.
+   */
+  private Map<String, Map<TypeReference, TypeReference>> freshAttributeTypes =
+      Collections.emptyMap();
+
+  /**
+   * Names the attribute reads that allocate; see {@link #freshAttributeTypes}.
+   *
+   * @param types Each attribute name mapped to its receiver types' value types.
+   */
+  public void setFreshAttributeTypes(Map<String, Map<TypeReference, TypeReference>> types) {
+    this.freshAttributeTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
+  }
+
+  /**
    * An allocation that happens only when a value the allocating method reads from a field may be of
    * the allocation's own type (wala/ML#1088): a summary cannot branch on a value's type, so the
    * builder decides it from the points-to set of the read.
@@ -1570,6 +1590,33 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Gives an attribute read whose receiver's type {@link #freshAttributeTypes} names an
+     * allocation of the type it maps to, as {@code t.shape} reads a shape object off a tensor (<a
+     * href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>).
+     *
+     * @param read The property read.
+     */
+    private void processAttributeRead(AstPropertyRead read) {
+      Map<String, Map<TypeReference, TypeReference>> attributes = getBuilder().freshAttributeTypes;
+      if (attributes.isEmpty() || !read.hasDef()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int member = read.getMemberRef();
+      if (!symtab.isStringConstant(member)) return;
+      Map<TypeReference, TypeReference> types = attributes.get(symtab.getStringValue(member));
+      if (types == null) return;
+      int object = read.getObjectRef();
+      if (object <= 0 || symtab.isConstant(object)) return;
+      PointerKey resultKey = getPointerKeyForLocal(read.getDef());
+      ArrayOperationOperator operator =
+          getBuilder().new ArrayOperationOperator(node, read.iIndex(), resultKey, types);
+      PointerKey key = getPointerKeyForLocal(object);
+      if (contentsAreInvariant(symtab, du, object) || system.isImplicit(key))
+        for (InstanceKey ik : getInvariantContents(symtab, du, node, object))
+          operator.contribute(ik);
+      else system.newSideEffect(operator, key);
+    }
+
+    /**
      * Allocates the element read off an array (wala/ML#1009): for each receiver key of a type
      * {@link #freshElementTypes} names, a fresh key of the mapped type at the read's instruction
      * index joins the result, with the receiver's per-instance methods, so a slice of the element
@@ -1736,6 +1783,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processNegativeSubscript(instruction);
       processUnknownIndexRead(instruction);
       processElementRead(instruction);
+      processAttributeRead(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
@@ -3481,15 +3529,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public int hashCode() {
-      return (node.hashCode() * 31 + pc) * 31 + resultKey.hashCode();
+      return ((node.hashCode() * 31 + pc) * 31 + resultKey.hashCode()) * 31 + types.hashCode();
     }
 
     @Override
     public boolean equals(Object o) {
+      // The type map is part of the identity: an element read and an attribute read at one site
+      // allocate under different maps (wala/ML#1104).
       return o instanceof ArrayOperationOperator other
           && node.equals(other.node)
           && pc == other.pc
-          && resultKey.equals(other.resultKey);
+          && resultKey.equals(other.resultKey)
+          && types.equals(other.types);
     }
 
     @Override

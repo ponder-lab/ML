@@ -5,7 +5,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -117,7 +117,7 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
             && (asin.concreteType().getReference().equals(list)
                 || asin.concreteType().getReference().equals(tuple))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   builder
                       .getPointerAnalysis()
                       .getPointsToSet(

@@ -5,7 +5,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
@@ -118,7 +118,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              withoutPythonScalarKeys(
+              withoutClientOnlyKeys(
                   pointerAnalysis.getPointsToSet(
                       ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                           .getPointerKeyForObjectCatalog(asin)));
@@ -142,8 +142,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
               PointerKey pointerKeyForInstanceField =
                   builder.getPointerKeyForInstanceField(asin, f);
               OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-                  withoutPythonScalarKeys(
-                      pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
+                  withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pointerKeyForInstanceField));
 
               for (InstanceKey valIK : instanceFieldPointsToSet) {
                 if (valIK instanceof ConstantKey) {

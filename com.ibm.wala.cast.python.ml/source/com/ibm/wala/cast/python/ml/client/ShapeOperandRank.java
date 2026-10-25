@@ -4,6 +4,7 @@ import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
@@ -113,6 +114,9 @@ public final class ShapeOperandRank {
       if (member instanceof ConstantKey<?> constant) {
         if (isScalarConstant(constant)) evidence.zero = true;
         else evidence.other = true;
+      } else if (Util.isPythonScalarKey(member)) {
+        // A Python scalar of unknown value, such as `len(xs)`, is rank 0 (wala/ML#1148).
+        evidence.zero = true;
       } else if (PythonTypes.isSequence(allocatedType(member))) {
         // A list or tuple is rank 1 when its elements are scalars; an element that is itself a
         // sequence or a tensor of nonzero rank stacks into a higher rank.

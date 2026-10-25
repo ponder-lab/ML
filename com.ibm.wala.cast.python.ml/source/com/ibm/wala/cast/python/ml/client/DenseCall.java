@@ -4,7 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
@@ -175,7 +175,7 @@ public class DenseCall extends TensorGenerator {
                   + ".");
 
           OrdinalSet<InstanceKey> unitsPTS =
-              withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
+              withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
           LOGGER.finer(
               "Points-to set: "
                   + describe(unitsPTS)

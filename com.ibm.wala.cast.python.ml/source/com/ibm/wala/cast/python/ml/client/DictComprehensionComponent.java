@@ -1,7 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -196,7 +196,7 @@ public class DictComprehensionComponent extends TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     PointerKey key =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
-    var pointsTo = withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key));
+    var pointsTo = withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key));
     if (pointsTo != null && !pointsTo.isEmpty()) return pointsTo;
     if (node.getDU().getDef(valueNumber) instanceof SSANewInstruction allocation) {
       InstanceKey allocated =

@@ -137,6 +137,24 @@ public class TestShapeOperandRank extends TestPythonMLCallGraphShape {
     assertEquals(Set.of(UNKNOWN), ranksIn("by_computed_int"));
   }
 
+  /**
+   * The length of a list, {@code tf.reshape(x, len(xs))}, is a Python int, whose type-level key
+   * makes the shape a scalar (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
+   */
+  @Test
+  public void testLength() {
+    assertEquals(Set.of(MAY_BE_RANK_0), ranksIn("by_length"));
+  }
+
+  /**
+   * A static shape's list, {@code tf.reshape(x, y.shape.as_list())}, holds Python ints, so the
+   * shape is a vector (<a href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>).
+   */
+  @Test
+  public void testStaticShapeList() {
+    assertEquals(Set.of(RANK_1), ranksIn("by_static_shape_list"));
+  }
+
   /** A number on one path and a list on another: some value is rank 0. */
   @Test
   public void testEither() {

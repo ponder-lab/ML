@@ -253,7 +253,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
@@ -447,7 +447,7 @@ public class TensorGeneratorFactory {
           PointerKey funcKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, funcVn);
           for (InstanceKey ik :
-              withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(funcKey))) {
+              withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(funcKey))) {
             TypeReference allocated = allocatedType(ik);
             if (allocated != null) return allocated;
           }
@@ -1295,7 +1295,7 @@ public class TensorGeneratorFactory {
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, get.getRef());
     AllocationSiteInNode data = null;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
         return null;
@@ -1335,7 +1335,7 @@ public class TensorGeneratorFactory {
     if (iterated != null && datasets.size() == 1) {
       Set<AllocationSiteInNode> iteratedAllocations = HashSetFactory.make();
       for (InstanceKey ik :
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder.getPointerAnalysis().getPointsToSet(iterated.getPointerKey()))) {
         AllocationSiteInNode asin;
         try {
@@ -1399,8 +1399,7 @@ public class TensorGeneratorFactory {
       PropagationCallGraphBuilder builder, PointsToSetVariable value) {
     List<TensorGenerator> datasets = new ArrayList<>();
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
-            builder.getPointerAnalysis().getPointsToSet(value.getPointerKey()))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(value.getPointerKey()))) {
       AllocationSiteInNode asin = findAllocationSiteInNode(ik);
       if (asin == null) return null;
       TensorGenerator allocator = TensorGenerator.createManualGenerator(asin.getNode(), builder);
@@ -1422,7 +1421,7 @@ public class TensorGeneratorFactory {
       PropagationCallGraphBuilder builder, PointsToSetVariable value) {
     if (value == null) return false;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(value.getPointerKey()));
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(value.getPointerKey()));
     if (pts == null || pts.isEmpty()) return false;
     IClassHierarchy cha = builder.getClassHierarchy();
     for (InstanceKey ik : pts) {
@@ -1460,7 +1459,7 @@ public class TensorGeneratorFactory {
         viaIter = true;
     if (!viaIter) return false;
     OrdinalSet<InstanceKey> pts =
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(
@@ -1546,7 +1545,7 @@ public class TensorGeneratorFactory {
 
     // Path 2: the container was populated in another node; read its field instance directly.
     PointerKey containerKey = pa.getHeapModel().getPointerKeyForLocal(node, containerVn);
-    for (InstanceKey ik : withoutPythonScalarKeys(pa.getPointsToSet(containerKey))) {
+    for (InstanceKey ik : withoutClientOnlyKeys(pa.getPointsToSet(containerKey))) {
       AllocationSiteInNode asin;
       try {
         asin = getAllocationSiteInNode(ik);
@@ -1646,7 +1645,7 @@ public class TensorGeneratorFactory {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     List<TensorGenerator> parts = new ArrayList<>();
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, objRef)))) {
       AllocationSiteInNode asin;
       try {
@@ -1806,7 +1805,7 @@ public class TensorGeneratorFactory {
     PointerKey memberKey =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
       if (ik instanceof ConstantKey) {
         Object value = ((ConstantKey<?>) ik).getValue();
         if (value instanceof Integer) return (Integer) value;
@@ -1838,7 +1837,7 @@ public class TensorGeneratorFactory {
     PointerKey memberKey =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
       if (ik instanceof ConstantKey) {
         Object value = ((ConstantKey<?>) ik).getValue();
         if (value instanceof Integer && (Integer) value == index) return true;
@@ -1900,7 +1899,7 @@ public class TensorGeneratorFactory {
             .getHeapModel()
             .getPointerKeyForLocal(node, funcRead.getMemberRef());
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
       if (!(ik instanceof ConstantKey)) continue;
       Object value = ((ConstantKey<?>) ik).getValue();
       if (!(value instanceof String)) continue;
@@ -2002,7 +2001,7 @@ public class TensorGeneratorFactory {
     HeapModel heapModel = builder.getPointerAnalysis().getHeapModel();
     Set<InstanceKey> receivers = HashSetFactory.make();
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(heapModel.getPointerKeyForLocal(node, object)))) receivers.add(ik);
@@ -2082,7 +2081,7 @@ public class TensorGeneratorFactory {
       } else return false;
       if (!name.equals(read)) return false;
       OrdinalSet<InstanceKey> objects =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(
@@ -2348,8 +2347,7 @@ public class TensorGeneratorFactory {
       CGNode node, int vn, PropagationCallGraphBuilder builder, int hops) {
     if (hops == 0) return false;
     PointerKey key = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(key))) {
+    for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key))) {
       TypeReference type = allocatedType(ik);
       if (type == null) continue; // A constant or an abstract key names no library object.
       if (isTensorLibraryType(type)) return true;
@@ -2400,13 +2398,13 @@ public class TensorGeneratorFactory {
     if (!symtab.isConstant(member) || !TENSOR_NUMPY_METHOD.equals(symtab.getConstantValue(member)))
       return false;
     HeapModel heap = builder.getPointerAnalysis().getHeapModel();
-    if (!withoutPythonScalarKeys(
+    if (!withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(heap.getPointerKeyForLocal(node, call.getUse(0))))
         .isEmpty()) return false;
     for (InstanceKey ik :
-        withoutPythonScalarKeys(
+        withoutClientOnlyKeys(
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(heap.getPointerKeyForLocal(node, read.getObjectRef())))) {
@@ -2486,8 +2484,7 @@ public class TensorGeneratorFactory {
     if (builder.getPropagationSystem().isImplicit(pk)) return true;
     PointsToSetVariable operandSrc = getPointsToSetVariable(pk, builder);
     if (operandSrc != null && tryGetGenerator(operandSrc, builder, visited) != null) return true;
-    for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(pk))) {
+    for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk))) {
       if (ik instanceof ConstantKey) continue;
       // A Python `list`/`tuple` allocation in the operand's PTS is not tensor evidence: a `+` binop
       // over it is list/tuple concatenation and a `*` is repetition, neither a tensor op. The
@@ -2706,7 +2703,7 @@ public class TensorGeneratorFactory {
         AllocationSiteInNode data = null;
         boolean allData = true;
         for (InstanceKey ik :
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(k))) {
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(k))) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
           if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference())) {
             if (data == null) data = asin;
@@ -2899,7 +2896,7 @@ public class TensorGeneratorFactory {
             // dataset.
             if (containerGenerator == null) {
               OrdinalSet<InstanceKey> iterPTS =
-                  withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(iterableKey));
+                  withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(iterableKey));
               LOGGER.fine(
                   () -> "next() field-indirection fallback: iterPTS size=" + iterPTS.size());
               for (InstanceKey iterIK : iterPTS) {
@@ -3093,7 +3090,7 @@ public class TensorGeneratorFactory {
         PointerKey memberRefKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
         for (InstanceKey ik :
-            withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberRefKey))) {
+            withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberRefKey))) {
           if (ik instanceof ConstantKey) {
             Object val = ((ConstantKey<?>) ik).getValue();
             LOGGER.fine(
@@ -3200,7 +3197,7 @@ public class TensorGeneratorFactory {
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
           boolean isFirstElement = false;
           for (InstanceKey ik :
-              withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberRefKey))) {
+              withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberRefKey))) {
             if (ik instanceof ConstantKey) {
               // A `ConstantKey` can carry Python `None` as a null value (see the sibling loop
               // above); guard it rather than dereferencing.
@@ -3435,7 +3432,7 @@ public class TensorGeneratorFactory {
       // the source-based half of the tandem registration, the manual half being
       // `createManualGenerator`'s allocation-type prelude.
       for (InstanceKey ik :
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder.getPointerAnalysis().getPointsToSet(source.getPointerKey()))) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference()))
@@ -3460,7 +3457,7 @@ public class TensorGeneratorFactory {
               ? FlowFromDirectoryGenerator.IMAGES_INDEX
               : FlowFromDirectoryGenerator.LABELS_INDEX;
       for (InstanceKey ik :
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder.getPointerAnalysis().getPointsToSet(source.getPointerKey()))) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null) {
@@ -3712,7 +3709,7 @@ public class TensorGeneratorFactory {
             .getPointerKeyForLocal(node, funcRead.getMemberRef());
     Set<String> names = HashSetFactory.make();
     for (InstanceKey ik :
-        withoutPythonScalarKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(memberKey))) {
       if (!(ik instanceof ConstantKey)) continue;
       Object value = ((ConstantKey<?>) ik).getValue();
       if (value instanceof String) names.add((String) value);

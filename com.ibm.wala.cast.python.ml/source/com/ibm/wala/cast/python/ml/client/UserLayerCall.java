@@ -4,7 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.withoutPythonScalarKeys;
+import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.loader.AstMethod;
@@ -414,7 +414,7 @@ public class UserLayerCall extends TensorGenerator {
       if (field == null) return null;
 
       OrdinalSet<InstanceKey> attributePTS =
-          withoutPythonScalarKeys(
+          withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
                   .getPointsToSet(builder.getPointerKeyForInstanceField(receiverASIN, field)));
