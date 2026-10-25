@@ -69,11 +69,19 @@ public class TestWrapperReentryContexts extends AbstractTensorTest {
     long wrapperCalls = 0;
     int deepest = 0;
     for (String node : nodes) {
-      if (!node.contains("LayerWrapper/call")) continue;
+      // A node the wrapper's call makes is anchored on it directly. A node beneath one of those,
+      // such as a built-in layer's build (wala/ML#1145), names the wrapper's call deeper in its
+      // context, and is the callee's own, not a re-entry of the wrapper. A re-entry keyed on its
+      // caller multiplies these direct nodes themselves: with the receiver keying disabled, this
+      // count reads 5,352.
+      if (!node.contains(
+          "@ Anchored: Node: <Code body of function Lscript " + FIXTURE + "/LayerWrapper/call>"))
+        continue;
       wrapperCalls++;
       // An anchored context prints as "Anchored: <anchor> @ <site>", nesting its anchor's context.
       deepest = Math.max(deepest, node.split("Anchored: ", -1).length - 1);
     }
+    assertTrue("the wrapper's call makes calls", wrapperCalls > 0);
     assertTrue(
         "the wrapper's call has a node per receiver, not per re-entry: " + wrapperCalls,
         wrapperCalls <= WRAPPER_CALL_NODE_CEILING);

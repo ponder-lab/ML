@@ -4458,6 +4458,15 @@
     <package name="tensorflow/keras/layers">
       <!-- Each built-in layer below declares `Layer` as its superclass, which opts it in to class-shell materialization (wala/WALA#1957) as `Layer`'s own `super` does, so a program class such as `class BatchNormalization(tf.keras.layers.BatchNormalization)` resolves its base through the built-in layer to `Layer` instead of falling back to `object` (wala/ML#1098). The shells carry their classes' method references (wala/ML#106), so the built-in layers' own `__call__` and `call` bodies keep serving their instances. `Input` is a function, not a layer class, so it declares none. -->
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
+      <!-- A built-in layer builds on its first call, as a user layer does: `Layer.__call__` runs `build` while `self.built` is false, and `build` creates the layer's variables with `self.add_weight` (wala/ML#1145). Each weighted layer's call runs this, so its variable creation is in the call graph wherever the layer is called. It stands for the layer's `build`: one `add_weight` call stands for all of the layer's variables, whose names and shapes are not modeled here, and the layer's `built` state is not written. The call graph cannot say which call to a layer is its first, so a call reaching this is a may-fact. -->
+      <class name="first_call_build" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self layer">
+          <new def="add_weight" class="Ltensorflow/keras/layers/Layer/add_weight"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="add_weight" arg1="layer" numArgs="2" def="weight"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
+      </class>
       <class name="Layer" super="Lobject">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#add_weight. The universal Keras weight-creation API: user layers call `self.add_weight(...)` (typically in `build`, wala/ML#595) to create their kernels. Modeled as a fresh dense tensor; the `AddWeight` generator consumes the call's `shape` and `dtype` arguments (wala/ML#667). The shell carries this method's reference (wala/ML#106), and source subclasses wire it through their synthesized constructors, so `self.add_weight` dispatches on any `Layer` subclass instance (wala/ML#618). -->
         <method name="add_weight" descriptor="()LRoot;" numArgs="10" paramNames="func self name shape dtype initializer regularizer trainable constraint synchronization">
@@ -4484,11 +4493,15 @@
       <class name="Dense" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
@@ -4497,10 +4510,14 @@
       <class name="Conv1D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv1D#__call__. The output type is computed by `Conv1DCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4508,11 +4525,15 @@
       <class name="Conv2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2D#__call__ -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <!-- Mirrors the `Dense` workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4531,10 +4552,14 @@
       <class name="BatchNormalization" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4630,10 +4655,14 @@
       <class name="Conv2DTranspose" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2DTranspose. The output type is computed by `Conv2DTransposeCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4674,10 +4703,14 @@
       <class name="LSTM" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTM. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4685,10 +4718,14 @@
       <class name="GRU" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRU. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4696,10 +4733,14 @@
       <class name="SimpleRNN" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNN. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4742,6 +4783,8 @@
       <class name="SimpleRNNCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNNCell. A call is one step: `(output, new_states)`, the output a `(batch, units)` tensor from the internal `rnn_cell_step` op, which `DenseCall` types from the step input and the stored `units`, in the layer's float32 compute dtype, and the new state the output itself, as a one-element list. -->
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <new def="new_states" class="Llist"/>
@@ -4753,6 +4796,8 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <new def="new_states" class="Llist"/>
@@ -4766,6 +4811,8 @@
       <class name="GRUCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRUCell. A call is one step: `(output, new_states)`, the output a `(batch, units)` tensor from the internal `rnn_cell_step` op, which `DenseCall` types from the step input and the stored `units`, in the layer's float32 compute dtype, and the new state the output itself, as a one-element list. -->
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <new def="new_states" class="Llist"/>
@@ -4777,6 +4824,8 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <new def="new_states" class="Llist"/>
@@ -4790,6 +4839,8 @@
       <class name="LSTMCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTMCell. A call is one step: `(output, new_states)`, the output a `(batch, units)` tensor from the internal `rnn_cell_step` op, which `DenseCall` types from the step input and the stored `units`, in the layer's float32 compute dtype, and the new states `[h, c]`: the output and a carry of the same type, from a second `rnn_cell_step`. -->
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="carry"/>
@@ -4803,6 +4854,8 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="carry"/>
@@ -4818,10 +4871,14 @@
       <class name="Bidirectional" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
@@ -4867,9 +4924,13 @@
       <class name="LayerNormalization" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- Typing-wise identity: normalization preserves both shape and dtype, so the call is a genuine pass-through, mirroring `Dropout` (wala/ML#711). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <return value="inputs"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <return value="inputs"/>
         </method>
       </class>
