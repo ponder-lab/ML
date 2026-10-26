@@ -50,8 +50,8 @@ numpy_scaled = areas + np.finfo(np.float32).eps
 assert numpy_scaled.shape == (2, 5) and numpy_scaled.dtype == np.float32
 consume_numpy_scaled(numpy_scaled)
 
-# Declines (unmodeled, so the product is not typed today): `np.iinfo`, and an integer-valued
-# attribute, both Python ints.
+# Declines: `np.iinfo`, and an integer-valued attribute, both Python ints, are unmodeled, so the
+# product is a tensor of unknown shape.
 iinfo_scaled = labels * np.iinfo(np.int32).max
 assert iinfo_scaled.shape == (3, 4)
 consume_iinfo_scaled(iinfo_scaled)
