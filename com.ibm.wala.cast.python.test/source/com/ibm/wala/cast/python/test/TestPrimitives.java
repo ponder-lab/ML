@@ -7,10 +7,13 @@ import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.ArrayContentsKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -183,5 +186,46 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("sign_of_flag", Set.of("Lint"));
     expected.put("negated_length", Set.of("Lint"));
     assertEquals(expected, pointees);
+  }
+
+  /**
+   * A keyword argument stores nothing in the string constant naming the keyword: no field or
+   * contents key of the constant {@code "learning_rate"} has a member, while each callee's
+   * parameter still receives its own call's value (<a
+   * href="https://github.com/wala/ML/issues/1151">wala/ML#1151</a>).
+   */
+  @Test
+  public void testKeywordNameHoldsNothing()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("kwarg_names1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Set<String> held = new TreeSet<>();
+    for (PointerKey key : pa.getPointerKeys()) {
+      InstanceKey owner =
+          key instanceof InstanceFieldKey field
+              ? field.getInstanceKey()
+              : key instanceof ArrayContentsKey contents ? contents.getInstanceKey() : null;
+      if (owner instanceof ConstantKey<?> constant
+          && "learning_rate".equals(constant.getValue())
+          && !pa.getPointsToSet(key).isEmpty()) held.add(key.toString());
+    }
+    assertEquals(Set.of(), held);
+    Map<String, Set<String>> pointees = new TreeMap<>();
+    for (String callee : List.of("f", "g")) {
+      Set<String> kinds = new TreeSet<>();
+      Collection<CGNode> nodes = getNodes(CG, "script kwarg_names1.py/" + callee);
+      assertFalse(callee + " is unreached", nodes.isEmpty());
+      for (CGNode node : nodes)
+        for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, 2)))
+          kinds.add(
+              ik instanceof ConstantKey<?> c
+                  ? String.valueOf(c.getValue())
+                  : ik.concreteType().getName().toString());
+      pointees.put(callee, kinds);
+    }
+    assertEquals(Map.of("f", Set.of("Llist"), "g", Set.of("0.1")), pointees);
   }
 }
