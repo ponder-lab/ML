@@ -929,6 +929,9 @@ public abstract class TensorGenerator implements Cloneable {
           // The positions an element of which may be a scalar tensor, such as `tf.reduce_max(d)`:
           // the element is a dimension whose value TensorFlow's static shape reports as `None`.
           boolean[] tensorValued = new boolean[elementCount];
+          // The positions an element of which may be an element of an ndarray, such as `sizes[0]`
+          // (wala/ML#1158): a fixed runtime integer the analysis did not compute.
+          boolean[] ndarrayValued = new boolean[elementCount];
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -1024,6 +1027,20 @@ public abstract class TensorGenerator implements Cloneable {
                               + describe(instanceFieldIK)
                               + ".");
                   tensorValued[fieldIndex] = true;
+                } else if (innerReference.equals(NumpyTypes.NDARRAY_TYPE)) {
+                  // An element of an ndarray, such as `sizes[0]`, is one dimension too
+                  // (wala/ML#1158). A shape position accepts only an integer, so at run time the
+                  // element is a scalar of a fixed size the analysis did not compute; a non-scalar
+                  // raises. The list's length still fixes the rank, and the position reads as
+                  // unresolved (wala/ML#721), as an unfoldable integer does.
+                  LOGGER.fine(
+                      () ->
+                          "Ndarray-valued shape element at position "
+                              + fieldIndex
+                              + ": "
+                              + describe(instanceFieldIK)
+                              + ".");
+                  ndarrayValued[fieldIndex] = true;
                 } else {
                   // Nested element of an unrecognized form; the shape's structure isn't statically
                   // resolvable, so return ⊤ rather than aborting (wala/ML#471).
@@ -1049,7 +1066,9 @@ public abstract class TensorGenerator implements Cloneable {
             // A multi-constant element is commonly a dead library default unioned with the live
             // caller override (wala/ML#769); the same-body store's flow-refined value is the one
             // that holds at the read, and a declined refinement keeps the union.
-            if (tensorDimensions.size() > 1 && !tensorValued[fieldIndex]) {
+            if (tensorDimensions.size() > 1
+                && !tensorValued[fieldIndex]
+                && !ndarrayValued[fieldIndex]) {
               Integer refined = refineAmbiguousFieldConstant(builder, asin, fieldIndex);
               if (refined != null) {
                 LOGGER.fine(
@@ -1068,6 +1087,10 @@ public abstract class TensorGenerator implements Cloneable {
             // dimension too; a position of tensors alone is resolved with the empty positions.
             if (tensorValued[fieldIndex] && !tensorDimensions.isEmpty())
               tensorDimensions.add(DynamicDim.INSTANCE);
+            // Likewise an ndarray element beside constants keeps its unresolved size
+            // (wala/ML#1158).
+            if (ndarrayValued[fieldIndex] && !tensorDimensions.isEmpty())
+              tensorDimensions.add(UnresolvedDim.INSTANCE);
 
             LOGGER.fine(
                 "Found possible shape dimensions: "

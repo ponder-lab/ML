@@ -5,6 +5,7 @@ import static java.util.Arrays.asList;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -42,10 +43,8 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
-   * An {@code np.zeros} whose shape tuple holds an element of an ndarray.
-   *
-   * <p>TODO: wala/ML#1158: expect rank 5 of {@code float32}, {@code (4, 52, 52, 3, 7)} or with the
-   * two axes the ndarray element gives unresolved.
+   * An {@code np.zeros} whose shape tuple holds an element of an ndarray (wala/ML#1158): the shape
+   * keeps its rank, and the two axes the ndarray element gives, 52 at run time, are unresolved.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -55,7 +54,46 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   @Test
   public void testZerosNdarrayElement()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_zeros_ndarray_element.py", "consume", 1, 1, Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+    test(
+        "tf2_test_zeros_ndarray_element.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(4),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(3),
+                        new NumericDim(7))))));
+  }
+
+  /**
+   * An {@code np.zeros} whose shape position may be an ndarray element or a literal (wala/ML#1158):
+   * the position keeps the literal beside the element's unresolved size.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testZerosNdarrayElementOrLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_ndarray_element.py",
+        "consume_mixed",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4, 26),
+                new TensorType(FLOAT_32, asList(new NumericDim(4), UnresolvedDim.INSTANCE)))));
   }
 
   /**
