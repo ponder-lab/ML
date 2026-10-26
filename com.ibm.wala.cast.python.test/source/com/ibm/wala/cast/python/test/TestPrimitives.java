@@ -104,7 +104,10 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "sum_objects",
             "isinstance",
             "round",
-            "round_digits")) {
+            "round_digits",
+            "round_keyword",
+            "sum_start",
+            "sum_start_keyword")) {
       Set<String> kinds = new TreeSet<>();
       Collection<CGNode> nodes = getNodes(CG, "script scalar_keys1.py/sink_" + sink);
       // An unreached sink would read as an empty set, so its presence is asserted.
@@ -134,6 +137,9 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("isinstance", Set.of("Lbool"));
     expected.put("round", Set.of("Lint"));
     expected.put("round_digits", Set.of("Lfloat"));
+    expected.put("round_keyword", Set.of("Lfloat"));
+    expected.put("sum_start", Set.of("Lfloat"));
+    expected.put("sum_start_keyword", Set.of("Lfloat"));
     assertEquals(expected, pointees);
   }
 

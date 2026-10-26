@@ -64,6 +64,18 @@ def sink_sum_objects(v):
     return v
 
 
+def sink_round_keyword(v):
+    return v
+
+
+def sink_sum_start(v):
+    return v
+
+
+def sink_sum_start_keyword(v):
+    return v
+
+
 assert sink_len(len([1, 2])) == 2
 assert sink_int(int("3")) == 3
 assert sink_float(float("0.5")) == 0.5
@@ -80,3 +92,6 @@ assert isinstance(sink_sum_objects(sum([Vector(1), Vector(2)])), Vector)
 assert sink_isinstance(isinstance(3, int)) is True
 assert sink_round(round(float("2.5"))) == 2
 assert sink_round_digits(round(float("2.25"), 1)) == 2.2
+assert sink_round_keyword(round(float("2.25"), ndigits=1)) == 2.2
+assert sink_sum_start(sum([1, 2], 0.5)) == 3.5
+assert sink_sum_start_keyword(sum([1, 2], start=0.5)) == 3.5
