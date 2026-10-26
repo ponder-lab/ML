@@ -1624,6 +1624,20 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     return visitVarAssign(n, v, a, c, visitor);
   }
 
+  /**
+   * Writes nothing for an element of an array literal (<a
+   * href="https://github.com/wala/ML/issues/1151">wala/ML#1151</a>). The front end builds an array
+   * literal only as a wrapper the call translation reads apart: a keyword argument's name and
+   * value, a starred argument's marker and value, and, in the Python 2 front end, a slice's bounds.
+   * Python's list and tuple displays are object literals. WALA's translation makes the wrapper's
+   * first child the array and writes each further child into it, so a keyword's value was stored in
+   * a field of the string constant naming the keyword, and every call passing a keyword of that
+   * name shared the field.
+   */
+  @Override
+  protected void leaveArrayLiteralInitElement(
+      CAstNode n, int i, WalkContext context, CAstVisitor<WalkContext> visitor) {}
+
   @Override
   protected void leaveArrayLiteralAssign(
       CAstNode n, CAstNode v, CAstNode a, WalkContext c, CAstVisitor<WalkContext> visitor) {
