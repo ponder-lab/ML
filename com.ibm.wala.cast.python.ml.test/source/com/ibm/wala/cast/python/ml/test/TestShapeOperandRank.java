@@ -129,12 +129,12 @@ public class TestShapeOperandRank extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A computed int, {@code tf.reshape(x, x.shape[0] * x.shape[1])}, has no instance key
-   * (wala/ML#805), so its rank is unknown, never rank 1. With wala/ML#805, it may be rank 0.
+   * A computed int, {@code tf.reshape(x, x.shape[0] * x.shape[1])}, may be rank 0: each element of
+   * the static shape is a Python int, and so is their product (wala/ML#1149).
    */
   @Test
   public void testComputedInt() {
-    assertEquals(Set.of(UNKNOWN), ranksIn("by_computed_int"));
+    assertEquals(Set.of(MAY_BE_RANK_0), ranksIn("by_computed_int"));
   }
 
   /**

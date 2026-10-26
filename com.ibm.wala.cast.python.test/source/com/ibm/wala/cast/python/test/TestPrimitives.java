@@ -117,4 +117,71 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("sum", Set.of());
     assertEquals(expected, pointees);
   }
+
+  /**
+   * The result of an operator over Python scalars points to the type-level key of its type: a loop
+   * counter to its literal and an {@code int}, a comparison to a {@code bool}, and an arithmetic
+   * operation with a {@code float} operand to a {@code float}. A division gives an {@code int} or a
+   * {@code float}, since {@code //} and {@code /} share one operator in the IR. An operator over a
+   * value of no scalar kind gives nothing (<a
+   * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>). Each {@code sink_*} function
+   * in {@code scalar_ops1.py} is read for what its parameter points to.
+   */
+  @Test
+  public void testScalarOperations()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("scalar_ops1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Map<String, Set<String>> pointees = new TreeMap<>();
+    for (String sink :
+        List.of(
+            "counter",
+            "compare",
+            "scaled",
+            "quotient",
+            "floor",
+            "negated",
+            "not",
+            "both",
+            "unknown",
+            "inverted",
+            "shifted",
+            "masked",
+            "sign_of_flag",
+            "negated_length")) {
+      Set<String> kinds = new TreeSet<>();
+      Collection<CGNode> nodes = getNodes(CG, "script scalar_ops1.py/sink_" + sink);
+      // An unreached sink would read as an empty set, so its presence is asserted.
+      assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
+      for (CGNode node : nodes)
+        // The parameter is value number 2; value number 1 is the function object.
+        for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, 2)))
+          kinds.add(
+              ik instanceof ConstantKey
+                  ? "constant"
+                  : ik instanceof ConcreteTypeKey
+                      ? ik.concreteType().getName().toString()
+                      : ik.getClass().getSimpleName());
+      pointees.put(sink, kinds);
+    }
+    Map<String, Set<String>> expected = new TreeMap<>();
+    expected.put("counter", Set.of("constant", "Lint"));
+    expected.put("compare", Set.of("Lbool"));
+    expected.put("scaled", Set.of("Lfloat"));
+    expected.put("quotient", Set.of("Lfloat", "Lint"));
+    expected.put("floor", Set.of("Lfloat", "Lint"));
+    expected.put("negated", Set.of("Lint"));
+    expected.put("not", Set.of("Lbool"));
+    expected.put("both", Set.of("Lbool"));
+    expected.put("unknown", Set.of());
+    expected.put("inverted", Set.of("Lint"));
+    expected.put("shifted", Set.of("Lint"));
+    expected.put("masked", Set.of("Lint"));
+    expected.put("sign_of_flag", Set.of("Lint"));
+    expected.put("negated_length", Set.of("Lint"));
+    assertEquals(expected, pointees);
+  }
 }
