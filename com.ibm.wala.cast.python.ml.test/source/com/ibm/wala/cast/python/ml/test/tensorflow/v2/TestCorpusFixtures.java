@@ -1211,6 +1211,39 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(4))))));
   }
 
+  /** The vendored files with the {@code logits[:, -1, :]} probe driver (wala/ML#1153). */
+  private static final String[] GPT2_SLICE_LAST_FILES = {
+    "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+    "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+    "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+    "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+    "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+    "gpt2_vendored/A.py", "gpt2_vendored/probe_slice_last.py"
+  };
+
+  /**
+   * The vendored {@code Gpt2}'s logits subscripted with {@code [:, -1, :]} ({@code
+   * probe_slice_last.py}), as the sampling step does: the result has only the shape its receiver's
+   * members give, {@code (1, 10)} (wala/ML#1153).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGpt2SliceLast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        GPT2_SLICE_LAST_FILES,
+        "probe_slice_last.py",
+        "consume_sliced",
+        "gpt2_vendored",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 10))));
+  }
+
   /**
    * The vendored {@code Gpt2.get_perplexity}, whose {@code cross_entropy} parameter is {@code loss
    * = tf.reduce_mean(self.get_loss(targets, predictions))} in {@code _train_step} and the
