@@ -3043,9 +3043,8 @@ public abstract class TensorGenerator implements Cloneable {
    * @return {@code true} iff the argument holds only an {@code int} of unknown value.
    */
   private boolean isUnknownIntShapeArgument(PropagationCallGraphBuilder builder, int valNum) {
-    // `Integer.MAX_VALUE` is `getArgumentValueNumber`'s answer for the synthetic generator
-    // function,
-    // not a value number.
+    // For the synthetic generator function, `getArgumentValueNumber` answers with the sentinel
+    // `Integer.MAX_VALUE`, which is not a value number.
     if (this.getSource() == null || valNum <= 0 || valNum == Integer.MAX_VALUE) return false;
     OrdinalSet<InstanceKey> pts =
         builder
