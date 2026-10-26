@@ -25,9 +25,18 @@ def consume_sliced(t):
     return t
 
 
+def consume_indexed(t):
+    return t
+
+
 head = Head()
 logits, _ = head.call(tf.ones([6]))
 consume_element(logits)
 consume_sliced(logits[:, -1, :])
 assert logits.shape == (2, 3, 1)
 assert logits[:, -1, :].shape == (2, 1)
+
+# A subscript the program writes, rather than a destructuring target.
+indexed = head.call(tf.ones([6]))[0]
+consume_indexed(indexed[:, -1, :])
+assert indexed[:, -1, :].shape == (2, 1)

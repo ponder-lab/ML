@@ -8952,11 +8952,24 @@ public abstract class TensorGenerator implements Cloneable {
    * @param read The property read.
    * @return The member's integer constant, or {@code null} when the member is no integer constant.
    */
-  private static Integer constantIndexMember(CGNode node, PythonPropertyRead read) {
+  private static Long constantIndexMember(CGNode node, PythonPropertyRead read) {
     SymbolTable st = node.getIR().getSymbolTable();
     int member = read.getMemberRef();
     if (member <= 0 || !st.isConstant(member)) return null;
-    return st.getConstantValue(member) instanceof Integer index ? index : null;
+    return integralValue(st.getConstantValue(member));
+  }
+
+  /**
+   * The value of an integer constant, which the front end boxes as an {@link Integer} when the
+   * translator mints it, as a destructuring target's index, and as a {@link Long} when the program
+   * writes it, as {@code t[0]}.
+   *
+   * @param value A constant value.
+   * @return The value as a {@code long}, or {@code null} when it is no {@link Integer} or {@link
+   *     Long}.
+   */
+  private static Long integralValue(Object value) {
+    return value instanceof Integer || value instanceof Long ? ((Number) value).longValue() : null;
   }
 
   /**
@@ -8983,7 +8996,7 @@ public abstract class TensorGenerator implements Cloneable {
    */
   private ShapeResult shapeResultOfTupleElementViaLiteral(
       PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read, boolean exact) {
-    Integer index = constantIndexMember(node, read);
+    Long index = constantIndexMember(node, read);
     if (index == null) return null;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     OrdinalSet<InstanceKey> receivers =
@@ -9010,7 +9023,7 @@ public abstract class TensorGenerator implements Cloneable {
         int member = write.getMemberRef();
         // A non-constant member may write the element.
         if (member <= 0 || !st.isConstant(member)) return null;
-        if (index.equals(st.getConstantValue(member))) {
+        if (index.equals(integralValue(st.getConstantValue(member)))) {
           if (stored > 0) return null;
           stored = write.getValue();
         }

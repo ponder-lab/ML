@@ -3507,4 +3507,20 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1))));
   }
+
+  /**
+   * A slice of a returned tuple's element read by a subscript the program writes, {@code
+   * head.call(x)[0]}, whose index constant the front end boxes differently from a destructuring
+   * target's (wala/ML#1153).
+   */
+  @Test
+  public void testSliceOfReturnedTupleSubscript()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tuple_element_dead_arm.py",
+        "consume_indexed",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1))));
+  }
 }
