@@ -227,6 +227,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORDOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_ARRAY_READS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_SCATTER_ND_UPDATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TFDS_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TFRECORD_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TILE;
@@ -3424,6 +3425,7 @@ public class TensorGeneratorFactory {
       return new TextLineDatasetGenerator(source);
     else if (isType(calledFunction, TFRECORD_DATASET_TYPE))
       return new TFRecordDatasetGenerator(source);
+    else if (isType(calledFunction, TFDS_DATASET_TYPE)) return new TfdsDatasetGenerator(source);
     else if (isType(calledFunction, DATASET_LIST_FILES_TYPE)
         || isType(calledFunction, LIST_FILES_DATASET_TYPE))
       return new ListFilesDatasetGenerator(source);

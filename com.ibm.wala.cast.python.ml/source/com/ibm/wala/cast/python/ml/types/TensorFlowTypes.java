@@ -510,6 +510,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String TFRECORD_DATASET_SIGNATURE = "tf.data.TFRecordDataset()";
 
+  /**
+   * A dataset TensorFlow Datasets' {@code tfds.load} returns (wala/ML#1155), whose elements are
+   * tensors of the named dataset's features; see {@code TfdsDatasetGenerator}.
+   */
+  public static final TypeReference TFDS_DATASET_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/TfdsDataset"));
+
+  public static final String TFDS_DATASET_SIGNATURE = "tfds.load()";
+
   /** The {@code tf.data.Dataset.list_files} function class, for source-side dispatch. */
   public static final TypeReference DATASET_LIST_FILES_TYPE =
       TypeReference.findOrCreate(
@@ -2991,6 +3001,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_RANGE_TYPE, DATASET_RANGE_SIGNATURE),
           Map.entry(TEXT_LINE_DATASET_TYPE, TEXT_LINE_DATASET_SIGNATURE),
           Map.entry(TFRECORD_DATASET_TYPE, TFRECORD_DATASET_SIGNATURE),
+          Map.entry(TFDS_DATASET_TYPE, TFDS_DATASET_SIGNATURE),
           Map.entry(DATASET_LIST_FILES_TYPE, DATASET_LIST_FILES_SIGNATURE),
           Map.entry(LIST_FILES_DATASET_TYPE, DATASET_LIST_FILES_SIGNATURE),
           Map.entry(IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),

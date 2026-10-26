@@ -11997,6 +11997,8 @@ public abstract class TensorGenerator implements Cloneable {
       return new TextLineDatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.TFRECORD_DATASET_TYPE)) {
       return new TFRecordDatasetGenerator(node);
+    } else if (type.equals(TensorFlowTypes.TFDS_DATASET_TYPE)) {
+      return new TfdsDatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_LIST_FILES_TYPE)
         || type.equals(TensorFlowTypes.LIST_FILES_DATASET_TYPE)) {
       // The allocating class for a `list_files` result is the function class

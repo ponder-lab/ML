@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <classloader name="PythonLoader">
+    <!-- https://www.tensorflow.org/datasets/api_docs/python/tfds: TensorFlow Datasets, as far as a training script loads a dataset with it (wala/ML#1155). `import tensorflow_datasets as tfds` resolves to this module object. -->
+    <class name="tensorflow_datasets" allocatable="true">
+      <method name="import" static="true" descriptor="()Ltensorflow_datasets;">
+        <new def="x" class="Ltensorflow_datasets"/>
+        <new def="load" class="Ltensorflow_datasets/load"/>
+        <putfield class="LRoot" field="load" fieldType="LRoot" ref="x" value="load"/>
+        <!-- https://www.tensorflow.org/datasets/api_docs/python/tfds/Split: the split names, which `tfds.load` keys its dictionary by. The reader of this file gives a string `<constant>` no value, so the names hold nothing, and `load`'s result answers a subscript by them through the field a non-literal subscript reads. -->
+        <new def="split" class="Lobject"/>
+        <putfield class="LRoot" field="Split" fieldType="LRoot" ref="x" value="split"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="tensorflow_datasets">
+      <!-- https://www.tensorflow.org/datasets/api_docs/python/tfds/load: loads a named dataset. With no `split`, it returns a dictionary from split names to datasets, and with one, the dataset; with `with_info=True`, it returns a pair of that result and a `DatasetInfo`. A summary cannot branch on its arguments, so one object stands for all three: the dataset, whose split-name fields hold itself and whose fields `0` and `1` hold itself and the information. An element's types depend on the named dataset's features, so `TfdsDatasetGenerator` types each component as a tensor of unknown shape and dtype, and an element as a pair of them when `as_supervised` is true. Parameters are those of TensorFlow Datasets 4.9. -->
+      <class name="load" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="15" paramNames="self name split data_dir batch_size shuffle_files download as_supervised decoders read_config with_info builder_kwargs download_and_prepare_kwargs as_dataset_kwargs try_gcs">
+          <new def="dataset" class="Ltensorflow/data/TfdsDataset"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="dataset" arg1="as_supervised" numArgs="2" def="res"/>
+          <putfield class="LRoot" field="train" fieldType="LRoot" ref="res" value="res"/>
+          <putfield class="LRoot" field="test" fieldType="LRoot" ref="res" value="res"/>
+          <putfield class="LRoot" field="validation" fieldType="LRoot" ref="res" value="res"/>
+          <putfield class="LRoot" field="unsupervised" fieldType="LRoot" ref="res" value="res"/>
+          <!-- A subscript by a value that is not a string literal, such as `tfds.Split.TRAIN`, reads this field (wala/ML#960). -->
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="res" value="res"/>
+          <new def="info" class="Ltensorflow_datasets/core/DatasetInfo"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="res"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="info"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow_datasets/core">
+      <!-- https://www.tensorflow.org/datasets/api_docs/python/tfds/core/DatasetInfo: the information `tfds.load` returns beside its datasets under `with_info=True`. Its features are not modeled. -->
+      <class name="DatasetInfo" allocatable="true"></class>
+    </package>
+  </classloader>
+</summary-spec>
