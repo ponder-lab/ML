@@ -146,7 +146,12 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "negated",
             "not",
             "both",
-            "unknown")) {
+            "unknown",
+            "inverted",
+            "shifted",
+            "masked",
+            "sign_of_flag",
+            "negated_length")) {
       Set<String> kinds = new TreeSet<>();
       Collection<CGNode> nodes = getNodes(CG, "script scalar_ops1.py/sink_" + sink);
       // An unreached sink would read as an empty set, so its presence is asserted.
@@ -172,6 +177,11 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("not", Set.of("Lbool"));
     expected.put("both", Set.of("Lbool"));
     expected.put("unknown", Set.of());
+    expected.put("inverted", Set.of("Lint"));
+    expected.put("shifted", Set.of("Lint"));
+    expected.put("masked", Set.of("Lint"));
+    expected.put("sign_of_flag", Set.of("Lint"));
+    expected.put("negated_length", Set.of("Lint"));
     assertEquals(expected, pointees);
   }
 }

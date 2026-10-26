@@ -43,6 +43,26 @@ def sink_unknown(v):
     return v
 
 
+def sink_inverted(v):
+    return v
+
+
+def sink_shifted(v):
+    return v
+
+
+def sink_masked(v):
+    return v
+
+
+def sink_sign_of_flag(v):
+    return v
+
+
+def sink_negated_length(v):
+    return v
+
+
 n = 0
 for _ in range(3):
     n += 1
@@ -55,3 +75,8 @@ assert isinstance(sink_negated(-n), int)
 assert isinstance(sink_not(not n), bool)
 assert isinstance(sink_both((n > 0) & (n < 5)), bool)
 assert isinstance(sink_unknown(Box() + 1), Box)
+assert isinstance(sink_inverted(~n), int)
+assert isinstance(sink_shifted(n << 1), int)
+assert isinstance(sink_masked(n & 1), int)
+assert isinstance(sink_sign_of_flag(-(n > 0)), int)
+assert isinstance(sink_negated_length(-len([n])), int)
