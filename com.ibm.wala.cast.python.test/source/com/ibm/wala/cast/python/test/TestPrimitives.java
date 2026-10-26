@@ -79,9 +79,10 @@ public class TestPrimitives extends TestJythonCallGraphShape {
   /**
    * A Python scalar whose value is not a literal points to one type-level key per type: the result
    * of a scalar builtin, an element of a {@code range} and an index {@code enumerate} supplies. A
-   * literal keeps its constant key, and a {@code sum}, whose type follows its elements, has none
-   * (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>). Each {@code sink_*}
-   * function in {@code scalar_keys1.py} is read for what its parameter points to.
+   * literal keeps its constant key. The results of {@code isinstance}, {@code round} and {@code
+   * sum} have keys too, the latter two of the type their arguments give; a sum of objects that are
+   * not scalars has none (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>). Each
+   * {@code sink_*} function in {@code scalar_keys1.py} is read for what its parameter points to.
    */
   @Test
   public void testScalarKeys()
@@ -93,7 +94,23 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Map<String, Set<String>> pointees = new TreeMap<>();
     for (String sink :
-        List.of("len", "int", "float", "bool", "range", "enumerate", "literal", "sum")) {
+        List.of(
+            "len",
+            "int",
+            "float",
+            "bool",
+            "range",
+            "enumerate",
+            "literal",
+            "sum",
+            "sum_floats",
+            "sum_objects",
+            "isinstance",
+            "round",
+            "round_digits",
+            "round_keyword",
+            "sum_start",
+            "sum_start_keyword")) {
       Set<String> kinds = new TreeSet<>();
       Collection<CGNode> nodes = getNodes(CG, "script scalar_keys1.py/sink_" + sink);
       // An unreached sink would read as an empty set, so its presence is asserted.
@@ -117,7 +134,15 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("range", Set.of("Lint"));
     expected.put("enumerate", Set.of("Lint"));
     expected.put("literal", Set.of("constant"));
-    expected.put("sum", Set.of());
+    expected.put("sum", Set.of("Lint"));
+    expected.put("sum_floats", Set.of("Lfloat"));
+    expected.put("sum_objects", Set.of());
+    expected.put("isinstance", Set.of("Lbool"));
+    expected.put("round", Set.of("Lint"));
+    expected.put("round_digits", Set.of("Lfloat"));
+    expected.put("round_keyword", Set.of("Lfloat"));
+    expected.put("sum_start", Set.of("Lfloat"));
+    expected.put("sum_start_keyword", Set.of("Lfloat"));
     assertEquals(expected, pointees);
   }
 
