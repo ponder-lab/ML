@@ -8,9 +8,87 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class TensorShapeUtil {
+
+  /**
+   * One possible reading of a matmul's operand flags (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>): whether {@code a} and {@code
+   * b} enter the product with their last two axes swapped. {@code transpose_x} and {@code
+   * adjoint_x} swap the same two axes (the adjoint also conjugates, which leaves the shape alone),
+   * so each operand's reading is their disjunction.
+   *
+   * @param transposeA Whether {@code a}'s last two axes are swapped.
+   * @param transposeB Whether {@code b}'s last two axes are swapped.
+   */
+  public record MatMulReading(boolean transposeA, boolean transposeB) {
+
+    /** The reading of a call that sets no flag. */
+    public static final MatMulReading PLAIN = new MatMulReading(false, false);
+  }
+
+  /**
+   * Composes a matmul result's shapes over the possible readings of its operand flags (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>): each reading swaps the last
+   * two axes of the operands it transposes, then composes as {@link #matmulShape} does.
+   *
+   * <p>When the flags allow more than one reading, a reading whose contracted axes are two unequal
+   * numeric extents is dropped, since that product raises at run time; if that drops every reading,
+   * all of them are kept, so the result never claims more than the flags show. A single reading is
+   * composed as is, as {@link #matmulShape} always has been.
+   *
+   * @param aDims The first operand's dimensions.
+   * @param bDims The second operand's dimensions.
+   * @param readings The possible flag readings, never empty.
+   * @return The composed dimensions, one per reading that composes, empty when none does.
+   */
+  public static Set<List<Dimension<?>>> matmulShapes(
+      List<Dimension<?>> aDims, List<Dimension<?>> bDims, Set<MatMulReading> readings) {
+    Set<List<Dimension<?>>> feasible = new LinkedHashSet<>();
+    Set<List<Dimension<?>>> all = new LinkedHashSet<>();
+    for (MatMulReading reading : readings) {
+      List<Dimension<?>> a = reading.transposeA() ? swapLastTwo(aDims) : aDims;
+      List<Dimension<?>> b = reading.transposeB() ? swapLastTwo(bDims) : bDims;
+      List<Dimension<?>> composed = matmulShape(a, b);
+      if (composed == null) continue;
+      all.add(composed);
+      if (readings.size() == 1 || contractible(a, b)) feasible.add(composed);
+    }
+    return feasible.isEmpty() ? all : feasible;
+  }
+
+  /**
+   * Whether a matmul pair's contracted axes may agree: {@code false} only when both are numeric
+   * extents that differ.
+   *
+   * @param a The first operand's dimensions, as read.
+   * @param b The second operand's dimensions, as read.
+   * @return Whether the pair can execute as far as its contracted axes show.
+   */
+  private static boolean contractible(List<Dimension<?>> a, List<Dimension<?>> b) {
+    Dimension<?> k = a.get(a.size() - 1);
+    Dimension<?> l = b.get(b.size() - 2);
+    return !(k instanceof NumericDim && l instanceof NumericDim && !k.equals(l));
+  }
+
+  /**
+   * The dimensions with their last two axes swapped, or the dimensions themselves below rank two.
+   *
+   * @param dims The dimensions, or {@code null}.
+   * @return The swapped dimensions.
+   */
+  private static List<Dimension<?>> swapLastTwo(List<Dimension<?>> dims) {
+    if (dims == null || dims.size() < 2) return dims;
+    List<Dimension<?>> ret = new ArrayList<>(dims);
+    int n = ret.size();
+    ret.set(n - 2, dims.get(n - 1));
+    ret.set(n - 1, dims.get(n - 2));
+    return ret;
+  }
 
   public static boolean areBroadcastable(List<Dimension<?>> xShape, List<Dimension<?>> yShape) {
     int xRank = xShape.size();

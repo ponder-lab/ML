@@ -676,13 +676,23 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * float32} (shape ⊤) in every context. The {@code use_einsum} arm's {@code
    * einsum("BFND,NDH->BFH", input_tensor, w)} proves the input rank 4; the shared {@code N}/{@code
    * D} extents stay {@link UnresolvedDim} in vivo because {@code w}'s dimensions are config-derived
-   * (contrast {@link #testDense3dProj()}, where the weight's static extents transfer). The {@code
-   * (8, 100, U, U)}/{@code (8, 10, U, U)} members arrive already rank-4 from the entry contracts
-   * (wala/ML#717) and pass through the refinement with their concrete leading dims intact. Their
-   * dynamic-batch twins arrive through the attention scores, a value with several definitions that
-   * is now read from all of them, where a walk used to read the first it reached (wala/ML#1009):
-   * one definition is a user call typed across its calling contexts, including a dataset-fed one
-   * whose batch axis TensorFlow reports as {@code None}.
+   * (contrast {@link #testDense3dProj()}, where the weight's static extents transfer). The input is
+   * {@code ALBERTAttention.call}'s context, whose members arrive through the attention scores, a
+   * value with several definitions that is read from all of them (wala/ML#1009): one definition is
+   * a user call typed across its calling contexts, including a dataset-fed one whose batch axis
+   * TensorFlow reports as {@code None}.
+   *
+   * <p>No member has a batch of 8, although the ALBERT drivers batch 8. The scores, {@code
+   * matmul(q, k, transpose_b=True)}, are {@code (B, N, F, T)}, and they meet the mask's adder in
+   * {@code logits += adder}. The adder's batch-8 members come only from the mask's un-reshaped
+   * {@code (B, T)} arm, which reaches that matmul through the phi of the two {@code if
+   * attention_mask is not None} blocks although it is taken only when the mask is {@code None}:
+   * transposed, it gives {@code (8, 1, F, 8)}, which doesn't broadcast against the scores, so those
+   * pairs drop (wala/ML#1152). The reshaped arm's batch and length read as dynamic, so its members
+   * survive with a dynamic batch. Before matmul read {@code transpose_b}, the scores were {@code
+   * (B, N, F, H)} with {@code H} unresolved, which broadcast against anything, and the arm read
+   * untransposed gave {@code (8, 1, F, T)}: batch-8 members from a pairing whose contracted axes,
+   * {@code 1} and {@code 8}, would raise at run time.
    *
    * <p>The four members with an unresolved leading or second extent arrive with the loaders' typed
    * loop components (wala/ML#1010), joined with the contract members in the contexts the entry
@@ -716,20 +726,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(
-                        new NumericDim(8),
-                        new NumericDim(100),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(8),
-                        new NumericDim(10),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
                         DynamicDim.INSTANCE,
                         new NumericDim(100),
                         UnresolvedDim.INSTANCE,
@@ -739,13 +735,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     asList(
                         DynamicDim.INSTANCE,
                         new NumericDim(10),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    Arrays.<Dimension<?>>asList(
-                        new NumericDim(8),
-                        UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)),
                 new TensorType(

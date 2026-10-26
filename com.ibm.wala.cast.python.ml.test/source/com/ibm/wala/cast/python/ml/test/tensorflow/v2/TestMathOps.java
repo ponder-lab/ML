@@ -2384,4 +2384,171 @@ public class TestMathOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
   }
+
+  /**
+   * {@code transpose_b=True} on batched rank-4 operands swaps {@code b}'s last two axes, so {@code
+   * (2, 3, 4, 5)} and {@code (2, 3, 6, 5)} give {@code (2, 3, 4, 6)} (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulTransposeB()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_transpose_b",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 4, 6))));
+  }
+
+  /**
+   * {@code transpose_a=True} swaps {@code a}'s last two axes, so {@code (5, 4)} and {@code (5, 6)}
+   * give {@code (4, 6)} (<a href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulTransposeA()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_transpose_a",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
+   * {@code adjoint_a=True} swaps {@code a}'s last two axes as {@code transpose_a} does, so {@code
+   * (5, 4)} and {@code (5, 6)} give {@code (4, 6)} (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulAdjointA()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_adjoint_a",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
+   * {@code adjoint_b=True} swaps {@code b}'s last two axes as {@code transpose_b} does, so {@code
+   * (4, 5)} and {@code (6, 5)} give {@code (4, 6)} (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulAdjointB()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_adjoint_b",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
+   * {@code transpose_a} and {@code transpose_b} passed positionally swap both operands, so {@code
+   * (5, 4)} and {@code (6, 5)} give {@code (4, 6)} (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulPositionalFlags()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
+   * A literal {@code transpose_b=False} reads as the default, so {@code (4, 5)} and {@code (5, 6)}
+   * give {@code (4, 6)} (<a href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulFalseFlag()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_false",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
+   * A {@code transpose_b} that isn't a literal is read both ways, and only the transposed reading
+   * of {@code (4, 5)} and {@code (6, 5)} contracts, so the result is {@code (4, 6)} (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulComputedFlag()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_computed_flag",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+  }
+
+  /**
+   * A {@code transpose_b=True} matmul whose first operand, of a statically unknown row count, is
+   * bound by tuple-unpacking, so {@code (?, 5)} and {@code (6, 5)} give {@code (?, 6)} (<a
+   * href="https://github.com/wala/ML/issues/1152">wala/ML#1152</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatMulUnpackedOperandTransposeB()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_matmul_flags.py",
+        "consume_unpacked",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(6))))));
+  }
 }
