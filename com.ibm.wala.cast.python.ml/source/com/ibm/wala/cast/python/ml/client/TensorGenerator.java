@@ -3495,6 +3495,41 @@ public abstract class TensorGenerator implements Cloneable {
             if (narrower) return viaWriters;
             if (deferred) return ShapeResult.bottom();
           }
+          // An element read by a constant index, `logits, past = model(...)`'s `logits`, whose
+          // union is rank-heterogeneous resolves through the tuple literal that built the
+          // receiver: each element is read in the literal's own frame, where the gates above apply
+          // (a phi's feasible arms, a call result's feasible returns). The element's field
+          // points-to set unions every allocation the literal's operand ever held, dead arms
+          // included, as an attribute's does (wala/ML#1153).
+          if (gateOpen
+              && valueDef instanceof PythonPropertyRead elementRead
+              && constantIndexMember(node, elementRead) != null
+              && distinctRankCount(fromValue) >= 2) {
+            ShapeResult viaLiteral =
+                this.shapeResultOfTupleElementViaLiteral(builder, node, elementRead, exact);
+            boolean narrower =
+                viaLiteral != null
+                    && !viaLiteral.hasUnknown()
+                    && !viaLiteral.members().isEmpty()
+                    && fromValue.members().containsAll(viaLiteral.members())
+                    && viaLiteral.members().size() < fromValue.members().size();
+            boolean deferred = viaLiteral != null && isInterimBottom(builder, viaLiteral);
+            LOGGER.fine(
+                () ->
+                    "Rank-heterogeneous element union for vn "
+                        + valueNumber
+                        + " in "
+                        + describe(node)
+                        + ": points-to union "
+                        + fromValue.members()
+                        + ", via the tuple literal "
+                        + viaLiteral
+                        + (narrower
+                            ? "; reading the literal."
+                            : deferred ? "; deferred." : "; kept."));
+            if (narrower) return viaLiteral;
+            if (deferred) return ShapeResult.bottom();
+          }
           if (valueDef instanceof SSAAbstractInvokeInstruction) {
             ShapeResult fromCallees =
                 this.shapeResultOfCalleeReturnValues(
@@ -8906,6 +8941,93 @@ public abstract class TensorGenerator implements Cloneable {
       }
       if (stored.isBottom() || stored.hasUnknown() || stored.members().isEmpty()) return null;
       combined.addAll(stored.members());
+    }
+    return interim ? ShapeResult.bottom() : ShapeResult.of(combined);
+  }
+
+  /**
+   * The constant index a property read selects, as {@code t[0]} or a destructuring target does.
+   *
+   * @param node The {@link CGNode} containing the read.
+   * @param read The property read.
+   * @return The member's integer constant, or {@code null} when the member is no integer constant.
+   */
+  private static Integer constantIndexMember(CGNode node, PythonPropertyRead read) {
+    SymbolTable st = node.getIR().getSymbolTable();
+    int member = read.getMemberRef();
+    if (member <= 0 || !st.isConstant(member)) return null;
+    return st.getConstantValue(member) instanceof Integer index ? index : null;
+  }
+
+  /**
+   * Resolves a constant-index read of a tuple as the union, over the tuple literals that may have
+   * built the receiver, of the element each literal stores at that index, read in the literal's
+   * frame (wala/ML#1153). The element's field points-to set unions every allocation the literal's
+   * operand ever held, including those a dead arm delivered; the literal's frame applies the
+   * arm-feasibility gates, as {@link #shapeResultOfStoredAttributeViaWriters} does for an
+   * attribute. A tuple is immutable, so the literal's own writes are all its elements.
+   *
+   * <p>Returns {@code null}, leaving the caller on the points-to union, when the walk is incomplete
+   * for good: a receiver that is not a tuple allocated by a literal in program code (a summary's
+   * tuple, or one an operator builds, holds elements no literal write shows), a literal writing a
+   * non-constant member or no element at the index, or an element with an unknown remainder or
+   * reading as no tensor. Returns ⊥ when an element reads as the engine's interim ⊥, so the caller
+   * defers, as the other gates do.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the read.
+   * @param read The constant-index read.
+   * @param exact Whether the elements are read exactly.
+   * @return The literals' union, ⊥ while an element converges, or {@code null} when the walk is
+   *     incomplete for good.
+   */
+  private ShapeResult shapeResultOfTupleElementViaLiteral(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read, boolean exact) {
+    Integer index = constantIndexMember(node, read);
+    if (index == null) return null;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    OrdinalSet<InstanceKey> receivers =
+        withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef())));
+    if (receivers == null || receivers.isEmpty()) return null;
+    Set<List<Dimension<?>>> combined = HashSetFactory.make();
+    boolean interim = false;
+    for (InstanceKey receiver : receivers) {
+      AllocationSiteInNode site = getAllocationSiteInNode(receiver);
+      if (site == null || !site.concreteType().getReference().equals(tuple)) return null;
+      CGNode literalNode = site.getNode();
+      if (literalNode.getMethod().isWalaSynthetic()
+          || literalNode.getIR() == null
+          || literalNode.getDU() == null) return null;
+      SSANewInstruction allocation = literalNode.getIR().getNew(site.getSite());
+      if (allocation == null) return null;
+      SymbolTable st = literalNode.getIR().getSymbolTable();
+      int stored = -1;
+      for (Iterator<SSAInstruction> uses = literalNode.getDU().getUses(allocation.getDef());
+          uses.hasNext(); ) {
+        if (!(uses.next() instanceof PythonPropertyWrite write)
+            || write.getObjectRef() != allocation.getDef()) continue;
+        int member = write.getMemberRef();
+        // A non-constant member may write the element.
+        if (member <= 0 || !st.isConstant(member)) return null;
+        if (index.equals(st.getConstantValue(member))) {
+          if (stored > 0) return null;
+          stored = write.getValue();
+        }
+      }
+      if (stored <= 0) return null;
+      ShapeResult element;
+      try {
+        element = this.getShapeResult(builder, literalNode, stored, exact);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      if (isInterimBottom(builder, element)) {
+        interim = true;
+        continue;
+      }
+      if (element.isBottom() || element.hasUnknown() || element.members().isEmpty()) return null;
+      combined.addAll(element.members());
     }
     return interim ? ShapeResult.bottom() : ShapeResult.of(combined);
   }
