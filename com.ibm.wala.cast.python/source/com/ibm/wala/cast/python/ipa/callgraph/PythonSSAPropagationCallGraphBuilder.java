@@ -2529,7 +2529,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * the scalar types of a constant one, which the call passes as instance keys.
    *
    * @param caller The node containing the call.
-   * @param call The call.
    * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
    * @param index The argument's index among the call's arguments, the callee's being 0.
    * @param use The argument's value number.
