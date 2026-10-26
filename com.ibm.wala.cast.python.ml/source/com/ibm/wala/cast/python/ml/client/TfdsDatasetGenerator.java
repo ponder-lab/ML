@@ -60,8 +60,11 @@ public class TfdsDatasetGenerator extends DatasetGenerator {
   /**
    * {@inheritDoc}
    *
-   * @implNote An element is a pair when {@code as_supervised} may be {@code True}. Absent or false,
-   *     it is a dictionary of features.
+   * @implNote An element is a pair when {@code as_supervised} may be the literal {@code True}.
+   *     Absent or false, it is a dictionary of features. A non-literal {@code as_supervised}, such
+   *     as a flag, also reads as a dictionary: its points-to set holds at most a {@code bool}'s
+   *     type-level key, which argument reads drop (wala/ML#1148), so it cannot be told from an
+   *     omitted argument.
    */
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {

@@ -97,4 +97,44 @@ public class TestTfdsLoad extends AbstractTensorTest {
         2,
         Map.of(2, Set.of(UNKNOWN_TENSOR), 3, Set.of(UNKNOWN_TENSOR)));
   }
+
+  /**
+   * A list {@code split} with {@code with_info=True}, unpacked as {@code (train, test), info}: the
+   * first dataset.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListedTrain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfds_load.py",
+        "consume_listed_train",
+        2,
+        2,
+        Map.of(2, Set.of(UNKNOWN_TENSOR), 3, Set.of(UNKNOWN_TENSOR)));
+  }
+
+  /**
+   * A list {@code split} with {@code with_info=True}, unpacked as {@code (train, test), info}: the
+   * second dataset, which the information must not stand in for.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListedTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfds_load.py",
+        "consume_listed_test",
+        2,
+        2,
+        Map.of(2, Set.of(UNKNOWN_TENSOR), 3, Set.of(UNKNOWN_TENSOR)));
+  }
 }

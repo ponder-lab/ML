@@ -38,3 +38,21 @@ def consume_features(text, label):
 # Without `as_supervised`, an element is a dictionary of features.
 for example in tfds.load("imdb_reviews/subwords8k", split="train"):
     consume_features(example["text"], example["label"])
+
+
+def consume_listed_train(inputs, outputs):
+    pass
+
+
+def consume_listed_test(inputs, outputs):
+    pass
+
+
+# A list `split` gives a list of datasets, here unpacked beside the information.
+(listed_train, listed_test), listed_info = tfds.load(
+    "mnist", split=["train", "test"], with_info=True, as_supervised=True
+)
+for inputs, outputs in listed_train.batch(8):
+    consume_listed_train(inputs, outputs)
+for inputs, outputs in listed_test.batch(8):
+    consume_listed_test(inputs, outputs)
