@@ -179,4 +179,13 @@ public class TestAllocatedClass extends TestPythonMLCallGraphShape {
   public void testLibraryCallable() {
     assertFalse(allocatedClasses("consume_callable").get(0).isPresent());
   }
+
+  /**
+   * A summary's method bound to an object, such as a dataset's {@code shuffle}, is a function
+   * object, not an instance of a class named for it.
+   */
+  @Test
+  public void testBoundSummaryMethod() {
+    assertFalse(allocatedClasses("consume_method").get(0).isPresent());
+  }
 }

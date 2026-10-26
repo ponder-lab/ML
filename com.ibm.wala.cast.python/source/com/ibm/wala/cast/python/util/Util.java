@@ -492,9 +492,14 @@ public class Util {
    * its modeled class as its concrete type, which this method returns.
    *
    * <p>Returns empty for every other key, which means the class is not known, not that there is
-   * none: a constant, a Python scalar of unknown value ({@link #isPythonScalarKey}), a value the
-   * program builds by syntax rather than by a constructor (a list display, a function, a class
-   * object), a summary's callable or generic {@code object}, and a key with no allocation site.
+   * none: a constant, a Python scalar of unknown value ({@link #isPythonScalarKey}), a key with no
+   * allocation site, a summary's callable (including a method a summary binds to an object, such as
+   * a dataset's {@code shuffle}), and a summary's generic {@code object}. So is every key allocated
+   * in program code rather than by a constructor: a value the program builds by syntax (a list
+   * display, a function, a class object), and a key the builder allocates at a program instruction,
+   * whose class may well be known, such as the fresh array or tensor of an operator over an array
+   * (wala/ML#1009), a list operation's result (wala/ML#960), a tensor's static shape
+   * (wala/ML#1104), or a slice's result (wala/ML#916).
    *
    * @param instanceKey The {@link InstanceKey} in question.
    * @return The class whose constructor allocated it, or empty when that is not known.

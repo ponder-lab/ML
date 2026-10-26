@@ -71,6 +71,10 @@ def consume_callable(v):
     return v
 
 
+def consume_method(v):
+    return v
+
+
 xs = [1, 2, 3]
 holder = Holder()
 holder(tf.ones([1, 2]))
@@ -85,3 +89,5 @@ assert consume_constant(3) == 3
 assert consume_length(len(xs)) == 3
 assert consume_class(Plain) is Plain
 assert consume_callable(tf.keras.layers.Dense) is tf.keras.layers.Dense
+ds = tf.data.Dataset.range(3)
+assert callable(consume_method(ds.shuffle))
