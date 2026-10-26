@@ -29,3 +29,12 @@ for inputs, outputs in test.batch(8):
 loaded, info = tfds.load("imdb_reviews/subwords8k", with_info=True, as_supervised=True)
 for inputs, outputs in loaded["train"].padded_batch(64):
     consume_info(inputs, outputs)
+
+
+def consume_features(text, label):
+    pass
+
+
+# Without `as_supervised`, an element is a dictionary of features.
+for example in tfds.load("imdb_reviews/subwords8k", split="train"):
+    consume_features(example["text"], example["label"])

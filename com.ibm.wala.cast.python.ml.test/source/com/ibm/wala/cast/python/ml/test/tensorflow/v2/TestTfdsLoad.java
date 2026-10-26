@@ -78,4 +78,23 @@ public class TestTfdsLoad extends AbstractTensorTest {
         2,
         Map.of(2, Set.of(UNKNOWN_TENSOR), 3, Set.of(UNKNOWN_TENSOR)));
   }
+
+  /**
+   * Without {@code as_supervised}, an element is a dictionary of features, each a tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFeatures()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfds_load.py",
+        "consume_features",
+        2,
+        2,
+        Map.of(2, Set.of(UNKNOWN_TENSOR), 3, Set.of(UNKNOWN_TENSOR)));
+  }
 }
