@@ -137,4 +137,19 @@ public class TestTfdsLoad extends AbstractTensorTest {
         2,
         Map.of(2, Set.of(UNKNOWN_TENSOR), 3, Set.of(UNKNOWN_TENSOR)));
   }
+
+  /**
+   * {@code fit} over a supervised dataset feeds the model's {@code call} each element's input
+   * component alone, a tensor, rather than the pair.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFit()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tfds_load.py", "consume_fit_inputs", 1, 1, Map.of(2, Set.of(UNKNOWN_TENSOR)));
+  }
 }

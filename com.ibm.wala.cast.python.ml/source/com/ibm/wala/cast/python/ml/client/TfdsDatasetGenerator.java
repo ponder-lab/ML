@@ -12,7 +12,6 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -81,18 +80,6 @@ public class TfdsDatasetGenerator extends DatasetGenerator {
   /**
    * {@inheritDoc}
    *
-   * @implNote A pair's two components; a dictionary has no declared order.
-   */
-  @Override
-  public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
-    return path.isEmpty() && this.yieldsTuple(builder)
-        ? OptionalInt.of(SUPERVISED_ARITY)
-        : OptionalInt.empty();
-  }
-
-  /**
-   * {@inheritDoc}
-   *
    * @implNote A pair's members by index, or a dictionary's features by key, one level deep.
    */
   @Override
@@ -102,16 +89,6 @@ public class TfdsDatasetGenerator extends DatasetGenerator {
     if (this.yieldsTuple(builder))
       return selector instanceof Integer index && index >= 0 && index < SUPERVISED_ARITY;
     return selector instanceof String;
-  }
-
-  /**
-   * {@inheritDoc}
-   *
-   * @implNote The whole element is a structure, a pair or a dictionary; its members are tensors.
-   */
-  @Override
-  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
-    return path.isEmpty();
   }
 
   /**
