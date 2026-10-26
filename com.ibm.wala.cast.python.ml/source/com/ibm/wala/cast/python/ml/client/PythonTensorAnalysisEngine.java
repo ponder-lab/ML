@@ -5035,6 +5035,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     addSummaryBypassLogic(options, "sklearn.xml");
     // TensorFlow Addons' optimizers are Keras optimizers (wala/ML#1050).
     addSummaryBypassLogic(options, "tensorflow_addons.xml");
+    // TensorFlow Datasets' `load` returns datasets of `tensorflow.xml` (wala/ML#1155).
+    addSummaryBypassLogic(options, "tensorflow_datasets.xml");
   }
 
   /**
