@@ -931,6 +931,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     elementTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       elementTypes.put(array, NumpyTypes.NDARRAY_TYPE);
+    // A static shape's element, `t.shape[k]`, is a Python int (wala/ML#1104), so arithmetic over
+    // the sizes has an int's type-level key as its result (wala/ML#1149). An axis of unknown size
+    // is `None` at run time, which the key does not cover.
+    elementTypes.put(TensorFlowTypes.STATIC_TENSOR_SHAPE, PythonTypes.PYTHON_INT);
     builder.setFreshElementTypes(elementTypes);
     // The `dict` that `tf.data.Dataset.map` hands its function beside the receiver exists only when
     // the receiver's element structure may be a dict, so a map function over a dataset of any other

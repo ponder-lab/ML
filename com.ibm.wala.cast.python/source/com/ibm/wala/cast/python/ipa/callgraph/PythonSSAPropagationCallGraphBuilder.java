@@ -14,6 +14,9 @@ import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.PYTHON_BOOL;
+import static com.ibm.wala.cast.python.types.PythonTypes.PYTHON_FLOAT;
+import static com.ibm.wala.cast.python.types.PythonTypes.PYTHON_INT;
 import static com.ibm.wala.cast.python.util.Util.IMPORT_WILDCARD_CHARACTER;
 import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_FILENAME;
 import static com.ibm.wala.cast.python.util.Util.PYTHON_FILE_EXTENSION;
@@ -30,6 +33,8 @@ import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
+import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
+import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
@@ -61,6 +66,7 @@ import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
@@ -74,6 +80,8 @@ import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
+import com.ibm.wala.shrike.shrikeBT.IShiftInstruction;
+import com.ibm.wala.shrike.shrikeBT.IUnaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -87,6 +95,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInvokeInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.Descriptor;
 import com.ibm.wala.types.FieldReference;
@@ -1499,6 +1508,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
       processArrayOperation(binop);
+      processScalarOperation(binop);
       // List repetition and concatenation (wala/ML#960): `xs * n` and `xs + ys` produce a fresh
       // list (or tuple) whose elements are the operands' elements. Only a list or tuple key
       // flowing into an operand produces anything, so a tensor binop keeps its empty result set
@@ -1557,6 +1567,98 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         if (keys[other] != null && invariant[other] == null)
           system.newSideEffect(listOperation, keys[other]);
       }
+    }
+
+    /**
+     * Gives the result of a binary operator over Python scalars the type-level key of its type (<a
+     * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>), as {@link
+     * PythonInstanceKeys} gives one to a scalar of unknown value (wala/ML#1148). Each pair of a
+     * scalar member of one operand and a scalar member of the other contributes the key of the type
+     * {@link #scalarResultTypes} gives the pair. An operand with no scalar member forms no pair, so
+     * an operator over a value of unknown kind keeps its empty result.
+     *
+     * @param binop The binary operator.
+     */
+    private void processScalarOperation(PythonBinaryOpInstruction binop) {
+      if (!binop.hasDef()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      PointerKey[] keys = new PointerKey[2];
+      Set<TypeReference>[] fixed = newScalarTypeSets();
+      for (int i = 0; i < 2; i++) {
+        int use = binop.getUse(i);
+        if (use <= 0) continue;
+        if (symtab.isConstant(use)) {
+          TypeReference type = scalarTypeOfValue(symtab.getConstantValue(use));
+          if (type != null) fixed[i].add(type);
+          continue;
+        }
+        PointerKey key = getPointerKeyForLocal(use);
+        // As for array and list operations: an invariant or implicit operand is read directly,
+        // since a constraint over its key would materialize it (the wala/ML#668 trap).
+        if (contentsAreInvariant(symtab, du, use) || system.isImplicit(key)) {
+          for (InstanceKey ik : getInvariantContents(symtab, du, node, use)) {
+            TypeReference type = scalarTypeOf(ik);
+            if (type != null) fixed[i].add(type);
+          }
+        } else keys[i] = key;
+      }
+      ScalarOperationOperator operator =
+          getBuilder()
+          .new ScalarOperationOperator(
+              node,
+              binop.iIndex(),
+              getPointerKeyForLocal(binop.getDef()),
+              binop.getOperator(),
+              keys,
+              fixed);
+      if (keys[0] == null && keys[1] == null) operator.apply();
+      for (PointerKey key : keys) if (key != null) system.newSideEffect(operator, key);
+    }
+
+    /**
+     * Gives the result of a unary operator its scalar type-level key (<a
+     * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>): {@code not} gives a {@code
+     * bool} whatever its operand, and a sign or {@code ~} over a scalar operand gives the type
+     * {@link #scalarResultTypes} gives it. An operand with no scalar member gives nothing, as for a
+     * binary operator.
+     *
+     * @param instruction The unary operator.
+     */
+    @Override
+    public void visitUnaryOp(SSAUnaryOpInstruction instruction) {
+      super.visitUnaryOp(instruction);
+      if (!instruction.hasDef()) return;
+      PointerKey resultKey = getPointerKeyForLocal(instruction.getDef());
+      IUnaryOpInstruction.IOperator operator = instruction.getOpcode();
+      if (operator == IUnaryOpInstruction.Operator.NEG) {
+        // Python's `not`, which the translator lowers to `NEG` (a minus is `CAstUnaryOp.MINUS`).
+        InstanceKey bool = getBuilder().getScalarTypeKey(node, instruction.iIndex(), PYTHON_BOOL);
+        if (bool != null) system.newConstraint(resultKey, bool);
+        return;
+      }
+      SymbolTable symtab = ir.getSymbolTable();
+      int use = instruction.getUse(0);
+      PointerKey[] keys = new PointerKey[2];
+      Set<TypeReference>[] fixed = newScalarTypeSets();
+      if (use <= 0) return;
+      if (symtab.isConstant(use)) {
+        TypeReference type = scalarTypeOfValue(symtab.getConstantValue(use));
+        if (type != null) fixed[0].add(type);
+      } else {
+        PointerKey key = getPointerKeyForLocal(use);
+        if (contentsAreInvariant(symtab, du, use) || system.isImplicit(key)) {
+          for (InstanceKey ik : getInvariantContents(symtab, du, node, use)) {
+            TypeReference type = scalarTypeOf(ik);
+            if (type != null) fixed[0].add(type);
+          }
+        } else keys[0] = key;
+      }
+      ScalarOperationOperator scalarOperation =
+          getBuilder()
+          .new ScalarOperationOperator(
+              node, instruction.iIndex(), resultKey, operator, keys, fixed);
+      if (keys[0] == null) scalarOperation.apply();
+      else system.newSideEffect(scalarOperation, keys[0]);
     }
 
     /**
@@ -3483,6 +3585,224 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     for (int i = 0; i < indices.size(); i++) if (!indices.contains(i)) return -1;
     return indices.size();
+  }
+
+  /**
+   * The scalar type of an instance key, for the operator rules of <a
+   * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>: a type-level key of a Python
+   * scalar type (wala/ML#1148) has that type, and a numeric or Boolean constant the type of its
+   * value.
+   *
+   * @param key An instance key.
+   * @return {@link PythonTypes#PYTHON_INT}, {@link PythonTypes#PYTHON_FLOAT} or {@link
+   *     PythonTypes#PYTHON_BOOL}, or {@code null} when the key is no Python scalar.
+   */
+  static TypeReference scalarTypeOf(InstanceKey key) {
+    if (key instanceof ConstantKey<?> constant) return scalarTypeOfValue(constant.getValue());
+    if (key instanceof ConcreteTypeKey) {
+      TypeReference type = key.concreteType().getReference();
+      if (PythonTypes.isScalar(type)) return type;
+    }
+    return null;
+  }
+
+  /**
+   * The scalar type of a constant value: {@code bool} for a {@link Boolean}, {@code float} for a
+   * {@link Double} or {@link Float}, and {@code int} for any other {@link Number}.
+   *
+   * @param value A constant value.
+   * @return The value's scalar type, or {@code null} when it is no number or Boolean.
+   */
+  static TypeReference scalarTypeOfValue(Object value) {
+    if (value instanceof Boolean) return PYTHON_BOOL;
+    if (value instanceof Double || value instanceof Float) return PYTHON_FLOAT;
+    if (value instanceof Number) return PYTHON_INT;
+    return null;
+  }
+
+  /**
+   * Makes the two per-operand sets of scalar types an operator rule reads.
+   *
+   * @return Two empty sets.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  static Set<TypeReference>[] newScalarTypeSets() {
+    return new Set[] {HashSetFactory.make(), HashSetFactory.make()};
+  }
+
+  /**
+   * The types of the result of an operator over Python scalars of the given types (<a
+   * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>). A {@code bool} operand counts
+   * as an {@code int}, except under a bitwise operator over two {@code bool}s.
+   *
+   * <ul>
+   *   <li>A comparison gives a {@code bool}.
+   *   <li>{@code &}, {@code |} and {@code ^} give a {@code bool} over two {@code bool}s, an {@code
+   *       int} over other non-{@code float} operands, and nothing over a {@code float}, which
+   *       raises.
+   *   <li>A shift gives an {@code int}, and nothing over a {@code float}.
+   *   <li>{@code +}, {@code -}, {@code *} and {@code %} give a {@code float} with a {@code float}
+   *       operand and an {@code int} otherwise. The translator lowers {@code **} to {@code ADD}
+   *       too, so an {@code int} raised to a negative {@code int}, a {@code float}, reads as an
+   *       {@code int}.
+   *   <li>{@code /} gives a {@code float}. The parser lowers {@code //} to the same {@code DIV}, so
+   *       a division with no {@code float} operand gives an {@code int} or a {@code float}.
+   *   <li>A unary sign gives its operand's type, with a {@code bool} as an {@code int}, and {@code
+   *       ~} an {@code int}, and nothing over a {@code float}.
+   * </ul>
+   *
+   * @param operator The binary or unary operator.
+   * @param left The type of the first operand.
+   * @param right The type of the second operand, or {@code null} for a unary operator.
+   * @return The result's types, empty when the operation raises or is not one of these.
+   */
+  static Set<TypeReference> scalarResultTypes(
+      Object operator, TypeReference left, TypeReference right) {
+    boolean anyFloat = PYTHON_FLOAT.equals(left) || PYTHON_FLOAT.equals(right);
+    if (right == null) {
+      if (operator == CAstUnaryOp.MINUS || operator == CAstUnaryOp.PLUS)
+        return Set.of(PYTHON_BOOL.equals(left) ? PYTHON_INT : left);
+      if (operator == CAstUnaryOp.BITNOT) return anyFloat ? Set.of() : Set.of(PYTHON_INT);
+      return Set.of();
+    }
+    if (operator == CAstBinaryOp.EQ
+        || operator == CAstBinaryOp.NE
+        || operator == CAstBinaryOp.LT
+        || operator == CAstBinaryOp.LE
+        || operator == CAstBinaryOp.GT
+        || operator == CAstBinaryOp.GE
+        || operator == CAstBinaryOp.STRICT_EQ
+        || operator == CAstBinaryOp.STRICT_NE) return Set.of(PYTHON_BOOL);
+    if (operator == IBinaryOpInstruction.Operator.AND
+        || operator == IBinaryOpInstruction.Operator.OR
+        || operator == IBinaryOpInstruction.Operator.XOR) {
+      if (anyFloat) return Set.of();
+      return PYTHON_BOOL.equals(left) && PYTHON_BOOL.equals(right)
+          ? Set.of(PYTHON_BOOL)
+          : Set.of(PYTHON_INT);
+    }
+    if (operator instanceof IShiftInstruction.Operator)
+      return anyFloat ? Set.of() : Set.of(PYTHON_INT);
+    if (operator == IBinaryOpInstruction.Operator.ADD
+        || operator == IBinaryOpInstruction.Operator.SUB
+        || operator == IBinaryOpInstruction.Operator.MUL
+        || operator == IBinaryOpInstruction.Operator.REM)
+      return Set.of(anyFloat ? PYTHON_FLOAT : PYTHON_INT);
+    if (operator == IBinaryOpInstruction.Operator.DIV)
+      return anyFloat ? Set.of(PYTHON_FLOAT) : Set.of(PYTHON_FLOAT, PYTHON_INT);
+    return Set.of();
+  }
+
+  /**
+   * The type-level key of a Python scalar type, as {@link PythonInstanceKeys} makes it for an
+   * allocation of that type (wala/ML#1148).
+   *
+   * @param node The node of the operation.
+   * @param pc The operation's instruction index.
+   * @param type A Python scalar type.
+   * @return The type's key, or {@code null} when the hierarchy has no class for it.
+   */
+  InstanceKey getScalarTypeKey(CGNode node, int pc, TypeReference type) {
+    return getInstanceKeyForAllocation(node, NewSiteReference.make(pc, type));
+  }
+
+  /**
+   * The result of an operator over Python scalars (<a
+   * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>), attached to each represented
+   * operand: whenever an operand's set changes, every pair of a scalar member of one operand and a
+   * scalar member of the other adds the key of each type {@link #scalarResultTypes} gives the pair
+   * to the result's points-to set, by an instance constraint. A unary operator's second operand is
+   * absent. An operand's literal or invariant members are fixed when the operator is made.
+   */
+  public final class ScalarOperationOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final Object operator;
+    private final PointerKey[] keys;
+    private final Set<TypeReference>[] fixed;
+    private final boolean unary;
+
+    private ScalarOperationOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        Object operator,
+        PointerKey[] keys,
+        Set<TypeReference>[] fixed) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.operator = operator;
+      this.keys = keys;
+      this.fixed = fixed;
+      this.unary = operator instanceof IUnaryOpInstruction.IOperator;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      apply();
+      return NOT_CHANGED;
+    }
+
+    /** Adds the result keys of every pair of the operands' current scalar members. */
+    void apply() {
+      Set<TypeReference> left = operandTypes(0);
+      if (left.isEmpty()) return;
+      Set<TypeReference> results = HashSetFactory.make();
+      if (unary) for (TypeReference l : left) results.addAll(scalarResultTypes(operator, l, null));
+      else {
+        Set<TypeReference> right = operandTypes(1);
+        for (TypeReference l : left)
+          for (TypeReference r : right) results.addAll(scalarResultTypes(operator, l, r));
+      }
+      for (TypeReference type : results) {
+        InstanceKey key = getScalarTypeKey(node, pc, type);
+        if (key != null) getSystem().newConstraint(resultKey, key);
+      }
+    }
+
+    /**
+     * The scalar types among an operand's members: its fixed ones, and those of its key's current
+     * points-to set.
+     *
+     * @param i The operand's position.
+     * @return The operand's scalar types.
+     */
+    private Set<TypeReference> operandTypes(int i) {
+      Set<TypeReference> types = HashSetFactory.make(fixed[i]);
+      if (keys[i] != null) {
+        PointsToSetVariable variable = getSystem().findOrCreatePointsToSet(keys[i]);
+        if (variable.getValue() != null)
+          variable
+              .getValue()
+              .foreach(
+                  k -> {
+                    TypeReference type = scalarTypeOf(getSystem().getInstanceKey(k));
+                    if (type != null) types.add(type);
+                  });
+      }
+      return types;
+    }
+
+    @Override
+    public int hashCode() {
+      return ((node.hashCode() * 31 + pc) * 31 + resultKey.hashCode()) * 31 + operator.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ScalarOperationOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && resultKey.equals(other.resultKey)
+          && operator.equals(other.operator);
+    }
+
+    @Override
+    public String toString() {
+      return "scalar operation@" + pc;
+    }
   }
 
   /**
