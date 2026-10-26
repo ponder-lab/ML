@@ -87,6 +87,25 @@ public class TestBuiltinLayerBuild extends TestPythonMLCallGraphShape {
     assertTrue(reachesAddWeight("RecurrentModel"));
   }
 
+  /**
+   * An {@code Embedding} sublayer's first call creates its {@code embeddings} matrix (<a
+   * href="https://github.com/wala/ML/issues/1168">wala/ML#1168</a>).
+   */
+  @Test
+  public void testEmbedding() {
+    assertTrue(reachesAddWeight("EmbeddingModel"));
+  }
+
+  /**
+   * A nested layer whose only weighted sublayer is an {@code Embedding} creates the embedding's
+   * matrix in its own {@code call}, as a position-embedding layer does (<a
+   * href="https://github.com/wala/ML/issues/1168">wala/ML#1168</a>).
+   */
+  @Test
+  public void testNestedEmbedding() {
+    assertTrue(reachesAddWeight("Embeddings"));
+  }
+
   /** A {@code Flatten} sublayer has no variables, and its call creates none. */
   @Test
   public void testFlatten() {

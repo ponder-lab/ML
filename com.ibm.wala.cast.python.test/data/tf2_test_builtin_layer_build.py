@@ -21,6 +21,35 @@ class RecurrentModel(tf.keras.Model):
         return self.rnn(x)
 
 
+class EmbeddingModel(tf.keras.Model):
+    def __init__(self):
+        super().__init__()
+        self.embedding = tf.keras.layers.Embedding(10, 4)
+
+    def call(self, ids):
+        return self.embedding(ids)
+
+
+# Test https://github.com/wala/ML/issues/1168: a nested layer whose only weighted sublayer is an
+# `Embedding` creates the embedding's variable in its own trace.
+class Embeddings(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.position_embeddings = tf.keras.layers.Embedding(10, 4)
+
+    def call(self, ids):
+        return self.position_embeddings(ids)
+
+
+class NestedEmbeddingModel(tf.keras.Model):
+    def __init__(self):
+        super().__init__()
+        self.emb = Embeddings()
+
+    def call(self, ids):
+        return self.emb(ids)
+
+
 class FlattenModel(tf.keras.Model):
     def __init__(self):
         super().__init__()
@@ -39,6 +68,15 @@ assert [w.shape for w in dense.dense.weights] == [(3, 4), (4,)]
 recurrent = RecurrentModel()
 tf.function(recurrent.call)(tf.ones((2, 5, 3)))
 assert recurrent.rnn.built and len(recurrent.rnn.weights) == 3
+
+embedding = EmbeddingModel()
+tf.function(embedding.call)(tf.constant([[1, 2, 3]]))
+assert [w.shape for w in embedding.embedding.weights] == [(10, 4)]
+
+nested = NestedEmbeddingModel()
+tf.function(nested.emb.call)(tf.constant([[1, 2, 3]]))
+assert [w.shape for w in nested.emb.position_embeddings.weights] == [(10, 4)]
+nested(tf.constant([[1, 2, 3]]))
 
 flatten = FlattenModel()
 tf.function(flatten.call)(tf.ones((2, 3, 4)))
