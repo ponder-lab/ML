@@ -1,0 +1,34 @@
+# An `Embedding` layer whose `output_dim` the analysis cannot read gives an output of unknown rank
+# (wala/ML#1163).
+import os
+
+import tensorflow as tf
+
+
+class MultiplyConstant(tf.keras.layers.Layer):
+    def __init__(self, c, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.c = c
+
+    def call(self, inputs):
+        return inputs * self.c
+
+
+def consume_literal(t):
+    pass
+
+
+def consume_unread(t):
+    pass
+
+
+inp = tf.keras.layers.Input((None,), dtype="int32")
+literal = tf.keras.layers.Embedding(input_dim=100, output_dim=128)(inp)
+assert literal.shape.as_list() == [None, None, 128] and literal.dtype == tf.float32
+consume_literal(literal)
+d_model = int(os.environ.get("D_MODEL", "128"))
+unread = tf.keras.layers.Embedding(input_dim=100, output_dim=d_model)(inp)
+assert unread.shape.as_list() == [None, None, 128]
+multiplied = MultiplyConstant(d_model)(unread)
+assert multiplied.dtype == tf.float32
+consume_unread(multiplied)
