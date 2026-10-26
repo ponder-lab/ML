@@ -2033,12 +2033,9 @@ public class TestConstructors extends AbstractTensorTest {
    * What the {@code np.finfo} model declines (wala/ML#907): {@code np.iinfo}, whose {@code min} and
    * {@code max} are Python ints, and the integer-valued {@code finfo} attributes such as {@code
    * bits}, also Python ints. Neither is modeled, so the operand stays opaque and not provably
-   * scalar, and the product is not typed at all today; that floor is the elementwise rule's own
-   * question (a tensor scaled by anything is a tensor or raises, so unknown shape would be the
-   * sound answer), not this model's. These assertions PIN THAT FLOOR AS IT IS TODAY and are the
-   * standing witnesses of wala/ML#924: when that issue lands, the products become tensors of
-   * unknown shape and these go red; flip them to assert one tensor parameter of unknown shape (and
-   * whatever dtype that issue settles on), do not restore the zero.
+   * scalar. Its points-to set is empty, so the elementwise rule reads the product as a tensor of
+   * unknown shape, the sound answer, since a tensor scaled by anything is a tensor or raises
+   * (wala/ML#924, wala/ML#1163). Before, the product was not typed at all.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2049,8 +2046,8 @@ public class TestConstructors extends AbstractTensorTest {
   public void testNumpyFinfoDeclines()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     String file = "tf2_test_numpy_finfo.py";
-    test(file, "consume_iinfo_scaled", 0, 0, Map.of());
-    test(file, "consume_bits_scaled", 0, 0, Map.of());
+    test(file, "consume_iinfo_scaled", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(file, "consume_bits_scaled", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**

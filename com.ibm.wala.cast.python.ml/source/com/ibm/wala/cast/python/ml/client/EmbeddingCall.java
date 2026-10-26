@@ -10,6 +10,7 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -64,13 +65,13 @@ public class EmbeddingCall extends TensorGenerator {
   }
 
   /**
-   * Resolves the output shapes by appending the layer's {@code output_dim} to each input shape.
-   * When {@code output_dim} is not statically resolvable, extending the input shapes with a dynamic
-   * dimension would misstate the rank contract, so ⊤ is returned instead.
+   * Resolves the output shapes by appending the layer's {@code output_dim} to each input shape. The
+   * output's rank is the input's plus one whatever {@code output_dim} is, so an {@code output_dim}
+   * that is not statically resolvable appends an {@link UnresolvedDim}: a fixed integer the
+   * analysis did not compute (wala/ML#721, wala/ML#1163).
    *
    * @param builder The propagation call graph builder.
-   * @return A set of output shapes, or {@code null} if the input shape or {@code output_dim} cannot
-   *     be resolved.
+   * @return A set of output shapes, or {@code null} if the input shape cannot be resolved.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -82,16 +83,26 @@ public class EmbeddingCall extends TensorGenerator {
     if (inputShapes == null || inputShapes.isEmpty()) return null;
 
     Set<Long> outputDims = getPossibleOutputDims(builder);
-    if (outputDims == null || outputDims.isEmpty()) return null;
+    // An `output_dim` that does not resolve still adds one axis, of an extent the analysis did not
+    // compute (wala/ML#1163).
+    boolean unresolved = outputDims == null || outputDims.isEmpty() || outputDims.contains(null);
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> inputShape : inputShapes)
-      for (Long outputDim : outputDims) {
-        if (outputDim == null) continue;
+    for (List<Dimension<?>> inputShape : inputShapes) {
+      if (inputShape == null) continue;
+      if (outputDims != null)
+        for (Long outputDim : outputDims) {
+          if (outputDim == null) continue;
+          List<Dimension<?>> outShape = new ArrayList<>(inputShape);
+          outShape.add(new NumericDim(outputDim.intValue()));
+          ret.add(outShape);
+        }
+      if (unresolved) {
         List<Dimension<?>> outShape = new ArrayList<>(inputShape);
-        outShape.add(new NumericDim(outputDim.intValue()));
+        outShape.add(UnresolvedDim.INSTANCE);
         ret.add(outShape);
       }
+    }
     return ret.isEmpty() ? null : ret;
   }
 

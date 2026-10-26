@@ -20,6 +20,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -406,6 +407,21 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   }
 
   /**
+   * Whether an operand's points-to set, read without the client-only mask, has no member: the
+   * analysis knows nothing of the operand (wala/ML#1163).
+   *
+   * @param builder The propagation call graph builder.
+   * @param vn The operand's value number.
+   * @return {@code true} iff the operand's points-to set is empty.
+   */
+  private boolean hasEmptyPointsToSet(PropagationCallGraphBuilder builder, int vn) {
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), vn);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    return pts == null || pts.isEmpty();
+  }
+
+  /**
    * Recognizes a statically opaque scalar expression: a scalar literal, a {@code float(...)} or
    * {@code int(...)} builtin call, a {@code math.<fn>(...)} call, a unary minus, or a binary op
    * whose operands are both scalar expressions (wala/ML#718). The value never resolves (the PA does
@@ -439,16 +455,19 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     // `epsilon=1e-6`, bound to the default's constant by the call trampoline (wala/ML#739).
     PointerKey scalarPk =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    OrdinalSet<InstanceKey> scalarPts =
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(scalarPk));
+    // Read without the client-only mask: the type-level key of a Python scalar of unknown value,
+    // such as an `int(...)` result, is evidence of a scalar too (wala/ML#1148, wala/ML#1163).
+    OrdinalSet<InstanceKey> scalarPts = builder.getPointerAnalysis().getPointsToSet(scalarPk);
     if (scalarPts != null && !scalarPts.isEmpty()) {
-      boolean allNumericConstants = true;
+      boolean allScalars = true;
       for (InstanceKey ik : scalarPts)
-        if (!(ik instanceof ConstantKey) || !(((ConstantKey<?>) ik).getValue() instanceof Number)) {
-          allNumericConstants = false;
+        if (!Util.isPythonScalarKey(ik)
+            && (!(ik instanceof ConstantKey)
+                || !(((ConstantKey<?>) ik).getValue() instanceof Number))) {
+          allScalars = false;
           break;
         }
-      if (allNumericConstants) return true;
+      if (allScalars) return true;
     }
 
     SSAInstruction def = node.getDU().getDef(vn);
@@ -567,8 +586,19 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     if (this.getSource() != null && xShapes.isEmpty() != yShapes.isEmpty()) {
       Set<List<Dimension<?>>> resolved = xShapes.isEmpty() ? yShapes : xShapes;
       int opaqueVn = xShapes.isEmpty() ? xVn : yVn;
-      if (resolved.stream().anyMatch(dims -> !dims.isEmpty())
-          && this.isScalarExpression(builder, opaqueVn)) return resolved;
+      if (resolved.stream().anyMatch(dims -> !dims.isEmpty())) {
+        if (this.isScalarExpression(builder, opaqueVn)) return resolved;
+        // An operand the analysis knows nothing of, beside a tensor, such as a value read off an
+        // unmodeled configuration object: the result is a tensor of unknown shape, since the
+        // operand may be a scalar or an array. Reading the empty cross product instead would type
+        // it as no tensor at all (wala/ML#1163). An operand whose points-to set holds anything,
+        // such as a list in a sequence operation, keeps the cross product.
+        // Not in a summary's own body, whose operands are parameters with routinely empty points-to
+        // sets while the caller passes a value: there the empty result lets the operation's feed
+        // replace it with the operands' types as the dataflow converges.
+        if (!this.getNode().getMethod().isWalaSynthetic()
+            && this.hasEmptyPointsToSet(builder, opaqueVn)) return null;
+      }
     }
 
     // wala/ML#462: when the operands carry per-context shape unions (e.g., `y_true ∈ {[256],

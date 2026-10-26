@@ -1340,7 +1340,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    *     <p>The local count excludes the two all-constant slice-constructor objects under the {@code
-   *     [:, :-1]} subscripts, pinned non-tensor since wala/ML#732.
+   *     [:, :-1]} subscripts, pinned non-tensor since wala/ML#732. It includes {@code start_token =
+   *     tf.ones(...) * par.token_sos}, a {@code (Dynamic, 1)} tensor at run time: its operand
+   *     {@code par.token_sos} is unknown to the analysis, so the product is a tensor of unknown
+   *     shape rather than no tensor (wala/ML#924, wala/ML#1163).
    */
   @Test
   public void testMusicTransformerPrepareTrainData()
@@ -1351,7 +1354,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "MusicTransformer.__prepare_train_data",
         "musictransformer_proj",
         2,
-        5,
+        6,
         Map.of(
             2,
             // Both parameters now read the runtime-true (2, 2048): the windowed batcher's extents
