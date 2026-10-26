@@ -2463,6 +2463,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       if (target.getMethod().getDeclaringClass().getReference().equals(PythonTypes.SLICE_BUILTIN))
         processSliceResult(caller, call, constParams);
+      if (target.getMethod().getDeclaringClass().getReference().equals(ROUND_BUILTIN))
+        processRoundResult(caller, call, constParams);
+      if (target.getMethod().getDeclaringClass().getReference().equals(SUM_BUILTIN))
+        processSumResult(caller, call, constParams);
     }
   }
 
@@ -2494,6 +2498,239 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /** The {@code round} builtin. */
+  private static final TypeReference ROUND_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lwala/builtin/round"));
+
+  /** The {@code sum} builtin. */
+  private static final TypeReference SUM_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lwala/builtin/sum"));
+
+  /**
+   * The builtins whose result type follows their arguments' scalar types, as {@link
+   * #scalarResultTypes} reads them (<a
+   * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
+   */
+  enum ScalarBuiltin {
+    /** {@code round(x)}, an {@code int} for any scalar {@code x}. */
+    ROUND,
+    /** {@code round(x, ndigits)}, of {@code x}'s type. */
+    ROUND_TO_DIGITS,
+    /** {@code sum(xs, start)}, over pairs of an element of {@code xs} and {@code start}. */
+    SUM
+  }
+
+  /**
+   * An argument of a call, as a scalar operation reads it: the key of a represented argument, or
+   * the scalar types of a constant one, which the call passes as instance keys.
+   *
+   * @param caller The node containing the call.
+   * @param call The call.
+   * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
+   * @param index The argument's index among the call's arguments, the callee's being 0.
+   * @param use The argument's value number.
+   * @param keys The represented keys, written at {@code slot}.
+   * @param fixed The constant types, added at {@code slot}.
+   * @param slot The operand's position in the operation.
+   */
+  private void scalarArgument(
+      CGNode caller,
+      InstanceKey[][] constParams,
+      int index,
+      int use,
+      PointerKey[] keys,
+      Set<TypeReference>[] fixed,
+      int slot) {
+    if (constParams != null && index < constParams.length && constParams[index] != null) {
+      for (InstanceKey ik : constParams[index]) {
+        TypeReference type = scalarTypeOf(ik);
+        if (type != null) fixed[slot].add(type);
+      }
+      return;
+    }
+    keys[slot] = getPointerKeyForLocal(caller, use);
+  }
+
+  /**
+   * Supplies the scalar result of a {@code round} call (<a
+   * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>): {@code round(x)} is an {@code
+   * int} for any scalar {@code x}, and {@code round(x, ndigits)} has {@code x}'s type, with a
+   * {@code bool} as an {@code int}. A non-scalar {@code x}, such as an array, rounds by its own
+   * method into a value of its own kind, so it gives no key. The builtin's body still allocates its
+   * untyped result, which has no key, so the summary's return edge is unchanged.
+   *
+   * @param caller The node containing the call.
+   * @param call The {@code round} call.
+   * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
+   */
+  private void processRoundResult(
+      CGNode caller, PythonInvokeInstruction call, InstanceKey[][] constParams) {
+    if (!call.hasDef() || call.getNumberOfPositionalParameters() < 2) return;
+    PointerKey[] keys = new PointerKey[2];
+    Set<TypeReference>[] fixed = newScalarTypeSets();
+    scalarArgument(caller, constParams, 1, call.getUse(1), keys, fixed, 0);
+    ScalarBuiltin operation = ScalarBuiltin.ROUND;
+    if (call.getNumberOfPositionalParameters() > 2) {
+      scalarArgument(caller, constParams, 2, call.getUse(2), keys, fixed, 1);
+      operation = ScalarBuiltin.ROUND_TO_DIGITS;
+    } else {
+      int k = call.getKeywords().indexOf("ndigits");
+      if (k >= 0) {
+        scalarArgument(
+            caller,
+            constParams,
+            call.getNumberOfPositionalParameters() + k,
+            call.getUse("ndigits"),
+            keys,
+            fixed,
+            1);
+        operation = ScalarBuiltin.ROUND_TO_DIGITS;
+      }
+    }
+    newScalarOperation(caller, call, operation, keys, fixed);
+  }
+
+  /**
+   * Supplies the scalar result of a {@code sum} call (<a
+   * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>): each pair of a scalar element
+   * of the iterable and a scalar {@code start}, {@code 0} when it is absent, gives an {@code int},
+   * or a {@code float} when either is one. The elements are those of the list and tuple keys the
+   * iterable holds, gathered into a contents field of a key allocated at the call for this purpose
+   * alone, as a list operation gathers its operands' elements. A non-scalar element, such as a
+   * tensor, forms no pair, so a sum of tensors gives no key; a sum over a list holding both scalars
+   * and tensors gives the scalars' key alone, the limit any union over modeled members has. The
+   * builtin's body still allocates its untyped result, which has no key.
+   *
+   * @param caller The node containing the call.
+   * @param call The {@code sum} call.
+   * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
+   */
+  private void processSumResult(
+      CGNode caller, PythonInvokeInstruction call, InstanceKey[][] constParams) {
+    if (!call.hasDef() || call.getNumberOfPositionalParameters() < 2) return;
+    IField contents = resolveRootField(getClassHierarchy(), LIST_OPERATION_CONTENTS_FIELD);
+    if (contents == null) return;
+    InstanceKey gathered =
+        getInstanceKeyForAllocation(caller, NewSiteReference.make(call.iIndex(), PythonTypes.list));
+    if (gathered == null) return;
+    PointerKey elements =
+        ((AstPointerKeyFactory) getPointerKeyFactory())
+            .getPointerKeyForInstanceField(gathered, contents);
+    PointerKey[] keys = new PointerKey[2];
+    Set<TypeReference>[] fixed = newScalarTypeSets();
+    keys[0] = elements;
+    SumElementsOperator gather = new SumElementsOperator(elements, call.iIndex());
+    if (constParams != null && constParams.length > 1 && constParams[1] != null)
+      for (InstanceKey ik : constParams[1]) gather.gather(ik);
+    else getSystem().newSideEffect(gather, getPointerKeyForLocal(caller, call.getUse(1)));
+    if (call.getNumberOfPositionalParameters() > 2)
+      scalarArgument(caller, constParams, 2, call.getUse(2), keys, fixed, 1);
+    else {
+      int k = call.getKeywords().indexOf("start");
+      if (k >= 0)
+        scalarArgument(
+            caller,
+            constParams,
+            call.getNumberOfPositionalParameters() + k,
+            call.getUse("start"),
+            keys,
+            fixed,
+            1);
+      else fixed[1].add(PYTHON_INT);
+    }
+    newScalarOperation(caller, call, ScalarBuiltin.SUM, keys, fixed);
+  }
+
+  /**
+   * Registers a scalar operation computing a call's result.
+   *
+   * @param caller The node containing the call.
+   * @param call The call.
+   * @param operation The operation.
+   * @param keys The represented operands' keys.
+   * @param fixed The constant operands' types.
+   */
+  private void newScalarOperation(
+      CGNode caller,
+      PythonInvokeInstruction call,
+      ScalarBuiltin operation,
+      PointerKey[] keys,
+      Set<TypeReference>[] fixed) {
+    ScalarOperationOperator operator =
+        new ScalarOperationOperator(
+            caller,
+            call.iIndex(),
+            getPointerKeyForLocal(caller, call.getDef()),
+            operation,
+            keys,
+            fixed);
+    operator.apply();
+    for (PointerKey key : keys) if (key != null) getSystem().newSideEffect(operator, key);
+  }
+
+  /**
+   * Gathers the elements of the list and tuple keys a {@code sum}'s iterable holds into a contents
+   * field (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>): each such key's
+   * appended and operation contents, and every field its object catalog names, as a list operation
+   * copies them. Keys of other types contribute nothing. Equal for the same contents field.
+   */
+  private final class SumElementsOperator extends UnaryOperator<PointsToSetVariable> {
+    private final PointerKey elements;
+    private final int pc;
+
+    private SumElementsOperator(PointerKey elements, int pc) {
+      this.elements = elements;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null)
+        rhs.getValue().foreach(i -> gather(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Flows one iterable key's elements into the contents field, if it is a list or a tuple.
+     *
+     * @param key An instance key the iterable may hold.
+     */
+    void gather(InstanceKey key) {
+      TypeReference type = key.concreteType().getReference();
+      if (!type.equals(PythonTypes.list) && !type.equals(PythonTypes.tuple)) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      for (String name : List.of(LIST_APPEND_CONTENTS_FIELD, LIST_OPERATION_CONTENTS_FIELD)) {
+        IField field = resolveRootField(cha, name);
+        if (field != null)
+          getSystem()
+              .newConstraint(
+                  elements, assignOperator, factory.getPointerKeyForInstanceField(key, field));
+      }
+      getSystem()
+          .newSideEffect(
+              new ElementCopyOperator(key, elements, pc),
+              factory.getPointerKeyForObjectCatalog(key));
+    }
+
+    @Override
+    public int hashCode() {
+      return elements.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof SumElementsOperator other && elements.equals(other.elements);
+    }
+
+    @Override
+    public String toString() {
+      return "sum elements@" + pc;
+    }
   }
 
   /** The most fields of a {@code collections.namedtuple} whose names bind its arguments. */
@@ -3659,6 +3896,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   static Set<TypeReference> scalarResultTypes(
       Object operator, TypeReference left, TypeReference right) {
     boolean anyFloat = PYTHON_FLOAT.equals(left) || PYTHON_FLOAT.equals(right);
+    // The builtins whose result follows their arguments (wala/ML#1148).
+    if (operator == ScalarBuiltin.ROUND) return Set.of(PYTHON_INT);
+    if (operator == ScalarBuiltin.ROUND_TO_DIGITS)
+      // A `float` digit count raises.
+      return PYTHON_FLOAT.equals(right)
+          ? Set.of()
+          : Set.of(PYTHON_BOOL.equals(left) ? PYTHON_INT : left);
+    if (operator == ScalarBuiltin.SUM) return Set.of(anyFloat ? PYTHON_FLOAT : PYTHON_INT);
     if (right == null) {
       if (operator == CAstUnaryOp.MINUS || operator == CAstUnaryOp.PLUS)
         return Set.of(PYTHON_BOOL.equals(left) ? PYTHON_INT : left);
@@ -3736,7 +3981,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       this.operator = operator;
       this.keys = keys;
       this.fixed = fixed;
-      this.unary = operator instanceof IUnaryOpInstruction.IOperator;
+      this.unary =
+          operator instanceof IUnaryOpInstruction.IOperator || operator == ScalarBuiltin.ROUND;
     }
 
     @Override

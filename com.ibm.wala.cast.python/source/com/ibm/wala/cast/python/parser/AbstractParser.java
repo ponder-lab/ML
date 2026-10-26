@@ -76,7 +76,9 @@ public abstract class AbstractParser {
         "hex",
         "id",
         "input",
-        "isinstance",
+        // `isinstance` is a builtin with a summary (`BuiltinFunctions`); an import here, declared
+        // after
+        // the builtins, shadowed it (wala/ML#1148).
         "locals",
         "map",
         "max",

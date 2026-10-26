@@ -2,6 +2,16 @@
 # (wala/ML#1148); a literal keeps its constant key.
 
 
+class Vector:
+    def __init__(self, n):
+        self.n = n
+
+    def __add__(self, other):
+        return Vector(self.n + (other.n if isinstance(other, Vector) else other))
+
+    __radd__ = __add__
+
+
 def sink_len(v):
     return v
 
@@ -34,6 +44,26 @@ def sink_sum(v):
     return v
 
 
+def sink_isinstance(v):
+    return v
+
+
+def sink_round(v):
+    return v
+
+
+def sink_round_digits(v):
+    return v
+
+
+def sink_sum_floats(v):
+    return v
+
+
+def sink_sum_objects(v):
+    return v
+
+
 assert sink_len(len([1, 2])) == 2
 assert sink_int(int("3")) == 3
 assert sink_float(float("0.5")) == 0.5
@@ -43,5 +73,10 @@ for i in range(3):
 for j, e in enumerate(["a"]):
     assert isinstance(sink_enumerate(j), int)
 assert sink_literal(3) == 3
-# A sum's type follows its elements, so `sum` gives no scalar key.
+# A sum's and a round's type follows their arguments.
 assert sink_sum(sum([1, 2])) == 3
+assert sink_sum_floats(sum([0.5, 0.25])) == 0.75
+assert isinstance(sink_sum_objects(sum([Vector(1), Vector(2)])), Vector)
+assert sink_isinstance(isinstance(3, int)) is True
+assert sink_round(round(float("2.5"))) == 2
+assert sink_round_digits(round(float("2.25"), 1)) == 2.2
