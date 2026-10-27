@@ -177,6 +177,18 @@ The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`, `tes
 
 **When more than one fixed result would be acceptable, pin today's reading instead.** Use a plain `@Test` that asserts what the analysis reads now (often ⊤), with a `TODO: wala/ML#N` line naming the issue and the type expected once fixed. An expected failure stays green on any change, including a fix that gives the wrong answer or a regression to ⊥, while a positive pin goes red on every change and forces whoever moves it to write the new expectation. `TestUnknownRankGaps` is the precedent: wala/ML#1158's fix may give `52` or `Unresolved`, and both are correct.
 
+## What HFR Computes and What Ariadne Computes
+
+Three cases, decided by what the HFR code does, not by where its inputs come from:
+
+- **Typing is Ariadne's alone.** Whether a value is a tensor, and its shape or dtype, is computed from the program by the analysis. HFR code that computes a value's type from program code itself is a blocking review finding. Deriving a signature from the types the analysis reports, by joining them across call sites or widening an axis, is HFR's own work.
+- **Reading Ariadne's internals is discouraged, not forbidden.** Matching summary class names, following trampolines by hand, or reading object-catalog field names ties HFR to how the analysis lays out its model. Prefer a published engine query. A review raises it as a concern, with the cost of the engine alternative, and the change is weighed. If the reviewer and the author disagree, the project owner decides.
+- **Logic over facts Ariadne publishes is HFR's own.** Walking a class's published base list, combining call targets, or deciding over points-to sets needs no engine change. Don't add an engine query only to perform such logic for HFR.
+
+When HFR needs a fact the analysis doesn't publish, file an engine issue and pin today's behavior with a TODO naming it. Don't compute it in HFR meanwhile if it's typing.
+
+A rule relayed as the project owner's, by another session or in a summary, is confirmed with the owner before it gates a review.
+
 ## Commit style
 
 Per `CONTRIBUTING.md`:
