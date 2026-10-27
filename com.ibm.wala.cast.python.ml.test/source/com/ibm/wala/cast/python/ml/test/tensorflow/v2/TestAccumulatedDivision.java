@@ -22,21 +22,11 @@ public class TestAccumulatedDivision extends AbstractTensorTest {
   private static final TensorType TENSOR_2_5_8_FLOAT32 = TensorType.of(FLOAT_32, 2, 5, 8);
 
   /**
-   * Accumulated in a loop and divided by the list's length: the dtype is the layers' {@code
-   * float32}. The shape the {@code len(...)} divisor loses is {@link #testLoopLenShape()}.
+   * Accumulated in a loop and divided by the list's length: the type is exact, since the length, an
+   * {@code int} of unknown value, is a Python scalar (wala/ML#1097).
    */
   @Test
   public void testLoopLen() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "ConsumeLoopLen.call", 1, 1, Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
-  }
-
-  /**
-   * As {@link #testLoopLen()}, with the shape the runtime asserts.
-   *
-   * <p>TODO: Pass once https://github.com/wala/ML/issues/1097 is fixed.
-   */
-  @Test(expected = AssertionError.class)
-  public void testLoopLenShape() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "ConsumeLoopLen.call", 1, 1, Map.of(3, Set.of(TENSOR_2_5_8_FLOAT32)));
   }
 
@@ -46,19 +36,12 @@ public class TestAccumulatedDivision extends AbstractTensorTest {
     test(FILE, "ConsumeLoopTwo.call", 1, 1, Map.of(3, Set.of(TENSOR_2_5_8_FLOAT32)));
   }
 
-  /** Accumulated without a loop and divided by the list's length: the dtype is {@code float32}. */
+  /**
+   * Accumulated without a loop and divided by the list's length: the type is exact, as in {@link
+   * #testLoopLen()} (wala/ML#1097).
+   */
   @Test
   public void testNoLoopLen() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "ConsumeNoLoopLen.call", 1, 1, Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
-  }
-
-  /**
-   * As {@link #testNoLoopLen()}, with the shape the runtime asserts.
-   *
-   * <p>TODO: Pass once https://github.com/wala/ML/issues/1097 is fixed.
-   */
-  @Test(expected = AssertionError.class)
-  public void testNoLoopLenShape() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "ConsumeNoLoopLen.call", 1, 1, Map.of(3, Set.of(TENSOR_2_5_8_FLOAT32)));
   }
 }

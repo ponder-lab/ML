@@ -15,7 +15,8 @@ import org.junit.Test;
 
 /**
  * Values whose rank the analysis loses although it is fixed, each pinned at what the analysis reads
- * today. Each test names the issue whose fix moves it, and the type it should then read.
+ * today, and the fixes that restore it. Each test names the issue whose fix moves it, and the type
+ * it should then read.
  */
 public class TestUnknownRankGaps extends AbstractTensorTest {
 
@@ -43,10 +44,8 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
-   * An {@code np.zeros} whose shape tuple holds an element of an ndarray.
-   *
-   * <p>TODO: wala/ML#1158: expect rank 5 of {@code float32}, {@code (4, 52, 52, 3, 7)} or with the
-   * two axes the ndarray element gives unresolved.
+   * An {@code np.zeros} whose shape tuple holds an element of an ndarray (wala/ML#1158): the shape
+   * keeps its rank, and the two axes the ndarray element gives, 52 at run time, are unresolved.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -56,7 +55,46 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   @Test
   public void testZerosNdarrayElement()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_zeros_ndarray_element.py", "consume", 1, 1, Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+    test(
+        "tf2_test_zeros_ndarray_element.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(4),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(3),
+                        new NumericDim(7))))));
+  }
+
+  /**
+   * An {@code np.zeros} whose shape position may be an ndarray element or a literal (wala/ML#1158):
+   * the position keeps the literal beside the element's unresolved size.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testZerosNdarrayElementOrLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_ndarray_element.py",
+        "consume_mixed",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4, 26),
+                new TensorType(FLOAT_32, asList(new NumericDim(4), UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -185,10 +223,8 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
 
   /**
    * An {@code Embedding} whose {@code output_dim} comes from the environment, through a layer
-   * multiplying it by a constant.
-   *
-   * <p>TODO: wala/ML#1163: expect rank 3 of {@code float32}, two dynamic axes and an unresolved
-   * one.
+   * multiplying it by a constant: rank 3 of {@code float32}, two dynamic axes and an unresolved one
+   * (wala/ML#1163).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -203,6 +239,59 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
         "consume_unread",
         1,
         1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * An {@code Embedding} whose {@code output_dim} is an absl flag, through a layer multiplying it
+   * by the flag. The flag's value has an empty points-to set, so the product's other operand is of
+   * unknown kind, and the product is a {@code float32} tensor of unknown shape: the operand may be
+   * an array that broadcasts to another. Before wala/ML#1163 gave the layer's input its rank, the
+   * product read the same; reading it as no tensor would be a regression.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEmbeddingOfFlagDimension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_unread_dim.py",
+        "consume_flagged",
+        1,
+        1,
         Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+  }
+
+  /**
+   * The layer's own input in both programs above: the {@code Embedding}'s output, rank 3 of {@code
+   * float32}, two dynamic axes and an unresolved one (wala/ML#1163).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testLayerInputOfUnreadDimension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_unread_dim.py",
+        "MultiplyConstant.call",
+        1,
+        2,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 }

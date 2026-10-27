@@ -2849,4 +2849,84 @@ public class TestElementwiseOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_unary_minus.py", "consume_number", 0, 0);
   }
+
+  /**
+   * A tensor times a Python {@code int} read off a field holding a literal: the tensor's shape and
+   * dtype, {@code (2,)} of {@code float32} (wala/ML#1161).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScalarOperandConstantField()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_operand_kinds.py",
+        "consume_constant_field",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * A tensor times a Python {@code int} read off a field holding {@code len(xs)}: the tensor's
+   * shape and dtype, {@code (2,)} of {@code float32} (wala/ML#1161).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScalarOperandComputedField()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_operand_kinds.py",
+        "consume_computed_field",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * A tensor times a Python {@code int} passed as a parameter, {@code len(xs)}: the tensor's shape
+   * and dtype, {@code (2,)} of {@code float32} (wala/ML#1161).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScalarOperandParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_operand_kinds.py",
+        "consume_parameter",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * A tensor times a Python {@code int} computed in place, {@code len(xs)}: the tensor's shape and
+   * dtype, {@code (2,)} of {@code float32} (wala/ML#1161).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScalarOperandCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_operand_kinds.py",
+        "consume_call",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
 }
