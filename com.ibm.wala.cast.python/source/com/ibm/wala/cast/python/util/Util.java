@@ -11,6 +11,7 @@ import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
+import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -19,6 +20,7 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -475,6 +477,52 @@ public class Util {
       if (base instanceof AllocationSiteInNode) return (AllocationSiteInNode) base;
     }
     return null;
+  }
+
+  /**
+   * The class whose constructor allocated the object an {@link InstanceKey} stands for (<a
+   * href="https://github.com/wala/ML/issues/1165">wala/ML#1165</a>), so that a client can check it
+   * against a library class with the class hierarchy, as {@code Encoder} for an {@code Encoder()}
+   * instance against {@code tf.keras.layers.Layer}.
+   *
+   * <p>The key's concrete type does not answer this for an object of a program-defined class: the
+   * class's synthesized constructor ({@link PythonConstructorFunction}) allocates it as {@link
+   * PythonTypes#object}, and the class shows only as that constructor's declaring class, which this
+   * method reads. An object a library summary allocates, such as a {@code Dense} layer, already has
+   * its modeled class as its concrete type, which this method returns.
+   *
+   * <p>Returns empty for every other key, which means the class is not known, not that there is
+   * none: a constant, a Python scalar of unknown value ({@link #isPythonScalarKey}), a key with no
+   * allocation site, a summary's callable (including a method a summary binds to an object, such as
+   * a dataset's {@code shuffle}), and a summary's generic {@code object}. So is every key allocated
+   * in program code rather than by a constructor: a value the program builds by syntax (a list
+   * display, a function, a class object), and a key the builder allocates at a program instruction,
+   * whose class may well be known, such as the fresh array or tensor of an operator over an array
+   * (wala/ML#1009), a list operation's result (wala/ML#960), a tensor's static shape
+   * (wala/ML#1104), or a slice's result (wala/ML#916).
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return The class whose constructor allocated it, or empty when that is not known.
+   */
+  public static Optional<IClass> allocatedClass(InstanceKey instanceKey) {
+    AllocationSiteInNode site = findAllocationSiteInNode(instanceKey);
+    if (site == null) return Optional.empty();
+    IMethod allocator = site.getNode().getMethod();
+    if (allocator instanceof PythonConstructorFunction)
+      return Optional.of(allocator.getDeclaringClass());
+    // Program code allocates the values it builds by syntax, whose concrete types are their own
+    // kinds, such as a class object typed as its class.
+    if (!allocator.isWalaSynthetic()) return Optional.empty();
+    IClass type = site.concreteType();
+    TypeReference reference = type.getReference();
+    if (reference.equals(PythonTypes.object) || reference.equals(PythonTypes.Root))
+      return Optional.empty();
+    IClass codeBody = type.getClassHierarchy().lookupClass(PythonTypes.CodeBody);
+    // A summary's callable, such as the function class `tf.keras.layers.Dense` names, is a
+    // function object, not an instance of the class its name suggests.
+    if (codeBody != null && type.getClassHierarchy().isSubclassOf(type, codeBody))
+      return Optional.empty();
+    return Optional.of(type);
   }
 
   /**

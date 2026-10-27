@@ -1172,6 +1172,28 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/models/Model")),
           AstMethodReference.fnSelector);
 
+  /**
+   * The modeled class of a Keras layer, {@code tf.keras.layers.Layer}: the class every modeled
+   * built-in layer, such as {@code Dense}, and every program subclass of it extends (<a
+   * href="https://github.com/wala/ML/issues/1165">wala/ML#1165</a>). Check a value's {@linkplain
+   * com.ibm.wala.cast.python.util.Util#allocatedClass allocated class} against it with the class
+   * hierarchy. The modeled {@link #KERAS_MODEL_TYPE} doesn't extend it, although a Keras model is a
+   * layer at run time, so a check for any Keras layer or model checks both.
+   */
+  public static final TypeReference KERAS_LAYER_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/layers/Layer"));
+
+  /**
+   * The modeled class of a Keras model, {@code tf.keras.Model}, which {@code tf.keras.Model},
+   * {@code tf.keras.models.Model} and their aliases resolve to, and which every program subclass of
+   * them extends (<a href="https://github.com/wala/ML/issues/1165">wala/ML#1165</a>). See {@link
+   * #KERAS_LAYER_TYPE}.
+   */
+  public static final TypeReference KERAS_MODEL_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/models/Model"));
+
   public static final TypeReference MODEL_ATTRIBUTE =
       TypeReference.findOrCreate(
           PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/Model/attribute"));
