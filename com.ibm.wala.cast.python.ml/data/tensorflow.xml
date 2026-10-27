@@ -4501,7 +4501,7 @@
     <package name="tensorflow/keras/layers">
       <!-- Each built-in layer below declares `Layer` as its superclass, which opts it in to class-shell materialization (wala/WALA#1957) as `Layer`'s own `super` does, so a program class such as `class BatchNormalization(tf.keras.layers.BatchNormalization)` resolves its base through the built-in layer to `Layer` instead of falling back to `object` (wala/ML#1098). The shells carry their classes' method references (wala/ML#106), so the built-in layers' own `__call__` and `call` bodies keep serving their instances. `Input` is a function, not a layer class, so it declares none. -->
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
-      <!-- A built-in layer builds on its first call, as a user layer does: `Layer.__call__` runs `build` while `self.built` is false, and `build` creates the layer's variables with `self.add_weight` (wala/ML#1145). Each weighted layer's call runs this, so its variable creation is in the call graph wherever the layer is called. It stands for the layer's `build`: one `add_weight` call stands for all of the layer's variables, whose names and shapes are not modeled here, and the layer's `built` state is not written. The call graph cannot say which call to a layer is its first, so a call reaching this is a may-fact. -->
+      <!-- A built-in layer builds on its first call, as a user layer does: `Layer.__call__` runs `build` while `self.built` is false, and `build` creates the layer's variables with `self.add_weight` (wala/ML#1145). Each weighted layer's `__call__` and `build` run this, and its `call` doesn't (wala/ML#1166): calling a built-in layer reaches its `__call__`, and calling an instance of a program subclass reaches the subclass's `call` through the method trampoline, which invokes `self.build` first. So the layer's variable creation is in the call graph wherever the layer is called, and not in a `call` that runs `super().call(...)`. It stands for the layer's `build`: one `add_weight` call stands for all of the layer's variables, whose names and shapes are not modeled here, and the layer's `built` state is not written. The call graph cannot say which call to a layer is its first, so a call reaching this is a may-fact. -->
       <class name="first_call_build" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self layer">
           <new def="add_weight" class="Ltensorflow/keras/layers/Layer/add_weight"/>
@@ -4543,11 +4543,16 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="Conv1D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4559,10 +4564,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="Conv2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4575,10 +4585,15 @@
         </method>
         <!-- Mirrors the `Dense` workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="Flatten" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4601,10 +4616,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="ReLU" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4704,10 +4724,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="ZeroPadding2D" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4752,10 +4777,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="GRU" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4767,10 +4797,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="SimpleRNN" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4782,10 +4817,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="RNN" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4839,8 +4879,6 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <new def="new_states" class="Llist"/>
@@ -4849,6 +4887,13 @@
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
           <return value="res"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="GRUCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4867,8 +4912,6 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <new def="new_states" class="Llist"/>
@@ -4877,6 +4920,13 @@
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="out"/>
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
           <return value="res"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="LSTMCell" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4897,8 +4947,6 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs states training">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_cell_step"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="out"/>
           <call class="Ltensorflow/functions/rnn_cell_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="self" arg2="inputs" numArgs="3" def="carry"/>
@@ -4910,6 +4958,13 @@
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="new_states"/>
           <return value="res"/>
         </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
       </class>
       <class name="Bidirectional" allocatable="true" super="Ltensorflow/keras/layers/Layer">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
@@ -4920,10 +4975,15 @@
           <return value="out"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="Concatenate" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4947,7 +5007,7 @@
           <putfield class="LRoot" field="output_dim" fieldType="LRoot" ref="self" value="output_dim"/>
           <return value="self"/>
         </method>
-        <!-- The first call builds the layer, creating its `embeddings` matrix with `add_weight`, as the other weighted built-in layers' calls do (wala/ML#1145, wala/ML#1168). -->
+        <!-- The first call builds the layer, creating its `embeddings` matrix with `add_weight`, as the other weighted built-in layers' calls do (wala/ML#1145, wala/ML#1168); `call` doesn't, and `build` does (wala/ML#1166). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
@@ -4956,10 +5016,15 @@
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
-          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
+          <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <class name="Dropout" allocatable="true" super="Ltensorflow/keras/layers/Layer">
@@ -4978,9 +5043,14 @@
           <return value="inputs"/>
         </method>
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <return value="inputs"/>
+        </method>
+        <!-- Keras builds the layer in `build`, which `Layer.__call__` runs before the first `call`, so `call` itself builds nothing (wala/ML#1166). A call of an instance of a program subclass dispatches to the subclass's `call` through the method trampoline, which invokes `self.build` first, so the build is reached there, whether or not the subclass's `call` runs `super().call(...)`. -->
+        <method name="build" descriptor="()LRoot;" numArgs="3" paramNames="func self input_shape">
           <new def="build_fn" class="Ltensorflow/keras/layers/first_call_build"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="build_fn" arg1="self" numArgs="2" def="built"/>
-          <return value="inputs"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
         </method>
       </class>
       <!-- The built-in layers TensorFlow 2.9 exports from `tf.keras.layers` that the summaries above do not model, each declared only by its superclass, so a program class subclassing one is a Keras layer whose declared bases reach `Layer` (wala/ML#1127). An alias (the same class at run time, e.g. `MaxPooling2D` for `MaxPool2D`) extends the class it names, so an alias of a modeled layer keeps the layer's modeling; any other layer extends `Layer` directly, since its own ancestors between it and `Layer` are not modeled. -->

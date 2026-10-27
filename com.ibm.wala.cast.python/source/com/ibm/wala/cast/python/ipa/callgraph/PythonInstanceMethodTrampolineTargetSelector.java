@@ -66,6 +66,13 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
   private PythonAnalysisEngine<T> engine;
 
+  /**
+   * Whether the target being resolved serves a call of an instance itself, as {@code layer(x)} is,
+   * which Keras's {@code Layer.__call__} handles by building the layer before its {@code call}
+   * (wala/ML#1166).
+   */
+  private boolean objectCall;
+
   public PythonInstanceMethodTrampolineTargetSelector(
       MethodTargetSelector base, PythonAnalysisEngine<T> engine) {
     super(base);
@@ -101,11 +108,22 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
       IClass callable =
           instance == null ? null : callableOf(receiver.getClassHierarchy(), instance);
       if (callable == null) return null; // not found.
-      receiver = callable;
       LOGGER.finer("Substituting the receiver with one derived from a callable.");
+      boolean outer = this.objectCall;
+      this.objectCall = true;
+      try {
+        return super.getCalleeTarget(caller, site, callable);
+      } finally {
+        this.objectCall = outer;
+      }
     }
 
     return super.getCalleeTarget(caller, site, receiver);
+  }
+
+  @Override
+  protected boolean isObjectCall() {
+    return this.objectCall;
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -164,12 +182,15 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
       // `build`, so without this the sublayers those bodies create have empty points-to sets and
       // every value flowing through them unravels (wala/ML#595). Emitting the invocation
       // unconditionally is safe: a class without a `build` method yields an empty points-to set
-      // for the field read, and the invoke has no targets.
-      if (filter
-          .getReference()
-          .getName()
-          .toString()
-          .endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)) {
+      // for the field read, and the invoke has no targets. Only a call of the layer itself goes
+      // through `Layer.__call__`: `layer.call(x)` and `super().call(x)` run `call` alone, and build
+      // nothing (wala/ML#1166).
+      if (this.objectCall
+          && filter
+              .getReference()
+              .getName()
+              .toString()
+              .endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)) {
         int buildFunction = v1 + 3;
         x.addStatement(
             PythonLanguage.Python.instructionFactory()
