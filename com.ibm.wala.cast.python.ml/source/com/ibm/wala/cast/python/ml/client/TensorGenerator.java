@@ -264,11 +264,11 @@ public abstract class TensorGenerator implements Cloneable {
    * the public surface after an analysis run takes (wala/ML#753), answering {@code onCycle} when
    * the same query is already being evaluated on this thread (<a
    * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>). The resolver converges a cycle
-   * of queries, promoting a member of a nontrivial cycle that stays ⊥ to the unknown-marked
-   * element; on this path nothing iterates, so a cycle through two operations, two nodes, or two φs
-   * recursed until the stack overflowed. The unknown element is the resolver's own answer for a
-   * cycle, and the only sound one for a read that runs once and ships as read: a ⊥ would vanish
-   * from a union and let the other members stand as the whole answer.
+   * of queries by iterating from ⊥; on this path nothing iterates, so a cycle through two
+   * operations, two nodes, or two φs recursed until the stack overflowed. The answer at the first
+   * re-entry is the unknown element, the sound answer for a read that cannot iterate: a ⊥ would
+   * vanish from a union and let the other members stand as the whole answer. The resolver reaches
+   * the unknown element only for a member of a nontrivial cycle that stays ⊥.
    *
    * @param <T> The query's result type.
    * @param builder The {@link PropagationCallGraphBuilder} the query reads.
