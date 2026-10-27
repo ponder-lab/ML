@@ -326,11 +326,18 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    *
    * @param builder The propagation call graph builder used for analysis.
    * @param valueIK A member of the receiver's points-to set.
-   * @return The generator, or {@code null} if the member does not resolve to one.
+   * @return The generator, or {@code null} if the member is not an allocation or does not resolve
+   *     to one.
    */
   private static TensorGenerator receiverGenerator(
       PropagationCallGraphBuilder builder, InstanceKey valueIK) {
-    AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+    AllocationSiteInNode asin;
+    try {
+      asin = getAllocationSiteInNode(valueIK);
+    } catch (IllegalArgumentException e) {
+      // A key that is not an allocation, such as a client-only static shape key, has no generator.
+      return null;
+    }
     if (asin == null) return null;
     // A mapped-dataset receiver is allocated in `map.do()` as a generic `Dataset`, so the default
     // dispatch below would resolve it to a plain `DatasetGenerator` that inherits from `map.do()`'s
@@ -344,8 +351,11 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
         .equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
       return new DatasetMapGenerator(asin.getNode(), asin);
     }
-    // A dataset is allocated in a library summary, whose allocating local has an implicit pointer
-    // key, so its generator is the summary node's own.
+    // A dataset is allocated in a library summary or in a program subclass's synthetic
+    // constructor, whose allocating locals have implicit pointer keys, so its generator is the
+    // allocating node's own. The builder's own allocations in program nodes, such as the fresh
+    // keys at an operator or a list operation's result, never have a dataset type; an allocator
+    // that gives one a dataset type must revisit this.
     return createManualGenerator(asin.getNode(), builder);
   }
 
