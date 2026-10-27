@@ -2592,7 +2592,9 @@ public class TensorGeneratorFactory {
    * The dispatches per builder that depended on their source alone (see {@link DispatchPath}),
    * keyed by the source {@link #findCreator} resolves. Each value holds the builder's points-to set
    * variables, which keep the weak key reachable, so {@link TensorGenerator#clearCaches} removes
-   * the entry.
+   * the entry. Entries are written only while an analysis resolves for the builder (its {@link
+   * WorklistTypeResolver} is active), so a query made after the analysis leaves none behind
+   * (wala/ML#1170).
    */
   private static final Map<PropagationCallGraphBuilder, Map<PointsToSetVariable, Dispatch>>
       DISPATCHES = new WeakHashMap<>();
@@ -2607,6 +2609,18 @@ public class TensorGeneratorFactory {
       PropagationCallGraphBuilder builder) {
     synchronized (DISPATCHES) {
       return DISPATCHES.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+  }
+
+  /**
+   * Whether a builder has memoized dispatches, for tests of their release (wala/ML#1170).
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasDispatches(PropagationCallGraphBuilder builder) {
+    synchronized (DISPATCHES) {
+      return DISPATCHES.containsKey(builder);
     }
   }
 
@@ -2646,7 +2660,13 @@ public class TensorGeneratorFactory {
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
     // source, so return null here rather than dereferencing it in `getGeneratorBody`. wala/ML#614.
     if (source == null) return null;
-    Map<PointsToSetVariable, Dispatch> dispatches = visited.memoizes() ? dispatches(builder) : null;
+    // Memoize only while an analysis is resolving for the builder. A query made after it, such as
+    // `ContainerElements.datasetComponent`, would refill the memo the analysis cleared, and the
+    // entries' values keep the weak key reachable (wala/ML#1170).
+    Map<PointsToSetVariable, Dispatch> dispatches =
+        visited.memoizes() && WorklistTypeResolver.active(builder) != null
+            ? dispatches(builder)
+            : null;
     if (visited.cuts(source)) {
       final PointsToSetVariable cycleSource = source;
       LOGGER.log(

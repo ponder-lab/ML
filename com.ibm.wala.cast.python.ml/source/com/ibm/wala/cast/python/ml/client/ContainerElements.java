@@ -89,6 +89,12 @@ import java.util.stream.Collectors;
  * mutate unrecorded (see {@link #mutations}). A list or tuple a library summary or an operator
  * model allocates reports none: its catalog holds the model's placeholder slots, not its run-time
  * elements. Every other container reports no length.
+ *
+ * <p>A client queries this after the analysis, on the builder the analysis ran on. Those queries
+ * don't keep the builder reachable through the generator memos, which only an analysis in progress
+ * writes (<a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>). A client done with a
+ * builder may still call {@link TensorGenerator#clearCaches} to release any other per-builder memo
+ * deterministically.
  */
 public final class ContainerElements {
 
