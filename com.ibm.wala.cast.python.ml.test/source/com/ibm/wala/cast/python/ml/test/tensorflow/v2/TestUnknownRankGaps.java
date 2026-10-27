@@ -134,9 +134,8 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
-   * An {@code np.zeros} whose shape is {@code len(xs)}.
-   *
-   * <p>TODO: wala/ML#1159: expect rank 1 of {@code float64}, with an unresolved extent.
+   * An {@code np.zeros} whose shape is {@code len(xs)}, an {@code int} of unknown value: rank 1 of
+   * {@code float64}, with an unresolved extent (wala/ML#1159).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -151,7 +150,7 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
         "consume_length",
         1,
         1,
-        Map.of(2, Set.of(UNKNOWN_FLOAT64)));
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**

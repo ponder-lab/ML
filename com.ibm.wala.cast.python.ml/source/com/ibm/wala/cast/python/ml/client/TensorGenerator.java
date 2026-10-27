@@ -67,6 +67,7 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -3021,10 +3022,43 @@ public abstract class TensorGenerator implements Cloneable {
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
     // If the argument shape is not specified.
-    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
-    else
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      // An `int` shape of unknown value, such as `len(xs)`, still allocates rank 1 (wala/ML#1159).
+      if (this.isUnknownIntShapeArgument(builder, valNum))
+        return Set.of(List.of(UnresolvedDim.INSTANCE));
+      return getDefaultShapes(builder);
+    } else
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
       return this.getShapesFromShapeArgument(builder, pointsToSet);
+  }
+
+  /**
+   * Whether a shape argument is a Python {@code int} of unknown value: its points-to set, read
+   * without the client-only mask, holds only the type-level key of {@code int} (wala/ML#1148). Such
+   * a shape allocates rank 1, whatever its value (wala/ML#1159). Read for a source-anchored
+   * generator only, whose argument value number belongs to its own node's IR.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param valNum The shape argument's value number in this generator's node.
+   * @return {@code true} iff the argument holds only an {@code int} of unknown value.
+   */
+  private boolean isUnknownIntShapeArgument(PropagationCallGraphBuilder builder, int valNum) {
+    // For the synthetic generator function, `getArgumentValueNumber` answers with the sentinel
+    // `Integer.MAX_VALUE`, which is not a value number.
+    if (this.getSource() == null || valNum <= 0 || valNum == Integer.MAX_VALUE) return false;
+    OrdinalSet<InstanceKey> pts =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(this.getNode(), valNum));
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts)
+      if (!(ik instanceof ConcreteTypeKey)
+          || !PythonTypes.PYTHON_INT.equals(ik.concreteType().getReference())) return false;
+    return true;
   }
 
   /**
