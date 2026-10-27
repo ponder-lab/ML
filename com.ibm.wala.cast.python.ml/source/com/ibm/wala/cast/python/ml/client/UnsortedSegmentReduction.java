@@ -5,11 +5,14 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -140,10 +143,18 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
 
   /**
    * The leading output axis when {@code num_segments} is not a static constant (wala/ML#1160), by
-   * the criterion of wala/ML#721: a tensor, such as {@code tf.shape(x)[0]}, is a {@link
-   * DynamicDim}, since TensorFlow's static shape reports {@code None} there when the tensor's value
-   * is not known at trace time; any other value, such as a Python {@code int} the analysis did not
-   * compute, is a fixed size, an {@link UnresolvedDim}.
+   * the criterion of wala/ML#721, which follows TensorFlow's static shape.
+   *
+   * <ul>
+   *   <li>An element of a tensor's shape, such as {@code tf.shape(x)[0]}, is the dimension it
+   *       reads: a number when {@code x}'s axis is one, as TensorFlow folds it at trace time; a
+   *       {@link DynamicDim} when that axis is dynamic; and an {@link UnresolvedDim} otherwise. It
+   *       is resolved where the call is made, through the parameters that forward it.
+   *   <li>Failing that, a tensor is a {@link DynamicDim}, since TensorFlow's static shape reports
+   *       {@code None} for a tensor whose value is not known at trace time.
+   *   <li>Any other value, such as a Python {@code int} the analysis did not compute, is a fixed
+   *       size, an {@link UnresolvedDim}.
+   * </ul>
    *
    * @param builder The propagation call graph builder.
    * @return The leading axis.
@@ -151,16 +162,70 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
   private Dimension<?> unresolvedLeadingAxis(PropagationCallGraphBuilder builder) {
     int index = Parameters.NUM_SEGMENTS.getIndex();
     String name = Parameters.NUM_SEGMENTS.getName();
-    // A tensor shows either as a tensor allocation or as a tensor's resolved shape: the element
-    // `tf.shape(x)[0]` reads as a rank-0 tensor while its points-to set is empty.
+    if (this.getSource() != null) {
+      int vn = this.getArgumentValueNumber(builder, index, name, true);
+      // `Integer.MAX_VALUE` is the synthetic generator function's sentinel, not a value number.
+      if (vn > 0 && vn != Integer.MAX_VALUE) {
+        Dimension<?> element =
+            this.resolveElementDimension(builder, this.getNode(), vn, name, MAX_FORWARDING_DEPTH);
+        if (element instanceof NumericDim || element instanceof DynamicDim) return element;
+        if (element != null) return UnresolvedDim.INSTANCE;
+      }
+    }
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
     if (pts != null)
       for (InstanceKey ik : pts)
         if (TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference()))
           return DynamicDim.INSTANCE;
-    Set<List<Dimension<?>>> shapes = this.shapesOfArg(builder, index, name);
-    if (shapes != null && !shapes.isEmpty()) return DynamicDim.INSTANCE;
     return UnresolvedDim.INSTANCE;
+  }
+
+  /** The most parameters a shape element is followed through to the call that computes it. */
+  private static final int MAX_FORWARDING_DEPTH = 4;
+
+  /**
+   * The dimension a value reads as an element of a tensor's shape, such as {@code tf.shape(x)[0]}
+   * (wala/ML#1160), following a parameter to the arguments its callers pass, as the summary's
+   * {@code num_segments} parameter and a helper's own parameter forward it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The node whose IR defines {@code vn}.
+   * @param vn The value's value number in {@code node}'s IR.
+   * @param keyword The keyword a caller may pass the parameter by, or {@code null}.
+   * @param depth How many more parameters to follow.
+   * @return The element's dimension, or {@code null} when some caller's value isn't an element of a
+   *     resolvable shape.
+   */
+  private Dimension<?> resolveElementDimension(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, String keyword, int depth) {
+    if (node.getIR() == null || node.getDU() == null) return null;
+    Dimension<?> element =
+        this.resolveShapeVectorElementDim(builder, node, node.getIR().getSymbolTable(), vn);
+    if (element != null || depth == 0) return element;
+
+    // A parameter: the dimension is the join of the callers' arguments.
+    int parameter = -1;
+    for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+      if (node.getIR().getParameter(i) == vn) parameter = i;
+    if (parameter < 0) return null;
+
+    Set<Dimension<?>> dimensions = HashSetFactory.make();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) return null;
+      int argument = -1;
+      if (keyword != null) argument = call.getUse(keyword);
+      if (argument == -1 && parameter < call.getNumberOfPositionalParameters())
+        argument = call.getUse(parameter);
+      if (argument <= 0) return null;
+      Dimension<?> dimension =
+          this.resolveElementDimension(builder, callerInvoke.fst, argument, null, depth - 1);
+      if (dimension == null) return null;
+      dimensions.add(dimension);
+    }
+    if (dimensions.isEmpty()) return null;
+    if (dimensions.size() == 1) return dimensions.iterator().next();
+    return dimensions.contains(DynamicDim.INSTANCE) ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE;
   }
 
   /**

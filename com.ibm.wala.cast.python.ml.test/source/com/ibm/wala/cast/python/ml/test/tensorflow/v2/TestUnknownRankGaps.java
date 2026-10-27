@@ -158,8 +158,9 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
-   * An unsorted segment sum whose {@code num_segments} is {@code tf.shape(x)[0]}, a tensor, so its
-   * leading axis is dynamic and its trailing axis is {@code data}'s 6 (wala/ML#1160).
+   * An unsorted segment sum whose {@code num_segments} is {@code tf.shape(x)[0]} over an {@code x}
+   * of static shape {@code (5, 6)}, forwarded through a helper's parameter: TensorFlow's static
+   * shape folds it to 5, as the element read does (wala/ML#1160).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -172,6 +173,27 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
     test(
         "tf2_test_segment_runtime_count.py",
         "consume_direct",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 6))));
+  }
+
+  /**
+   * An unsorted segment sum whose {@code num_segments} is {@code tf.shape(inputs)[0]} over a Keras
+   * input of a dynamic batch axis: TensorFlow's static shape reports {@code None} there, so the
+   * leading axis is dynamic (wala/ML#721, wala/ML#1160).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentSumOfDynamicCount()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_segment_runtime_count.py",
+        "consume_dynamic",
         1,
         1,
         Map.of(2, Set.of(DYNAMIC_6_FLOAT32)));
@@ -202,7 +224,9 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
 
   /**
    * A softmax over a segment reduction chosen by a branch, whose {@code num_segments} is {@code
-   * tf.shape(x)[0]}: rank 2, a dynamic leading axis and 6 (wala/ML#1160).
+   * tf.shape(x)[0]}: rank 2, with 6 as its trailing axis (wala/ML#1160). At run time the leading
+   * axis is 5, but these reductions are anchored on their summaries' own nodes rather than on a
+   * source, so the element isn't read through the callers and the axis is unresolved.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -217,7 +241,9 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
         "consume_chosen",
         1,
         1,
-        Map.of(2, Set.of(DYNAMIC_6_FLOAT32)));
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
   }
 
   /**

@@ -15,6 +15,10 @@ def consume_counted(x):
     pass
 
 
+def consume_dynamic(x):
+    pass
+
+
 def aggregate(per_type, targets, num_nodes, aggr):
     if aggr == "sum":
         fn = tf.math.unsorted_segment_sum
@@ -49,3 +53,12 @@ xs = [1, 2, 3, 4, 5]
 counted = tf.math.unsorted_segment_sum(tf.ones([4, 6]), edges[:, 1], len(xs))
 assert counted.shape == (5, 6)
 consume_counted(counted)
+
+# A `num_segments` read off a tensor whose leading axis is dynamic: TensorFlow's static shape reports
+# `None` there.
+inputs = tf.keras.Input(shape=(6,))
+dynamic = tf.math.unsorted_segment_sum(
+    tf.ones([4, 6]), edges[:, 1], tf.shape(inputs)[0]
+)
+assert dynamic.shape.as_list() == [None, 6]
+consume_dynamic(dynamic)
