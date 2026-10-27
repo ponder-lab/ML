@@ -3523,4 +3523,44 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1))));
   }
+
+  /**
+   * {@code np.vstack} over two matrices joins them along their first axis: {@code (6, 3)} of {@code
+   * float64} (wala/ML#1159).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpVstackMatrices()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_vstack.py",
+        "consume_matrices",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 6, 3))));
+  }
+
+  /**
+   * {@code np.vstack} over two 1-D arrays raises each to a row first: {@code (2, 3)} of {@code
+   * float64}, not the {@code (6,)} a concatenation gives (wala/ML#1159).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpVstackRows()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_vstack.py",
+        "consume_rows",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 3))));
+  }
 }

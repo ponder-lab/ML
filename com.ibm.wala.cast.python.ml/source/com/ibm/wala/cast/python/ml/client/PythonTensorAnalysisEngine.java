@@ -935,6 +935,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // the sizes has an int's type-level key as its result (wala/ML#1149). An axis of unknown size
     // is `None` at run time, which the key does not cover.
     elementTypes.put(TensorFlowTypes.STATIC_TENSOR_SHAPE, PythonTypes.PYTHON_INT);
+    // So is an ndarray's shape's element, `a.shape[k]` (wala/ML#1159).
+    elementTypes.put(NumpyTypes.STATIC_ARRAY_SHAPE, PythonTypes.PYTHON_INT);
     builder.setFreshElementTypes(elementTypes);
     // The `dict` that `tf.data.Dataset.map` hands its function beside the receiver exists only when
     // the receiver's element structure may be a dict, so a map function over a dataset of any other
@@ -966,6 +968,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     shapeTypes.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
       shapeTypes.put(component, TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    // An ndarray's `shape` attribute reads its shape, a tuple of Python ints, for points-to clients
+    // only, as a tensor's does (wala/ML#1159).
+    shapeTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.STATIC_ARRAY_SHAPE);
+    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
+      shapeTypes.put(array, NumpyTypes.STATIC_ARRAY_SHAPE);
     builder.setFreshAttributeTypes(Map.of("shape", shapeTypes));
     builder.setFreshArrayAttributes(
         Map.of(

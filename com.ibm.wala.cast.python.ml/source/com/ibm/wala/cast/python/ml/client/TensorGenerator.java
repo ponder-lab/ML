@@ -11977,6 +11977,8 @@ public abstract class TensorGenerator implements Cloneable {
       return new NpOnes(node);
     } else if (type.equals(NumpyTypes.CONCATENATE.getDeclaringClass())) {
       return new NpConcatenate(node);
+    } else if (type.equals(NumpyTypes.VSTACK.getDeclaringClass())) {
+      return new NpVstack(node);
     } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
       return new NpZeros(node);
     } else if (type.equals(NumpyTypes.FULL.getDeclaringClass())) {

@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.types;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
@@ -54,6 +55,20 @@ public class NumpyTypes extends PythonTypes {
   public static final TypeReference NDARRAY_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lnumpy/ndarray"));
 
+  /**
+   * The shape an ndarray's {@code shape} attribute reads, a tuple whose elements are Python {@code
+   * int}s (<a href="https://github.com/wala/ML/issues/1159">wala/ML#1159</a>), as {@link
+   * TensorFlowTypes#STATIC_TENSOR_SHAPE} is a tensor's.
+   */
+  public static final TypeReference STATIC_ARRAY_SHAPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lnumpy/StaticArrayShape"));
+
+  static {
+    // The array shape is for points-to clients only, as a tensor's static shape is (wala/ML#1104):
+    // the generators read an array's shape structurally, through `Util.withoutClientOnlyKeys`.
+    Util.registerClientOnlyType(STATIC_ARRAY_SHAPE);
+  }
+
   public static final TypeReference D_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lnumpy/dtype"));
 
@@ -83,6 +98,15 @@ public class NumpyTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String CONCATENATE_SIGNATURE = "np.concatenate()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.vstack.html (wala/ML#1159). */
+  public static final MethodReference VSTACK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/vstack")),
+          AstMethodReference.fnSelector);
+
+  private static final String VSTACK_SIGNATURE = "np.vstack()";
 
   /** https://numpy.org/doc/stable/reference/generated/numpy.outer.html (wala/ML#1008). */
   public static final MethodReference OUTER =
@@ -547,6 +571,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(FULL.getDeclaringClass(), FULL_SIGNATURE),
           Map.entry(FULL_LIKE.getDeclaringClass(), FULL_LIKE_SIGNATURE),
           Map.entry(CONCATENATE.getDeclaringClass(), CONCATENATE_SIGNATURE),
+          Map.entry(VSTACK.getDeclaringClass(), VSTACK_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(NDARRAY_CONSTRUCTOR.getDeclaringClass(), NDARRAY_CONSTRUCTOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),
