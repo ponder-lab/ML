@@ -213,10 +213,17 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, node)) {
       if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) return null;
+      // A synthetic caller, such as a method trampoline, need not pass its arguments in the slots
+      // of the body's parameters.
+      if (callerInvoke.fst.getMethod().isWalaSynthetic()) return null;
       int argument = -1;
       if (keyword != null) argument = call.getUse(keyword);
-      if (argument == -1 && parameter < call.getNumberOfPositionalParameters())
-        argument = call.getUse(parameter);
+      if (argument == -1) {
+        // A starred argument at or before the parameter's slot unpacks a sequence of unknown
+        // length, so the slot's use is not the argument the parameter binds (wala/ML#751).
+        for (int starred : call.getStarredPositions()) if (starred <= parameter) return null;
+        if (parameter < call.getNumberOfPositionalParameters()) argument = call.getUse(parameter);
+      }
       if (argument <= 0) return null;
       Dimension<?> dimension =
           this.resolveElementDimension(builder, callerInvoke.fst, argument, null, depth - 1);

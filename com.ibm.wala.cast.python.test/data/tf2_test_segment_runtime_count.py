@@ -19,6 +19,18 @@ def consume_dynamic(x):
     pass
 
 
+def consume_starred(x):
+    pass
+
+
+MESSAGES = tf.ones([4, 6])
+SEGMENT_IDS = tf.constant([1, 2, 3, 4])
+
+
+def aggregate_starred(first, second, num_nodes, extra):
+    return tf.math.unsorted_segment_sum(MESSAGES, SEGMENT_IDS, num_nodes)
+
+
 def aggregate(per_type, targets, num_nodes, aggr):
     if aggr == "sum":
         fn = tf.math.unsorted_segment_sum
@@ -62,3 +74,11 @@ dynamic = tf.math.unsorted_segment_sum(
 )
 assert dynamic.shape.as_list() == [None, 6]
 consume_dynamic(dynamic)
+
+# A `num_segments` passed after a starred argument: `num_nodes` binds `tf.shape(x)[0]`, 5, while the
+# call's fourth positional slot holds `tf.shape(y)[0]`, 7.
+y = tf.ones([7, 2])
+leading = (0, 0)
+starred = aggregate_starred(*leading, tf.shape(x)[0], tf.shape(y)[0])
+assert starred.shape == (5, 6)
+consume_starred(starred)

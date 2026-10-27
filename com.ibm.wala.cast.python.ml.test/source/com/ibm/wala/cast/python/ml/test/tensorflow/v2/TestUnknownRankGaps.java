@@ -200,6 +200,31 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
+   * An unsorted segment sum whose {@code num_segments} reaches the helper after a starred argument,
+   * {@code aggregate_starred(*leading, tf.shape(x)[0], tf.shape(y)[0])}: the parameter's slot in
+   * the call holds {@code tf.shape(y)[0]}, 7, while the parameter binds {@code tf.shape(x)[0]}, 5,
+   * so the element isn't read through the call and the leading axis is unresolved (wala/ML#751,
+   * wala/ML#1160).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentSumAfterStarredArgument()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_segment_runtime_count.py",
+        "consume_starred",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
    * An unsorted segment sum whose {@code num_segments} is {@code len(xs)}, a Python {@code int} of
    * unknown value: a fixed size the analysis did not compute, so the leading axis is unresolved
    * (wala/ML#721, wala/ML#1160).
