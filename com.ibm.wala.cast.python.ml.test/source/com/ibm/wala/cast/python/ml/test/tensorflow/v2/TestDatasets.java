@@ -2870,6 +2870,10 @@ public class TestDatasets extends AbstractTensorTest {
    * component, not as one fixed component of the receiver's element (wala/ML#1088). At run time the
    * fixture's flag picks the first, of shape {@code (4,)}; the analysis cannot read the flag.
    *
+   * <p>This pins the whole-element read, which joins the returns, and does not reach the decline in
+   * {@link com.ibm.wala.cast.python.ml.client.DatasetMapGenerator}'s returned-parameter search;
+   * {@link #testMapReturnsDisagreePathRead()} is that decline's witness.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
