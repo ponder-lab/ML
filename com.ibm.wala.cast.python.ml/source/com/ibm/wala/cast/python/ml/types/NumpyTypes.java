@@ -99,6 +99,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String CONCATENATE_SIGNATURE = "np.concatenate()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.vstack.html (wala/ML#1159). */
+  public static final MethodReference VSTACK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/vstack")),
+          AstMethodReference.fnSelector);
+
+  private static final String VSTACK_SIGNATURE = "np.vstack()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.outer.html (wala/ML#1008). */
   public static final MethodReference OUTER =
       MethodReference.findOrCreate(
@@ -562,6 +571,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(FULL.getDeclaringClass(), FULL_SIGNATURE),
           Map.entry(FULL_LIKE.getDeclaringClass(), FULL_LIKE_SIGNATURE),
           Map.entry(CONCATENATE.getDeclaringClass(), CONCATENATE_SIGNATURE),
+          Map.entry(VSTACK.getDeclaringClass(), VSTACK_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(NDARRAY_CONSTRUCTOR.getDeclaringClass(), NDARRAY_CONSTRUCTOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),

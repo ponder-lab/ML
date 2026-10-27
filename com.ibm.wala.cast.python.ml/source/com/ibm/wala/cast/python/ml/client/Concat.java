@@ -128,6 +128,17 @@ public class Concat extends TensorGenerator {
   }
 
   /**
+   * The shapes an element takes part in the concatenation with. A concatenation takes each element
+   * as it is; {@link NpVstack} first raises an element of rank below 2 to a row (wala/ML#1159).
+   *
+   * @param shapes An element's possible shapes.
+   * @return The shapes the concatenation joins.
+   */
+  protected Set<List<Dimension<?>>> promoteElementShapes(Set<List<Dimension<?>>> shapes) {
+    return shapes;
+  }
+
+  /**
    * The axis used when the call supplies none: {@code tf.concat}'s documented default. Overridable
    * because the Keras concatenate family defaults to {@code -1} instead (wala/ML#840).
    *
@@ -295,7 +306,7 @@ public class Concat extends TensorGenerator {
     ShapeResult contents = this.getShapeResultOfValue(builder, contentsPts, false);
     if (contents.isBottom()) return ShapeResult.bottom();
     if (contents.members().isEmpty()) return ShapeResult.unknown();
-    Set<List<Dimension<?>>> shapes = contents.members();
+    Set<List<Dimension<?>>> shapes = this.promoteElementShapes(contents.members());
 
     List<Dimension<?>> template = null;
     for (List<Dimension<?>> shape : shapes) {
@@ -379,7 +390,7 @@ public class Concat extends TensorGenerator {
               || this.getShapeResultOfValue(builder, elemPts, true).hasUnknown()))
         anyUnknown = true;
       else if (elemResult.hasUnknown() || elemResult.members().isEmpty()) anyUnknown = true;
-      else candidates.add(elemResult.members());
+      else candidates.add(this.promoteElementShapes(elemResult.members()));
     }
 
     long combinations = 1;

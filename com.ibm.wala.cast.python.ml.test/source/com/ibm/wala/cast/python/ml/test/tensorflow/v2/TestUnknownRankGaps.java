@@ -118,12 +118,8 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
 
   /**
    * An {@code np.zeros} whose shape is an ndarray's {@code .shape[0]}, where the ndarray is the
-   * result of {@code np.vstack}, which has no summary, so it has no points-to member and its {@code
-   * shape} reads nothing. Over an array the analysis models, the same read gives rank 1 ({@link
-   * #testZerosOfModeledShapeElement()}).
-   *
-   * <p>TODO: wala/ML#1159: expect rank 1 of {@code float64}, with an unresolved extent, once {@code
-   * np.vstack} allocates an array.
+   * result of {@code np.vstack}: an ndarray's shape is a tuple of Python {@code int}s, so this is
+   * rank 1 of {@code float64}, with an unresolved extent (wala/ML#1159).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -134,7 +130,11 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   public void testZerosOfShapeElement()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_zeros_unknown_int.py", "consume_zeros", 1, 1, Map.of(2, Set.of(UNKNOWN_FLOAT64)));
+        "tf2_test_zeros_unknown_int.py",
+        "consume_zeros",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**

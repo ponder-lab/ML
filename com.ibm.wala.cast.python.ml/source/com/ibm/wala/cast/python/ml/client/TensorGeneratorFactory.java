@@ -3392,6 +3392,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, NumpyTypes.ONES.getDeclaringClass())) return new NpOnes(source);
     else if (isType(calledFunction, NumpyTypes.CONCATENATE.getDeclaringClass()))
       return new NpConcatenate(source);
+    else if (isType(calledFunction, NumpyTypes.VSTACK.getDeclaringClass()))
+      return new NpVstack(source);
     else if (isType(calledFunction, NumpyTypes.ZEROS.getDeclaringClass()))
       return new NpZeros(source);
     else if (isType(calledFunction, NumpyTypes.FULL.getDeclaringClass())) return new NpFull(source);
