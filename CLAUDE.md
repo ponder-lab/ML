@@ -175,6 +175,8 @@ Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When addin
 
 The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`, `testModelCallConsume`) is the idiom for "this test documents a known failure, tracked by issue #N." When adding one, always include a `TODO:` line in the Javadoc naming the blocking issue — without it, the suppression is indistinguishable from an intentional positive negative-assertion (as in `testDecoratedMethod9`) and tooling can't distinguish the two. When the underlying issue is resolved, flip the annotation to plain `@Test` and remove the `TODO` to convert the test into a positive regression guard.
 
+**When more than one fixed result would be acceptable, pin today's reading instead.** Use a plain `@Test` that asserts what the analysis reads now (often ⊤), with a `TODO: wala/ML#N` line naming the issue and the type expected once fixed. An expected failure stays green on any change, including a fix that gives the wrong answer or a regression to ⊥, while a positive pin goes red on every change and forces whoever moves it to write the new expectation. `TestUnknownRankGaps` is the precedent: wala/ML#1158's fix may give `52` or `Unresolved`, and both are correct.
+
 ## Commit style
 
 Per `CONTRIBUTING.md`:
