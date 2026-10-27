@@ -1,11 +1,19 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -20,11 +28,12 @@ import java.util.Set;
  * <p>Output dtype inherits from the {@code data} (arg 0) input. Output shape is {@code
  * [num_segments] ++ data.shape[segment_ids.ndim:]}: the leading axis is {@code num_segments} and
  * the trailing axes are {@code data}'s axes after the ones consumed by {@code segment_ids}. That
- * shape is recovered when {@code num_segments} is a static constant and the {@code data}/{@code
- * segment_ids} shapes (hence {@code segment_ids}'s rank) are known; otherwise — notably when {@code
- * num_segments} is a runtime value (e.g. a {@code tf.shape(...)} result, the common case in a GNN
- * where it is the node count) — the shape is left at ⊤ rather than mis-forwarding {@code data}'s
- * shape. See <a href="https://github.com/wala/ML/issues/570">wala/ML#570</a> and <a
+ * shape is recovered when the {@code data}/{@code segment_ids} shapes (hence {@code segment_ids}'s
+ * rank) are known, and is left at ⊤ otherwise rather than mis-forwarding {@code data}'s shape. A
+ * {@code num_segments} that is not a static constant, notably a runtime value such as a {@code
+ * tf.shape(...)} result, the common case in a GNN where it is the node count, still gives the
+ * leading axis, of a size the analysis did not compute (wala/ML#1160). See <a
+ * href="https://github.com/wala/ML/issues/570">wala/ML#570</a> and <a
  * href="https://github.com/wala/ML/issues/582">wala/ML#582</a>.
  *
  * @see <a
@@ -87,25 +96,27 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Computes the output shape {@code [num_segments] ++ data.shape[segment_ids.ndim:]} when {@code
-   * num_segments} resolves to a static constant and the {@code data}/{@code segment_ids} shapes are
-   * known, and returns ⊤ ({@code null}) otherwise. The leading axis becomes the constant {@code
-   * num_segments}; the trailing axes are {@code data}'s dimensions after the ones consumed by
-   * {@code segment_ids} (whose rank is read from its shape). Dtype still inherits from {@code data}
-   * via the inherited {@link #getDefaultDTypes}.
+   * Computes the output shape {@code [num_segments] ++ data.shape[segment_ids.ndim:]} when the
+   * {@code data}/{@code segment_ids} shapes are known, and returns ⊤ ({@code null}) otherwise. The
+   * leading axis is {@code num_segments}'s static value, or, when it has none, the axis {@link
+   * #unresolvedLeadingAxis} gives (wala/ML#1160); the trailing axes are {@code data}'s dimensions
+   * after the ones consumed by {@code segment_ids} (whose rank is read from its shape). Dtype still
+   * inherits from {@code data} via the inherited {@link #getDefaultDTypes}.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The set of output shapes, or {@code null} (⊤) when {@code num_segments} is not a static
-   *     constant or the input shapes / {@code segment_ids}'s rank cannot be resolved.
+   * @return The set of output shapes, or {@code null} (⊤) when the input shapes or {@code
+   *     segment_ids}'s rank cannot be resolved.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // The leading output axis is num_segments; recoverable only when it is a static constant. A
-    // runtime num_segments (e.g. a node count via tf.shape) leaves the shape at ⊤.
+    // The leading output axis is num_segments. A num_segments that is not a static constant, such
+    // as a node count read with tf.shape, still adds that one axis, so the rank and the trailing
+    // axes are kept (wala/ML#1160).
     Integer numSegments =
         this.resolveStaticIntArgument(
             builder, Parameters.NUM_SEGMENTS.getIndex(), Parameters.NUM_SEGMENTS.getName());
-    if (numSegments == null) return null;
+    Dimension<?> leading =
+        numSegments != null ? new NumericDim(numSegments) : this.unresolvedLeadingAxis(builder);
 
     // The number of leading data axes consumed by segment_ids is segment_ids's rank.
     Integer segmentIdsRank =
@@ -123,11 +134,105 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
       // segment_ids indexes data's leading axes, so data must be at least that rank.
       if (dataShape == null || dataShape.size() < segmentIdsRank) return null;
       List<Dimension<?>> outputShape = new ArrayList<>(dataShape.size() - segmentIdsRank + 1);
-      outputShape.add(new NumericDim(numSegments));
+      outputShape.add(leading);
       outputShape.addAll(dataShape.subList(segmentIdsRank, dataShape.size()));
       result.add(outputShape);
     }
     return result;
+  }
+
+  /**
+   * The leading output axis when {@code num_segments} is not a static constant (wala/ML#1160), by
+   * the criterion of wala/ML#721, which follows TensorFlow's static shape.
+   *
+   * <ul>
+   *   <li>An element of a tensor's shape, such as {@code tf.shape(x)[0]}, is the dimension it
+   *       reads: a number when {@code x}'s axis is one, as TensorFlow folds it at trace time; a
+   *       {@link DynamicDim} when that axis is dynamic; and an {@link UnresolvedDim} otherwise. It
+   *       is resolved where the call is made, through the parameters that forward it.
+   *   <li>Failing that, a tensor is a {@link DynamicDim}, since TensorFlow's static shape reports
+   *       {@code None} for a tensor whose value is not known at trace time.
+   *   <li>Any other value, such as a Python {@code int} the analysis did not compute, is a fixed
+   *       size, an {@link UnresolvedDim}.
+   * </ul>
+   *
+   * @param builder The propagation call graph builder.
+   * @return The leading axis.
+   */
+  private Dimension<?> unresolvedLeadingAxis(PropagationCallGraphBuilder builder) {
+    int index = Parameters.NUM_SEGMENTS.getIndex();
+    String name = Parameters.NUM_SEGMENTS.getName();
+    if (this.getSource() != null) {
+      int vn = this.getArgumentValueNumber(builder, index, name, true);
+      // `Integer.MAX_VALUE` is the synthetic generator function's sentinel, not a value number.
+      if (vn > 0 && vn != Integer.MAX_VALUE) {
+        Dimension<?> element =
+            this.resolveElementDimension(builder, this.getNode(), vn, name, MAX_FORWARDING_DEPTH);
+        if (element instanceof NumericDim || element instanceof DynamicDim) return element;
+        if (element != null) return UnresolvedDim.INSTANCE;
+      }
+    }
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
+    if (pts != null)
+      for (InstanceKey ik : pts)
+        if (TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference()))
+          return DynamicDim.INSTANCE;
+    return UnresolvedDim.INSTANCE;
+  }
+
+  /** The most parameters a shape element is followed through to the call that computes it. */
+  private static final int MAX_FORWARDING_DEPTH = 4;
+
+  /**
+   * The dimension a value reads as an element of a tensor's shape, such as {@code tf.shape(x)[0]}
+   * (wala/ML#1160), following a parameter to the arguments its callers pass, as the summary's
+   * {@code num_segments} parameter and a helper's own parameter forward it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The node whose IR defines {@code vn}.
+   * @param vn The value's value number in {@code node}'s IR.
+   * @param keyword The keyword a caller may pass the parameter by, or {@code null}.
+   * @param depth How many more parameters to follow.
+   * @return The element's dimension, or {@code null} when some caller's value isn't an element of a
+   *     resolvable shape.
+   */
+  private Dimension<?> resolveElementDimension(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, String keyword, int depth) {
+    if (node.getIR() == null || node.getDU() == null) return null;
+    Dimension<?> element =
+        this.resolveShapeVectorElementDim(builder, node, node.getIR().getSymbolTable(), vn);
+    if (element != null || depth == 0) return element;
+
+    // A parameter: the dimension is the join of the callers' arguments.
+    int parameter = -1;
+    for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+      if (node.getIR().getParameter(i) == vn) parameter = i;
+    if (parameter < 0) return null;
+
+    Set<Dimension<?>> dimensions = HashSetFactory.make();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction call)) return null;
+      // A synthetic caller, such as a method trampoline, need not pass its arguments in the slots
+      // of the body's parameters.
+      if (callerInvoke.fst.getMethod().isWalaSynthetic()) return null;
+      int argument = -1;
+      if (keyword != null) argument = call.getUse(keyword);
+      if (argument == -1) {
+        // A starred argument at or before the parameter's slot unpacks a sequence of unknown
+        // length, so the slot's use is not the argument the parameter binds (wala/ML#751).
+        for (int starred : call.getStarredPositions()) if (starred <= parameter) return null;
+        if (parameter < call.getNumberOfPositionalParameters()) argument = call.getUse(parameter);
+      }
+      if (argument <= 0) return null;
+      Dimension<?> dimension =
+          this.resolveElementDimension(builder, callerInvoke.fst, argument, null, depth - 1);
+      if (dimension == null) return null;
+      dimensions.add(dimension);
+    }
+    if (dimensions.isEmpty()) return null;
+    if (dimensions.size() == 1) return dimensions.iterator().next();
+    return dimensions.contains(DynamicDim.INSTANCE) ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE;
   }
 
   /**
