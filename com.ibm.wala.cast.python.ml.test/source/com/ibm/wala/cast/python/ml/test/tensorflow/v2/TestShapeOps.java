@@ -3563,4 +3563,44 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 3))));
   }
+
+  /**
+   * An {@code np.zeros} whose shape argument is a value of unknown kind, here a {@code json.loads}
+   * result, has an unknown shape: it may be an {@code int} or a sequence (wala/ML#1159).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testZerosOfUnknownKind()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_shape_kinds.py",
+        "consume_unknown",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
+  }
+
+  /**
+   * An {@code np.zeros} whose shape argument may be an {@code int} of unknown value or a tensor's
+   * static shape has an unknown shape, not rank 1 (wala/ML#1159).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testZerosOfIntOrShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_shape_kinds.py",
+        "consume_int_or_shape",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
+  }
 }

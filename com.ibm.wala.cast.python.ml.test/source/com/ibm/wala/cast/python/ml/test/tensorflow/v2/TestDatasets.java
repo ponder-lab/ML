@@ -2864,4 +2864,52 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
   }
+
+  /**
+   * A {@code map} function whose returns pass different parameters through reads as either
+   * component, not as one fixed component of the receiver's element (wala/ML#1088). At run time the
+   * fixture's flag picks the first, of shape {@code (4,)}; the analysis cannot read the flag.
+   *
+   * <p>This pins the whole-element read, which joins the returns, and does not reach the decline in
+   * {@link com.ibm.wala.cast.python.ml.client.DatasetMapGenerator}'s returned-parameter search;
+   * {@link #testMapReturnsDisagreePathRead()} is that decline's witness.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMapReturnsDisagree()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_map_returns_disagree.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4), TensorType.of(FLOAT_32, 3))));
+  }
+
+  /**
+   * A path read into the element of a {@code map} whose returns pass different parameters through,
+   * the pair or the label: the element is not one fixed component of the receiver's element, so its
+   * first part reads as a tensor of unknown type, not as the pair's first component (wala/ML#1088).
+   * At run time the fixture's flag picks the pair, whose first component is {@code (4,)}; the
+   * analysis cannot read the flag.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMapReturnsDisagreePathRead()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_map_returns_disagree.py",
+        "consume_first",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
 }

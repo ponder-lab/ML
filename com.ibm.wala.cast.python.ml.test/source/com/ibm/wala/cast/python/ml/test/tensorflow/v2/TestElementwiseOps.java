@@ -2929,4 +2929,70 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
   }
+
+  /**
+   * A tensor scaled by a parameter whose callers pass a number computed from a {@code range}
+   * element and a value of unknown kind, a {@code json.loads} result: not every caller passes a
+   * Python number, so the parameter is not read as one, and the product, at the call passing the
+   * unknown value, is a tensor of unknown shape (wala/ML#1039). At run time the loaded value is the
+   * number {@code 2} and the product is {@code (3,)}; the analysis cannot read the string.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScaleByParameterOfUnknownKind()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scale_by_parameter_kinds.py",
+        "consume_loaded",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /**
+   * The control for {@link #testScaleByParameterOfUnknownKind()}: at the call passing a number from
+   * a {@code range} element, the product keeps the tensor's shape (wala/ML#1039).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScaleByRangeNumber()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scale_by_parameter_kinds.py",
+        "consume_counted",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
+
+  /**
+   * A tensor scaled by the elements of a parameter that one caller passes a {@code range} and
+   * another a {@code json.loads} result: not every caller passes a {@code range}, so the element is
+   * not shown to be a Python number, and the product reads both the tensor's shape and an unknown
+   * one (wala/ML#1039). At run time both lists hold numbers and the product is {@code (3,)}; the
+   * analysis cannot read the string.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScaleByElementOfParameterOfUnknownKind()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scale_by_iterated_parameter.py",
+        "consume_each",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3), new TensorType(FLOAT_32, null))));
+  }
 }

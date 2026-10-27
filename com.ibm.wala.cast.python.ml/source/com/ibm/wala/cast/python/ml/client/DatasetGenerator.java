@@ -289,12 +289,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     if (receiverPTS == null || receiverPTS.isEmpty()) return null;
     List<TensorGenerator> ret = new ArrayList<>();
     for (InstanceKey valueIK : receiverPTS) {
-      TensorGenerator generator;
-      try {
-        generator = receiverGenerator(builder, valueIK);
-      } catch (IllegalArgumentException e) {
-        return null;
-      }
+      TensorGenerator generator = receiverGenerator(builder, valueIK);
       if (generator == null) return null;
       if (!ret.contains(generator)) ret.add(generator);
     }
@@ -331,11 +326,18 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    *
    * @param builder The propagation call graph builder used for analysis.
    * @param valueIK A member of the receiver's points-to set.
-   * @return The generator, or {@code null} if the member does not resolve to one.
+   * @return The generator, or {@code null} if the member is not an allocation or does not resolve
+   *     to one.
    */
   private static TensorGenerator receiverGenerator(
       PropagationCallGraphBuilder builder, InstanceKey valueIK) {
-    AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+    AllocationSiteInNode asin;
+    try {
+      asin = getAllocationSiteInNode(valueIK);
+    } catch (IllegalArgumentException e) {
+      // A key that is not an allocation, such as a client-only static shape key, has no generator.
+      return null;
+    }
     if (asin == null) return null;
     // A mapped-dataset receiver is allocated in `map.do()` as a generic `Dataset`, so the default
     // dispatch below would resolve it to a plain `DatasetGenerator` that inherits from `map.do()`'s
@@ -349,17 +351,12 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
         .equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
       return new DatasetMapGenerator(asin.getNode(), asin);
     }
-    int vn = findDefinition(asin.getNode(), asin);
-    if (vn <= 0) return null;
-    PointerKey pk =
-        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(asin.getNode(), vn);
-    PointsToSetVariable var = null;
-    if (!builder.getPropagationSystem().isImplicit(pk)) {
-      var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
-    }
-    return var != null
-        ? TensorGeneratorFactory.getGenerator(var, builder)
-        : createManualGenerator(asin.getNode(), builder);
+    // A dataset is allocated in a library summary or in a program subclass's synthetic
+    // constructor, whose allocating locals have implicit pointer keys, so its generator is the
+    // allocating node's own. The builder's own allocations in program nodes, such as the fresh
+    // keys at an operator or a list operation's result, never have a dataset type; an allocator
+    // that gives one a dataset type must revisit this.
+    return createManualGenerator(asin.getNode(), builder);
   }
 
   @Override
