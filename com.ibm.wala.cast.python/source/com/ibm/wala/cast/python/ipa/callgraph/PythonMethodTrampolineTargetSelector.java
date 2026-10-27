@@ -34,12 +34,17 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
    * @param receiver The {@link IClass} being dispatched on.
    * @param positionalParameterCount The call's number of positional parameters.
    * @param keywordNames The call's keyword argument names.
+   * @param starredPositions The call's starred positional slots.
+   * @param objectCall Whether the call calls the object the method is bound to, as {@code layer(x)}
+   *     does, rather than reading the method off it, as {@code layer.call(x)} and {@code
+   *     super().call(x)} do (wala/ML#1166).
    */
   protected record TrampolineKey(
       IClass receiver,
       int positionalParameterCount,
       Set<String> keywordNames,
-      List<Integer> starredPositions) {}
+      List<Integer> starredPositions,
+      boolean objectCall) {}
 
   protected final MethodTargetSelector base;
 
@@ -114,7 +119,19 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
         receiver,
         call.getNumberOfPositionalParameters(),
         Set.copyOf(call.getKeywords()),
-        starredPositions(call));
+        starredPositions(call),
+        this.isObjectCall());
+  }
+
+  /**
+   * Whether the trampoline being resolved serves a call of the object its method is bound to, as
+   * {@code layer(x)} is, rather than a call of the method read off the object (wala/ML#1166). The
+   * two get distinct trampoline bodies.
+   *
+   * @return {@code true} iff the call being resolved calls the object itself.
+   */
+  protected boolean isObjectCall() {
+    return false;
   }
 
   /**
@@ -131,7 +148,8 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
     return TRAMPOLINE_METHOD_NAME
         + call.getNumberOfPositionalParameters()
         + call.getKeywords().stream().sorted().map(k -> "$" + k).collect(joining())
-        + starredPositions(call).stream().map(p -> "$star" + p).collect(joining());
+        + starredPositions(call).stream().map(p -> "$star" + p).collect(joining())
+        + (this.isObjectCall() ? "$object" : "");
   }
 
   /**
