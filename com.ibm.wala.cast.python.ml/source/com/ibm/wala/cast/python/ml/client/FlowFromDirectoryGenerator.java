@@ -254,6 +254,27 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
       CLASS_AXIS_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * Clears the memoized class axes of a builder; its keys hold the builder's call-graph nodes,
+   * which keep the weak key reachable (<a
+   * href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>).
+   *
+   * @param builder The builder.
+   */
+  static void clearClassAxes(PropagationCallGraphBuilder builder) {
+    CLASS_AXIS_CACHE.remove(builder);
+  }
+
+  /**
+   * Whether a builder has memoized class axes, for tests of their release.
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasClassAxes(PropagationCallGraphBuilder builder) {
+    return CLASS_AXIS_CACHE.containsKey(builder);
+  }
+
+  /**
    * The class axis of {@code class_mode="categorical"} labels (wala/ML#920). The class count is the
    * directory's subfolder count, which no forward chase reads, so the axis is {@link UnresolvedDim}
    * unless a shape-constrained consumer fixes it: {@code tf.keras.losses.CategoricalCrossentropy}
