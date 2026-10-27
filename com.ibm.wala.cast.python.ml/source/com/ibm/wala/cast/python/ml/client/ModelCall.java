@@ -43,7 +43,9 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -124,6 +126,20 @@ public class ModelCall extends TensorGenerator {
             .flatMap(result -> result.members().stream())
             .collect(Collectors.toSet());
 
+    Set<List<Dimension<?>>> refined = this.refineBatch(builder, outputShapes);
+    return refined.isEmpty() ? null : refined;
+  }
+
+  /**
+   * Refines the batch dimension of recovered output shapes with the batch of the inputs passed to
+   * {@code __call__}, as Keras preserves the batch axis.
+   *
+   * @param builder The propagation call graph builder.
+   * @param outputShapes The recovered output shapes.
+   * @return The refined shapes, or the given ones when no input shape carries a batch dimension.
+   */
+  private Set<List<Dimension<?>>> refineBatch(
+      PropagationCallGraphBuilder builder, Set<List<Dimension<?>>> outputShapes) {
     // Extract shapes from the inputs passed to __call__.
     OrdinalSet<InstanceKey> inputsPTS =
         this.getArgumentPointsToSet(
@@ -166,7 +182,7 @@ public class ModelCall extends TensorGenerator {
       }
     }
 
-    return outputShapes.isEmpty() ? null : outputShapes;
+    return outputShapes;
   }
 
   /**
@@ -260,6 +276,201 @@ public class ModelCall extends TensorGenerator {
    */
   protected Set<TensorGenerator> getOutputGenerators(PropagationCallGraphBuilder builder) {
     Set<TensorGenerator> ret = HashSetFactory.make();
+    for (InstanceKey outputIK : this.getOutputsPointsToSet(builder)) {
+      TensorGenerator outputGenerator = outputGenerator(builder, outputIK);
+      if (outputGenerator != null) ret.add(outputGenerator);
+    }
+    return ret;
+  }
+
+  /**
+   * The manual generator of an output at its allocation's node, or {@code null} when the output has
+   * no allocation site or no generator, as a list of outputs has none (wala/ML#1157).
+   *
+   * @param builder The propagation call graph builder.
+   * @param outputIK An instance key the {@code outputs} argument holds.
+   * @return The output's generator, or {@code null}.
+   */
+  private static TensorGenerator outputGenerator(
+      PropagationCallGraphBuilder builder, InstanceKey outputIK) {
+    LOGGER.finest("Found output instance key: " + describe(outputIK) + ".");
+    AllocationSiteInNode outputASIN = getAllocationSiteInNode(outputIK);
+    if (outputASIN == null) return null;
+    TensorGenerator outputGenerator = createManualGenerator(outputASIN.getNode(), builder);
+    if (outputGenerator != null)
+      LOGGER.finest(
+          "Created tensor generator: "
+              + outputGenerator
+              + " for output allocation site: "
+              + describe(outputASIN)
+              + ".");
+    return outputGenerator;
+  }
+
+  /**
+   * A list or tuple display the {@code outputs} of a functional model may be (wala/ML#1157).
+   *
+   * @param positions The generators at each of the display's positions.
+   * @param unwrapped Whether the call returns the display's one element itself rather than a list:
+   *     Keras returns the tensor for a list of one output, though not for a tuple of one.
+   */
+  protected record OutputDisplay(List<Set<TensorGenerator>> positions, boolean unwrapped) {}
+
+  /**
+   * The generators at each position of each list or tuple display the {@code outputs} of a
+   * functional model may be, such as {@code tf.keras.Model(inp, [conv, decode(conv)])}, whose call
+   * returns a list of the same length (wala/ML#1157), except that a list of one output returns that
+   * output itself. Each display keeps its own positions, so a negative index is resolved against
+   * that display's own length.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The displays; or {@code null} when the {@code outputs} argument holds nothing or
+   *     anything other than a list or tuple display whose positions are known: a list operation's
+   *     result (wala/ML#960), a display with a starred element (wala/ML#989), or one with no
+   *     element at a constant index. The caller then reads the call's result whole.
+   */
+  protected List<OutputDisplay> getSequenceOutputGenerators(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> outputsPTS = this.getOutputsPointsToSet(builder);
+    if (outputsPTS.isEmpty()) return null;
+    List<OutputDisplay> ret = new ArrayList<>();
+    for (InstanceKey ik : outputsPTS) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      TypeReference reference = asin == null ? null : asin.concreteType().getReference();
+      if (reference == null || !(reference.equals(tuple) || reference.equals(list))) return null;
+      // A list operation's result or a starred display keeps elements whose positions are unknown,
+      // so its numeric fields, if any, are not its elements by position.
+      if (isListOperationResult(asin) || hasUnpositionedElements(builder, asin)) return null;
+      OrdinalSet<InstanceKey> catalogPTS =
+          withoutClientOnlyKeys(
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin)));
+      List<Set<TensorGenerator>> positions = new ArrayList<>();
+      for (InstanceKey catalogIK : catalogPTS) {
+        if (!(catalogIK instanceof ConstantKey)) continue;
+        Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+        if (fieldIndex == null || fieldIndex < 0) continue;
+        IField field =
+            builder
+                .getClassHierarchy()
+                .resolveField(
+                    FieldReference.findOrCreate(
+                        Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root));
+        if (field == null) continue;
+        while (positions.size() <= fieldIndex) positions.add(HashSetFactory.make());
+        for (InstanceKey elementIK :
+            withoutClientOnlyKeys(
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)))) {
+          TensorGenerator elementGenerator = outputGenerator(builder, elementIK);
+          if (elementGenerator != null) positions.get(fieldIndex).add(elementGenerator);
+        }
+      }
+      if (positions.isEmpty()) return null;
+      ret.add(new OutputDisplay(positions, reference.equals(list) && positions.size() == 1));
+    }
+    return ret;
+  }
+
+  /**
+   * The shapes of an element of this call's result when the model's {@code outputs} are a list or
+   * tuple (wala/ML#1157): those of {@code outputs[index]}, or the union over every position when
+   * the index is not a constant, each with the batch dimension refined as {@link #getDefaultShapes}
+   * refines the whole output's.
+   *
+   * @param builder The propagation call graph builder.
+   * @param displays The displays, from {@link #getSequenceOutputGenerators}.
+   * @param index The element's constant index, or {@code null} for any element.
+   * @return The element's shapes, empty when the index is out of range, or {@code null} (⊤) when no
+   *     position's shape resolves.
+   */
+  protected Set<List<Dimension<?>>> getOutputElementShapes(
+      PropagationCallGraphBuilder builder, List<OutputDisplay> displays, Integer index) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    boolean inRange = false;
+    for (OutputDisplay display : displays) {
+      Set<TensorGenerator> generators = generatorsAt(display, index);
+      if (generators == null) continue;
+      inRange = true;
+      Set<List<Dimension<?>>> shapes =
+          generators.stream()
+              .map(g -> memoizedShapeResult(builder, g))
+              .flatMap(result -> result.members().stream())
+              .collect(Collectors.toSet());
+      // A display whose element shapes don't resolve leaves the element unknown.
+      if (shapes.isEmpty()) return null;
+      for (List<Dimension<?>> shape : this.refineBatch(builder, shapes))
+        // The call returns the one output itself, so an element is a slice of its first axis.
+        ret.add(
+            display.unwrapped() && !shape.isEmpty()
+                ? new ArrayList<>(shape.subList(1, shape.size()))
+                : shape);
+    }
+    return inRange ? ret : Collections.emptySet();
+  }
+
+  /**
+   * The dtypes of an element of this call's result when the model's {@code outputs} are a list or
+   * tuple (wala/ML#1157), as {@link #getOutputElementShapes} gives its shapes.
+   *
+   * @param builder The propagation call graph builder.
+   * @param displays The displays, from {@link #getSequenceOutputGenerators}.
+   * @param index The element's constant index, or {@code null} for any element.
+   * @return The element's dtypes, empty when the index is out of range, or the unknown dtype when
+   *     none resolves.
+   */
+  protected Set<DType> getOutputElementDTypes(
+      PropagationCallGraphBuilder builder, List<OutputDisplay> displays, Integer index) {
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    boolean inRange = false;
+    for (OutputDisplay display : displays) {
+      Set<TensorGenerator> generators = generatorsAt(display, index);
+      if (generators == null) continue;
+      inRange = true;
+      Set<DType> dtypes =
+          generators.stream()
+              .map(g -> memoizedDTypes(builder, g))
+              .filter(d -> d != null)
+              .flatMap(Collection::stream)
+              .collect(Collectors.toSet());
+      if (dtypes.isEmpty()) ret.add(DType.UNKNOWN);
+      else ret.addAll(dtypes);
+    }
+    return inRange ? ret : Collections.emptySet();
+  }
+
+  /**
+   * The generators an element of the call's result has under one display: at the given position,
+   * counting a negative index from the display's own end; at every position for a {@code null}
+   * index; and the one output, whatever the index, for a display the call unwraps.
+   *
+   * @param display The display.
+   * @param index The constant index, or {@code null}.
+   * @return The generators, or {@code null} when the index is out of the display's range.
+   */
+  private static Set<TensorGenerator> generatorsAt(OutputDisplay display, Integer index) {
+    List<Set<TensorGenerator>> positions = display.positions();
+    if (index == null || display.unwrapped()) {
+      Set<TensorGenerator> all = HashSetFactory.make();
+      positions.forEach(all::addAll);
+      return all;
+    }
+    int k = index < 0 ? positions.size() + index : index;
+    return k < 0 || k >= positions.size() ? null : positions.get(k);
+  }
+
+  /**
+   * The union of what the {@code outputs} argument holds over every model instance this call's
+   * receiver may be (wala/ML#537, wala/ML#1128).
+   *
+   * @param builder The propagation call graph builder.
+   * @return The {@code outputs} points-to set, empty for a model that has none.
+   */
+  private OrdinalSet<InstanceKey> getOutputsPointsToSet(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> ret = OrdinalSet.empty();
 
     // 1. Find the Model instance (SELF).
     OrdinalSet<InstanceKey> selfPts =
@@ -312,31 +523,7 @@ public class ModelCall extends TensorGenerator {
                   + describe(selfIK)
                   + ".");
 
-      for (InstanceKey outputIK : outputsPTS) {
-        LOGGER.finest("Found output instance key: " + describe(outputIK) + ".");
-
-        AllocationSiteInNode outputASIN = getAllocationSiteInNode(outputIK);
-        if (outputASIN != null) {
-          LOGGER.finest(
-              "Found output allocation site: "
-                  + describe(outputASIN)
-                  + " for instance key: "
-                  + describe(outputIK)
-                  + ".");
-
-          TensorGenerator outputGenerator = createManualGenerator(outputASIN.getNode(), builder);
-          if (outputGenerator != null) {
-            LOGGER.finest(
-                "Created tensor generator: "
-                    + outputGenerator
-                    + " for output allocation site: "
-                    + describe(outputASIN)
-                    + ".");
-
-            ret.add(outputGenerator);
-          }
-        }
-      }
+      ret = OrdinalSet.unify(ret, outputsPTS);
     }
 
     return ret;

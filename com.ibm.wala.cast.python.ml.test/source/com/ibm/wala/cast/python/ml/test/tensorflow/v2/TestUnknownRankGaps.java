@@ -30,11 +30,15 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   /** A {@code float64} tensor of unknown shape. */
   private static final TensorType UNKNOWN_FLOAT64 = new TensorType(FLOAT_64, null);
 
+  /** {@code outputs[0]} of the list-output model, with the call's batch. */
+  private static final TensorType FIRST_OUTPUT = TensorType.of(FLOAT_32, 4, 13, 13, 21);
+
+  /** {@code outputs[1]} of the list-output model, with the call's batch. */
+  private static final TensorType SECOND_OUTPUT = TensorType.of(FLOAT_32, 4, 13, 13, 3, 7);
+
   /**
-   * An element of the result of calling a functional model whose outputs are a list.
-   *
-   * <p>TODO: wala/ML#1157: expect {@code (4, 13, 13, 3, 7)} of {@code float32}, the shape of {@code
-   * outputs[1]}.
+   * An element of the result of calling a functional model whose outputs are a list (wala/ML#1157):
+   * {@code res[1]} has the shape of {@code outputs[1]}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -44,7 +48,137 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   @Test
   public void testListOutputModelElement()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_list_output_model.py", "consume", 1, 1, Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+    test("tf2_test_list_output_model.py", "consume", 1, 1, Map.of(2, Set.of(SECOND_OUTPUT)));
+  }
+
+  /**
+   * The first element of the list-output model's result, {@code res[0]}, has the shape of {@code
+   * outputs[0]} (wala/ML#1157).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListOutputModelFirstElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_output_model.py", "consume_first", 1, 1, Map.of(2, Set.of(FIRST_OUTPUT)));
+  }
+
+  /**
+   * A negative index counts from the end, so {@code res[-1]} is {@code outputs[1]} (wala/ML#1157).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListOutputModelLastElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_output_model.py", "consume_last", 1, 1, Map.of(2, Set.of(SECOND_OUTPUT)));
+  }
+
+  /**
+   * Two models of different output counts reach one call, so {@code res[-1]} is the last of each
+   * sequence: {@code outputs[1]} of the two-output model and {@code outputs[0]} of the model built
+   * with a tuple of one output (wala/ML#1157).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListOutputModelsLastElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_output_model_forms.py",
+        "consume_mixed_last",
+        1,
+        1,
+        Map.of(2, Set.of(SECOND_OUTPUT, TensorType.of(FLOAT_32, 4, 13, 13, 5))));
+  }
+
+  /**
+   * When the outputs may be a concatenation, whose element positions are unknown, an element of the
+   * call's result is read whole, as unknown, rather than from the display's positions alone
+   * (wala/ML#1157, wala/ML#960).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testConcatenatedOutputsElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_output_model_forms.py",
+        "consume_concatenated",
+        1,
+        1,
+        Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+  }
+
+  /**
+   * When the outputs are a display with a starred element, whose positions are unknown, an element
+   * of the call's result is read whole, as unknown (wala/ML#1157, wala/ML#989).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testStarredOutputsElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_output_model_forms.py",
+        "consume_starred",
+        1,
+        1,
+        Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+  }
+
+  /**
+   * A model built with a list of one output returns that output itself, not a list, so {@code
+   * res[0]} is the output's first row (wala/ML#1157).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSingleListOutputModelRow()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_output_model_forms.py",
+        "consume_single_row",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 13, 13, 5))));
+  }
+
+  /**
+   * Iterating the list-output model's result reads every output (wala/ML#1157).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListOutputModelIteration()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_output_model.py",
+        "consume_each",
+        1,
+        1,
+        Map.of(2, Set.of(FIRST_OUTPUT, SECOND_OUTPUT)));
   }
 
   /**
