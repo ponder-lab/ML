@@ -11,6 +11,10 @@ def consume_chosen(x):
     pass
 
 
+def consume_counted(x):
+    pass
+
+
 def aggregate(per_type, targets, num_nodes, aggr):
     if aggr == "sum":
         fn = tf.math.unsorted_segment_sum
@@ -39,3 +43,9 @@ assert out.shape == (5, 6)
 chosen = tf.math.softmax(out, -1)
 assert chosen.dtype == tf.float32
 consume_chosen(chosen)
+
+# A `num_segments` that is a Python `int` of unknown value: a fixed size.
+xs = [1, 2, 3, 4, 5]
+counted = tf.math.unsorted_segment_sum(tf.ones([4, 6]), edges[:, 1], len(xs))
+assert counted.shape == (5, 6)
+consume_counted(counted)

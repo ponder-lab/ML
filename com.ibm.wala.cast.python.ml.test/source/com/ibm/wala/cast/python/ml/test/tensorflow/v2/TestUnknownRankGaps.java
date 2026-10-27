@@ -20,6 +20,10 @@ import org.junit.Test;
  */
 public class TestUnknownRankGaps extends AbstractTensorTest {
 
+  /** A {@code float32} of a dynamic leading axis and 6, a segment reduction's output. */
+  private static final TensorType DYNAMIC_6_FLOAT32 =
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6)));
+
   /** A {@code float32} tensor of unknown shape. */
   private static final TensorType UNKNOWN_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -154,9 +158,8 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
-   * An unsorted segment sum whose {@code num_segments} is {@code tf.shape(x)[0]}.
-   *
-   * <p>TODO: wala/ML#1160: expect rank 2 of {@code float32}, a dynamic leading axis and 6.
+   * An unsorted segment sum whose {@code num_segments} is {@code tf.shape(x)[0]}, a tensor, so its
+   * leading axis is dynamic and its trailing axis is {@code data}'s 6 (wala/ML#1160).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -171,14 +174,35 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
         "consume_direct",
         1,
         1,
-        Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+        Map.of(2, Set.of(DYNAMIC_6_FLOAT32)));
+  }
+
+  /**
+   * An unsorted segment sum whose {@code num_segments} is {@code len(xs)}, a Python {@code int} of
+   * unknown value: a fixed size the analysis did not compute, so the leading axis is unresolved
+   * (wala/ML#721, wala/ML#1160).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentSumOfLength()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_segment_runtime_count.py",
+        "consume_counted",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
   }
 
   /**
    * A softmax over a segment reduction chosen by a branch, whose {@code num_segments} is {@code
-   * tf.shape(x)[0]}.
-   *
-   * <p>TODO: wala/ML#1160: expect rank 2 of {@code float32}, a dynamic leading axis and 6.
+   * tf.shape(x)[0]}: rank 2, a dynamic leading axis and 6 (wala/ML#1160).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -193,7 +217,7 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
         "consume_chosen",
         1,
         1,
-        Map.of(2, Set.of(UNKNOWN_FLOAT32)));
+        Map.of(2, Set.of(DYNAMIC_6_FLOAT32)));
   }
 
   /**
