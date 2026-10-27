@@ -117,9 +117,13 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
-   * An {@code np.zeros} whose shape is an ndarray's {@code .shape[0]}.
+   * An {@code np.zeros} whose shape is an ndarray's {@code .shape[0]}, where the ndarray is the
+   * result of {@code np.vstack}, which has no summary, so it has no points-to member and its {@code
+   * shape} reads nothing. Over an array the analysis models, the same read gives rank 1 ({@link
+   * #testZerosOfModeledShapeElement()}).
    *
-   * <p>TODO: wala/ML#1159: expect rank 1 of {@code float64}, with an unresolved extent.
+   * <p>TODO: wala/ML#1159: expect rank 1 of {@code float64}, with an unresolved extent, once {@code
+   * np.vstack} allocates an array.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -131,6 +135,27 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_zeros_unknown_int.py", "consume_zeros", 1, 1, Map.of(2, Set.of(UNKNOWN_FLOAT64)));
+  }
+
+  /**
+   * An {@code np.zeros} whose shape is {@code np.eye(4).shape[0]}: an ndarray's shape is a tuple of
+   * Python {@code int}s, so this is rank 1 of {@code float64}, with an unresolved extent
+   * (wala/ML#1159).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testZerosOfModeledShapeElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_unknown_int.py",
+        "consume_rows",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**
