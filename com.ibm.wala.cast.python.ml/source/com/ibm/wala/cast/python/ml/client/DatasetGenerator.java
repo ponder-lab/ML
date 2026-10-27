@@ -289,12 +289,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     if (receiverPTS == null || receiverPTS.isEmpty()) return null;
     List<TensorGenerator> ret = new ArrayList<>();
     for (InstanceKey valueIK : receiverPTS) {
-      TensorGenerator generator;
-      try {
-        generator = receiverGenerator(builder, valueIK);
-      } catch (IllegalArgumentException e) {
-        return null;
-      }
+      TensorGenerator generator = receiverGenerator(builder, valueIK);
       if (generator == null) return null;
       if (!ret.contains(generator)) ret.add(generator);
     }
@@ -349,17 +344,9 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
         .equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
       return new DatasetMapGenerator(asin.getNode(), asin);
     }
-    int vn = findDefinition(asin.getNode(), asin);
-    if (vn <= 0) return null;
-    PointerKey pk =
-        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(asin.getNode(), vn);
-    PointsToSetVariable var = null;
-    if (!builder.getPropagationSystem().isImplicit(pk)) {
-      var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
-    }
-    return var != null
-        ? TensorGeneratorFactory.getGenerator(var, builder)
-        : createManualGenerator(asin.getNode(), builder);
+    // A dataset is allocated in a library summary, whose allocating local has an implicit pointer
+    // key, so its generator is the summary node's own.
+    return createManualGenerator(asin.getNode(), builder);
   }
 
   @Override

@@ -471,11 +471,6 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     path.add(generator);
     List<TensorGenerator> spreadReceivers = new ArrayList<>();
     for (TensorGenerator receiver : receivers) {
-      while (receiver instanceof DelegatingTensorGenerator dtg) {
-        TensorGenerator next = dtg.getUnderlying();
-        if (next == null || next == receiver) break;
-        receiver = next;
-      }
       List<TensorGenerator> parts = spread(builder, receiver, path);
       if (parts == null) return null; // Abandons the whole spread, so the path is not reused.
       for (TensorGenerator part : parts)
