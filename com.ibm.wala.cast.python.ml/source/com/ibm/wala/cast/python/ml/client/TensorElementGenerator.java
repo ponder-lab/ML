@@ -97,7 +97,7 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
     // Calling a functional model built with a list or tuple of outputs returns a list. Its element
     // is the output at that position, not an axis-0 slice of one tensor (wala/ML#1157).
     if (this.containerGenerator instanceof ModelCall call) {
-      List<Set<TensorGenerator>> positions = call.getSequenceOutputGenerators(builder);
+      List<ModelCall.OutputDisplay> positions = call.getSequenceOutputGenerators(builder);
       if (positions != null) return call.getOutputElementShapes(builder, positions, this.index());
     }
     Set<List<Dimension<?>>> containerShapes = this.containerGenerator.getShapes(builder);
@@ -122,7 +122,7 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
     // See the null check in getDefaultShapes. ⊥ preserves source-dropped semantics.
     if (this.containerGenerator == null) return Collections.emptySet();
     if (this.containerGenerator instanceof ModelCall call) {
-      List<Set<TensorGenerator>> positions = call.getSequenceOutputGenerators(builder);
+      List<ModelCall.OutputDisplay> positions = call.getSequenceOutputGenerators(builder);
       if (positions != null) return call.getOutputElementDTypes(builder, positions, this.index());
     }
     return this.containerGenerator.getDTypes(builder);
