@@ -35,6 +35,38 @@ class Derived(Base):
     pass
 
 
+class ProjectMixin:
+
+    def project(self, x):
+        return x
+
+
+class MixedNet(ProjectMixin, tf.keras.Model):
+
+    def call(self, x):
+        return self.project(x)
+
+
+class MixedNetModelFirst(tf.keras.Model, ProjectMixin):
+
+    def call(self, x):
+        return self.project(x)
+
+
+class Inner(ProjectMixin, tf.keras.layers.Layer):
+
+    def call(self, x):
+        return self.project(x)
+
+
+class Outer(Inner):
+    pass
+
+
+class MixedPlain(ProjectMixin, Plain):
+    pass
+
+
 def consume_encoder(v):
     return v
 
@@ -75,6 +107,22 @@ def consume_method(v):
     return v
 
 
+def consume_mixed_net(v):
+    return v
+
+
+def consume_mixed_net_model_first(v):
+    return v
+
+
+def consume_outer(v):
+    return v
+
+
+def consume_mixed_plain(v):
+    return v
+
+
 xs = [1, 2, 3]
 holder = Holder()
 holder(tf.ones([1, 2]))
@@ -91,3 +139,11 @@ assert consume_class(Plain) is Plain
 assert consume_callable(tf.keras.layers.Dense) is tf.keras.layers.Dense
 ds = tf.data.Dataset.range(3)
 assert callable(consume_method(ds.shuffle))
+assert isinstance(consume_mixed_net(MixedNet()), tf.keras.Model)
+assert isinstance(consume_mixed_net_model_first(MixedNetModelFirst()), tf.keras.Model)
+outer = consume_outer(Outer())
+assert isinstance(outer, tf.keras.layers.Layer) and not isinstance(
+    outer, tf.keras.Model
+)
+mixed_plain = consume_mixed_plain(MixedPlain(3))
+assert not isinstance(mixed_plain, (tf.keras.layers.Layer, tf.keras.Model))

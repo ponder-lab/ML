@@ -104,6 +104,20 @@ public class TestAllocatedClass extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Whether a class extends a modeled class through any of its Python bases ({@link
+   * Util#isPythonSubtype}, <a href="https://github.com/wala/ML/issues/1171">wala/ML#1171</a>).
+   *
+   * @param type The class.
+   * @param base The modeled class.
+   * @return Whether {@code type} is {@code base} or reaches it through its bases.
+   */
+  private static boolean isPythonSubtype(IClass type, TypeReference base) {
+    IClass baseClass = builder().getClassHierarchy().lookupClass(base);
+    assertNotNull("The class " + base + " is modeled.", baseClass);
+    return Util.isPythonSubtype(type, baseClass);
+  }
+
+  /**
    * Asserts a sink's value is allocated by a class of the program with the given name.
    *
    * @param sink The sink's name.
@@ -187,5 +201,47 @@ public class TestAllocatedClass extends TestPythonMLCallGraphShape {
   @Test
   public void testBoundSummaryMethod() {
     assertFalse(allocatedClasses("consume_method").get(0).isPresent());
+  }
+
+  /**
+   * A Keras model with a mixin as its first base is a model across its bases (<a
+   * href="https://github.com/wala/ML/issues/1171">wala/ML#1171</a>), although the class hierarchy's
+   * subclass test, which follows the one recorded superclass, misses it.
+   */
+  @Test
+  public void testModelWithMixinFirst() {
+    IClass type = assertProgramClass("consume_mixed_net", "MixedNet");
+    assertTrue(isPythonSubtype(type, KERAS_MODEL_TYPE));
+    assertFalse(isPythonSubtype(type, KERAS_LAYER_TYPE));
+    assertFalse(
+        "The recorded superclass alone misses the model base.",
+        isSubclassOf(type, KERAS_MODEL_TYPE));
+  }
+
+  /** A Keras model with a mixin as its second base is a model across its bases (wala/ML#1171). */
+  @Test
+  public void testModelWithMixinSecond() {
+    IClass type = assertProgramClass("consume_mixed_net_model_first", "MixedNetModelFirst");
+    assertTrue(isPythonSubtype(type, KERAS_MODEL_TYPE));
+    assertFalse(isPythonSubtype(type, KERAS_LAYER_TYPE));
+  }
+
+  /**
+   * A subclass of a layer that has a mixin as its first base is a layer, through two levels of
+   * bases (wala/ML#1171).
+   */
+  @Test
+  public void testLayerThroughMixinChain() {
+    IClass type = assertProgramClass("consume_outer", "Outer");
+    assertTrue(isPythonSubtype(type, KERAS_LAYER_TYPE));
+    assertFalse(isPythonSubtype(type, KERAS_MODEL_TYPE));
+  }
+
+  /** A plain class with a mixin is neither a layer nor a model across its bases (wala/ML#1171). */
+  @Test
+  public void testPlainWithMixin() {
+    IClass type = assertProgramClass("consume_mixed_plain", "MixedPlain");
+    assertFalse(isPythonSubtype(type, KERAS_LAYER_TYPE));
+    assertFalse(isPythonSubtype(type, KERAS_MODEL_TYPE));
   }
 }

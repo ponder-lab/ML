@@ -1176,9 +1176,12 @@ public class TensorFlowTypes extends PythonTypes {
    * The modeled class of a Keras layer, {@code tf.keras.layers.Layer}: the class every modeled
    * built-in layer, such as {@code Dense}, and every program subclass of it extends (<a
    * href="https://github.com/wala/ML/issues/1165">wala/ML#1165</a>). Check a value's {@linkplain
-   * com.ibm.wala.cast.python.util.Util#allocatedClass allocated class} against it with the class
-   * hierarchy. The modeled {@link #KERAS_MODEL_TYPE} doesn't extend it, although a Keras model is a
-   * layer at run time, so a check for any Keras layer or model checks both.
+   * com.ibm.wala.cast.python.util.Util#allocatedClass allocated class} against it with {@link
+   * com.ibm.wala.cast.python.util.Util#isPythonSubtype}, which follows every base of a Python class
+   * (<a href="https://github.com/wala/ML/issues/1171">wala/ML#1171</a>); the class hierarchy's own
+   * subclass test follows only one. The modeled {@link #KERAS_MODEL_TYPE} doesn't extend it,
+   * although a Keras model is a layer at run time, so a check for any Keras layer or model checks
+   * both.
    */
   public static final TypeReference KERAS_LAYER_TYPE =
       TypeReference.findOrCreate(

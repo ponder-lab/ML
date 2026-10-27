@@ -13,6 +13,7 @@ import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInst
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -35,12 +36,16 @@ import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -501,6 +506,11 @@ public class Util {
    * (wala/ML#1009), a list operation's result (wala/ML#960), a tensor's static shape
    * (wala/ML#1104), or a slice's result (wala/ML#916).
    *
+   * <p>Check the class this returns against a library class with {@link #isPythonSubtype}, not with
+   * {@link com.ibm.wala.ipa.cha.IClassHierarchy#isSubclassOf}, which follows only the one
+   * superclass the class model records and so misses a base other than that one (<a
+   * href="https://github.com/wala/ML/issues/1171">wala/ML#1171</a>).
+   *
    * @param instanceKey The {@link InstanceKey} in question.
    * @return The class whose constructor allocated it, or empty when that is not known.
    */
@@ -523,6 +533,44 @@ public class Util {
     if (codeBody != null && type.getClassHierarchy().isSubclassOf(type, codeBody))
       return Optional.empty();
     return Optional.of(type);
+  }
+
+  /**
+   * Whether a class is a subtype of another across all of its Python bases, transitively (<a
+   * href="https://github.com/wala/ML/issues/1171">wala/ML#1171</a>): {@code cls} is {@code target},
+   * or one of its bases is a subtype of {@code target}. A Python class may have several bases, but
+   * the class model records only one superclass, and {@link
+   * com.ibm.wala.ipa.cha.IClassHierarchy#isSubclassOf} follows that edge alone, so {@code class
+   * Net(Mixin, tf.keras.Model)} is no subclass of the Keras model there. This walks every base
+   * {@link IPythonClass#getBaseTypeNames()} records, each resolved in the class's own loader (<a
+   * href="https://github.com/wala/ML/issues/1006">wala/ML#1006</a>), together with the recorded
+   * superclass, which is the only edge of a class that records no bases, such as a summary's class
+   * shell. Use it to check a class {@link #allocatedClass} returns against a library class.
+   *
+   * @param cls The class in question.
+   * @param target The class it may be a subtype of.
+   * @return {@code true} iff {@code cls} is {@code target} or reaches it through its bases.
+   */
+  public static boolean isPythonSubtype(IClass cls, IClass target) {
+    if (cls == null || target == null) return false;
+    Deque<IClass> work = new ArrayDeque<>();
+    Set<IClass> seen = new HashSet<>();
+    work.add(cls);
+    while (!work.isEmpty()) {
+      IClass c = work.pop();
+      if (!seen.add(c)) continue;
+      if (c.equals(target)) return true;
+      if (c instanceof IPythonClass python)
+        for (TypeName base : python.getBaseTypeNames()) {
+          IClass next =
+              c.getClassHierarchy()
+                  .lookupClass(TypeReference.findOrCreate(c.getClassLoader().getReference(), base));
+          if (next != null) work.add(next);
+        }
+      IClass superclass = c.getSuperclass();
+      if (superclass != null) work.add(superclass);
+    }
+    return false;
   }
 
   /**
