@@ -2,8 +2,13 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -89,6 +94,12 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
     // effectively dropped from tensor analysis, matching the pre-audit behaviour where the IAE
     // bubbled up through the wrapper constructor and the source never got added to the init map.
     if (this.containerGenerator == null) return Collections.emptySet();
+    // Calling a functional model built with a list or tuple of outputs returns a list. Its element
+    // is the output at that position, not an axis-0 slice of one tensor (wala/ML#1157).
+    if (this.containerGenerator instanceof ModelCall call) {
+      List<Set<TensorGenerator>> positions = call.getSequenceOutputGenerators(builder);
+      if (positions != null) return call.getOutputElementShapes(builder, positions, this.index());
+    }
     Set<List<Dimension<?>>> containerShapes = this.containerGenerator.getShapes(builder);
     if (containerShapes == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -110,7 +121,31 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // See the null check in getDefaultShapes. ⊥ preserves source-dropped semantics.
     if (this.containerGenerator == null) return Collections.emptySet();
+    if (this.containerGenerator instanceof ModelCall call) {
+      List<Set<TensorGenerator>> positions = call.getSequenceOutputGenerators(builder);
+      if (positions != null) return call.getOutputElementDTypes(builder, positions, this.index());
+    }
     return this.containerGenerator.getDTypes(builder);
+  }
+
+  /**
+   * The constant index this element is read at, as {@code res[1]} or {@code res[-1]} reads it, or
+   * {@code null} when it is read by iteration or at an index that is not a constant.
+   *
+   * @return The constant index, or {@code null}.
+   */
+  private Integer index() {
+    if (this.getSource() == null
+        || !(this.getSource().getPointerKey() instanceof LocalPointerKey local)) return null;
+    CGNode node = local.getNode();
+    if (node.getIR() == null || node.getDU() == null) return null;
+    SSAInstruction def = node.getDU().getDef(local.getValueNumber());
+    if (!(def instanceof PythonPropertyRead read)) return null;
+    SymbolTable symbolTable = node.getIR().getSymbolTable();
+    int member = read.getMemberRef();
+    if (member <= 0 || !symbolTable.isConstant(member)) return null;
+    Object value = symbolTable.getConstantValue(member);
+    return value instanceof Integer || value instanceof Long ? ((Number) value).intValue() : null;
   }
 
   @Override

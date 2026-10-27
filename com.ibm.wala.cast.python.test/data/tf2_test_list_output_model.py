@@ -12,6 +12,18 @@ def consume(x):
     pass
 
 
+def consume_first(x):
+    pass
+
+
+def consume_last(x):
+    pass
+
+
+def consume_each(x):
+    pass
+
+
 inp = tf.keras.layers.Input([26, 26, 3])
 conv = tf.keras.layers.Conv2D(21, 1, strides=2)(inp)
 model = tf.keras.Model(inp, [conv, decode(conv)])
@@ -19,3 +31,8 @@ res = model(tf.ones([4, 26, 26, 3]))
 assert res[1].shape == (4, 13, 13, 3, 7)
 assert res[1].dtype == tf.float32
 consume(res[1])
+assert res[0].shape == (4, 13, 13, 21)
+consume_first(res[0])
+consume_last(res[-1])
+for output in res:
+    consume_each(output)
