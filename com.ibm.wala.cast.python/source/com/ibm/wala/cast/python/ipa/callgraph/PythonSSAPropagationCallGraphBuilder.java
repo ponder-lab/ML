@@ -183,7 +183,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * Stops any later {@link PropagationSystem#findOrCreatePointsToSet} from adding to this builder's
    * points-to map (<a href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>). Called once
    * the analysis that used the builder is over, so the queries a client makes afterwards, possibly
-   * on several threads, only read the map.
+   * on several threads, only read the map. The freeze is irreversible, so the builder must not
+   * solve again afterwards: a solve would write into sets the map doesn't hold, and lose them.
    */
   public void freezePointsTo() {
     if (this.system instanceof PythonPropagationSystem python) python.freeze();
@@ -246,7 +247,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public PointsToSetVariable findOrCreatePointsToSet(PointerKey key) {
       if (!this.frozen || key == null || this.pointsToMap.isImplicit(key))
         return super.findOrCreatePointsToSet(key);
-      PointsToSetVariable existing = this.pointsToMap.getPointsToSet(key);
+      // By index, since a read by key upgrades the set's key to a filtered one, a write to the map.
+      int index = this.pointsToMap.getIndex(key);
+      PointsToSetVariable existing = index == -1 ? null : this.pointsToMap.getPointsToSet(index);
       return existing != null
           ? existing
           : this.detached.computeIfAbsent(key, PointsToSetVariable::new);

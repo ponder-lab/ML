@@ -3907,7 +3907,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * its points-to map, so a client may make such queries from several threads, or while another
    * thread walks the pointer keys (<a
    * href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>). This holds for a {@link
-   * PythonSSAPropagationCallGraphBuilder}, whose points-to map stops growing here.
+   * PythonSSAPropagationCallGraphBuilder}, whose points-to map stops growing here. A client reading
+   * the pointer analysis directly, through {@link PointerAnalysis#getPointsToSet}, reads only for
+   * an unfiltered key: WALA upgrades the held key of a set read through a {@link
+   * com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey}, which writes to the map.
    */
   @Override
   public TensorTypeAnalysis performAnalysis(PropagationCallGraphBuilder builder)

@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -8,7 +9,10 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKeyWithFilter;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ssa.IR;
@@ -119,6 +123,66 @@ public class PostAnalysisPointsToTest extends TestPythonMLCallGraphShape {
           "Reading a key the solver never created adds no pointer key.",
           before,
           pointerKeys(builder));
+    } finally {
+      TensorGenerator.clearCaches(builder);
+    }
+  }
+
+  /**
+   * Reading, after the analysis, the points-to set of a held key through a filtered key leaves the
+   * set's key as the solver held it. WALA's read by key upgrades the held key to the filtered one,
+   * replacing it in the map, a write that a concurrent walk of the pointer keys races with. The
+   * front end makes filtered keys for receivers, so a client can hold one.
+   */
+  @Test
+  public void testFilteredReadAfterTheAnalysisLeavesTheHeldKey() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(Collections.<File>emptyList(), "tf2_test_container_elements.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    engine.performAnalysis(builder);
+    try {
+      Set<PointerKey> held = held(builder);
+      PointsToSetVariable set = null;
+      LocalPointerKey local = null;
+      for (CGNode node : scriptNodes(builder)) {
+        for (int vn = 1;
+            set == null && vn <= node.getIR().getSymbolTable().getMaxValueNumber();
+            vn++) {
+          PointerKey value =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+          if (value instanceof LocalPointerKey candidate
+              && held.contains(candidate)
+              && !builder.getPropagationSystem().isImplicit(candidate)) {
+            PointsToSetVariable candidateSet =
+                builder.getPropagationSystem().findOrCreatePointsToSet(candidate);
+            if (candidateSet.getPointerKey() instanceof LocalPointerKey heldKey
+                && !(heldKey instanceof FilteredPointerKey)) {
+              set = candidateSet;
+              local = candidate;
+            }
+          }
+        }
+        if (set != null) break;
+      }
+      assertTrue("Expecting a script value held under an unfiltered key.", set != null);
+      PointerKey heldKey = set.getPointerKey();
+
+      LocalPointerKeyWithFilter filtered =
+          new LocalPointerKeyWithFilter(
+              local.getNode(),
+              local.getValueNumber(),
+              new FilteredPointerKey.SingleClassFilter(builder.getClassHierarchy().getRootClass()));
+      assertSame(
+          "A filtered read finds the held set.",
+          set,
+          builder.getPropagationSystem().findOrCreatePointsToSet(filtered));
+      assertSame("A filtered read leaves the held set's key.", heldKey, set.getPointerKey());
+      for (PointerKey key : builder.getPointerAnalysis().getPointerKeys())
+        if (key.equals(local))
+          assertFalse(
+              "A filtered read leaves the map's key unfiltered.",
+              key instanceof FilteredPointerKey);
     } finally {
       TensorGenerator.clearCaches(builder);
     }
