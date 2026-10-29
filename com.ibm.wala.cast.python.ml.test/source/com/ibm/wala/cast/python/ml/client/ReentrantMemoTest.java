@@ -47,7 +47,8 @@ public class ReentrantMemoTest {
   /**
    * A thread that reads a key while another thread is computing it computes the key itself rather
    * than reading the other thread's floor. A latch holds the first thread inside its computation,
-   * after the key is marked and before the value is stored, while the second thread reads.
+   * after the key is marked and before the value is stored, while the second thread reads. The
+   * second thread's value, stored first, then stands for both threads and for later reads.
    */
   @Test
   public void testAnotherThreadDoesNotReadTheFloor() throws Exception {
@@ -73,7 +74,11 @@ public class ReentrantMemoTest {
       assertTrue("The first thread entered its computation.", entered.await(30, TimeUnit.SECONDS));
       assertEquals(Optional.of("second"), memo.get("k", () -> "second"));
       release.countDown();
-      assertEquals(Optional.of("first"), held.get(30, TimeUnit.SECONDS));
+      assertEquals(
+          "The value stored first stands for the thread that finished later.",
+          Optional.of("second"),
+          held.get(30, TimeUnit.SECONDS));
+      assertEquals(Optional.of("second"), memo.get("k", () -> "third"));
     } finally {
       release.countDown();
       first.shutdownNow();

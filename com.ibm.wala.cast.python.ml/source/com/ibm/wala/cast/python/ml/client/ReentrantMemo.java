@@ -29,7 +29,8 @@ final class ReentrantMemo<V> {
   /**
    * Creates a memo over the given map.
    *
-   * @param values The map holding the computed values, which must be safe to share between threads.
+   * @param values The map holding the computed values, which must be safe to share between threads
+   *     and put a value if absent atomically.
    */
   ReentrantMemo(Map<Object, Optional<V>> values) {
     this.values = values;
@@ -38,7 +39,8 @@ final class ReentrantMemo<V> {
   /**
    * Returns the value memoized for the given key, computing and storing it when there is none. A
    * computation that re-enters the same key on the same thread reads {@link Optional#empty()},
-   * which is not stored.
+   * which is not stored. When threads compute the same key at once, the first value stored stands,
+   * and every one of them returns it, so all reads of a key agree.
    *
    * @param key The key.
    * @param compute The computation, returning {@code null} for an absent value.
@@ -51,8 +53,8 @@ final class ReentrantMemo<V> {
     if (!active.add(key)) return Optional.empty();
     try {
       memo = Optional.ofNullable(compute.get());
-      this.values.put(key, memo);
-      return memo;
+      Optional<V> prior = this.values.putIfAbsent(key, memo);
+      return prior != null ? prior : memo;
     } finally {
       active.remove(key);
     }
