@@ -71,10 +71,12 @@ import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
@@ -125,6 +127,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
@@ -164,6 +167,93 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IAnalysisCacheView cache,
       PointerKeyFactory pointerKeyFactory) {
     super(PythonLanguage.Python.getFakeRootMethod(cha, cache), options, cache, pointerKeyFactory);
+  }
+
+  /**
+   * Makes the propagation system, one whose points-to map a client's query can stop changing once
+   * the analysis is over ({@link PythonPropagationSystem#freeze}, <a
+   * href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>).
+   */
+  @Override
+  protected PropagationSystem makeSystem(AnalysisOptions options) {
+    return new PythonPropagationSystem(callGraph, pointerKeyFactory, instanceKeyFactory);
+  }
+
+  /**
+   * Stops any later {@link PropagationSystem#findOrCreatePointsToSet} from adding to this builder's
+   * points-to map (<a href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>). Called once
+   * the analysis that used the builder is over, so the queries a client makes afterwards, possibly
+   * on several threads, only read the map. The freeze is irreversible, so the builder must not
+   * solve again afterwards: a solve would write into sets the map doesn't hold, and lose them.
+   */
+  public void freezePointsTo() {
+    if (this.system instanceof PythonPropagationSystem python) python.freeze();
+  }
+
+  /**
+   * A propagation system whose points-to map stops growing once frozen (<a
+   * href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>). Until then it behaves exactly
+   * as {@link AstSSAPropagationCallGraphBuilder}'s. Once frozen, asking for the points-to set of a
+   * key the solver created returns that set, unchanged, and asking for one it didn't returns a set
+   * the map doesn't hold, empty, the same one each time for the same key, so a client's walk that
+   * keys sets by identity still meets each key once. Nothing is added to the map, which a client
+   * may then read from several threads, as a mod-ref index does while other threads query.
+   *
+   * <p>Reading the map still compresses paths in its union-find, which a concurrent read may redo
+   * but cannot get wrong, since every path it compresses leads to the same representative. Unlike
+   * {@link PropagationSystem}, reading through a {@link FilteredPointerKey} whose set the solver
+   * held under an unfiltered key leaves that set's key as it is, since the solver, the only reader
+   * of the filter, has finished. A builder whose analysis never ends, such as one queried without
+   * the tensor analysis running, is never frozen, and its queries grow the map as before.
+   */
+  static class PythonPropagationSystem extends PropagationSystem {
+
+    /** Whether the points-to map no longer grows. */
+    private volatile boolean frozen;
+
+    /** The sets handed out, once frozen, for keys the map doesn't hold. */
+    private final Map<PointerKey, PointsToSetVariable> detached = new ConcurrentHashMap<>();
+
+    /** The factory for the pointer keys of the pointer analysis this system makes. */
+    private final PointerKeyFactory pointerKeys;
+
+    /** The factory for the instance keys of the pointer analysis this system makes. */
+    private final InstanceKeyFactory instanceKeyFactory;
+
+    PythonPropagationSystem(
+        CallGraph cg, PointerKeyFactory pointerKeyFactory, InstanceKeyFactory instanceKeyFactory) {
+      super(cg, pointerKeyFactory, instanceKeyFactory);
+      this.pointerKeys = pointerKeyFactory;
+      this.instanceKeyFactory = instanceKeyFactory;
+    }
+
+    @Override
+    public PointerAnalysis<InstanceKey> makePointerAnalysis(PropagationCallGraphBuilder builder) {
+      return new AstSSAPropagationCallGraphBuilder.AstPointerAnalysisImpl(
+          builder,
+          this.cg,
+          this.pointsToMap,
+          this.instanceKeys,
+          this.pointerKeys,
+          this.instanceKeyFactory);
+    }
+
+    /** Stops the points-to map from growing. */
+    void freeze() {
+      this.frozen = true;
+    }
+
+    @Override
+    public PointsToSetVariable findOrCreatePointsToSet(PointerKey key) {
+      if (!this.frozen || key == null || this.pointsToMap.isImplicit(key))
+        return super.findOrCreatePointsToSet(key);
+      // By index, since a read by key upgrades the set's key to a filtered one, a write to the map.
+      int index = this.pointsToMap.getIndex(key);
+      PointsToSetVariable existing = index == -1 ? null : this.pointsToMap.getPointsToSet(index);
+      return existing != null
+          ? existing
+          : this.detached.computeIfAbsent(key, PointsToSetVariable::new);
+    }
   }
 
   protected boolean isConstantRef(SymbolTable symbolTable, int valueNumber) {
