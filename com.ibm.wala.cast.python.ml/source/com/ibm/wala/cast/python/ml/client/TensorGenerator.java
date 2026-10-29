@@ -252,13 +252,34 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
-   * The queries this thread is evaluating outside an analysis run, each keyed on its builder and on
-   * the key the {@link WorklistTypeResolver} would give it (<a
+   * The state of the reads this thread is making outside an analysis run (<a
    * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>). Per thread, since a client may
    * read several functions' types in parallel after the analysis.
    */
-  private static final ThreadLocal<Set<Pair<PropagationCallGraphBuilder, Object>>>
-      NULL_ENGINE_IN_PROGRESS = ThreadLocal.withInitial(HashSet::new);
+  private static final class NullEngineReads {
+
+    /**
+     * The queries being evaluated, each keyed on its builder and on the key the {@link
+     * WorklistTypeResolver} would give it, mapped to its depth in the evaluation.
+     */
+    private final Map<Pair<PropagationCallGraphBuilder, Object>, Integer> active = new HashMap<>();
+
+    /**
+     * The results of the queries evaluated so far in the outermost read that depend on no query
+     * still being evaluated, kept until that read ends.
+     */
+    private final Map<Pair<PropagationCallGraphBuilder, Object>, Object> results = new HashMap<>();
+
+    /**
+     * The least depth of a query whose re-entry was answered with its cycle answer within the query
+     * now being evaluated, or {@link Integer#MAX_VALUE} for none.
+     */
+    private int cycleDepth = Integer.MAX_VALUE;
+  }
+
+  /** This thread's reads outside an analysis run. */
+  private static final ThreadLocal<NullEngineReads> NULL_ENGINE_READS =
+      ThreadLocal.withInitial(NullEngineReads::new);
 
   /**
    * Evaluates a query with no {@link WorklistTypeResolver} installed, the path a read made through
@@ -270,6 +291,20 @@ public abstract class TensorGenerator implements Cloneable {
    * re-entry is the unknown element, the sound answer for a read that cannot iterate: a ⊥ would
    * vanish from a union and let the other members stand as the whole answer. The resolver reaches
    * the unknown element only for a member of a nontrivial cycle that stays ⊥.
+   *
+   * <p>A query's result is kept until the outermost read ends, so that a query its producers reach
+   * along several paths is evaluated once rather than once per path, which is exponential in the
+   * number of producers that share subgraphs. A result is kept only when no query its evaluation
+   * answered with the cycle answer is still being evaluated above it. Such a result is sound only
+   * while that query is being evaluated, since a read can drop a cycle answer's unknown remainder
+   * that the query's own value then supplies. A kept result is sound wherever it is asked again, as
+   * every query it answered with the cycle answer is one its own evaluation was making, which any
+   * evaluation of it answers the same way. It answers fewer queries with the cycle answer than
+   * evaluating the query anew would, where a query being evaluated above it is answered with the
+   * cycle answer, so the two can differ. A read's value therefore depends on the order in which it
+   * meets its queries: a query first met outside a cycle it reaches is kept, and a query of that
+   * cycle reads it, while one first met inside the cycle is not kept, and the cycle reads its value
+   * with the cycle answer. Either order gives a sound value.
    *
    * @param <T> The query's result type.
    * @param builder The {@link PropagationCallGraphBuilder} the query reads.
@@ -283,13 +318,35 @@ public abstract class TensorGenerator implements Cloneable {
       Object key,
       java.util.function.Supplier<T> compute,
       T onCycle) {
-    Set<Pair<PropagationCallGraphBuilder, Object>> active = NULL_ENGINE_IN_PROGRESS.get();
+    NullEngineReads reads = NULL_ENGINE_READS.get();
     Pair<PropagationCallGraphBuilder, Object> query = Pair.make(builder, key);
-    if (!active.add(query)) return onCycle;
+    if (reads.results.containsKey(query)) {
+      @SuppressWarnings("unchecked")
+      T result = (T) reads.results.get(query);
+      return result;
+    }
+    Integer activeDepth = reads.active.get(query);
+    if (activeDepth != null) {
+      reads.cycleDepth = Math.min(reads.cycleDepth, activeDepth);
+      return onCycle;
+    }
+    int depth = reads.active.size();
+    reads.active.put(query, depth);
+    int outerCycleDepth = reads.cycleDepth;
+    reads.cycleDepth = Integer.MAX_VALUE;
+    boolean completed = false;
+    T result = null;
     try {
-      return compute.get();
+      result = compute.get();
+      completed = true;
+      return result;
     } finally {
-      active.remove(query);
+      reads.active.remove(query);
+      // A cycle answered at this query or below it is closed here; one answered above it is not.
+      boolean closed = reads.cycleDepth >= depth;
+      if (completed && closed) reads.results.put(query, result);
+      reads.cycleDepth = Math.min(outerCycleDepth, closed ? Integer.MAX_VALUE : reads.cycleDepth);
+      if (reads.active.isEmpty()) reads.results.clear();
     }
   }
 

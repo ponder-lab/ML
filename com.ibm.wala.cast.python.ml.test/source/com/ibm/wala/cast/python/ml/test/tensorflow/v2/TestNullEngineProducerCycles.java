@@ -54,6 +54,8 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
 
   private static final String FIXTURE = "tf2_test_null_engine_producer_cycles.py";
 
+  private static final String SHARED_PRODUCERS_FIXTURE = "tf2_test_null_engine_shared_producers.py";
+
   private static final TensorType TENSOR_2_3_INT32 = TensorType.of(INT_32, 2, 3);
 
   private static final TensorType TENSOR_NONE_3_INT32 =
@@ -73,9 +75,22 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
    */
   private Set<TensorType> readDirectly(String sink)
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    return readDirectly(FIXTURE, sink);
+  }
+
+  /**
+   * Builds a fixture's call graph without running the analysis and reads the argument of the given
+   * sink directly through its generator, at every call site in every context, joining the reads.
+   *
+   * @param fixture The fixture's file name.
+   * @param sink The sink function's name.
+   * @return The argument's types, joined over its call sites.
+   */
+  private Set<TensorType> readDirectly(String fixture, String sink)
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     List<File> pathFiles = this.getPathFiles("");
     PythonTensorAnalysisEngine engine =
-        makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, pathFiles, FIXTURE);
+        makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, pathFiles, fixture);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     addPytestEntrypoints(builder);
     CallGraph callGraph = builder.makeCallGraph(builder.getOptions());
@@ -204,6 +219,19 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
   public void testDatasetZipReadDirectlyIsAControl()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     assertEquals(Set.of(TENSOR_3_FLOAT32, UNKNOWN_SHAPE_UNKNOWN), readDirectly("consume_zipped"));
+  }
+
+  /**
+   * A value whose producers share subgraphs, read outside an analysis run (<a
+   * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>). Each of forty steps adds the
+   * previous value to itself, so a read that evaluates each operand anew evaluates the first value
+   * 2<sup>40</sup> times and never finishes, at a stack only forty steps deep. Evaluated once per
+   * query, the read finishes at once. The program's value is {@code (2, 3)} float32.
+   */
+  @Test(timeout = 300_000)
+  public void testSharedProducersReadDirectly()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    assertEquals(Set.of(TENSOR_2_3_FLOAT32), readDirectly(SHARED_PRODUCERS_FIXTURE, "consume"));
   }
 
   /**
