@@ -294,14 +294,16 @@ public abstract class TensorGenerator implements Cloneable {
    * <p>A query's result is kept until the outermost read ends, so that a query its producers reach
    * along several paths is evaluated once rather than once per path, which is exponential in the
    * number of producers that share subgraphs. A result is kept only when no query its evaluation
-   * answered with the cycle answer is still being evaluated above it, since such a result depends
-   * on where it was asked from. A kept result is sound wherever it is asked again, as every cycle
-   * answer is the unknown element. It answers fewer queries with the cycle answer than evaluating
-   * the query anew would, where a query being evaluated above it is answered with the cycle answer,
-   * so the two can differ. A read's value therefore depends on the order in which it meets its
-   * queries: a query first met outside a cycle it reaches is kept, and a query of that cycle reads
-   * it, while one first met inside the cycle is not kept, and the cycle reads its value with the
-   * cycle answer. Either order gives a sound value.
+   * answered with the cycle answer is still being evaluated above it. Such a result is sound only
+   * while that query is being evaluated, since a read can drop a cycle answer's unknown remainder
+   * that the query's own value then supplies. A kept result is sound wherever it is asked again, as
+   * every query it answered with the cycle answer is one its own evaluation was making, which any
+   * evaluation of it answers the same way. It answers fewer queries with the cycle answer than
+   * evaluating the query anew would, where a query being evaluated above it is answered with the
+   * cycle answer, so the two can differ. A read's value therefore depends on the order in which it
+   * meets its queries: a query first met outside a cycle it reaches is kept, and a query of that
+   * cycle reads it, while one first met inside the cycle is not kept, and the cycle reads its value
+   * with the cycle answer. Either order gives a sound value.
    *
    * @param <T> The query's result type.
    * @param builder The {@link PropagationCallGraphBuilder} the query reads.
