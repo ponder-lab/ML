@@ -3525,6 +3525,27 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A slice of an element of a returned tuple that a concatenation builds, {@code (y,) + (x,)},
+   * rather than a tuple display. The analysis allocates that tuple at the {@code +} operation,
+   * which is no {@code new} instruction, so the element isn't read through a display, and the slice
+   * reads the element's points-to union instead of failing on the missing {@code new}
+   * (wala/ML#1153). At run time the slice is {@code (2, 1)} alone: the {@code (1, 3, 1)} member is
+   * the dead {@code mode == "flat"} return, which the union keeps because the tuple has no display
+   * to read through. A later change that reads an operation-built tuple's positions drops it, and
+   * this expectation then narrows, an improvement rather than a regression.
+   */
+  @Test
+  public void testSliceOfConcatenatedTupleElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tuple_concat_element.py",
+        "consume_sliced",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1), TensorType.of(FLOAT_32, 1, 3, 1))));
+  }
+
+  /**
    * {@code np.vstack} over two matrices joins them along their first axis: {@code (6, 3)} of {@code
    * float64} (wala/ML#1159).
    *

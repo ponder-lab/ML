@@ -9160,7 +9160,9 @@ public abstract class TensorGenerator implements Cloneable {
       if (literalNode.getMethod().isWalaSynthetic()
           || literalNode.getIR() == null
           || literalNode.getDU() == null) return null;
-      SSANewInstruction allocation = literalNode.getIR().getNew(site.getSite());
+      // A tuple an operation builds, such as `(a,) + (b,)` (wala/ML#960), is allocated at a site
+      // that is no `new` of this IR, and has no display to read.
+      SSANewInstruction allocation = newInstructionOrNull(literalNode.getIR(), site.getSite());
       if (allocation == null) return null;
       SymbolTable st = literalNode.getIR().getSymbolTable();
       int stored = -1;
