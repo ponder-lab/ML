@@ -10,6 +10,7 @@ import com.ibm.wala.ipa.callgraph.CallGraph;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import org.junit.Test;
 
 /**
@@ -45,7 +46,8 @@ public class TestSuperMultibaseDispatch extends TestPythonMLCallGraphShape {
       String name = node.getMethod().getDeclaringClass().getName().toString();
       for (String target : SUPER_TARGETS) if (name.endsWith(target)) reached.add(target);
     }
-    for (String target : SUPER_TARGETS)
-      assertTrue(target + " is reached through super().", reached.contains(target));
+    Set<String> missing = new TreeSet<>(SUPER_TARGETS);
+    missing.removeAll(reached);
+    assertTrue("Not reached through super(): " + missing + ".", missing.isEmpty());
   }
 }
