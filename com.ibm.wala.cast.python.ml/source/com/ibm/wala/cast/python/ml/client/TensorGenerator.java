@@ -296,8 +296,12 @@ public abstract class TensorGenerator implements Cloneable {
    * number of producers that share subgraphs. A result is kept only when no query its evaluation
    * answered with the cycle answer is still being evaluated above it, since such a result depends
    * on where it was asked from. A kept result is sound wherever it is asked again, as every cycle
-   * answer is the unknown element. It can be more precise than evaluating the query anew, which
-   * would answer a query being evaluated above it with the cycle answer.
+   * answer is the unknown element. It answers fewer queries with the cycle answer than evaluating
+   * the query anew would, where a query being evaluated above it is answered with the cycle answer,
+   * so the two can differ. A read's value therefore depends on the order in which it meets its
+   * queries: a query first met outside a cycle it reaches is kept, and a query of that cycle reads
+   * it, while one first met inside the cycle is not kept, and the cycle reads its value with the
+   * cycle answer. Either order gives a sound value.
    *
    * @param <T> The query's result type.
    * @param builder The {@link PropagationCallGraphBuilder} the query reads.
