@@ -366,19 +366,20 @@ public abstract class TensorGenerator implements Cloneable {
    * Memo of the {@code (class, attribute)} chase results of {@link
    * #resolveStoredAttributeDimInClass(PropagationCallGraphBuilder, IClass, String)} per builder
    * (wala/ML#712). The chase scans the whole call graph, so uncached re-runs are quadratic on large
-   * analyses; the {@link Optional} payload caches the negative result too.
+   * analyses; the {@link Optional} payload caches the negative result too. A chase that re-enters
+   * itself on the same thread reads the floor, which no other thread sees (wala/ML#1175).
    */
-  private static final Map<PropagationCallGraphBuilder, Map<Object, Optional<Dimension<?>>>>
+  private static final Map<PropagationCallGraphBuilder, ReentrantMemo<Dimension<?>>>
       STORED_ATTRIBUTE_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
    * Memo of the per-class contract results of {@link
    * #explicitBuildContractShapes(PropagationCallGraphBuilder, CGNode)} per builder (wala/ML#717).
    * The recognizer scans the whole call graph, so uncached re-runs are quadratic on large analyses;
-   * the {@link Optional} payload caches the negative result too.
+   * the {@link Optional} payload caches the negative result too. A recognition that re-enters
+   * itself on the same thread reads the floor, which no other thread sees (wala/ML#1175).
    */
-  private static final Map<
-          PropagationCallGraphBuilder, Map<Object, Optional<Set<List<Dimension<?>>>>>>
+  private static final Map<PropagationCallGraphBuilder, ReentrantMemo<Set<List<Dimension<?>>>>>
       BUILD_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
@@ -1817,31 +1818,31 @@ public abstract class TensorGenerator implements Cloneable {
     if (node.getIR().getParameter(2) != valueNumber) return null; // Not the first input.
 
     // The recognizer scans the whole call graph and the result depends only on the call body's
-    // class, so it is memoized per class. A sentinel is seeded before computing: the contract's
-    // literal resolution can re-enter the seed through the shape machinery, and the sentinel
-    // floors the re-entry to "no contract" (sound) instead of recursing.
-    Map<Object, Optional<Set<List<Dimension<?>>>>> cache =
+    // class, so it is memoized per class. The contract's literal resolution can re-enter the seed
+    // through the shape machinery, and the memo floors that re-entry to "no contract" (sound)
+    // instead of recursing.
+    ReentrantMemo<Set<List<Dimension<?>>>> cache =
         BUILD_CONTRACT_CACHE.computeIfAbsent(
-            builder, b -> Collections.synchronizedMap(new HashMap<>()));
+            builder, b -> new ReentrantMemo<>(Collections.synchronizedMap(new HashMap<>())));
     // A bound resolution (wala/ML#1071) can differ, so it is memoized apart.
     Object key = this.boundKey(node.getMethod().getDeclaringClass());
-    Optional<Set<List<Dimension<?>>>> memo = cache.get(key);
-    if (memo == null) {
-      cache.put(key, Optional.empty());
-      Set<List<Dimension<?>>> computed = this.explicitBuildContractShapes(builder, node);
-      LOGGER.fine(
-          () ->
-              "Contract seed consulted for vn "
-                  + valueNumber
-                  + " of "
-                  + describe(node)
-                  + " -> "
-                  + computed
-                  + ".");
-      memo = Optional.ofNullable(computed);
-      cache.put(key, memo);
-    }
-    return memo.orElse(null);
+    return cache
+        .get(
+            key,
+            () -> {
+              Set<List<Dimension<?>>> computed = this.explicitBuildContractShapes(builder, node);
+              LOGGER.fine(
+                  () ->
+                      "Contract seed consulted for vn "
+                          + valueNumber
+                          + " of "
+                          + describe(node)
+                          + " -> "
+                          + computed
+                          + ".");
+              return computed;
+            })
+        .orElse(null);
   }
 
   /**
@@ -2018,31 +2019,32 @@ public abstract class TensorGenerator implements Cloneable {
       // A user Python object allocates as `Lobject` inside its class's synthetic constructor, so
       // the class identity lives in the allocating node's declaring class.
       IClass pythonClass = asin.getNode().getMethod().getDeclaringClass();
-      Map<Object, Optional<Dimension<?>>> cache =
+      ReentrantMemo<Dimension<?>> cache =
           STORED_ATTRIBUTE_CACHE.computeIfAbsent(
-              builder, b -> Collections.synchronizedMap(new HashMap<>()));
+              builder, b -> new ReentrantMemo<>(Collections.synchronizedMap(new HashMap<>())));
       // A bound chase (wala/ML#1071) can resolve differently, so it is memoized apart.
       Object key = this.boundKey(Pair.make(pythonClass, attributeName));
-      Optional<Dimension<?>> memo = cache.get(key);
-      if (memo == null) {
-        // Seed an empty sentinel before computing: the chase can re-enter itself on the same key
-        // through the shape machinery (a self-referential attribute), and the sentinel floors the
-        // re-entry to "unresolved" (sound) instead of recursing.
-        cache.put(key, Optional.empty());
-        Dimension<?> chased =
-            this.resolveStoredAttributeDimInClass(builder, pythonClass, attributeName);
-        LOGGER.fine(
-            () ->
-                "resolveStoredAttributeDim: "
-                    + pythonClass
-                    + "."
-                    + attributeName
-                    + " resolved to "
-                    + chased);
-        memo = Optional.ofNullable(chased);
-        cache.put(key, memo);
-      }
-      Dimension<?> stored = memo.orElse(null);
+      // The chase can re-enter itself on the same key through the shape machinery (a
+      // self-referential attribute), and the memo floors that re-entry to "unresolved" (sound)
+      // instead of recursing.
+      Dimension<?> stored =
+          cache
+              .get(
+                  key,
+                  () -> {
+                    Dimension<?> chased =
+                        this.resolveStoredAttributeDimInClass(builder, pythonClass, attributeName);
+                    LOGGER.fine(
+                        () ->
+                            "resolveStoredAttributeDim: "
+                                + pythonClass
+                                + "."
+                                + attributeName
+                                + " resolved to "
+                                + chased);
+                    return chased;
+                  })
+              .orElse(null);
       if (stored == null) return null;
       if (found != null && !found.equals(stored)) return null; // Conflicting receivers.
       found = stored;

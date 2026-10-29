@@ -29,7 +29,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.logging.Logger;
@@ -246,11 +245,11 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
 
   /**
    * The consumer-constrained class axis per anchor node, per builder (wala/ML#920): the recognizer
-   * scans the whole call graph, so it runs once per generator anchor; a sentinel is entered before
-   * computing so a re-entry through the shape machinery reads "no constraint" instead of recursing
-   * (the wala/ML#923 hazard).
+   * scans the whole call graph, so it runs once per generator anchor; a re-entry through the shape
+   * machinery on the same thread reads "no constraint" instead of recursing (the wala/ML#923
+   * hazard), and no other thread sees that floor (wala/ML#1175).
    */
-  private static final Map<PropagationCallGraphBuilder, Map<CGNode, Optional<Dimension<?>>>>
+  private static final Map<PropagationCallGraphBuilder, ReentrantMemo<Dimension<?>>>
       CLASS_AXIS_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
@@ -307,17 +306,12 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
   private Dimension<?> categoricalClassAxis(PropagationCallGraphBuilder builder) {
     CGNode anchor = this.getNode();
     if (anchor == null) return UnresolvedDim.INSTANCE;
-    Map<CGNode, Optional<Dimension<?>>> cache =
+    ReentrantMemo<Dimension<?>> cache =
         CLASS_AXIS_CACHE.computeIfAbsent(
-            builder, b -> Collections.synchronizedMap(new HashMap<>()));
-    Optional<Dimension<?>> memo = cache.get(anchor);
-    if (memo == null) {
-      cache.put(anchor, Optional.empty());
-      Dimension<?> computed = this.consumerConstrainedClassAxis(builder, anchor);
-      memo = Optional.ofNullable(computed);
-      cache.put(anchor, memo);
-    }
-    return memo.orElse(UnresolvedDim.INSTANCE);
+            builder, b -> new ReentrantMemo<>(Collections.synchronizedMap(new HashMap<>())));
+    return cache
+        .get(anchor, () -> this.consumerConstrainedClassAxis(builder, anchor))
+        .orElse(UnresolvedDim.INSTANCE);
   }
 
   /**
