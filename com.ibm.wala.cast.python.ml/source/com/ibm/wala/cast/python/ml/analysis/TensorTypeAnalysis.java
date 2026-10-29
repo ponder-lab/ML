@@ -705,6 +705,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param transform The generator's own shape rule for {@link
    *     TensorGenerator.TypeFeedKind#TRANSFORM}, and {@code null} for every other kind
    *     (wala/ML#905).
+   * @param dtypeTransform The generator's own dtype rule for a {@link
+   *     TensorGenerator.TypeFeedKind#DTYPE_ONLY} feed that maps its operand's dtype, else {@code
+   *     null} (wala/ML#1008).
+   * @param matmulReadings The possible readings of a {@link TensorGenerator.TypeFeedKind#MATMUL}
+   *     call's operand flags, the plain reading alone for a call setting no flag, and {@code null}
+   *     for every other kind, or for a {@link TensorGenerator.TypeFeedKind#MATMUL} feed declared
+   *     without readings, which composes the plain reading (wala/ML#1164).
    */
   public record FeedPlan(
       TensorGenerator.TypeFeedKind kind,
@@ -713,7 +720,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<TensorType> seedMembers,
       Set<TensorOrigin> seedOrigins,
       TensorGenerator.ShapeTransform transform,
-      TensorGenerator.DTypeTransform dtypeTransform) {
+      TensorGenerator.DTypeTransform dtypeTransform,
+      Set<TensorShapeUtil.MatMulReading> matmulReadings) {
 
     /**
      * The result's dtype for a fed operand dtype: the operand's own, or the generator's mapping of
@@ -1171,14 +1179,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                       sourceIsA ? this.plan.operands().get(1) : this.plan.operands().get(0);
                   TensorVariable otherState = outAccessor.get().apply(otherOperand);
                   if (otherState == null || otherState.state == null) break;
+                  // A pair that cannot compose at run time contributes nothing rather than an
+                  // unknown (wala/ML#878).
                   for (TensorType t : rhs.state)
-                    for (TensorType u : otherState.state) {
-                      TensorType m =
-                          sourceIsA ? this.matmulMembers(t, u) : this.matmulMembers(u, t);
-                      // A null member is an operand pair that cannot compose at run time, so it
-                      // contributes nothing rather than an unknown (wala/ML#878).
-                      if (m != null) composed.add(m);
-                    }
+                    for (TensorType u : otherState.state)
+                      composed.addAll(
+                          sourceIsA ? this.matmulMembers(t, u) : this.matmulMembers(u, t));
                   break;
                 case DTYPE_ONLY:
                   break;
@@ -1188,29 +1194,39 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
             /**
              * Composes one matmul member pair: {@code (..., m, k)} and {@code (..., k, n)} yield
-             * {@code (..., m, n)}, through the same {@code TensorShapeUtil.matmulShape} the
-             * generator calls, so one operation cannot get two answers depending on which path
-             * resolved it (wala/ML#877, wala/ML#878). The batch dimensions BROADCAST pairwise from
-             * the right. A member of rank below 2, with an unknown shape, or with batch prefixes
-             * that would fail to broadcast at run time composes to an unknown shape. The dtype is
-             * the pair's proven one, taken from {@code a} first since the runtime requires the
-             * operands to agree; a pair of two known, different dtypes raises at run time, so it
-             * composes to nothing.
+             * {@code (..., m, n)}, after each operand the call's flags transpose has its last two
+             * axes swapped, through the same {@code TensorShapeUtil.matmulShapes} the generator
+             * calls over the same flag readings, so one operation cannot get two answers depending
+             * on which path resolved it (wala/ML#877, wala/ML#878, wala/ML#1164). The batch
+             * dimensions BROADCAST pairwise from the right. A member with an unknown shape composes
+             * to an unknown shape, and a pair that cannot compose, such as a member of rank below 2
+             * or batch prefixes that would fail to broadcast at run time, composes to nothing. The
+             * dtype is the pair's proven one, taken from {@code a} first since the runtime requires
+             * the operands to agree; a pair of two known, different dtypes raises at run time, so
+             * it composes to nothing.
              *
              * @param a The first operand's member.
              * @param b The second operand's member.
-             * @return The composed member, or {@code null} when the pair cannot execute.
+             * @return The composed members, one per flag reading that composes, empty when the pair
+             *     cannot execute.
              */
-            private TensorType matmulMembers(TensorType a, TensorType b) {
+            private Set<TensorType> matmulMembers(TensorType a, TensorType b) {
               if (a.getDType() != DType.UNKNOWN
                   && b.getDType() != DType.UNKNOWN
-                  && a.getDType() != b.getDType()) return null;
+                  && a.getDType() != b.getDType()) return Collections.emptySet();
               DType dtype = a.getDType() != DType.UNKNOWN ? a.getDType() : b.getDType();
               List<Dimension<?>> aDims = a.getDims();
               List<Dimension<?>> bDims = b.getDims();
-              if (aDims == null || bDims == null) return new TensorType(dtype, null);
-              List<Dimension<?>> newShape = TensorShapeUtil.matmulShape(aDims, bDims);
-              return newShape == null ? null : new TensorType(dtype, newShape);
+              if (aDims == null || bDims == null) return Set.of(new TensorType(dtype, null));
+              Set<TensorShapeUtil.MatMulReading> readings = this.plan.matmulReadings();
+              Set<TensorType> ret = HashSetFactory.make();
+              for (List<Dimension<?>> shape :
+                  TensorShapeUtil.matmulShapes(
+                      aDims,
+                      bDims,
+                      readings == null ? Set.of(TensorShapeUtil.MatMulReading.PLAIN) : readings))
+                ret.add(new TensorType(dtype, shape));
+              return ret;
             }
 
             /**

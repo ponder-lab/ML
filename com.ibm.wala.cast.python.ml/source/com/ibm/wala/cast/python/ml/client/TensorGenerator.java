@@ -54,6 +54,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Layout;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ml.util.TensorShapeUtil.MatMulReading;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
@@ -8398,7 +8399,8 @@ public abstract class TensorGenerator implements Cloneable {
     /**
      * The two operands' member shapes compose as a matrix product: {@code (..., m, k)} and {@code
      * (..., k, n)} yield {@code (..., m, n)}. Unlike {@link #BROADCAST} this is order-sensitive, so
-     * the composition reads the operands in their declared order (wala/ML#877).
+     * the composition reads the operands in their declared order (wala/ML#877), after swapping the
+     * last two axes of each operand the call's flags transpose (wala/ML#1164).
      */
     MATMUL
   }
@@ -8449,12 +8451,17 @@ public abstract class TensorGenerator implements Cloneable {
    * @param dtypeTransform The generator's own dtype rule for a {@link TypeFeedKind#DTYPE_ONLY} feed
    *     whose operation maps its operand's dtype, and {@code null} for one that preserves it and
    *     for every other kind (wala/ML#1008).
+   * @param matmulReadings The possible readings of a {@link TypeFeedKind#MATMUL} call's operand
+   *     flags, which the composition reads as the generator does, {@link MatMulReading#PLAIN} alone
+   *     for a call setting no flag, and {@code null} for every other kind (wala/ML#1164). A {@link
+   *     TypeFeedKind#MATMUL} feed declared without readings composes the plain reading.
    */
   public record TypeFeed(
       TypeFeedKind kind,
       List<PointerKey> operands,
       ShapeTransform transform,
-      DTypeTransform dtypeTransform) {
+      DTypeTransform dtypeTransform,
+      Set<MatMulReading> matmulReadings) {
 
     public TypeFeed {
       if ((kind == TypeFeedKind.TRANSFORM) != (transform != null))
@@ -8463,6 +8470,36 @@ public abstract class TensorGenerator implements Cloneable {
       if (dtypeTransform != null && kind != TypeFeedKind.DTYPE_ONLY)
         throw new IllegalArgumentException(
             "A dtype transform is carried by the DTYPE_ONLY kind only: " + kind + ".");
+      if (matmulReadings != null && kind != TypeFeedKind.MATMUL)
+        throw new IllegalArgumentException(
+            "Operand flag readings are carried by the MATMUL kind only: " + kind + ".");
+    }
+
+    /**
+     * A feed carrying at most a shape rule and a dtype rule.
+     *
+     * @param kind The composition kind.
+     * @param operands The operand pointer keys, in operand order.
+     * @param transform The shape rule for {@link TypeFeedKind#TRANSFORM}, else {@code null}.
+     * @param dtypeTransform The dtype rule for {@link TypeFeedKind#DTYPE_ONLY}, else {@code null}.
+     */
+    public TypeFeed(
+        TypeFeedKind kind,
+        List<PointerKey> operands,
+        ShapeTransform transform,
+        DTypeTransform dtypeTransform) {
+      this(kind, operands, transform, dtypeTransform, null);
+    }
+
+    /**
+     * A {@link TypeFeedKind#MATMUL} feed whose composition reads the operand flags as the generator
+     * does (wala/ML#1164).
+     *
+     * @param operands The operand pointer keys, {@code a} then {@code b}.
+     * @param matmulReadings The possible readings of the call's operand flags, never empty.
+     */
+    public TypeFeed(List<PointerKey> operands, Set<MatMulReading> matmulReadings) {
+      this(TypeFeedKind.MATMUL, operands, null, null, matmulReadings);
     }
 
     /**

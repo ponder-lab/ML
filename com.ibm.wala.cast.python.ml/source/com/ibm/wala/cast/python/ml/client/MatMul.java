@@ -73,9 +73,9 @@ public class MatMul extends TensorGenerator {
         // Batched semantics: the leading (batch) dimensions BROADCAST and the trailing two compose
         // as the matrix product, so the rank is preserved rather than collapsing to two
         // (wala/ML#718, wala/ML#878), after each operand a flag transposes has its last two axes
-        // swapped (wala/ML#1152). The type-feed composition shares the unswapped rule, so for a
-        // call setting no flag one operation cannot get two answers depending on which path
-        // resolved it.
+        // swapped (wala/ML#1152). The type-feed composition reads the same flag readings
+        // (wala/ML#1164), so one operation cannot get two answers depending on which path resolved
+        // it.
         //
         // A pair that cannot compose contributes NO member. Batch extents that are unequal and
         // neither of them 1 would fail at run time, so the pair is not an execution the program
@@ -270,11 +270,11 @@ public class MatMul extends TensorGenerator {
    * cannot see (for example an operand bound by tuple-unpacking), {@link #getDefaultShapeResult}
    * seeds an unresolved ⊤ member; the feed replaces it with a synthetic dataflow edge from each
    * operand, composing {@code (..., m, k)} and {@code (..., k, n)} into {@code (..., m, n)} exactly
-   * as {@link #getDefaultShapeResult} does for a call that sets no operand flag. The feed composes
-   * its operands unswapped: it does not read {@code transpose_a}, {@code transpose_b}, {@code
-   * adjoint_a} or {@code adjoint_b}, which {@link #getDefaultShapeResult} reads (wala/ML#1152), and
-   * no test in this repository depends on the feed's composition. Its sparse cousin {@code
-   * SparseMatrixDot} already declares a feed; this closes the twin-operation gap.
+   * as {@link #getDefaultShapeResult} does. The feed carries the possible readings of {@code
+   * transpose_a}, {@code transpose_b}, {@code adjoint_a} and {@code adjoint_b} that {@link
+   * #getDefaultShapeResult} reads (wala/ML#1152), so the composition swaps the same operands
+   * (wala/ML#1164). Its sparse cousin {@code SparseMatrixDot} already declares a feed; this closes
+   * the twin-operation gap.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The matmul feed over operands {@code a} and {@code b}, or {@code null} when either
@@ -288,10 +288,10 @@ public class MatMul extends TensorGenerator {
     int bVn = this.getArgumentValueNumber(builder, 1, "b", true);
     if (aVn <= 0 || bVn <= 0) return null;
     return new TypeFeed(
-        TypeFeedKind.MATMUL,
         List.of(
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, aVn),
-            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, bVn)));
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, bVn)),
+        this.getReadings(builder));
   }
 
   @Override

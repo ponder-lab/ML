@@ -4176,7 +4176,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 mode == TensorTypeAnalysis.FeedMode.REPLACE ? Collections.emptySet() : types,
                 origins != null ? origins : generator.getOrigins(builder),
                 feed.transform(),
-                feed.dtypeTransform()));
+                feed.dtypeTransform(),
+                feed.matmulReadings()));
         suppressedSeeds.put(src, types);
         if (origins != null) suppressedOrigins.put(src, origins);
         init.remove(src);
