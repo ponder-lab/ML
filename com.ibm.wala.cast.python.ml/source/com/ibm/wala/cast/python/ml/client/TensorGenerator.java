@@ -251,6 +251,69 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The queries this thread is evaluating outside an analysis run, each keyed on its builder and on
+   * the key the {@link WorklistTypeResolver} would give it (<a
+   * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>). Per thread, since a client may
+   * read several functions' types in parallel after the analysis.
+   */
+  private static final ThreadLocal<Set<Pair<PropagationCallGraphBuilder, Object>>>
+      NULL_ENGINE_IN_PROGRESS = ThreadLocal.withInitial(HashSet::new);
+
+  /**
+   * Evaluates a query with no {@link WorklistTypeResolver} installed, the path a read made through
+   * the public surface after an analysis run takes (wala/ML#753), answering {@code onCycle} when
+   * the same query is already being evaluated on this thread (<a
+   * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>). The resolver converges a cycle
+   * of queries by iterating from ⊥; on this path nothing iterates, so a cycle through two
+   * operations, two nodes, or two φs recursed until the stack overflowed. The answer at the first
+   * re-entry is the unknown element, the sound answer for a read that cannot iterate: a ⊥ would
+   * vanish from a union and let the other members stand as the whole answer. The resolver reaches
+   * the unknown element only for a member of a nontrivial cycle that stays ⊥.
+   *
+   * @param <T> The query's result type.
+   * @param builder The {@link PropagationCallGraphBuilder} the query reads.
+   * @param key The query's key, the one the resolver would memoize it under.
+   * @param compute The query's evaluation.
+   * @param onCycle The answer for a query met again while it is being evaluated.
+   * @return The query's result, or {@code onCycle} for a cyclic query.
+   */
+  private static <T> T nullEngineRead(
+      PropagationCallGraphBuilder builder,
+      Object key,
+      java.util.function.Supplier<T> compute,
+      T onCycle) {
+    Set<Pair<PropagationCallGraphBuilder, Object>> active = NULL_ENGINE_IN_PROGRESS.get();
+    Pair<PropagationCallGraphBuilder, Object> query = Pair.make(builder, key);
+    if (!active.add(query)) return onCycle;
+    try {
+      return compute.get();
+    } finally {
+      active.remove(query);
+    }
+  }
+
+  /**
+   * The legacy shape read of a generator a {@code read_data} allocation delegates to. Under the
+   * {@link WorklistTypeResolver} the read is made directly, as before; outside an analysis run it
+   * is guarded against a cycle like every other query there (<a
+   * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>), answering {@code null}, the
+   * legacy view's ⊤.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param generator The generator delegated to.
+   * @return Its shapes, or {@code null} (⊤).
+   */
+  private static Set<List<Dimension<?>>> legacyDelegatedShapes(
+      PropagationCallGraphBuilder builder, TensorGenerator generator) {
+    if (WorklistTypeResolver.active(builder) != null) return generator.getShapes(builder);
+    return nullEngineRead(
+        builder,
+        generator.boundKey(Pair.make("shape-legacy", evaluationKey(generator))),
+        () -> generator.getShapes(builder),
+        null);
+  }
+
+  /**
    * Evaluates the generator's shapes through the worklist engine (wala/ML#365), which memoizes,
    * records the dependency edge, and converges cycles.
    *
@@ -262,10 +325,12 @@ public abstract class TensorGenerator implements Cloneable {
       PropagationCallGraphBuilder builder, TensorGenerator generator) {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // The engine is installed for every analysis run's resolution (wala/ML#365, Phase 3); a null
-    // engine occurs only for direct generator use outside one (e.g. unit tests) and computes
-    // unmemoized.
-    if (engine == null) return generator.getShapeResult(builder);
+    // engine occurs only for direct generator use outside one (e.g. unit tests, or a client's read
+    // after the analysis) and computes unmemoized, with a cycle answered ⊤ (wala/ML#1174).
     Object key = generator.boundKey(Pair.make("shape-eval", evaluationKey(generator)));
+    if (engine == null)
+      return nullEngineRead(
+          builder, key, () -> generator.getShapeResult(builder), ShapeResult.unknown());
     java.util.function.Supplier<Object> transfer = () -> generator.getShapeResult(builder);
     return (ShapeResult)
         (engine.isEvaluating()
@@ -284,8 +349,9 @@ public abstract class TensorGenerator implements Cloneable {
   static Set<DType> memoizedDTypes(PropagationCallGraphBuilder builder, TensorGenerator generator) {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
-    if (engine == null) return generator.getDTypes(builder);
     Object key = generator.boundKey(Pair.make("dtype-eval", evaluationKey(generator)));
+    if (engine == null)
+      return nullEngineRead(builder, key, () -> generator.getDTypes(builder), EnumSet.of(UNKNOWN));
     java.util.function.Supplier<Object> transfer = () -> generator.getDTypes(builder);
     @SuppressWarnings("unchecked")
     Set<DType> diverted =
@@ -3147,9 +3213,13 @@ public abstract class TensorGenerator implements Cloneable {
     boolean bound = this.valueBinding != null && this.valueBinding.binds(node, valueNumber);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null)
-      return bound
-          ? this.boundShapeResult(builder, exact)
-          : computeShapes(builder, node, valueNumber, exact);
+      return nullEngineRead(
+          builder,
+          key,
+          bound
+              ? () -> this.boundShapeResult(builder, exact)
+              : () -> computeShapes(builder, node, valueNumber, exact),
+          ShapeResult.unknown());
     java.util.function.Supplier<Object> transfer =
         bound
             ? () -> this.boundShapeResult(builder, exact)
@@ -6654,15 +6724,24 @@ public abstract class TensorGenerator implements Cloneable {
     // or inheriting a whole-read ⊤ (wala/ML#718).
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback; only that
-    // recursive path needs the in-body self-recursion guards.
-    if (engine == null) return this.doGetShapeResultFromTensor(builder, asin, exact, true);
+    // recursive path needs the in-body self-recursion guards. The cycle guard on that path
+    // (wala/ML#1174) would also stop a self-recursion, one read deeper, and turning the in-body
+    // guards off there left every test that reads outside an analysis run reading the same values.
+    // They stay: the dtype twin's guards also run under the engine, where the cycle guard does not,
+    // and keeping the shape side's lets both axes answer a self-read where they always have.
+    Object key = this.boundKey(Pair.make("shape-delegation", Pair.make(asin, exact)));
+    if (engine == null)
+      return nullEngineRead(
+          builder,
+          key,
+          () -> this.doGetShapeResultFromTensor(builder, asin, exact, true),
+          ShapeResult.unknown());
     // The key carries everything the transfer depends on: the query is shared by every reader of
     // the allocation site, so a closure capturing the first reader's identity or mode would
     // settle the value by sighting order (wala/ML#753) — a self-reader first-sighting would pin
     // the query at an edge-free ⊥ invisible to promotion and canonicalization. The guards are
     // recursion breaks, and engine reads never recurse, so the transfer runs unguarded; the
     // self-read participates as an ordinary cycle edge that converges from the acyclic base.
-    Object key = this.boundKey(Pair.make("shape-delegation", Pair.make(asin, exact)));
     java.util.function.Supplier<Object> transfer =
         () -> this.doGetShapeResultFromTensor(builder, asin, exact, false);
     return (ShapeResult)
@@ -6876,7 +6955,7 @@ public abstract class TensorGenerator implements Cloneable {
 
         if (generator != null) {
           LOGGER.fine("Delegating shape inference to: " + generator);
-          Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
+          Set<List<Dimension<?>>> delegatedShapes = legacyDelegatedShapes(builder, generator);
           if (delegatedShapes != null) ret.addAll(delegatedShapes);
           else {
             if (exact) hasUnknown = true; // Incomplete union, wala/ML#718.
@@ -7404,7 +7483,11 @@ public abstract class TensorGenerator implements Cloneable {
     boolean bound = this.valueBinding != null && this.valueBinding.binds(node, valueNumber);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null)
-      return bound ? this.boundDTypes(builder) : computeDTypes(builder, node, valueNumber);
+      return nullEngineRead(
+          builder,
+          key,
+          bound ? () -> this.boundDTypes(builder) : () -> computeDTypes(builder, node, valueNumber),
+          EnumSet.of(UNKNOWN));
     java.util.function.Supplier<Object> transfer =
         bound ? () -> this.boundDTypes(builder) : () -> computeDTypes(builder, node, valueNumber);
     @SuppressWarnings("unchecked")
@@ -7882,8 +7965,10 @@ public abstract class TensorGenerator implements Cloneable {
     // feeds the null-⊤ delegated result's UNKNOWN into unions whose normalization absorbs it,
     // composing unknown-dtype twins of otherwise-resolved members (the wala/ML#753 round-6
     // measurement); the shared-query first-sighting hazard stands for the shape side only.
-    if (engine == null) return this.doGetDTypesFromTensor(builder, asin, true);
     Object key = this.boundKey(Pair.make("dtype-delegation", asin));
+    if (engine == null)
+      return nullEngineRead(
+          builder, key, () -> this.doGetDTypesFromTensor(builder, asin, true), EnumSet.of(UNKNOWN));
     java.util.function.Supplier<Object> transfer =
         () -> this.doGetDTypesFromTensor(builder, asin, true);
     @SuppressWarnings("unchecked")
