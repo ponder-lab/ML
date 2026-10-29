@@ -3899,6 +3899,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return false;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Once this returns, a query on the builder, such as {@link ContainerElements#of}, {@link
+   * ContainerElements#ofValue}, {@link TensorFlowApis#of} or a generator's tensor types, only reads
+   * its points-to map, so a client may make such queries from several threads, or while another
+   * thread walks the pointer keys (<a
+   * href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>). This holds for a {@link
+   * PythonSSAPropagationCallGraphBuilder}, whose points-to map stops growing here.
+   */
   @Override
   public TensorTypeAnalysis performAnalysis(PropagationCallGraphBuilder builder)
       throws CancelException {
@@ -4728,6 +4738,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // leaks into the next run.
       this.resolverCensus = WorklistTypeResolver.uninstall(builder, completed);
       TensorGenerator.clearCaches(builder);
+      // From here on a client's query only reads the points-to map, so queries on several threads,
+      // or one beside a walk over the pointer keys, cannot race on it (wala/ML#1173).
+      if (builder instanceof PythonSSAPropagationCallGraphBuilder python) python.freezePointsTo();
       reportAndResetInterpreterUnavailableMisses();
     }
   }
