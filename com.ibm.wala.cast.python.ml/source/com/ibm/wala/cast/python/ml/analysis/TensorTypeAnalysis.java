@@ -709,8 +709,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    *     TensorGenerator.TypeFeedKind#DTYPE_ONLY} feed that maps its operand's dtype, else {@code
    *     null} (wala/ML#1008).
    * @param matmulReadings The possible readings of a {@link TensorGenerator.TypeFeedKind#MATMUL}
-   *     call's operand flags, and {@code null} for a call setting no flag and for every other kind
-   *     (wala/ML#1164).
+   *     call's operand flags, the plain reading alone for a call setting no flag, and {@code null}
+   *     for every other kind, or for a {@link TensorGenerator.TypeFeedKind#MATMUL} feed declared
+   *     without readings, which composes the plain reading (wala/ML#1164).
    */
   public record FeedPlan(
       TensorGenerator.TypeFeedKind kind,

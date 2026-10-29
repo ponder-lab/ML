@@ -8395,8 +8395,9 @@ public abstract class TensorGenerator implements Cloneable {
    *     whose operation maps its operand's dtype, and {@code null} for one that preserves it and
    *     for every other kind (wala/ML#1008).
    * @param matmulReadings The possible readings of a {@link TypeFeedKind#MATMUL} call's operand
-   *     flags, which the composition reads as the generator does, and {@code null} for a call
-   *     setting no flag and for every other kind (wala/ML#1164).
+   *     flags, which the composition reads as the generator does, {@link MatMulReading#PLAIN} alone
+   *     for a call setting no flag, and {@code null} for every other kind (wala/ML#1164). A {@link
+   *     TypeFeedKind#MATMUL} feed declared without readings composes the plain reading.
    */
   public record TypeFeed(
       TypeFeedKind kind,
