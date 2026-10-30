@@ -1651,10 +1651,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
         int rvi = c.currentScope().allocateTempValue();
         int idx = c.currentScope().getConstantValue(i - 1);
+        // A destructuring read, which a client tells from a subscript (wala/ML#1117).
         c.cfg()
             .addInstruction(
-                Python.instructionFactory()
-                    .PropertyRead(c.cfg().getCurrentInstruction(), rvi, rval, idx));
+                PythonPropertyRead.unpacking(c.cfg().getCurrentInstruction(), rvi, rval, idx));
 
         c.setValue(n, rvi);
         assignValue(n, c, ls, name, rvi);
@@ -1697,10 +1697,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         currentPosition = c.getSourceMap().getPosition(var);
 
         int rvi = c.currentScope().allocateTempValue();
+        // A destructuring read, which a client tells from an attribute read (wala/ML#1117).
         c.cfg()
             .addInstruction(
-                Python.instructionFactory()
-                    .PropertyRead(c.cfg().getCurrentInstruction(), rvi, rval, idx));
+                PythonPropertyRead.unpacking(c.cfg().getCurrentInstruction(), rvi, rval, idx));
 
         currentPosition = save;
 
@@ -1710,8 +1710,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         int rvi = c.currentScope().allocateTempValue();
         c.cfg()
             .addInstruction(
-                Python.instructionFactory()
-                    .PropertyRead(c.cfg().getCurrentInstruction(), rvi, rval, idx));
+                PythonPropertyRead.unpacking(c.cfg().getCurrentInstruction(), rvi, rval, idx));
         handleObjectLiteralAssign(n, var, rvi, c, visitor);
       }
     }

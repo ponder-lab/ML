@@ -26,6 +26,14 @@ public class PythonPropertyRead extends AstPropertyRead {
    */
   private final boolean subscript;
 
+  /**
+   * Whether the read came from destructuring, {@code a, b = y} or a {@code for a, b in ys} target,
+   * rather than from attribute or subscript syntax. A destructuring reads each target out of its
+   * value by position, which at run time iterates the value, and lowers to this instruction with an
+   * integer-constant member (wala/ML#1117).
+   */
+  private final boolean unpacking;
+
   public PythonPropertyRead(int iindex, int result, int objectRef, int memberRef) {
     this(iindex, result, objectRef, memberRef, false);
   }
@@ -41,8 +49,29 @@ public class PythonPropertyRead extends AstPropertyRead {
    */
   public PythonPropertyRead(
       int iindex, int result, int objectRef, int memberRef, boolean subscript) {
+    this(iindex, result, objectRef, memberRef, subscript, false);
+  }
+
+  private PythonPropertyRead(
+      int iindex, int result, int objectRef, int memberRef, boolean subscript, boolean unpacking) {
     super(iindex, result, objectRef, memberRef);
+    assert !(subscript && unpacking) : "A read comes from one syntax.";
     this.subscript = subscript;
+    this.unpacking = unpacking;
+  }
+
+  /**
+   * A property read that destructuring makes: it reads one target out of the destructured value
+   * (wala/ML#1117).
+   *
+   * @param iindex The instruction index.
+   * @param result The target's value number.
+   * @param objectRef The destructured value's value number.
+   * @param memberRef The target's position's value number, an integer constant.
+   * @return The read, which {@link #isUnpacking()}.
+   */
+  public static PythonPropertyRead unpacking(int iindex, int result, int objectRef, int memberRef) {
+    return new PythonPropertyRead(iindex, result, objectRef, memberRef, false, true);
   }
 
   /**
@@ -55,6 +84,18 @@ public class PythonPropertyRead extends AstPropertyRead {
     return subscript;
   }
 
+  /**
+   * Whether this read came from destructuring, {@code a, b = y} or a {@code for a, b in ys} target,
+   * rather than from attribute or subscript syntax (wala/ML#1117). Such a read iterates its
+   * receiver at run time, where a subscript calls {@code __getitem__}. It is never also a {@link
+   * #isSubscript() subscript}.
+   *
+   * @return {@code true} iff the read is a destructuring read.
+   */
+  public boolean isUnpacking() {
+    return unpacking;
+  }
+
   @Override
   public SSAInstruction copyForSSA(SSAInstructionFactory insts, int[] defs, int[] uses) {
     return new PythonPropertyRead(
@@ -62,7 +103,8 @@ public class PythonPropertyRead extends AstPropertyRead {
         defs == null ? getDef() : defs[0],
         uses == null ? getObjectRef() : uses[0],
         uses == null ? getMemberRef() : uses[1],
-        subscript);
+        subscript,
+        unpacking);
   }
 
   /* (non-Javadoc)
