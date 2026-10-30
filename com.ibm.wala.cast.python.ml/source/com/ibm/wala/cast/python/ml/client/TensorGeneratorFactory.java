@@ -1737,12 +1737,53 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether the given node is a comprehension's function, the synthetic function a comprehension's
+   * element or filter expression lowers to (wala/ML#1179).
+   *
+   * @param node The node.
+   * @return {@code true} iff the node's function is a comprehension's.
+   */
+  static boolean isComprehensionFunction(CGNode node) {
+    IClassHierarchy cha = node.getClassHierarchy();
+    IClass comprehension = cha.lookupClass(PythonTypes.comprehension);
+    return comprehension != null
+        && cha.isSubclassOf(node.getMethod().getDeclaringClass(), comprehension);
+  }
+
+  /**
+   * Whether every value the given local may hold is a Python int: an integer constant, or a {@link
+   * PythonTypes#PYTHON_INT} instance, as {@code range}'s elements are. A {@code bool} does not
+   * count, since NumPy reads a {@code bool} subscript as a mask (wala/ML#1179).
+   *
+   * @param node The node of the local.
+   * @param vn The local's value number.
+   * @param builder The propagation call graph builder, whose pointer analysis holds the local's
+   *     values.
+   * @return {@code true} iff the local's points-to set is not empty and holds only Python ints.
+   */
+  private static boolean holdsOnlyInts(CGNode node, int vn, PropagationCallGraphBuilder builder) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    boolean any = false;
+    for (InstanceKey key : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))) {
+      any = true;
+      if (key instanceof ConstantKey<?> constant) {
+        if (!(constant.getValue() instanceof Integer || constant.getValue() instanceof Long))
+          return false;
+      } else if (!PythonTypes.PYTHON_INT.equals(key.concreteType().getReference())) return false;
+    }
+    return any;
+  }
+
+  /**
    * Whether a subscript's member is an integer index, decided structurally: a constant integer, the
    * result of a call to the {@code int} or {@code len} builtin, or a loop counter bound from {@code
    * next(iter(range(...)))}. A member's points-to set does not decide it: a loop counter's set is
    * often empty, and a {@code slice(...)} result's holds an integer constant, although subscripting
-   * by it keeps the axis. Every other member, a parameter among them, is not an integer index, so
-   * its subscript stays unseeded.
+   * by it keeps the axis. The one exception is a comprehension's variable, a parameter of the
+   * comprehension's function that the comprehension trampoline binds to the iterable's elements: it
+   * is an integer index when every value bound to it is a Python int, as {@code range}'s elements
+   * are (wala/ML#1179). Every other member, any other parameter among them, is not an integer
+   * index, so its subscript stays unseeded.
    *
    * @param node The node of the subscript.
    * @param memberRef The member's value number.
@@ -1757,6 +1798,9 @@ public class TensorGeneratorFactory {
       return value instanceof Integer || value instanceof Long;
     }
     DefUse du = node.getDU();
+    if (du.getDef(memberRef) == null
+        && symtab.isParameter(memberRef)
+        && isComprehensionFunction(node)) return holdsOnlyInts(node, memberRef, builder);
     if (!(du.getDef(memberRef) instanceof SSAAbstractInvokeInstruction call)) return false;
     if (callsBuiltin(node, call, "int", builder) || callsBuiltin(node, call, "len", builder))
       return true;
