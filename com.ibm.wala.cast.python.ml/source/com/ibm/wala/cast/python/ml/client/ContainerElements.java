@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.set;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.parseIntOrNull;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -764,13 +765,10 @@ public final class ContainerElements {
     if (value instanceof Integer i) return i >= 0 ? i : null;
     if (value instanceof Long l)
       return l >= 0 && l <= Integer.MAX_VALUE ? Integer.valueOf(l.intValue()) : null;
-    if (value instanceof String s)
-      try {
-        int i = Integer.parseInt(s);
-        return i >= 0 ? i : null;
-      } catch (NumberFormatException e) {
-        return null;
-      }
+    if (value instanceof String s) {
+      Integer i = parseIntOrNull(s);
+      return i != null && i >= 0 ? i : null;
+    }
     return null;
   }
 

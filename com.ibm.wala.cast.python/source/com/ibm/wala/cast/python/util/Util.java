@@ -438,6 +438,52 @@ public class Util {
   }
 
   /**
+   * The one key of a points-to set that is not for points-to clients only ({@link
+   * #isClientOnlyKey(InstanceKey)}), the key {@link #withoutClientOnlyKeys(OrdinalSet)} keeps when
+   * it keeps exactly one. A reader that wants a value only when the set has a single one asks this
+   * rather than filtering the whole set and counting what is left: the scan stops at the second
+   * such key, where filtering visits every key of a set that may hold thousands, and a branch fold
+   * asks once per guard of every caller of every function it reads a parameter of.
+   *
+   * @param pointsToSet The points-to set, possibly {@code null}.
+   * @return The set's only key not for points-to clients only, or {@code null} when it has none or
+   *     several.
+   */
+  public static InstanceKey onlyKeyWithoutClientOnlyKeys(OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null) return null;
+    InstanceKey only = null;
+    for (InstanceKey ik : pointsToSet) {
+      if (isClientOnlyKey(ik)) continue;
+      if (only != null) return null;
+      only = ik;
+    }
+    return only;
+  }
+
+  /**
+   * Parses a string as a decimal {@code int} as {@link Integer#parseInt(String)} does, answering
+   * {@code null} where that method throws. A reader that asks whether a member name or a constant
+   * is an index asks this rather than catching the exception: most names are not, and an exception
+   * fills in its stack trace, whose cost grows with a stack a generator read makes hundreds of
+   * frames deep.
+   *
+   * @param s The string, possibly {@code null}.
+   * @return Its value, or {@code null} when it is not a decimal {@code int}.
+   */
+  public static Integer parseIntOrNull(String s) {
+    if (s == null || s.isEmpty()) return null;
+    int start = s.charAt(0) == '-' || s.charAt(0) == '+' ? 1 : 0;
+    if (start == s.length()) return null;
+    for (int i = start; i < s.length(); i++) if (Character.digit(s.charAt(i), 10) < 0) return null;
+    try {
+      // The characters are digits, so only a value outside the range of an int throws.
+      return Integer.parseInt(s);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  /**
    * Whether an instance key is the type-level key of a Python scalar of unknown value, such as the
    * result of {@code len(xs)} (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
    * A literal is a {@link ConstantKey} instead.
