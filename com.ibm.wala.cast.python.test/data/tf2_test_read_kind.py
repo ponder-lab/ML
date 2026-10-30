@@ -16,6 +16,11 @@ def reads(x, pair, seq, nested, k):
     return a, b, c, d, e, f, g, h, i, j, m, n, o
 
 
+def starred(y):
+    a, *rest = y
+    return a, rest
+
+
 class X(list):
     shape = 7
 
@@ -35,3 +40,4 @@ assert reads(X([1, 2]), (3, 4), [(5, 6)], (8, (9, 10)), 1) == (
     9,
     10,
 )
+assert starred((1, 2, 3)) == (1, [2, 3])

@@ -29,8 +29,9 @@ public class PythonPropertyRead extends AstPropertyRead {
   /**
    * Whether the read came from destructuring, {@code a, b = y} or a {@code for a, b in ys} target,
    * rather than from attribute or subscript syntax. A destructuring reads each target out of its
-   * value by position, which at run time iterates the value, and lowers to this instruction with an
-   * integer-constant member (wala/ML#1117).
+   * value, which at run time iterates the value, and lowers to this instruction. Its member is the
+   * target's position, an integer constant, except under a starred target, {@code a, *rest = y},
+   * where it is the order-free contents field or the starred marker (wala/ML#1117).
    */
   private final boolean unpacking;
 
@@ -67,7 +68,8 @@ public class PythonPropertyRead extends AstPropertyRead {
    * @param iindex The instruction index.
    * @param result The target's value number.
    * @param objectRef The destructured value's value number.
-   * @param memberRef The target's position's value number, an integer constant.
+   * @param memberRef The member's value number: the target's position, an integer constant, or
+   *     under a starred target the contents field or the starred marker.
    * @return The read, which {@link #isUnpacking()}.
    */
   public static PythonPropertyRead unpacking(int iindex, int result, int objectRef, int memberRef) {
