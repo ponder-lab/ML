@@ -222,11 +222,30 @@ public abstract class PythonAnalysisEngine<T>
     return Collections.emptyList();
   }
 
+  /**
+   * The library summary XMLs this engine loads in {@link #addBypassLogic}, read before source
+   * translation for the top-level names they model an import of, so a project directory of such a
+   * name without an initialization module is not bound as a namespace package in the library's
+   * place (<a href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>). Subclasses that load
+   * summaries of their own add them.
+   *
+   * @return the summary XML resource names
+   */
+  protected Collection<String> getLibrarySummaries() {
+    return Arrays.asList(LIBRARIES);
+  }
+
   @Override
   public IClassHierarchy buildClassHierarchy() {
     for (String summary : getSummaryClassShellSummaries()) {
       loader.addSummaryClassShells(new XMLMethodSummaryReader(openSummaryStream(summary), scope));
     }
+
+    for (String summary : getLibrarySummaries())
+      for (MethodReference method :
+          new XMLMethodSummaryReader(openSummaryStream(summary), scope).getSummaries().keySet())
+        if (method.getName().toString().equals("import"))
+          loader.addLibraryImportRoot(method.getDeclaringClass().getName().toString().substring(1));
 
     IClassHierarchy cha = null;
     try {

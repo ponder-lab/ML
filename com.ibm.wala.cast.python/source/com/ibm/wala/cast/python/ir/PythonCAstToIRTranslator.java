@@ -1503,6 +1503,17 @@ public class PythonCAstToIRTranslator extends AstTranslator {
   }
 
   /**
+   * Returns whether a library summary models an import of the given top-level name (<a
+   * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>).
+   *
+   * @param name The imported top-level name.
+   * @return {@code true} iff the loader knows a summary modeling {@code import()} on it.
+   */
+  private boolean modelsLibraryImport(String name) {
+    return loader instanceof PythonLoader pythonLoader && pythonLoader.modelsLibraryImport(name);
+  }
+
+  /**
    * Binds the given value to the implicit namespace package at the given path, a directory under a
    * PYTHONPATH entry that holds scripts but no {@code __init__.py} (<a
    * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>). Python 3 imports such a
@@ -1645,9 +1656,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                     + ") (wala/ML#687).");
         FieldReference global = makeGlobalRef("script " + bound);
         context.cfg().addInstruction(new AstGlobalRead(idx, resultVal, global));
-        // A directory of scripts with no initialization script is a namespace package
-        // (wala/ML#1177); only a name matching no script at all is a library import.
-      } else if (!bindNamespacePackage(context, resultVal, name)) {
+        // A directory of scripts with no initialization script is a namespace package, unless a
+        // summary models a library of that name, which Python's path finder takes over the
+        // directory (wala/ML#1177); any other name is a library import.
+      } else if (modelsLibraryImport(name) || !bindNamespacePackage(context, resultVal, name)) {
         traceImportBinding(
             LOGGER,
             () ->

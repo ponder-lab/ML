@@ -67,4 +67,39 @@ public class TestNamespacePackages extends AbstractTensorTest {
         3,
         Map.of(3, Set.of(TENSOR_4_INT64), 4, Set.of(TENSOR_4_3_FLOAT32)));
   }
+
+  private static final String[] SHADOW_FILES = {
+    "namespace_shadow_proj/tensorflow/example.py", "namespace_shadow_proj/main.py"
+  };
+
+  /**
+   * A project directory named like a library a summary models, without an {@code __init__.py},
+   * leaves {@code from tensorflow import ones} the library's, as Python's path finder does.
+   */
+  @Test
+  public void testModeledLibraryNotShadowed()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        SHADOW_FILES,
+        "main.py",
+        "consume",
+        "namespace_shadow_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+  }
+
+  /** The same, for {@code import tensorflow as tf} and {@code tf.ones}. */
+  @Test
+  public void testModeledLibraryAttributeNotShadowed()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        SHADOW_FILES,
+        "main.py",
+        "consume_attribute",
+        "namespace_shadow_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+  }
 }
