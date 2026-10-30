@@ -16,6 +16,7 @@ import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -1575,7 +1576,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           int objectRef = propertyRead.getObjectRef();
           SSAInstruction def = du.getDef(objectRef);
 
-          if (def == null) {
+          // A comprehension's function reads a value its enclosing function binds lexically, so the
+          // receiver of `[f(t[i]) for i in range(n)]` has no local def either (wala/ML#1179).
+          if (def == null
+              || (def instanceof AstLexicalRead
+                  && TensorGeneratorFactory.isComprehensionFunction(localPointerKeyNode))) {
             // definition is unavailable from the local DefUse. Use interprocedural analysis using
             // the PA.
             boolean added =
