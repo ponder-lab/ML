@@ -147,6 +147,31 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The results of {@code np.vstack} and {@code np.concatenate} are ndarrays and carry the NumPy
+   * origin, and a value a function computes from a stacked array carries it to the call site, as
+   * one computed from an {@code np.array} does (wala/ML#1180).
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testConcatenateOrigin() throws ClassHierarchyException, CancelException, IOException {
+    List<String> sinks =
+        List.of("consume_vstack", "consume_concatenate", "consume_vstack_wh", "consume_array_wh");
+    SinkOrigins sinkOrigins =
+        getSinkOrigins("tf2_test_concatenate_origin.py", sinks.toArray(new String[0]));
+
+    Map<String, List<Set<TensorOrigin>>> expected = new HashMap<>();
+    Map<String, List<Set<TensorOrigin>>> actual = new HashMap<>();
+    for (String sink : sinks) {
+      expected.put(sink, List.of(EnumSet.of(TensorOrigin.NUMPY)));
+      actual.put(sink, sinkOrigins.argumentOrigins().get(sink));
+    }
+    assertEquals(expected, actual);
+  }
+
+  /**
    * The wala/ML#726 consumer contract on the vendored {@code deep_recommenders} Cora subject (the
    * Hybridize-Functions-Refactoring#774 methods), anchored in-repo so the consumer's re-measure is
    * corroboration rather than the gate. The nested helpers ({@code _sample_mask}, {@code
