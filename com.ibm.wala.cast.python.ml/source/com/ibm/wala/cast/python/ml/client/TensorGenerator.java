@@ -28,6 +28,8 @@ import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
+import static com.ibm.wala.cast.python.util.Util.onlyKeyWithoutClientOnlyKeys;
+import static com.ibm.wala.cast.python.util.Util.parseIntOrNull;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -1403,15 +1405,9 @@ public abstract class TensorGenerator implements Cloneable {
     Object constantKeyValue = constantKey.getValue();
 
     if (constantKeyValue instanceof Integer) return (Integer) constantKeyValue;
-    if (constantKeyValue instanceof String) {
-      try {
-        return Integer.parseInt((String) constantKeyValue);
-      } catch (NumberFormatException e) {
-        // A non-integer attribute key (e.g. a method-name field), not an element index. See
-        // wala/ML#603.
-        return null;
-      }
-    }
+    // A non-integer attribute key (e.g. a method-name field) is not an element index. See
+    // wala/ML#603.
+    if (constantKeyValue instanceof String) return parseIntOrNull((String) constantKeyValue);
 
     return null;
   }
@@ -2384,10 +2380,9 @@ public abstract class TensorGenerator implements Cloneable {
 
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (pk == null || builder.getPropagationSystem().isImplicit(pk)) return null;
-    OrdinalSet<InstanceKey> pts =
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
-    if (pts == null || pts.size() != 1) return null;
-    InstanceKey only = pts.iterator().next();
+    InstanceKey only =
+        onlyKeyWithoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+    if (only == null) return null;
     if (!(only instanceof ConstantKey) || !(((ConstantKey<?>) only).getValue() instanceof Number))
       return null;
     return intProjectionOrNull((Number) ((ConstantKey<?>) only).getValue(), truncate);
@@ -4762,10 +4757,9 @@ public abstract class TensorGenerator implements Cloneable {
     }
 
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    OrdinalSet<InstanceKey> pts =
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
-    if (pts == null || pts.size() != 1) return null;
-    InstanceKey only = pts.iterator().next();
+    InstanceKey only =
+        onlyKeyWithoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+    if (only == null) return null;
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
@@ -4819,21 +4813,15 @@ public abstract class TensorGenerator implements Cloneable {
         LOGGER.fine(() -> "ATTR-FOLD non-allocation instance for " + fn + ".");
         return null;
       }
-      OrdinalSet<InstanceKey> fieldPts =
-          withoutClientOnlyKeys(pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
-      if (fieldPts == null || fieldPts.size() != 1) {
+      InstanceKey only =
+          onlyKeyWithoutClientOnlyKeys(
+              pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f)));
+      if (only == null) {
         LOGGER.fine(
             () ->
-                "ATTR-FOLD field pts size "
-                    + (fieldPts == null ? "null" : fieldPts.size())
-                    + " for "
-                    + fn
-                    + " on "
-                    + describe(asin)
-                    + ".");
+                "ATTR-FOLD field holds no single value for " + fn + " on " + describe(asin) + ".");
         return null;
       }
-      InstanceKey only = fieldPts.iterator().next();
       if (!(only instanceof ConstantKey)) {
         LOGGER.fine(() -> "ATTR-FOLD non-constant field value for " + fn + ".");
         return null;
@@ -5273,10 +5261,9 @@ public abstract class TensorGenerator implements Cloneable {
     SymbolTable st = caller.getIR().getSymbolTable();
     if (st.isConstant(vn)) return st.getConstantValue(vn);
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
-    OrdinalSet<InstanceKey> pts =
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
-    if (pts == null || pts.size() != 1) return null;
-    InstanceKey only = pts.iterator().next();
+    InstanceKey only =
+        onlyKeyWithoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+    if (only == null) return null;
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
@@ -5301,10 +5288,10 @@ public abstract class TensorGenerator implements Cloneable {
         FieldReference.findOrCreate(Root, Atom.findOrCreateUnicodeAtom("global " + name), Root);
     IField f = builder.getClassHierarchy().resolveField(global);
     if (f == null) return null;
-    OrdinalSet<InstanceKey> pts =
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f)));
-    if (pts == null || pts.size() != 1) return null;
-    InstanceKey only = pts.iterator().next();
+    InstanceKey only =
+        onlyKeyWithoutClientOnlyKeys(
+            builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f)));
+    if (only == null) return null;
     // A `@click.option` default is written under a global of its own, but it reaches this one
     // when a nested function's Python default IS the click parameter (`def pick(flag=wide)`):
     // the parameter's marker key flows into the nested function's defaults global through an
@@ -10198,11 +10185,8 @@ public abstract class TensorGenerator implements Cloneable {
   private static Integer subscriptIndexOrNull(
       PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int memberVn) {
     if (st.isStringConstant(memberVn)) {
-      try {
-        return Integer.parseInt(st.getStringValue(memberVn));
-      } catch (NumberFormatException e) {
-        return null; // An attribute read, not a subscript.
-      }
+      // A name that is no int is an attribute read, not a subscript.
+      return parseIntOrNull(st.getStringValue(memberVn));
     }
     Integer index = constantIntValueOrSentinel(builder, node, st, memberVn);
     return index == null || Objects.equals(index, UNRESOLVED_BOUND) ? null : index;

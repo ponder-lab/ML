@@ -253,6 +253,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZERO_PADDING_2D_
 import static com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.parseIntOrNull;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -1811,13 +1812,7 @@ public class TensorGeneratorFactory {
         Object value = ((ConstantKey<?>) ik).getValue();
         if (value instanceof Integer) return (Integer) value;
         if (value instanceof Long) return ((Long) value).intValue();
-        if (value instanceof String) {
-          try {
-            return Integer.parseInt((String) value);
-          } catch (NumberFormatException e) {
-            return null;
-          }
-        }
+        if (value instanceof String) return parseIntOrNull((String) value);
       }
     }
     return null;
@@ -3124,11 +3119,7 @@ public class TensorGeneratorFactory {
               propertyIndex = (Integer) val;
             } else if (val instanceof String) {
               propertyName = (String) val;
-              try {
-                propertyIndex = Integer.parseInt((String) val);
-              } catch (NumberFormatException e) {
-                // Ignore
-              }
+              propertyIndex = parseIntOrNull((String) val);
             } else if (val instanceof Long) {
               propertyIndex = ((Long) val).intValue();
             }
