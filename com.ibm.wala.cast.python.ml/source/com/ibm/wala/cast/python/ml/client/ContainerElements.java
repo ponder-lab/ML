@@ -92,9 +92,10 @@ import java.util.stream.Collectors;
  * elements. Every other container reports no length.
  *
  * <p>A client queries this after the analysis, on the builder the analysis ran on. Those queries
- * don't keep the builder reachable through the generator memos, which only an analysis in progress
- * writes (<a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>). A client done with a
- * builder may still call {@link TensorGenerator#clearCaches} to release any other per-builder memo
+ * memoize their generator dispatches on the builder itself, so the memo doesn't keep the builder
+ * reachable (<a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>, <a
+ * href="https://github.com/wala/ML/issues/1176">wala/ML#1176</a>). A client done with a builder may
+ * still call {@link TensorGenerator#clearCaches} to release any other per-builder memo
  * deterministically.
  */
 public final class ContainerElements {

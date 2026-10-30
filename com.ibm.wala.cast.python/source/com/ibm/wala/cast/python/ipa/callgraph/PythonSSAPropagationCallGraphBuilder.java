@@ -128,6 +128,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
@@ -362,6 +363,45 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * change; the tensor analysis names its tensor and array types.
    */
   private Map<TypeReference, TypeReference> freshBinaryOpResultTypes = Collections.emptyMap();
+
+  /**
+   * Memos a client of this builder keeps for it, by a key the client owns. They are held by the
+   * builder, so they are collected with it: a memo in a static map keyed weakly by the builder
+   * whose values reach the builder is never collected (wala/ML#1170).
+   */
+  private final Map<Object, Object> clientMemos = new ConcurrentHashMap<>();
+
+  /**
+   * Returns the memo this builder holds under the given key, creating it first if it has none.
+   *
+   * @param <T> The memo's type.
+   * @param key The key, which the memo's owner holds.
+   * @param create Creates the memo.
+   * @return The memo.
+   */
+  @SuppressWarnings("unchecked")
+  public <T> T clientMemo(Object key, Supplier<T> create) {
+    return (T) clientMemos.computeIfAbsent(key, k -> create.get());
+  }
+
+  /**
+   * Whether this builder holds a memo under the given key.
+   *
+   * @param key The key.
+   * @return {@code true} iff it holds one.
+   */
+  public boolean hasClientMemo(Object key) {
+    return clientMemos.containsKey(key);
+  }
+
+  /**
+   * Drops the memo this builder holds under the given key.
+   *
+   * @param key The key.
+   */
+  public void clearClientMemo(Object key) {
+    clientMemos.remove(key);
+  }
 
   /**
    * The length of each {@code *args} pack whose call fixes it: the positional arguments from the

@@ -264,6 +264,7 @@ import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -2584,39 +2585,38 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * The dispatches per builder that depended on their source alone (see {@link DispatchPath}),
-   * keyed by the source {@link #findCreator} resolves. Each value holds the builder's points-to set
-   * variables, which keep the weak key reachable, so {@link TensorGenerator#clearCaches} removes
-   * the entry. Entries are written only while an analysis resolves for the builder (its {@link
-   * WorklistTypeResolver} is active), so a query made after the analysis leaves none behind
-   * (wala/ML#1170).
+   * The key under which a builder holds its dispatches that depended on their source alone (see
+   * {@link DispatchPath}), keyed by the source {@link #findCreator} resolves. The builder holds
+   * them ({@link PythonSSAPropagationCallGraphBuilder#clientMemo}), so they are collected with it,
+   * and a query made after the analysis, as through {@link ContainerElements}, memoizes its
+   * dispatches too without keeping the builder alive. A static map keyed weakly by the builder kept
+   * it alive, since the dispatches reach it (wala/ML#1170); memoizing only while an analysis
+   * resolved then left every query made after the analysis to dispatch afresh (wala/ML#1176).
    */
-  private static final Map<PropagationCallGraphBuilder, Map<PointsToSetVariable, Dispatch>>
-      DISPATCHES = new WeakHashMap<>();
+  private static final Object DISPATCHES = new Object();
 
   /**
    * The memoized dispatches of a builder.
    *
    * @param builder The builder.
-   * @return Its dispatches.
+   * @return Its dispatches, or {@code null} if the builder can hold none.
    */
   private static Map<PointsToSetVariable, Dispatch> dispatches(
       PropagationCallGraphBuilder builder) {
-    synchronized (DISPATCHES) {
-      return DISPATCHES.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
-    }
+    return builder instanceof PythonSSAPropagationCallGraphBuilder python
+        ? python.clientMemo(DISPATCHES, ConcurrentHashMap::new)
+        : null;
   }
 
   /**
    * Whether a builder has memoized dispatches, for tests of their release (wala/ML#1170).
    *
    * @param builder The builder.
-   * @return {@code true} iff the builder has an entry.
+   * @return {@code true} iff the builder holds them.
    */
   static boolean hasDispatches(PropagationCallGraphBuilder builder) {
-    synchronized (DISPATCHES) {
-      return DISPATCHES.containsKey(builder);
-    }
+    return builder instanceof PythonSSAPropagationCallGraphBuilder python
+        && python.hasClientMemo(DISPATCHES);
   }
 
   /**
@@ -2625,9 +2625,8 @@ public class TensorGeneratorFactory {
    * @param builder The builder.
    */
   static void clearDispatches(PropagationCallGraphBuilder builder) {
-    synchronized (DISPATCHES) {
-      DISPATCHES.remove(builder);
-    }
+    if (builder instanceof PythonSSAPropagationCallGraphBuilder python)
+      python.clearClientMemo(DISPATCHES);
   }
 
   /**
@@ -2655,13 +2654,9 @@ public class TensorGeneratorFactory {
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
     // source, so return null here rather than dereferencing it in `getGeneratorBody`. wala/ML#614.
     if (source == null) return null;
-    // Memoize only while an analysis is resolving for the builder. A query made after it, such as
-    // `ContainerElements.datasetComponent`, would refill the memo the analysis cleared, and the
-    // entries' values keep the weak key reachable (wala/ML#1170).
-    Map<PointsToSetVariable, Dispatch> dispatches =
-        visited.memoizes() && WorklistTypeResolver.active(builder) != null
-            ? dispatches(builder)
-            : null;
+    // The builder holds the memo, so a query made after the analysis memoizes too (wala/ML#1176)
+    // without keeping the builder alive (wala/ML#1170).
+    Map<PointsToSetVariable, Dispatch> dispatches = visited.memoizes() ? dispatches(builder) : null;
     if (visited.cuts(source)) {
       final PointsToSetVariable cycleSource = source;
       LOGGER.log(
