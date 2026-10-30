@@ -198,6 +198,25 @@ public final class ContainerElements {
     }
 
     /**
+     * Marks what a value names for a store under a member the analysis cannot name, when the same
+     * body also stores that value in the object's append contents: a list or set then holds no
+     * element the analysis does not see, so only a list's positions are lost, while a dict's keys
+     * still are (wala/ML#1178).
+     *
+     * @param pa The pointer analysis.
+     * @param node The node of the store.
+     * @param vn The object's value number.
+     */
+    void markMirrored(PointerAnalysis<InstanceKey> pa, CGNode node, int vn) {
+      for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))) {
+        TypeReference type = ik.concreteType().getReference();
+        int index = pa.getInstanceKeyMapping().getMappedIndex(ik);
+        if (type.equals(list)) this.lists.add(index);
+        if (type.equals(dict)) this.open.add(index);
+      }
+    }
+
+    /**
      * Marks every list and, when {@code adds}, every list, dict and set.
      *
      * @param adds Whether the mutation may also add an element the analysis does not record.
@@ -820,7 +839,9 @@ public final class ContainerElements {
    *   <li>the receiver of a read of a repositioning method ({@link #REPOSITIONING_LIST_METHODS}),
    *       or an argument of a call of such a read, as in {@code list.append(l, x)};
    *   <li>the object of a store at a member that is not a constant index or name, such as {@code
-   *       l[i] = x};
+   *       l[i] = x}. When the same body also stores the value in the object's append contents, as a
+   *       comprehension's body does, the store adds no element the analysis does not see, so it
+   *       opens only a dict;
    *   <li>the list of a slice, read or assigned, which the front end lowers to a call of the slice
    *       builtin on the list;
    *   <li>the left operand of a {@code +}, {@code *} or {@code |}, which {@code l += m}, {@code l
@@ -871,10 +892,13 @@ public final class ContainerElements {
                 || isAdding(symtab, read.getMemberRef())))
           marks.mark(pa, node, read.getObjectRef(), isAdding(symtab, read.getMemberRef()));
         else if (instruction instanceof AstPropertyWrite write
-            && !symtab.isConstant(write.getMemberRef()))
-          // `d[k] = t` or `l[i] = t` with a key the analysis may not name.
-          marks.mark(pa, node, write.getObjectRef(), true);
-        else if (instruction instanceof SSABinaryOpInstruction binary
+            && !symtab.isConstant(write.getMemberRef())) {
+          // `d[k] = t` or `l[i] = t` with a key the analysis may not name, unless the body also
+          // stores the value in the append contents, as a comprehension's body does (wala/ML#1178).
+          if (storesInAppendContents(ir, symtab, write))
+            marks.markMirrored(pa, node, write.getObjectRef());
+          else marks.mark(pa, node, write.getObjectRef(), true);
+        } else if (instruction instanceof SSABinaryOpInstruction binary
             && (binary.getOperator() == IBinaryOpInstruction.Operator.ADD
                 || binary.getOperator() == IBinaryOpInstruction.Operator.MUL
                 || binary.getOperator() == IBinaryOpInstruction.Operator.OR))
@@ -1047,6 +1071,28 @@ public final class ContainerElements {
         if (name.equals(access.variableName())) return true;
     if (instruction instanceof SSANewInstruction allocation)
       return allocation.getConcreteType().getName().toString().endsWith(name);
+    return false;
+  }
+
+  /**
+   * Whether a body stores the value of a store under a member the analysis cannot name also in the
+   * same object's append contents ({@link
+   * PythonSSAPropagationCallGraphBuilder#LIST_APPEND_CONTENTS_FIELD}), where the element readers
+   * look. A comprehension's body stores each element so (wala/ML#1178).
+   *
+   * @param ir The body.
+   * @param symtab Its symbol table.
+   * @param write The store.
+   * @return {@code true} iff the body has such a second store.
+   */
+  private static boolean storesInAppendContents(IR ir, SymbolTable symtab, AstPropertyWrite write) {
+    for (SSAInstruction other : ir.getInstructions())
+      if (other instanceof AstPropertyWrite store
+          && store.getObjectRef() == write.getObjectRef()
+          && store.getValue() == write.getValue()
+          && symtab.isStringConstant(store.getMemberRef())
+          && PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD.equals(
+              symtab.getStringValue(store.getMemberRef()))) return true;
     return false;
   }
 
