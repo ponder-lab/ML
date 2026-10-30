@@ -22,6 +22,7 @@ import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -119,6 +120,12 @@ final class WorklistTypeResolver {
   private final Map<Object, Set<Object>> reads = HashMapFactory.make();
 
   /**
+   * Each {@link #reads} key's insertion position, so a region-restricted {@link #tarjan(Set)} roots
+   * its search in the whole graph's order without scanning every key (wala/ML#1176).
+   */
+  private final Map<Object, Integer> readsOrder = HashMapFactory.make();
+
+  /**
    * A check a bound evaluation must pass at convergence (wala/ML#1071), with the queries whose
    * evaluations rely on it.
    *
@@ -157,6 +164,15 @@ final class WorklistTypeResolver {
    * and changed-read criteria (the residual artifact class of wala/ML#758).
    */
   private final Set<Object> staleReaders = HashSetFactory.make();
+
+  /**
+   * The readers {@link #enqueueStaleReaders} must check (wala/ML#1176): every reader whose records
+   * were written or whose read value's version moved since the last scan, and every reader that
+   * scan skipped or found stale. A reader outside the set was not stale at the last scan and has
+   * neither a new record nor a moved read since, so it is not stale now, and a scan need not visit
+   * every record of every reader to find that nothing is stale.
+   */
+  private final Set<Object> staleCandidates = HashSetFactory.make();
 
   /**
    * Queries whose transfers deferred a finality-dependent arm (wala/ML#717's contract seed) during
@@ -749,8 +765,13 @@ final class WorklistTypeResolver {
     Object reader = this.evaluating.peek();
     if (this.settling && reader != null && reader.equals(key)) this.selfReadInRecomputation = true;
     if (reader != null && !reader.equals(key)) {
-      if (this.reads.computeIfAbsent(reader, k -> HashSetFactory.make()).add(key))
-        this.newEdgeReaders.add(reader);
+      Set<Object> readerReads = this.reads.get(reader);
+      if (readerReads == null) {
+        readerReads = HashSetFactory.make();
+        this.reads.put(reader, readerReads);
+        this.readsOrder.put(reader, this.readsOrder.size());
+      }
+      if (readerReads.add(key)) this.newEdgeReaders.add(reader);
       this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
     }
     if (!this.transfers.containsKey(key)) this.register(key, transfer, shapeKind);
@@ -771,10 +792,12 @@ final class WorklistTypeResolver {
     // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
     // evaluation so it matches the value returned below, and an on-stack (interim) read records the
     // pre-completion version, which lags as soon as the read value grows.
-    if (reader != null && !reader.equals(key))
+    if (reader != null && !reader.equals(key)) {
       this.readVersions
           .computeIfAbsent(reader, k -> HashMapFactory.make())
           .put(key, this.versions.getOrDefault(key, 0));
+      this.staleCandidates.add(reader);
+    }
     Object value = this.state.get(key);
     if (value == NULL_DTYPE) return null;
     if (value != null) return value;
@@ -944,18 +967,25 @@ final class WorklistTypeResolver {
    * @return {@code true} iff any stale reader was re-enqueued.
    */
   private boolean enqueueStaleReaders() {
-    List<Object> stale = new ArrayList<>();
-    for (Map.Entry<Object, Map<Object, Integer>> reader : this.readVersions.entrySet()) {
-      Object key = reader.getKey();
-      if (this.enqueued.contains(key)
-          || this.evaluationCounts.getOrDefault(key, 0) > EVALUATION_CAP) continue;
-      for (Map.Entry<Object, Integer> record : reader.getValue().entrySet())
-        if (this.versions.getOrDefault(record.getKey(), 0) > record.getValue()) {
-          stale.add(key);
-          break;
-        }
+    // Only a candidate can be stale; when none is, the whole scan below would find nothing, and
+    // skipping it is what keeps a demand from paying for every record of every reader.
+    Set<Object> retained = HashSetFactory.make();
+    boolean anyStale = false;
+    for (Object key : this.staleCandidates)
+      if (this.staleScanSkips(key)) retained.add(key);
+      else if (this.isStale(key)) {
+        anyStale = true;
+        break;
+      }
+    if (this.checkSkips && !anyStale && !this.findStaleReaders(null).isEmpty())
+      throw new AssertionError("A reader outside the staleness candidates is stale.");
+    if (!anyStale) {
+      this.staleCandidates.retainAll(retained);
+      return false;
     }
-    if (stale.isEmpty()) return false;
+    this.staleCandidates.clear();
+    List<Object> stale = this.findStaleReaders(this.staleCandidates);
+    this.staleCandidates.addAll(stale);
     LOGGER.fine(() -> "Staleness sweep re-enqueueing " + stale.size() + " readers.");
     this.staleReaders.addAll(stale);
     // Perturbation point 3 of the wala/ML#756 knob: the sweep's enqueue order is the map's
@@ -965,6 +995,59 @@ final class WorklistTypeResolver {
       Collections.shuffle(stale, this.cycleShuffle);
     for (Object key : stale) this.enqueue(key);
     return true;
+  }
+
+  /**
+   * Scans every reader, in {@link #readVersions}' order, for a stale one.
+   *
+   * @param skipped Where to add the readers the scan skips, or {@code null}.
+   * @return The stale readers, in scan order.
+   */
+  private List<Object> findStaleReaders(Set<Object> skipped) {
+    List<Object> stale = new ArrayList<>();
+    for (Object key : this.readVersions.keySet())
+      if (this.staleScanSkips(key)) {
+        if (skipped != null) skipped.add(key);
+      } else if (this.isStale(key)) stale.add(key);
+    return stale;
+  }
+
+  /**
+   * Returns whether the staleness scan passes over a reader: it is already enqueued, or pinned at
+   * the evaluation cap.
+   *
+   * @param key The reader.
+   * @return {@code true} iff the scan skips the reader.
+   */
+  private boolean staleScanSkips(Object key) {
+    return this.enqueued.contains(key)
+        || this.evaluationCounts.getOrDefault(key, 0) > EVALUATION_CAP;
+  }
+
+  /**
+   * Returns whether any version the reader's latest evaluation recorded lags the value's current
+   * one.
+   *
+   * @param key The reader.
+   * @return {@code true} iff the reader is stale.
+   */
+  private boolean isStale(Object key) {
+    Map<Object, Integer> records = this.readVersions.get(key);
+    if (records == null) return false;
+    for (Map.Entry<Object, Integer> record : records.entrySet())
+      if (this.versions.getOrDefault(record.getKey(), 0) > record.getValue()) return true;
+    return false;
+  }
+
+  /**
+   * Bumps a query's value version, making each reader that recorded the value a staleness
+   * candidate.
+   *
+   * @param key The query whose value changed.
+   */
+  private void bumpVersion(Object key) {
+    this.versions.merge(key, 1, Integer::sum);
+    this.staleCandidates.addAll(this.dependents.getOrDefault(key, Collections.emptySet()));
   }
 
   /**
@@ -1033,7 +1116,7 @@ final class WorklistTypeResolver {
         Set<Object> promotedNow = HashSetFactory.make();
         for (Object query : promoted) {
           this.putState(query, ShapeResult.unknown());
-          this.versions.merge(query, 1, Integer::sum);
+          this.bumpVersion(query);
           this.stamp(query, true);
           promotedNow.add(query);
         }
@@ -1397,7 +1480,10 @@ final class WorklistTypeResolver {
     long before = this.clock;
     boolean deferredBefore = this.reentryDeferredAtSettlement.contains(key);
     Object value = this.unwinding(() -> this.recomputeSettled(key));
-    if (saved != null) this.readVersions.put(key, saved);
+    if (saved != null) {
+      this.readVersions.put(key, saved);
+      this.staleCandidates.add(key);
+    }
     // A recomputation the skip stands for writes nothing and defers nothing; one that does breaks
     // the skip's premise even when its value passes the comparison below.
     if (this.clock != before || (!deferredBefore && this.reentryDeferredAtSettlement.contains(key)))
@@ -1812,7 +1898,7 @@ final class WorklistTypeResolver {
     joined = this.widen(key, joined);
     if (!joined.equals(old)) {
       this.putState(key, joined);
-      this.versions.merge(key, 1, Integer::sum);
+      this.bumpVersion(key);
       this.stamp(key, true);
       this.reEnqueueStaleDependents(key);
     }
@@ -1921,7 +2007,7 @@ final class WorklistTypeResolver {
         if (region != null && !region.contains(key))
           throw new AssertionError("A promotion lies outside the region: " + key + ".");
         this.putState(key, ShapeResult.unknown());
-        this.versions.merge(key, 1, Integer::sum);
+        this.bumpVersion(key);
         this.stamp(key, true);
         this.reEnqueueStaleDependents(key);
         any = true;
@@ -1955,8 +2041,12 @@ final class WorklistTypeResolver {
     // as a trivial SCC before any reader that reaches it, preserving the reverse-topological
     // emission order.
     List<Object> roots = new ArrayList<>();
-    for (Object key : this.reads.keySet())
-      if (region == null || region.contains(key)) roots.add(key);
+    if (region == null) roots.addAll(this.reads.keySet());
+    else {
+      // The region's readers in the whole graph's order, without scanning every key.
+      for (Object key : region) if (this.readsOrder.containsKey(key)) roots.add(key);
+      roots.sort(Comparator.comparingInt(this.readsOrder::get));
+    }
     for (Object requested : this.settlementRequested)
       if (!this.reads.containsKey(requested) && (region == null || region.contains(requested)))
         roots.add(requested);
