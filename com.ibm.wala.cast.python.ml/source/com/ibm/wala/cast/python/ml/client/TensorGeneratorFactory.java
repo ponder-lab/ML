@@ -3119,7 +3119,9 @@ public class TensorGeneratorFactory {
               propertyIndex = (Integer) val;
             } else if (val instanceof String) {
               propertyName = (String) val;
-              propertyIndex = parseIntOrNull((String) val);
+              // A name that is no int keeps the index an earlier member set.
+              Integer parsed = parseIntOrNull((String) val);
+              if (parsed != null) propertyIndex = parsed;
             } else if (val instanceof Long) {
               propertyIndex = ((Long) val).intValue();
             }

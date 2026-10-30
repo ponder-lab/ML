@@ -2912,4 +2912,20 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
   }
+
+  /**
+   * A dataset element subscripted by a key that is {@code 0} or the name {@code "foo"} to the
+   * analysis is the element's first component: the name selects no component, so the index the
+   * key's other member supplies stands (wala/ML#1176).
+   */
+  @Test
+  public void testDatasetElementMixedMember()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_element_mixed_member.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
 }
