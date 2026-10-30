@@ -86,7 +86,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.Stack;
+import java.util.StringJoiner;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -1461,6 +1464,131 @@ public class PythonCAstToIRTranslator extends AstTranslator {
   }
 
   /**
+   * The in-scope scripts' file names relative to the PYTHONPATH entry each lies under, e.g. {@code
+   * pkg/mod.py}, computed on first use (<a
+   * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>).
+   */
+  private SortedSet<String> scriptsUnderPythonPath;
+
+  /**
+   * Returns the in-scope scripts' file names relative to the PYTHONPATH entry each lies under, as
+   * the scripts are named, e.g. {@code pkg/mod.py}. A script under no entry is left out.
+   *
+   * @return The relative file names, sorted.
+   */
+  private SortedSet<String> getScriptsUnderPythonPath() {
+    if (scriptsUnderPythonPath == null) {
+      scriptsUnderPythonPath = new TreeSet<>();
+
+      if (loader instanceof PythonLoader pythonLoader) {
+        List<Module> allModules =
+            pythonLoader.getClassHierarchy().getScope().getModules(PythonTypes.pythonLoader);
+
+        for (SourceModule m : getLocalModules(allModules)) {
+          Path path = Path.of(m.getURL().getFile());
+
+          for (File pathEntry : pythonLoader.getPythonPath())
+            if (path.startsWith(pathEntry.toPath())) {
+              StringJoiner relative = new StringJoiner("/");
+              for (Path component : pathEntry.toPath().relativize(path))
+                relative.add(component.toString());
+              scriptsUnderPythonPath.add(relative.toString());
+              break;
+            }
+        }
+      }
+    }
+
+    return scriptsUnderPythonPath;
+  }
+
+  /**
+   * Binds the given value to the implicit namespace package at the given path, a directory under a
+   * PYTHONPATH entry that holds scripts but no {@code __init__.py} (<a
+   * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>). Python 3 imports such a
+   * directory as a package, so {@code from pkg import mod} and {@code import pkg.mod} load {@code
+   * pkg/mod.py}. With no initialization script to hold the package's members, the value is a fresh
+   * object with a field per member, as a regular package's initialization script has: a module is
+   * its script, a regular subpackage is its initialization script, and a directory without one is a
+   * namespace package in turn.
+   *
+   * @param context The context of the importing code.
+   * @param result The value to bind.
+   * @param packagePath The directory's path relative to its PYTHONPATH entry, e.g. {@code pkg}.
+   * @return {@code true} iff some in-scope script lies under the directory, so the value is bound.
+   */
+  private boolean bindNamespacePackage(WalkContext context, int result, String packagePath) {
+    String prefix = packagePath + "/";
+    SortedSet<String> scripts =
+        getScriptsUnderPythonPath().subSet(prefix, prefix + Character.MAX_VALUE);
+    if (scripts.isEmpty()) return false;
+
+    // A module, `mod.py`, or a directory, `sub/`, directly under the package.
+    SortedSet<String> members = new TreeSet<>();
+    for (String script : scripts) {
+      String rest = script.substring(prefix.length());
+      int slash = rest.indexOf('/');
+      members.add(slash < 0 ? rest : rest.substring(0, slash + 1));
+    }
+
+    traceImportBinding(
+        LOGGER,
+        () ->
+            "Binding import of: "
+                + packagePath
+                + " to a namespace package with members: "
+                + members
+                + " (wala/ML#1177).");
+
+    int idx = context.cfg().getCurrentInstruction();
+    context
+        .cfg()
+        .addInstruction(
+            Python.instructionFactory()
+                .NewInstruction(idx, result, NewSiteReference.make(idx, PythonTypes.object)));
+
+    for (String member : members) {
+      int value = context.currentScope().allocateTempValue();
+      String name;
+
+      if (member.endsWith("/")) {
+        name = member.substring(0, member.length() - 1);
+        String initialization = prefix + name + "/" + MODULE_INITIALIZATION_FILENAME;
+
+        if (getScriptsUnderPythonPath().contains(initialization))
+          context
+              .cfg()
+              .addInstruction(
+                  new AstGlobalRead(
+                      context.cfg().getCurrentInstruction(),
+                      value,
+                      makeGlobalRef("script " + initialization)));
+        else bindNamespacePackage(context, value, prefix + name);
+      } else {
+        name = getNameWithoutExtension(member);
+        context
+            .cfg()
+            .addInstruction(
+                new AstGlobalRead(
+                    context.cfg().getCurrentInstruction(),
+                    value,
+                    makeGlobalRef("script " + prefix + member)));
+      }
+
+      FieldReference field =
+          FieldReference.findOrCreate(
+              PythonTypes.Root, Atom.findOrCreateUnicodeAtom(name), PythonTypes.Root);
+      context
+          .cfg()
+          .addInstruction(
+              Python.instructionFactory()
+                  .PutInstruction(context.cfg().getCurrentInstruction(), result, value, field));
+    }
+
+    return true;
+  }
+
+  /**
    * Whether the analysis defines the script of the given file name, translated or in scope.
    *
    * @param fileName The script's file name relative to its PYTHONPATH entry, e.g. {@code
@@ -1517,7 +1645,9 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                     + ") (wala/ML#687).");
         FieldReference global = makeGlobalRef("script " + bound);
         context.cfg().addInstruction(new AstGlobalRead(idx, resultVal, global));
-      } else {
+        // A directory of scripts with no initialization script is a namespace package
+        // (wala/ML#1177); only a name matching no script at all is a library import.
+      } else if (!bindNamespacePackage(context, resultVal, name)) {
         traceImportBinding(
             LOGGER,
             () ->

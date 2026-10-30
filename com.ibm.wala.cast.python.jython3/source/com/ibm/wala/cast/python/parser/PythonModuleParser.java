@@ -149,6 +149,29 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           List<alias> importNames, String moduleName, boolean useInitializationFile) {
         moduleName = adjustModuleName(moduleName, useInitializationFile);
 
+        // `import pkg.mod` binds `pkg`, read off the package's initialization module. A package
+        // with no `__init__.py` is an implicit namespace package, and the import binds its name,
+        // which the translator binds to the package's scripts (wala/ML#1177).
+        if (useInitializationFile && !isLocalModule(moduleName)) {
+          String root = moduleName.split("/")[0];
+          return Ast.makeNode(
+              CAstNode.BLOCK_STMT,
+              importNames.stream()
+                  .map(
+                      a ->
+                          Ast.makeNode(
+                              CAstNode.DECL_STMT,
+                              Ast.makeConstant(
+                                  new CAstSymbolImpl(
+                                      a.getInternalName().split("\\.")[0],
+                                      PythonCAstToIRTranslator.Any)),
+                              Ast.makeNode(
+                                  CAstNode.PRIMITIVE,
+                                  Ast.makeConstant("import"),
+                                  Ast.makeConstant(root))))
+                  .collect(Collectors.toList()));
+        }
+
         String yuck = moduleName;
         return Ast.makeNode(
             CAstNode.BLOCK_STMT,
