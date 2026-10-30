@@ -90,6 +90,35 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   }
 
   /**
+   * The top-level names a library summary models an import of (<a
+   * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>).
+   */
+  private Set<String> libraryImportRoots = Collections.emptySet();
+
+  /**
+   * Sets the top-level names a library summary models an import of.
+   *
+   * @param libraryImportRoots The names, e.g. {@code tensorflow}.
+   */
+  public void setLibraryImportRoots(Set<String> libraryImportRoots) {
+    this.libraryImportRoots = libraryImportRoots;
+  }
+
+  /**
+   * Returns whether a library summary models an import of the given top-level name. Python's path
+   * finder takes a regular package or module found on any path entry over a directory without an
+   * initialization module, so an installed library a summary models wins over a project directory
+   * of the same name, and the import is the library's (<a
+   * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>).
+   *
+   * @param name The imported top-level name, e.g. {@code tensorflow}.
+   * @return {@code true} iff a summary models {@code import()} on {@code L<name>}.
+   */
+  public boolean modelsLibraryImport(String name) {
+    return libraryImportRoots.contains(name);
+  }
+
+  /**
    * The file names of the source modules in the analysis scope, collected before translation so
    * cross-module references can be decided order-independently (<a
    * href="https://github.com/wala/ML/issues/691">wala/ML#691</a>).

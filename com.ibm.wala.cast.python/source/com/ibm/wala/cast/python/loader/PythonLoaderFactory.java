@@ -17,7 +17,9 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.summaries.XMLMethodSummaryReader;
 import com.ibm.wala.types.ClassLoaderReference;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public abstract class PythonLoaderFactory extends SingleClassLoaderFactory {
 
@@ -40,6 +42,24 @@ public abstract class PythonLoaderFactory extends SingleClassLoaderFactory {
   }
 
   /**
+   * The top-level names a library summary models an import of, e.g. {@code tensorflow}, registered
+   * by the engine before the class hierarchy is built (<a
+   * href="https://github.com/wala/ML/issues/1177">wala/ML#1177</a>).
+   */
+  private final Set<String> libraryImportRoots = new HashSet<>();
+
+  /**
+   * Registers a top-level name a library summary models an import of, so the loader this factory
+   * creates never binds an import of that name to a project directory without an initialization
+   * module (wala/ML#1177).
+   *
+   * @param name The name, e.g. {@code tensorflow}.
+   */
+  public void addLibraryImportRoot(String name) {
+    libraryImportRoots.add(name);
+  }
+
+  /**
    * {@inheritDoc}
    *
    * <p>Hands the registered summary class-shell readers to the loader, so {@link PythonLoader#init}
@@ -49,6 +69,7 @@ public abstract class PythonLoaderFactory extends SingleClassLoaderFactory {
   protected final IClassLoader makeTheLoader(IClassHierarchy cha) {
     PythonLoader loader = makePythonLoader(cha);
     loader.setSummaryClassShellReaders(summaryClassShellReaders);
+    loader.setLibraryImportRoots(libraryImportRoots);
     return loader;
   }
 

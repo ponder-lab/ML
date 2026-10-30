@@ -50,6 +50,7 @@ import com.ibm.wala.util.graph.labeled.LabeledGraph;
 import com.ibm.wala.util.graph.labeled.SlowSparseNumberedLabeledGraph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -104,6 +105,13 @@ public class PythonTurtleAnalysisEngine
                   });
         });
     return stuff;
+  }
+
+  @Override
+  protected Collection<String> getLibrarySummaries() {
+    List<String> ret = new ArrayList<>(super.getLibrarySummaries());
+    ret.add("turtles.xml");
+    return ret;
   }
 
   @Override

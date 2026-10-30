@@ -5054,22 +5054,35 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         : -1;
   }
 
+  /**
+   * The summaries this engine loads after the base engine's, in order. Load numpy before tensorflow
+   * so tensorflow-level generators can reference numpy types via `NumpyTypes` constants without
+   * depending on load order side effects. scipy.xml's sparse product allocates a `numpy/ndarray`,
+   * so it loads after numpy too. SentencePiece's id encodings are lists of Python ints a text
+   * model's prompt is built from. scikit-learn's `train_test_split` halves are lists of the input's
+   * elements. TensorFlow Addons' optimizers are Keras optimizers (wala/ML#1050). TensorFlow
+   * Datasets' `load` returns datasets of `tensorflow.xml` (wala/ML#1155).
+   */
+  private static final List<String> SUMMARIES =
+      List.of(
+          "numpy.xml",
+          "scipy.xml",
+          "tensorflow.xml",
+          "sentencepiece.xml",
+          "sklearn.xml",
+          "tensorflow_addons.xml",
+          "tensorflow_datasets.xml");
+
   protected void addBypassLogic(IClassHierarchy cha, AnalysisOptions options) {
     super.addBypassLogic(cha, options);
-    // Load numpy before tensorflow so tensorflow-level generators can reference numpy types via
-    // `NumpyTypes` constants without depending on load order side effects. scipy.xml's sparse
-    // product allocates a `numpy/ndarray`, so it loads after numpy too.
-    addSummaryBypassLogic(options, "numpy.xml");
-    addSummaryBypassLogic(options, "scipy.xml");
-    addSummaryBypassLogic(options, "tensorflow.xml");
-    // SentencePiece's id encodings are lists of Python ints a text model's prompt is built from.
-    addSummaryBypassLogic(options, "sentencepiece.xml");
-    // scikit-learn's `train_test_split` halves are lists of the input's elements.
-    addSummaryBypassLogic(options, "sklearn.xml");
-    // TensorFlow Addons' optimizers are Keras optimizers (wala/ML#1050).
-    addSummaryBypassLogic(options, "tensorflow_addons.xml");
-    // TensorFlow Datasets' `load` returns datasets of `tensorflow.xml` (wala/ML#1155).
-    addSummaryBypassLogic(options, "tensorflow_datasets.xml");
+    for (String summary : SUMMARIES) addSummaryBypassLogic(options, summary);
+  }
+
+  @Override
+  protected Collection<String> getLibrarySummaries() {
+    List<String> ret = new ArrayList<>(super.getLibrarySummaries());
+    ret.addAll(SUMMARIES);
+    return ret;
   }
 
   /**

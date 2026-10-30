@@ -21,6 +21,8 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 public class PytestAnalysisEngine<T> extends PythonAnalysisEngine<T> {
@@ -87,6 +89,13 @@ public class PytestAnalysisEngine<T> extends PythonAnalysisEngine<T> {
     options.setSelector(new PytestTargetSelector(options.getMethodTargetSelector()));
 
     addSummaryBypassLogic(options, "pytest.xml");
+  }
+
+  @Override
+  protected Collection<String> getLibrarySummaries() {
+    List<String> ret = new ArrayList<>(super.getLibrarySummaries());
+    ret.add("pytest.xml");
+    return ret;
   }
 
   @Override
