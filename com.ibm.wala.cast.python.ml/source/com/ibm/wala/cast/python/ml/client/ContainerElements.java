@@ -137,6 +137,17 @@ public final class ContainerElements {
   private static final List<String> NON_RESIZING_LIBRARIES = List.of("Ltensorflow", "Lnumpy");
 
   /**
+   * The library functions named like a method that may add an element ({@link #ADDING_METHODS})
+   * that resize no container, by the library module's type name and the attributes read off it:
+   * {@code tf.keras.backend.update} assigns a variable (wala/ML#1182).
+   */
+  private static final Set<String> NON_RESIZING_LIBRARY_FUNCTIONS =
+      Set.of("Ltensorflow/keras/backend/update");
+
+  /** The builtins whose call builds a fresh container (wala/ML#1182). */
+  private static final Set<String> CONTAINER_BUILTINS = Set.of("list", "dict", "set");
+
+  /**
    * The methods that may add an element to a list, dict or set without the analysis recording it
    * among the container's element keys, a set's {@code add} among them. A list's {@code append} is
    * not: the analysis records an appended element under its own channel.
@@ -838,8 +849,10 @@ public final class ContainerElements {
    * A program function the call graph does not reach may still run, as a callback a library summary
    * does not call, such as a {@code key} of {@code sorted} or a function {@code map} applies. In
    * such a body, the receiver of a repositioning read is a list so mutated when it is a variable of
-   * an enclosing frame or a global, read off what that variable is written. Any other receiver
-   * there may be any list, and so is every list.
+   * an enclosing frame or a global, read off what that variable is written. A receiver the body
+   * builds itself is none the analysis has, and a library function that resizes nothing ({@link
+   * #NON_RESIZING_LIBRARY_FUNCTIONS}) mutates nothing (wala/ML#1182). Any other receiver there may
+   * be any list, and so is every list.
    *
    * <p>The front end drops the target of a {@code del} statement, so a subscript {@code del}
    * anywhere, in a reached node or such a body, may mutate any list.
@@ -944,6 +957,12 @@ public final class ContainerElements {
                   || isAdding(symtab, read.getMemberRef()))) continue;
           boolean adds = isAdding(symtab, read.getMemberRef());
           SSAInstruction receiver = du.getDef(read.getObjectRef());
+          // A container the body builds itself is none the analysis allocates, and a library
+          // function so named may resize none (wala/ML#1182).
+          if (isBuiltHere(builder, du, receiver)
+              || isNonResizingLibraryFunction(
+                  builder, symtab, du, receiver, symtab.getStringValue(read.getMemberRef())))
+            continue;
           if (receiver instanceof AstLexicalRead lexical) {
             for (Access access : lexical.getAccesses())
               if (access.valueNumber() == read.getObjectRef())
@@ -956,6 +975,123 @@ public final class ContainerElements {
         }
       }
     }
+  }
+
+  /**
+   * Whether a receiver in a body the call graph does not reach is a container the body builds
+   * itself: a display, such as {@code []} or {@code {}}, or a call of the {@code list}, {@code
+   * dict} or {@code set} builtin, read by a name the program binds to no function of its own. The
+   * analysis allocates no such container, so a mutation of it mutates none the analysis has
+   * (wala/ML#1182).
+   *
+   * @param builder The builder.
+   * @param du The body's def-use.
+   * @param receiver The instruction defining the receiver, or {@code null}.
+   * @return {@code true} iff the body builds the receiver.
+   */
+  private static boolean isBuiltHere(
+      PropagationCallGraphBuilder builder, DefUse du, SSAInstruction receiver) {
+    if (receiver instanceof SSANewInstruction) return true;
+    if (!(receiver instanceof SSAAbstractInvokeInstruction call) || call.getNumberOfUses() == 0)
+      return false;
+    SSAInstruction callee = du.getDef(call.getUse(0));
+    String name;
+    if (callee instanceof AstGlobalRead global) name = bareName(global.getGlobalName());
+    else if (callee instanceof AstLexicalRead lexical
+        && lexical.getAccessCount() == 1
+        && isModule(lexical.getAccess(0).variableDefiner()))
+      name = lexical.getAccess(0).variableName();
+    else return false;
+    if (!CONTAINER_BUILTINS.contains(name)) return false;
+    // A module may bind the name to a function of its own, which may return any container.
+    for (InstanceKey value : variableWrites(builder, name, null))
+      if (value.concreteType().getName().toString().startsWith("Lscript ")) return false;
+    return true;
+  }
+
+  /**
+   * Whether a method read in a body the call graph does not reach is a library function that
+   * resizes no container ({@link #NON_RESIZING_LIBRARY_FUNCTIONS}): its receiver is a chain of
+   * attribute reads, as {@code tf.keras.backend} is, off a variable that every write in the call
+   * graph binds to a TensorFlow or NumPy module ({@link #NON_RESIZING_LIBRARIES}), as {@code import
+   * tensorflow as tf} does (wala/ML#1182).
+   *
+   * @param builder The builder.
+   * @param symtab The body's symbol table.
+   * @param du The body's def-use.
+   * @param receiver The instruction defining the receiver, or {@code null}.
+   * @param method The method's name.
+   * @return {@code true} iff the method is such a function.
+   */
+  private static boolean isNonResizingLibraryFunction(
+      PropagationCallGraphBuilder builder,
+      SymbolTable symtab,
+      DefUse du,
+      SSAInstruction receiver,
+      String method) {
+    // The attributes read off the root variable, outermost first.
+    List<String> attributes = new ArrayList<>();
+    SSAInstruction current = receiver;
+    Set<SSAInstruction> seen = new HashSet<>();
+    while (current instanceof AstPropertyRead read && seen.add(current)) {
+      if (!symtab.isStringConstant(read.getMemberRef())) return false;
+      attributes.add(0, symtab.getStringValue(read.getMemberRef()));
+      current = du.getDef(read.getObjectRef());
+    }
+    String variable;
+    String definer;
+    if (current instanceof AstGlobalRead global) {
+      variable = bareName(global.getGlobalName());
+      definer = null;
+    } else if (current instanceof AstLexicalRead lexical && lexical.getAccessCount() == 1) {
+      variable = lexical.getAccess(0).variableName();
+      definer = lexical.getAccess(0).variableDefiner();
+    } else return false;
+    String path = (attributes.isEmpty() ? "" : "/" + String.join("/", attributes)) + "/" + method;
+    boolean any = false;
+    for (InstanceKey module : variableWrites(builder, variable, definer)) {
+      String type = module.concreteType().getName().toString();
+      if (NON_RESIZING_LIBRARIES.stream().noneMatch(type::startsWith)
+          || !NON_RESIZING_LIBRARY_FUNCTIONS.contains(type + path)) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /**
+   * The values the call graph's nodes write a variable: a global, or a module's variable, which is
+   * how a module-level assignment is lowered, matched by bare name as {@link #markGlobalWrites}
+   * matches them; or, given its definer, a variable of that frame.
+   *
+   * @param builder The builder.
+   * @param name The variable's bare name.
+   * @param definer The name of the method whose frame defines the variable, or {@code null} for a
+   *     global.
+   * @return The written values' instance keys.
+   */
+  private static Set<InstanceKey> variableWrites(
+      PropagationCallGraphBuilder builder, String name, String definer) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Set<InstanceKey> ret = new HashSet<>();
+    for (CGNode node : builder.getCallGraph()) {
+      IR ir = node.getIR();
+      if (ir == null) continue;
+      for (SSAInstruction instruction : ir.getInstructions())
+        if (definer == null
+            && instruction instanceof AstGlobalWrite write
+            && name.equals(bareName(write.getGlobalName())))
+          pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, write.getVal()))
+              .forEach(ret::add);
+        else if (instruction instanceof AstLexicalWrite write)
+          for (Access access : write.getAccesses())
+            if (name.equals(access.variableName())
+                && (definer == null
+                    ? isModule(access.variableDefiner())
+                    : definer.equals(access.variableDefiner())))
+              pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, access.valueNumber()))
+                  .forEach(ret::add);
+    }
+    return ret;
   }
 
   /**
