@@ -166,13 +166,17 @@ final class WorklistTypeResolver {
   private final Set<Object> staleReaders = HashSetFactory.make();
 
   /**
-   * The readers {@link #enqueueStaleReaders} must check (wala/ML#1176): every reader whose records
-   * were written or whose read value's version moved since the last scan, and every reader that
-   * scan skipped or found stale. A reader outside the set was not stale at the last scan and has
-   * neither a new record nor a moved read since, so it is not stale now, and a scan need not visit
-   * every record of every reader to find that nothing is stale.
+   * The readers {@link #enqueueStaleReaders} must check (wala/ML#1176): every reader of a value
+   * whose version moved since the last scan, every reader whose records {@link #checkSkip} restored
+   * since then, and every reader that scan skipped or found stale. A record is written at its
+   * value's current version, so it lags only once that value moves after it, which marks the
+   * reader; a reader outside the set was therefore not stale at the last scan and is not stale now,
+   * and a scan need not visit every record of every reader to find that nothing is stale.
    */
   private final Set<Object> staleCandidates = HashSetFactory.make();
+
+  /** How many staleness scans found a stale reader. */
+  private int staleScanHits;
 
   /**
    * Queries whose transfers deferred a finality-dependent arm (wala/ML#717's contract seed) during
@@ -792,12 +796,10 @@ final class WorklistTypeResolver {
     // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
     // evaluation so it matches the value returned below, and an on-stack (interim) read records the
     // pre-completion version, which lags as soon as the read value grows.
-    if (reader != null && !reader.equals(key)) {
+    if (reader != null && !reader.equals(key))
       this.readVersions
           .computeIfAbsent(reader, k -> HashMapFactory.make())
           .put(key, this.versions.getOrDefault(key, 0));
-      this.staleCandidates.add(reader);
-    }
     Object value = this.state.get(key);
     if (value == NULL_DTYPE) return null;
     if (value != null) return value;
@@ -986,6 +988,7 @@ final class WorklistTypeResolver {
     this.staleCandidates.clear();
     List<Object> stale = this.findStaleReaders(this.staleCandidates);
     this.staleCandidates.addAll(stale);
+    if (!stale.isEmpty()) this.staleScanHits++;
     LOGGER.fine(() -> "Staleness sweep re-enqueueing " + stale.size() + " readers.");
     this.staleReaders.addAll(stale);
     // Perturbation point 3 of the wala/ML#756 knob: the sweep's enqueue order is the map's
@@ -1502,6 +1505,38 @@ final class WorklistTypeResolver {
               + brief(value)
               + ".");
     this.checkedSkips++;
+  }
+
+  /**
+   * Returns how many staleness scans found a stale reader.
+   *
+   * @return The count.
+   */
+  int staleScanHits() {
+    return this.staleScanHits;
+  }
+
+  /**
+   * Rewinds the version a reader recorded for a value by one, as if the reader had consumed the
+   * value before its latest change, without making the reader a staleness candidate. For a test of
+   * {@link #enqueueStaleReaders}'s check mode: no scheduling reaches this state.
+   *
+   * @param reader The reader.
+   * @param key The value it read.
+   */
+  void lagRecordForTest(Object reader, Object key) {
+    this.readVersions.get(reader).merge(key, -1, Integer::sum);
+  }
+
+  /**
+   * Bumps a value's version without re-enqueueing its readers, as a change made while they are on
+   * the stack does, so only the staleness scan can find them. For a test of {@link
+   * #enqueueStaleReaders}.
+   *
+   * @param key The value.
+   */
+  void bumpVersionForTest(Object key) {
+    this.bumpVersion(key);
   }
 
   /** Turns on the check mode of {@link #checkSkip} for this engine. */

@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -828,5 +829,71 @@ public class WorklistTypeResolverTest {
 
     assertTrue("The binding was not declined.", engine.isBindingDeclined("edge"));
     assertEquals(ShapeResult.unknown(), engine.demand("EDGE_ROOT", transfers.get(0), true));
+  }
+
+  /**
+   * The staleness scan's check mode fails when a stale reader is not a candidate (wala/ML#1176):
+   * the scan checks only candidates, and the check compares it against the whole scan.
+   */
+  @Test
+  public void testStaleNonCandidateFailsCheck() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    engine.demand("LAG_A", () -> engine.read("LAG_B", () -> scalar, true), true);
+    // A first scan finds the reader current and drops it from the candidates.
+    demandPureCycle(engine, "LAG_E", "LAG_F");
+    engine.lagRecordForTest("LAG_A", "LAG_B");
+
+    try {
+      demandPureCycle(engine, "LAG_C", "LAG_D");
+    } catch (AssertionError e) {
+      assertEquals("A reader outside the staleness candidates is stale.", e.getMessage());
+      return;
+    }
+    fail("The check mode missed a stale reader outside the candidates.");
+  }
+
+  /**
+   * A reader whose read value changes while it cannot be re-enqueued is a staleness candidate, so
+   * the scan finds and re-enqueues it, and the check mode agrees (wala/ML#1176).
+   */
+  @Test
+  public void testStaleCandidateFoundByScan() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    engine.demand("BUMP_A", () -> engine.read("BUMP_B", () -> scalar, true), true);
+    // A first scan finds the reader current and drops it from the candidates.
+    demandPureCycle(engine, "BUMP_E", "BUMP_F");
+    engine.bumpVersionForTest("BUMP_B");
+
+    demandPureCycle(engine, "BUMP_C", "BUMP_D");
+
+    assertEquals(1, engine.staleScanHits());
+    assertEquals(scalar, engine.demand("BUMP_A", () -> scalar, true));
+  }
+
+  /**
+   * Demands a fresh two-query cycle, so the fixpoint runs past its early return and scans for stale
+   * readers.
+   *
+   * @param engine The engine.
+   * @param first The first query's key.
+   * @param second The second query's key.
+   */
+  private static void demandPureCycle(WorklistTypeResolver engine, Object first, Object second) {
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read(second, transfers.get(1), true);
+          return ShapeResult.bottom();
+        });
+    transfers.add(
+        () -> {
+          engine.read(first, transfers.get(0), true);
+          return ShapeResult.bottom();
+        });
+    engine.demand(first, transfers.get(0), true);
   }
 }
