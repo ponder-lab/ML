@@ -1688,7 +1688,7 @@ final class WorklistTypeResolver {
     this.bumpVersion(key);
   }
 
-  /** Turns on the check mode of {@link #checkSkip} for this engine. */
+  /** Turns on the check mode of {@link #CHECK_SKIPS_PROPERTY} for this engine. */
   void enableSkipCheck() {
     this.checkSkips = true;
   }
@@ -1699,7 +1699,7 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Turns off the check mode of {@link #checkSkip} for this engine, whatever {@link
+   * Turns off the check mode of {@link #CHECK_SKIPS_PROPERTY} for this engine, whatever {@link
    * #CHECK_SKIPS_PROPERTY} says, for a test of the skip itself.
    */
   void disableSkipCheck() {

@@ -35,11 +35,12 @@ public class WorklistOrderInvarianceTest {
   public void testSeedOrderInvariance()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     new TestCorpusFixtures().runNlpgnnFullGeneration();
+    String oldReverseSeeds = System.getProperty("ariadne.typeResolution.reverseSeeds");
     System.setProperty("ariadne.typeResolution.reverseSeeds", "true");
     try {
       new TestCorpusFixtures().runNlpgnnFullGeneration();
     } finally {
-      System.clearProperty("ariadne.typeResolution.reverseSeeds");
+      restore("ariadne.typeResolution.reverseSeeds", oldReverseSeeds);
     }
   }
 
@@ -63,11 +64,18 @@ public class WorklistOrderInvarianceTest {
   @Test
   public void testCycleOrderInvariance()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String oldShuffleCyclesProperty =
+        System.getProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
     System.setProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, "11");
     try {
       new TestCorpusFixtures().runNlpgnnFullGeneration();
     } finally {
-      System.clearProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
+      restore(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, oldShuffleCyclesProperty);
     }
+  }
+
+  private static void restore(String property, String value) {
+    if (value == null) System.clearProperty(property);
+    else System.setProperty(property, value);
   }
 }

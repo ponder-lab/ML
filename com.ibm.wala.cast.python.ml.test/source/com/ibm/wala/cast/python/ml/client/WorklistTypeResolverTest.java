@@ -588,11 +588,13 @@ public class WorklistTypeResolverTest {
     assertNull(WorklistTypeResolver.parseCycleShuffleSeed(null));
     assertNull(WorklistTypeResolver.parseCycleShuffleSeed("bogus"));
     assertEquals(Long.valueOf(42), WorklistTypeResolver.parseCycleShuffleSeed("42"));
+    String oldShuffleCyclesProperty =
+        System.getProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
     System.setProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, "11");
     try {
       testCanonicalizationRetractsStaleCollapse();
     } finally {
-      System.clearProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
+      restore(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, oldShuffleCyclesProperty);
     }
   }
 
@@ -753,6 +755,7 @@ public class WorklistTypeResolverTest {
    */
   @Test
   public void testRestrictedSettlementMatchesWholeGraph() {
+    String oldCheckSkipsProperty = System.getProperty(WorklistTypeResolver.CHECK_SKIPS_PROPERTY);
     System.setProperty(WorklistTypeResolver.CHECK_SKIPS_PROPERTY, "true");
     try {
       testPureCyclePromotesToUnknown();
@@ -765,7 +768,7 @@ public class WorklistTypeResolverTest {
       uninstall();
       testSettledReadsSurviveFixpointEvaluation();
     } finally {
-      System.clearProperty(WorklistTypeResolver.CHECK_SKIPS_PROPERTY);
+      restore(WorklistTypeResolver.CHECK_SKIPS_PROPERTY, oldCheckSkipsProperty);
     }
   }
 
@@ -775,11 +778,13 @@ public class WorklistTypeResolverTest {
    */
   @Test
   public void testSettlementRestrictionCanBeTurnedOff() {
+    String oldRestrictSettlementProperty =
+        System.getProperty(WorklistTypeResolver.RESTRICT_SETTLEMENT_PROPERTY);
     System.setProperty(WorklistTypeResolver.RESTRICT_SETTLEMENT_PROPERTY, "false");
     try {
       testSettledCycleRecomputedWhenPartnerRewritten();
     } finally {
-      System.clearProperty(WorklistTypeResolver.RESTRICT_SETTLEMENT_PROPERTY);
+      restore(WorklistTypeResolver.RESTRICT_SETTLEMENT_PROPERTY, oldRestrictSettlementProperty);
     }
   }
 
@@ -927,5 +932,10 @@ public class WorklistTypeResolverTest {
           return ShapeResult.bottom();
         });
     engine.demand(first, transfers.get(0), true);
+  }
+
+  private static void restore(String property, String value) {
+    if (value == null) System.clearProperty(property);
+    else System.setProperty(property, value);
   }
 }
