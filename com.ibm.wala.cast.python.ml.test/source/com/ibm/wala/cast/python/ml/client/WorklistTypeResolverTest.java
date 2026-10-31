@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -924,9 +925,9 @@ public class WorklistTypeResolverTest {
     Set<Object> changed = new HashSet<>();
     for (int i = 0; i < 4096; i++) changed.add("CHANGED" + i);
 
-    assertTrue(!engine.intersects(Set.of("READ"), changed));
+    assertFalse(engine.intersects(Set.of("READ"), changed));
     assertEquals(1, engine.readTestCounts()[3]);
-    assertTrue(!engine.intersects(changed, Set.of("READ")));
+    assertFalse(engine.intersects(changed, Set.of("READ")));
     assertEquals(2, engine.readTestCounts()[3]);
 
     // A shared element is found, from either side.
@@ -935,8 +936,8 @@ public class WorklistTypeResolverTest {
     assertTrue(engine.readTestCounts()[3] <= 5);
 
     // An empty set shares nothing and costs no probe.
-    assertTrue(!engine.intersects(Set.of(), changed));
-    assertTrue(!engine.intersects(changed, Set.of()));
+    assertFalse(engine.intersects(Set.of(), changed));
+    assertFalse(engine.intersects(changed, Set.of()));
     assertTrue(engine.readTestCounts()[3] <= 5);
   }
 

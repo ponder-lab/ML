@@ -377,7 +377,9 @@ final class WorklistTypeResolver {
    * The read-set census of the settlement sweep's target selection (wala/ML#1176): the queries it
    * tested for having read a changed query, the sizes of their read sets and of the changed set
    * summed over those tests, the containment probes the tests made and the time the selection took.
-   * The selection evaluates no transfer, so no nested solve is inside its time.
+   * Besides the read tests, the selection's time holds the settled-input checks of cyclic queries.
+   * It evaluates no transfer, so no nested solve is inside it, except in the check mode of {@link
+   * #CHECK_SKIPS_PROPERTY}, where it also holds the recomputations that check each skip.
    */
   private long sweepReadTests, sweepReadsSum, sweepChangedSum, sweepReadProbes, sweepSelectNanos;
 
