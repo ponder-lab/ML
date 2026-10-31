@@ -353,8 +353,8 @@ final class WorklistTypeResolver {
    * condensation took; the time of the staleness scans; and the outermost solves and their time.
    * Neither a walk nor a scan evaluates a transfer, so no nested solve is inside the times they
    * record. The condensed queries are the restricted pass's in either mode, but in the check mode
-   * of {@link #checkSkip} a walk's time also holds the whole-graph condensation it is checked
-   * against.
+   * of {@link #CHECK_SKIPS_PROPERTY} a walk's time also holds the whole-graph condensation it is
+   * checked against.
    */
   private long promotionWalks,
       promotionWholeWalks,
@@ -1084,8 +1084,8 @@ final class WorklistTypeResolver {
 
   /**
    * Counts the queries in the components of a condensation that lie in a region. In the check mode
-   * of {@link #checkSkip} the condensation is the whole graph's, so either mode counts the
-   * restricted pass's queries; a component lies wholly inside or outside the region.
+   * of {@link #CHECK_SKIPS_PROPERTY} the condensation is the whole graph's, so either mode counts
+   * the restricted pass's queries; a component lies wholly inside or outside the region.
    *
    * @param sccs The condensation.
    * @param region The region, or {@code null} for the whole graph.
@@ -1688,7 +1688,7 @@ final class WorklistTypeResolver {
     this.bumpVersion(key);
   }
 
-  /** Turns on the check mode of {@link #checkSkip} for this engine. */
+  /** Turns on the check mode of {@link #CHECK_SKIPS_PROPERTY} for this engine. */
   void enableSkipCheck() {
     this.checkSkips = true;
   }
@@ -1699,8 +1699,8 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Turns off the check mode of {@link #checkSkip} for this engine, whatever {@link
-   * #CHECK_SKIPS_PROPERTY} says, for a test of the skip itself.
+   * Turns off the check mode for this engine, whatever {@link #CHECK_SKIPS_PROPERTY} says, for a
+   * test of the skip itself.
    */
   void disableSkipCheck() {
     this.checkSkips = false;

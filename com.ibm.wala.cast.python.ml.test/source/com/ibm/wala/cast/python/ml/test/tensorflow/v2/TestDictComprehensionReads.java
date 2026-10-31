@@ -195,19 +195,22 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   public void testCycleIsOrderInvariant()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     this.testCycle();
+    String oldReverseSeeds = System.getProperty("ariadne.typeResolution.reverseSeeds");
     System.setProperty("ariadne.typeResolution.reverseSeeds", "true");
     try {
       this.testCycle();
     } finally {
-      System.clearProperty("ariadne.typeResolution.reverseSeeds");
+      restore("ariadne.typeResolution.reverseSeeds", oldReverseSeeds);
     }
-    for (String seed : new String[] {"7", "11"}) {
-      System.setProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, seed);
-      try {
+    String oldShuffleCycles =
+        System.getProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
+    try {
+      for (String seed : new String[] {"7", "11"}) {
+        System.setProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, seed);
         this.testCycle();
-      } finally {
-        System.clearProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
       }
+    } finally {
+      restore(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, oldShuffleCycles);
     }
   }
 
@@ -254,5 +257,10 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FIXTURE, "shared_audios_sink", 1, 1, Map.of(2, Set.of(AUDIOS_SLICED)));
     test(FIXTURE, "shared_ids_sink", 1, 1, Map.of(2, Set.of(AUDIOS_SLICED)));
+  }
+
+  private static void restore(String property, String value) {
+    if (value == null) System.clearProperty(property);
+    else System.setProperty(property, value);
   }
 }
