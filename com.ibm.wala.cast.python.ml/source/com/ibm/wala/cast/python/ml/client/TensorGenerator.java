@@ -179,13 +179,75 @@ public abstract class TensorGenerator implements Cloneable {
   /**
    * A shape-resolution query key (wala/ML#716): the queried value plus the resolution mode.
    * Exact-mode results poison to ⊤ whenever any points-to member fails to resolve, so they cannot
-   * share engine state entries with the default partial-union results.
-   *
-   * @param node The {@link CGNode} whose IR defines the value.
-   * @param valueNumber The queried value number.
-   * @param exact Whether an unresolvable union member poisons the result to ⊤.
+   * share engine state entries with the default partial-union results. Equality and the hash code
+   * are a record's of its three components, the hash code computed once.
    */
-  private record ShapeQuery(CGNode node, int valueNumber, boolean exact) {}
+  static final class ShapeQuery {
+
+    private final CGNode node;
+
+    private final int valueNumber;
+
+    private final boolean exact;
+
+    /**
+     * The hash code a record of these components has, computed once (wala/ML#1176): the resolver
+     * looks its keys up many times over, and a {@link CGNode}'s hash code is not cached.
+     */
+    private final int hash;
+
+    /**
+     * Constructs a query key.
+     *
+     * @param node The {@link CGNode} whose IR defines the value.
+     * @param valueNumber The queried value number.
+     * @param exact Whether an unresolvable union member poisons the result to ⊤.
+     */
+    ShapeQuery(CGNode node, int valueNumber, boolean exact) {
+      this.node = node;
+      this.valueNumber = valueNumber;
+      this.exact = exact;
+      this.hash =
+          (Objects.hashCode(node) * 31 + Integer.hashCode(valueNumber)) * 31
+              + Boolean.hashCode(exact);
+    }
+
+    CGNode node() {
+      return this.node;
+    }
+
+    int valueNumber() {
+      return this.valueNumber;
+    }
+
+    boolean exact() {
+      return this.exact;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj instanceof ShapeQuery other
+          && this.valueNumber == other.valueNumber
+          && this.exact == other.exact
+          && Objects.equals(this.node, other.node);
+    }
+
+    @Override
+    public int hashCode() {
+      return this.hash;
+    }
+
+    @Override
+    public String toString() {
+      return "ShapeQuery[node="
+          + this.node
+          + ", valueNumber="
+          + this.valueNumber
+          + ", exact="
+          + this.exact
+          + "]";
+    }
+  }
 
   /**
    * Returns the memo key identifying a generator evaluation (wala/ML#365).
@@ -201,7 +263,8 @@ public abstract class TensorGenerator implements Cloneable {
     // The discriminator separates same-class generators sharing an anchor (e.g., the two tuple
     // positions of one `do()` node); without it, one position's memoized result replays for the
     // other (wala/ML#830).
-    return Pair.make(generator.getClass(), Pair.make(anchorId, generator.operationDiscriminator()));
+    return HashedPair.of(
+        generator.getClass(), Pair.make(anchorId, generator.operationDiscriminator()));
   }
 
   /**
@@ -368,7 +431,7 @@ public abstract class TensorGenerator implements Cloneable {
     if (WorklistTypeResolver.active(builder) != null) return generator.getShapes(builder);
     return nullEngineRead(
         builder,
-        generator.boundKey(Pair.make("shape-legacy", evaluationKey(generator))),
+        generator.boundKey(HashedPair.of("shape-legacy", evaluationKey(generator))),
         () -> generator.getShapes(builder),
         null);
   }
@@ -387,7 +450,7 @@ public abstract class TensorGenerator implements Cloneable {
     // The engine is installed for every analysis run's resolution (wala/ML#365, Phase 3); a null
     // engine occurs only for direct generator use outside one (e.g. unit tests, or a client's read
     // after the analysis) and computes unmemoized, with a cycle answered ⊤ (wala/ML#1174).
-    Object key = generator.boundKey(Pair.make("shape-eval", evaluationKey(generator)));
+    Object key = generator.boundKey(HashedPair.of("shape-eval", evaluationKey(generator)));
     if (engine == null)
       return nullEngineRead(
           builder, key, () -> generator.getShapeResult(builder), ShapeResult.unknown());
@@ -409,7 +472,7 @@ public abstract class TensorGenerator implements Cloneable {
   static Set<DType> memoizedDTypes(PropagationCallGraphBuilder builder, TensorGenerator generator) {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
-    Object key = generator.boundKey(Pair.make("dtype-eval", evaluationKey(generator)));
+    Object key = generator.boundKey(HashedPair.of("dtype-eval", evaluationKey(generator)));
     if (engine == null)
       return nullEngineRead(builder, key, () -> generator.getDTypes(builder), EnumSet.of(UNKNOWN));
     java.util.function.Supplier<Object> transfer = () -> generator.getDTypes(builder);
@@ -638,12 +701,58 @@ public abstract class TensorGenerator implements Cloneable {
    * A memo key evaluated under a {@link ValueBinding} (wala/ML#1071). A bound evaluation can differ
    * from the unbound one with the same key, and from the evaluation under another binding, so every
    * memoized query a bound generator issues is wrapped, and none is shared across bindings. Unbound
-   * keys are left as they are.
-   *
-   * @param binding The binding in force.
-   * @param key The unbound key.
+   * keys are left as they are. Equality and the hash code are a record's of its two components, the
+   * hash code computed once.
    */
-  record BoundKey(ValueBinding binding, Object key) {}
+  static final class BoundKey {
+
+    private final ValueBinding binding;
+
+    private final Object key;
+
+    /**
+     * The hash code a record of these components has, computed once (wala/ML#1176), as for {@link
+     * ShapeQuery}.
+     */
+    private final int hash;
+
+    /**
+     * Constructs a bound key.
+     *
+     * @param binding The binding in force.
+     * @param key The unbound key.
+     */
+    BoundKey(ValueBinding binding, Object key) {
+      this.binding = binding;
+      this.key = key;
+      this.hash = Objects.hashCode(binding) * 31 + Objects.hashCode(key);
+    }
+
+    ValueBinding binding() {
+      return this.binding;
+    }
+
+    Object key() {
+      return this.key;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj instanceof BoundKey other
+          && Objects.equals(this.binding, other.binding)
+          && Objects.equals(this.key, other.key);
+    }
+
+    @Override
+    public int hashCode() {
+      return this.hash;
+    }
+
+    @Override
+    public String toString() {
+      return "BoundKey[binding=" + this.binding + ", key=" + this.key + "]";
+    }
+  }
 
   /**
    * The value binding in force, or {@code null} when this generator reads every value as its own.
@@ -5928,7 +6037,7 @@ public abstract class TensorGenerator implements Cloneable {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null) return this.getShapeResultOfValue(builder, elementPointsToSet, exact);
-    Object key = this.boundKey(Pair.make("element-shapes", Pair.make(elementKey, exact)));
+    Object key = this.boundKey(HashedPair.of("element-shapes", Pair.make(elementKey, exact)));
     java.util.function.Supplier<Object> transfer =
         () -> this.getShapeResultOfValue(builder, elementPointsToSet, exact);
     return (ShapeResult)
@@ -6776,7 +6885,7 @@ public abstract class TensorGenerator implements Cloneable {
     // guards off there left every test that reads outside an analysis run reading the same values.
     // They stay: the dtype twin's guards also run under the engine, where the cycle guard does not,
     // and keeping the shape side's lets both axes answer a self-read where they always have.
-    Object key = this.boundKey(Pair.make("shape-delegation", Pair.make(asin, exact)));
+    Object key = this.boundKey(HashedPair.of("shape-delegation", Pair.make(asin, exact)));
     if (engine == null)
       return nullEngineRead(
           builder,
@@ -7525,7 +7634,7 @@ public abstract class TensorGenerator implements Cloneable {
    */
   protected Set<DType> getDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
-    Object key = this.boundKey(Pair.make(node, valueNumber));
+    Object key = this.boundKey(HashedPair.of(node, valueNumber));
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     boolean bound = this.valueBinding != null && this.valueBinding.binds(node, valueNumber);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
@@ -8012,7 +8121,7 @@ public abstract class TensorGenerator implements Cloneable {
     // feeds the null-⊤ delegated result's UNKNOWN into unions whose normalization absorbs it,
     // composing unknown-dtype twins of otherwise-resolved members (the wala/ML#753 round-6
     // measurement); the shared-query first-sighting hazard stands for the shape side only.
-    Object key = this.boundKey(Pair.make("dtype-delegation", asin));
+    Object key = this.boundKey(HashedPair.of("dtype-delegation", asin));
     if (engine == null)
       return nullEngineRead(
           builder, key, () -> this.doGetDTypesFromTensor(builder, asin, true), EnumSet.of(UNKNOWN));
@@ -9066,7 +9175,7 @@ public abstract class TensorGenerator implements Cloneable {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
     if (engine == null) return this.getShapeResultOfShapeVector(builder, node, vn, visited);
-    Object key = this.boundKey(Pair.make("shape-vector", Pair.make(node, vn)));
+    Object key = this.boundKey(HashedPair.of("shape-vector", Pair.make(node, vn)));
     java.util.function.Supplier<Object> transfer =
         () -> this.getShapeResultOfShapeVector(builder, node, vn, HashSetFactory.make());
     return (ShapeResult)
