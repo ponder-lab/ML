@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -345,6 +346,37 @@ final class WorklistTypeResolver {
       settledSkips,
       checkedSkips;
 
+  /**
+   * The walk census (wala/ML#1176): for the pure-cycle promotion and for the settlement sweep, the
+   * walks, those over the whole graph, the queries their reader closures held, the queries their
+   * condensations emitted and the time the closure and the condensation took; the time of the
+   * staleness scans; and the outermost solves and their time. Neither a walk nor a scan evaluates a
+   * transfer, so no nested solve is inside the times they record.
+   */
+  private long promotionWalks,
+      promotionWholeWalks,
+      promotionClosureQueries,
+      promotionCondensedQueries,
+      promotionWalkNanos,
+      sweepWalks,
+      sweepWholeWalks,
+      sweepGuardedWholeWalks,
+      sweepClosureQueries,
+      sweepCondensedQueries,
+      sweepWalkNanos,
+      staleScanNanos,
+      outerSolves,
+      outerSolveNanos;
+
+  /** How many solves are running, so only the outermost one is timed. */
+  private int solveDepth;
+
+  /** When the walk census was last logged, so a long analysis logs it as it goes. */
+  private long walkCensusLoggedAt = System.nanoTime();
+
+  /** How long an analysis runs between interim walk census lines. */
+  private static final long WALK_CENSUS_INTERVAL_NANOS = TimeUnit.MINUTES.toNanos(5);
+
   /** The logger of the settlement census line, apart from the engine's own. */
   private static final Logger SETTLEMENT_CENSUS =
       Logger.getLogger(WorklistTypeResolver.class.getName() + ".settlement");
@@ -428,6 +460,7 @@ final class WorklistTypeResolver {
                 + " skipped ("
                 + engine.checkedSkips
                 + " checked).");
+    SETTLEMENT_CENSUS.fine(() -> "Walk census: " + engine.walkCensus() + ".");
     int cyclicQueries = 0;
     Map<Object, String> cyclicSliceGenerators = HashMapFactory.make();
     for (List<Object> scc : engine.tarjan()) {
@@ -946,16 +979,103 @@ final class WorklistTypeResolver {
         && !this.cycleSeen
         && this.settlementRequested.isEmpty()
         && !this.bindingChecksPending) return;
-    boolean moved;
-    do {
-      this.iterate();
-      moved = this.enqueueStaleReaders();
-      if (!moved) moved = this.cycleSeen && this.promotePureCycles();
-      if (!moved) moved = this.validateBindings();
-    } while (moved);
-    if (this.cycleSeen || !this.settlementRequested.isEmpty()) this.canonicalize();
-    this.cycleSeen = false;
-    this.dumpFiltered();
+    boolean outer = this.solveDepth++ == 0;
+    long solveStart = outer ? System.nanoTime() : 0;
+    try {
+      boolean moved;
+      do {
+        this.iterate();
+        long scanStart = System.nanoTime();
+        moved = this.enqueueStaleReaders();
+        this.staleScanNanos += System.nanoTime() - scanStart;
+        if (!moved) moved = this.cycleSeen && this.promotePureCycles();
+        if (!moved) moved = this.validateBindings();
+      } while (moved);
+      if (this.cycleSeen || !this.settlementRequested.isEmpty()) this.canonicalize();
+      this.cycleSeen = false;
+      this.dumpFiltered();
+    } finally {
+      this.solveDepth--;
+      if (outer) {
+        long now = System.nanoTime();
+        this.outerSolves++;
+        this.outerSolveNanos += now - solveStart;
+        if (now - this.walkCensusLoggedAt >= WALK_CENSUS_INTERVAL_NANOS) {
+          this.walkCensusLoggedAt = now;
+          SETTLEMENT_CENSUS.fine(() -> "Walk census so far: " + this.walkCensus() + ".");
+        }
+      }
+    }
+  }
+
+  /**
+   * Describes the walk census.
+   *
+   * @return The description.
+   */
+  String walkCensus() {
+    return this.outerSolves
+        + " outermost solves in "
+        + TimeUnit.NANOSECONDS.toMillis(this.outerSolveNanos)
+        + " ms; promotion: "
+        + this.promotionWalks
+        + " walks ("
+        + this.promotionWholeWalks
+        + " whole-graph), "
+        + this.promotionClosureQueries
+        + " closure queries, "
+        + this.promotionCondensedQueries
+        + " condensed queries, "
+        + TimeUnit.NANOSECONDS.toMillis(this.promotionWalkNanos)
+        + " ms; sweep: "
+        + this.sweepWalks
+        + " walks ("
+        + this.sweepWholeWalks
+        + " whole-graph, "
+        + this.sweepGuardedWholeWalks
+        + " of them inside a generator guard), "
+        + this.sweepClosureQueries
+        + " closure queries, "
+        + this.sweepCondensedQueries
+        + " condensed queries, "
+        + TimeUnit.NANOSECONDS.toMillis(this.sweepWalkNanos)
+        + " ms; staleness scans: "
+        + TimeUnit.NANOSECONDS.toMillis(this.staleScanNanos)
+        + " ms";
+  }
+
+  /**
+   * Returns the walk census's counts: promotion walks, whole-graph promotion walks, promotion
+   * closure queries, promotion condensed queries, sweep walks, whole-graph sweep walks, guarded
+   * whole-graph sweep walks, sweep closure queries, sweep condensed queries and outermost solves.
+   *
+   * @return The counts, in that order.
+   */
+  long[] walkCounts() {
+    return new long[] {
+      this.promotionWalks,
+      this.promotionWholeWalks,
+      this.promotionClosureQueries,
+      this.promotionCondensedQueries,
+      this.sweepWalks,
+      this.sweepWholeWalks,
+      this.sweepGuardedWholeWalks,
+      this.sweepClosureQueries,
+      this.sweepCondensedQueries,
+      this.outerSolves
+    };
+  }
+
+  /**
+   * Counts the queries in a condensation.
+   *
+   * @param sccs The condensation.
+   * @return The count.
+   */
+  private static long condensedQueries(List<List<Object>> sccs) {
+    long count = 0;
+    for (List<Object> scc : sccs) count += scc.size();
+    return count;
   }
 
   /**
@@ -1159,6 +1279,8 @@ final class WorklistTypeResolver {
     // full sweep with the skip on, of the stale, requested and possibly-unskippable cyclic queries
     // and of every reader that gained an edge since the last full sweep (where a new cycle can
     // be). Outside it no query is targeted and none is written, so walking it changes nothing.
+    long walkStart = System.nanoTime();
+    this.sweepWalks++;
     Set<Object> region = null;
     if (this.restrictSettlement && !(full && (!this.skipEnabled || this.guardedSettlement))) {
       Set<Object> seeds = HashSetFactory.make();
@@ -1170,6 +1292,10 @@ final class WorklistTypeResolver {
         seeds.addAll(this.newEdgeReaders);
       }
       region = this.readerClosure(seeds);
+      this.sweepClosureQueries += region.size();
+    } else {
+      this.sweepWholeWalks++;
+      if (this.guardedSettlement) this.sweepGuardedWholeWalks++;
     }
     if (full) this.newEdgeReaders.clear();
     List<List<Object>> sccs;
@@ -1178,6 +1304,8 @@ final class WorklistTypeResolver {
       sccs = this.tarjan();
       this.checkRestriction(sccs, region);
     } else sccs = this.tarjan(region);
+    this.sweepWalkNanos += System.nanoTime() - walkStart;
+    this.sweepCondensedQueries += condensedQueries(sccs);
     if (region != null && this.checkSkips) this.checkedSweepRegion = region;
     try {
       for (List<Object> scc : sccs) {
@@ -2014,17 +2142,25 @@ final class WorklistTypeResolver {
     boolean any = false;
     // Only a shape query whose state is absent or bottom promotes, and its component lies whole in
     // the closure of such queries under their readers.
+    long walkStart = System.nanoTime();
+    this.promotionWalks++;
     Set<Object> region = null;
     if (this.restrictSettlement) {
       region = this.readerClosure(this.shapeBottoms);
-      if (region.isEmpty() && !this.checkSkips) return false;
-    }
+      this.promotionClosureQueries += region.size();
+      if (region.isEmpty() && !this.checkSkips) {
+        this.promotionWalkNanos += System.nanoTime() - walkStart;
+        return false;
+      }
+    } else this.promotionWholeWalks++;
     List<List<Object>> sccs;
     if (region == null) sccs = this.tarjan();
     else if (this.checkSkips) {
       sccs = this.tarjan();
       this.checkRestriction(sccs, region);
     } else sccs = this.tarjan(region);
+    this.promotionWalkNanos += System.nanoTime() - walkStart;
+    this.promotionCondensedQueries += condensedQueries(sccs);
     for (List<Object> scc : sccs) {
       boolean cyclic =
           scc.size() > 1
