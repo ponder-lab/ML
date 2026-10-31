@@ -912,6 +912,64 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A promotion pass walks only the reader closure of what changed since the previous pass, not of
+   * every bottom-valued query (wala/ML#1176): a bottom-valued pair that is on no cycle, and an
+   * already promoted cycle, are outside the closure of a later pass that promotes a new cycle.
+   */
+  @Test
+  public void testPromotionWalksOnlyWhatChanged() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    // An acyclic bottom-valued pair stays in the bottoms, and its solve runs no promotion pass.
+    engine.demand("SEED_X", () -> engine.read("SEED_Y", () -> ShapeResult.bottom(), true), true);
+    demandPureCycle(engine, "SEED_A", "SEED_B");
+    long[] first = engine.walkCounts();
+    demandPureCycle(engine, "SEED_C", "SEED_D");
+    long[] second = engine.walkCounts();
+
+    // The first cycle's passes walk the pair and the cycle, then nothing once the cycle is
+    // promoted; the second cycle's passes walk the second cycle alone, then nothing.
+    assertEquals(2, first[0]);
+    assertEquals(4, first[3]);
+    assertEquals(4, second[0]);
+    assertEquals(2, second[3] - first[3]);
+  }
+
+  /**
+   * A promotion pass sees a cycle that a new edge closes between two queries that were already
+   * bottom-valued at the previous pass (wala/ML#1176). Neither query enters the bottoms again, so
+   * only the edge's reader seeds the pass, and the pass promotes both.
+   */
+  @Test
+  public void testPromotionSeesCycleClosedByNewEdge() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    boolean[] applies = {true};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // CLOSE_ROOT reads CLOSE_PARTNER, which is bound and reads CLOSE_ROOT back only once its
+    // binding is declined.
+    transfers.add(
+        () -> {
+          engine.read("CLOSE_PARTNER", transfers.get(1), true);
+          return ShapeResult.bottom();
+        });
+    transfers.add(
+        () -> {
+          engine.registerBindingCheck("close", resolver -> applies[0], "CLOSE_PARTNER");
+          if (engine.isBindingDeclined("close")) engine.read("CLOSE_ROOT", transfers.get(0), true);
+          return ShapeResult.bottom();
+        });
+    assertEquals(ShapeResult.bottom(), engine.demand("CLOSE_ROOT", transfers.get(0), true));
+    // A promotion pass runs while the pair is acyclic and bottom-valued.
+    demandPureCycle(engine, "CLOSE_A", "CLOSE_B");
+
+    applies[0] = false;
+    demandPureCycle(engine, "CLOSE_C", "CLOSE_D");
+
+    assertTrue("The binding was not declined.", engine.isBindingDeclined("close"));
+    assertEquals(ShapeResult.unknown(), engine.demand("CLOSE_ROOT", transfers.get(0), true));
+  }
+
+  /**
    * Demands a fresh two-query cycle, so the fixpoint runs past its early return and scans for stale
    * readers.
    *

@@ -339,6 +339,20 @@ final class WorklistTypeResolver {
   /** The shape queries whose state is absent or bottom: a superset of the promotion candidates. */
   private final Set<Object> shapeBottoms = HashSetFactory.make();
 
+  /**
+   * The shape queries that entered {@link #shapeBottoms} since the last promotion pass began: a
+   * query whose state became absent or bottom can be a promotion candidate on a cycle it was
+   * already on.
+   */
+  private final Set<Object> newShapeBottoms = HashSetFactory.make();
+
+  /**
+   * The readers that gained an edge since the last promotion pass began. Unlike {@link
+   * #newEdgeReaders}, which a full settlement sweep clears, only {@link #promotePureCycles} clears
+   * these, so a promotion pass sees every edge added since the previous one.
+   */
+  private final Set<Object> promotionEdgeReaders = HashSetFactory.make();
+
   /** The settlement census: passes, guarded passes, recomputations, skips and checked skips. */
   private long settlementPasses,
       guardedSettlementPasses,
@@ -813,7 +827,10 @@ final class WorklistTypeResolver {
         this.reads.put(reader, readerReads);
         this.readsOrder.put(reader, this.readsOrder.size());
       }
-      if (readerReads.add(key)) this.newEdgeReaders.add(reader);
+      if (readerReads.add(key)) {
+        this.newEdgeReaders.add(reader);
+        this.promotionEdgeReaders.add(reader);
+      }
       this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
     }
     if (!this.transfers.containsKey(key)) this.register(key, transfer, shapeKind);
@@ -1480,11 +1497,14 @@ final class WorklistTypeResolver {
     this.shapeKinds.put(key, shapeKind);
     // No settled recomputation stands for a new query.
     this.markDirty(key);
-    if (shapeKind) this.shapeBottoms.add(key);
+    if (shapeKind) {
+      this.shapeBottoms.add(key);
+      this.newShapeBottoms.add(key);
+    }
   }
 
   /**
-   * Writes a query's state, keeping {@link #shapeBottoms}.
+   * Writes a query's state, keeping {@link #shapeBottoms} and {@link #newShapeBottoms}.
    *
    * @param key The query.
    * @param value Its new value.
@@ -1492,9 +1512,9 @@ final class WorklistTypeResolver {
   private void putState(Object key, Object value) {
     this.state.put(key, value);
     if (Boolean.TRUE.equals(this.shapeKinds.get(key))) {
-      if (value instanceof ShapeResult && ((ShapeResult) value).isBottom())
-        this.shapeBottoms.add(key);
-      else this.shapeBottoms.remove(key);
+      if (value instanceof ShapeResult && ((ShapeResult) value).isBottom()) {
+        if (this.shapeBottoms.add(key)) this.newShapeBottoms.add(key);
+      } else this.shapeBottoms.remove(key);
     }
   }
 
@@ -2157,18 +2177,39 @@ final class WorklistTypeResolver {
    * Promotes bottom-valued members of nontrivial SCCs to the unknown-marked element and re-enqueues
    * their dependents (the design's pure-cycle step).
    *
+   * <p>A restricted pass walks only the reader closure of the queries that entered {@link
+   * #shapeBottoms} since the previous pass and are still in it, and of the readers that gained an
+   * edge since then (wala/ML#1176). That closure holds every query the whole-graph pass would
+   * promote. Each pass promotes every candidate it finds, and a promoted query leaves {@link
+   * #shapeBottoms}, so a candidate now was not one at the previous pass, or no pass has run since
+   * it became one. Either it entered {@link #shapeBottoms} since then, and is a seed itself, or its
+   * component became cyclic since then. A component becomes cyclic only through a new edge on the
+   * cycle, and the cycle's members are readers, transitively, of that edge's reader, so the closure
+   * of that reader holds the candidate's whole component. A state is written only through {@link
+   * #putState} and a query is first sighted only through {@link #register}, which mark the entries,
+   * and an edge is added only by {@link #read}, which marks its reader. Under the check mode of
+   * {@link #CHECK_SKIPS_PROPERTY}, the pass condenses the whole graph and promotes from it, and an
+   * assertion fails if a promotion lies outside the closure.
+   *
    * @return whether any promotion occurred.
    */
   private boolean promotePureCycles() {
     boolean any = false;
     // Only a shape query whose state is absent or bottom promotes, and its component lies whole in
-    // the closure of such queries under their readers.
+    // the closure of the seeds below under their readers.
     long walkStart = System.nanoTime();
     this.promotionWalks++;
     this.promotionGraphQueries += this.state.size();
+    // The entries since the previous pass seed this one, and what this pass's own writes add (a
+    // promotion only leaves the bottoms, and adds no edge) seeds the next.
+    Set<Object> seeds = HashSetFactory.make();
+    for (Object key : this.newShapeBottoms) if (this.shapeBottoms.contains(key)) seeds.add(key);
+    seeds.addAll(this.promotionEdgeReaders);
+    this.newShapeBottoms.clear();
+    this.promotionEdgeReaders.clear();
     Set<Object> region = null;
     if (this.restrictSettlement) {
-      region = this.readerClosure(this.shapeBottoms);
+      region = this.readerClosure(seeds);
       this.promotionClosureQueries += region.size();
       if (region.isEmpty() && !this.checkSkips) {
         this.promotionWalkNanos += System.nanoTime() - walkStart;
