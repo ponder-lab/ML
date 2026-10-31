@@ -27,6 +27,12 @@ public class QueryKeyHashTest {
       this.hashes++;
       return 1_000_003;
     }
+
+    /** Equal only to itself, as {@link Object#equals(Object)} is, whatever its hash code. */
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj;
+    }
   }
 
   /** The record a shape query was, for its hash code. */
