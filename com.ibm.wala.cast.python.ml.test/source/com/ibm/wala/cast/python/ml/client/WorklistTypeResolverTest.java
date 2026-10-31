@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -10,6 +11,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -967,6 +969,104 @@ public class WorklistTypeResolverTest {
 
     assertTrue("The binding was not declined.", engine.isBindingDeclined("close"));
     assertEquals(ShapeResult.unknown(), engine.demand("CLOSE_ROOT", transfers.get(0), true));
+  }
+
+  /**
+   * The sweep's set intersection iterates the smaller set, whichever argument it is, so a query's
+   * few reads tested against a large changed set cost the reads, not the changed set
+   * (wala/ML#1176): {@link java.util.Collections#disjoint} iterates its second argument whenever
+   * its first is a set.
+   */
+  @Test
+  public void testIntersectionIteratesTheSmallerSet() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    Set<Object> changed = new HashSet<>();
+    for (int i = 0; i < 4096; i++) changed.add("CHANGED" + i);
+
+    assertFalse(engine.intersects(Set.of("READ"), changed));
+    assertEquals(1, engine.readTestCounts()[3]);
+    assertFalse(engine.intersects(changed, Set.of("READ")));
+    assertEquals(2, engine.readTestCounts()[3]);
+
+    // A shared element is found, from either side.
+    assertTrue(engine.intersects(Set.of("CHANGED7"), changed));
+    assertTrue(engine.intersects(changed, Set.of("READ", "CHANGED7")));
+    assertTrue(engine.readTestCounts()[3] <= 5);
+
+    // An empty set shares nothing and costs no probe.
+    assertFalse(engine.intersects(Set.of(), changed));
+    assertFalse(engine.intersects(changed, Set.of()));
+    assertTrue(engine.readTestCounts()[3] <= 5);
+  }
+
+  /**
+   * A star in one settlement sweep: leaves whose settled recomputation differs fill the changed
+   * set, and readers that read none of them are tested against it, so with the changed set iterated
+   * the probes would grow with the readers times the leaves (wala/ML#1176). The readers each read
+   * only a gate over the leaves, which orders every reader after every leaf.
+   */
+  @Test
+  public void testSweepReadTestsGrowWithTheReads() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    int leaves = 64;
+    int readers = 64;
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(3))));
+
+    // Each leaf asks for a settled recomputation and recomputes, settling, to another value.
+    List<Supplier<Object>> leafTransfers = new ArrayList<>();
+    for (int i = 0; i < leaves; i++)
+      leafTransfers.add(
+          () -> {
+            engine.requestSettledRecomputation();
+            return engine.isSettling() ? vector : scalar;
+          });
+    Supplier<Object> gate =
+        () -> {
+          for (int i = 0; i < leaves; i++) engine.read("LEAF" + i, leafTransfers.get(i), true);
+          return scalar;
+        };
+    Supplier<Object> reader =
+        () -> {
+          engine.read("GATE", gate, true);
+          return scalar;
+        };
+
+    Object result =
+        engine.demand(
+            "STAR",
+            () -> {
+              engine.read("GATE", gate, true);
+              for (int j = 0; j < readers; j++) engine.read("READER" + j, reader, true);
+              return scalar;
+            },
+            true);
+
+    assertEquals(scalar, result);
+    for (int i = 0; i < leaves; i++)
+      assertEquals(vector, engine.demand("LEAF" + i, leafTransfers.get(i), true));
+    long[] counts = engine.readTestCounts();
+    // The readers' tests alone would make leaves × readers probes with the changed set iterated.
+    assertTrue(counts[2] >= (long) leaves * readers);
+    assertTrue(counts[3] < (long) leaves * readers / 2);
+  }
+
+  /**
+   * The settlement sweep selects its targets through the read test, so the read-set census counts
+   * the tests, their reads and their probes, and the probes stay within the reads (wala/ML#1176).
+   */
+  @Test
+  public void testSweepCountsItsReadTests() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    for (int i = 0; i < 4; i++) demandPureCycle(engine, "READS_A" + i, "READS_B" + i);
+
+    long[] counts = engine.readTestCounts();
+    assertTrue(counts[0] > 0);
+    assertTrue(counts[1] >= counts[0]);
+    assertTrue(counts[3] <= counts[1]);
+    assertTrue(engine.walkCensus().contains(" read tests over "));
+    assertTrue(engine.walkCensus().contains(" queries in buckets of 8 or more"));
   }
 
   /**
