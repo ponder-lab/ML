@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -872,6 +873,37 @@ public class WorklistTypeResolverTest {
 
     assertEquals(1, engine.staleScanHits());
     assertEquals(scalar, engine.demand("BUMP_A", () -> scalar, true));
+  }
+
+  /**
+   * The walk census counts a pure cycle's promotion walks and settlement sweep, and the queries the
+   * graph held at each walk, their closures held and their condensations emitted (wala/ML#1176).
+   */
+  @Test
+  public void testWalkCensusCountsCycleWalks() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    demandPureCycle(engine, "WALK_A", "WALK_B");
+
+    // Two promotion walks, the second over an empty closure once the cycle is promoted, then one
+    // restricted sweep, all in one outermost solve.
+    assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 0, 0, 2, 2, 2, 1}, engine.walkCounts());
+    assertTrue(
+        engine.walkCensus().startsWith("2 queries and 2 dependency edges; 1 outermost solves in "));
+  }
+
+  /**
+   * With the settlement skip off, the census counts the full sweep as a whole-graph walk, which has
+   * no closure (wala/ML#1176).
+   */
+  @Test
+  public void testWalkCensusCountsWholeGraphSweep() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkip();
+
+    demandPureCycle(engine, "WHOLE_A", "WHOLE_B");
+
+    assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 1, 0, 2, 0, 2, 1}, engine.walkCounts());
   }
 
   /**
