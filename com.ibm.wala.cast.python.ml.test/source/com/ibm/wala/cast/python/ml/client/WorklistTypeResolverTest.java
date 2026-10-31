@@ -941,6 +941,58 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A star in one settlement sweep: leaves whose settled recomputation differs fill the changed
+   * set, and readers that read none of them are tested against it, so with the changed set iterated
+   * the probes would grow with the readers times the leaves (wala/ML#1176). The readers each read
+   * only a gate over the leaves, which orders every reader after every leaf.
+   */
+  @Test
+  public void testSweepReadTestsGrowWithTheReads() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    int leaves = 64;
+    int readers = 64;
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(3))));
+
+    // Each leaf asks for a settled recomputation and recomputes, settling, to another value.
+    List<Supplier<Object>> leafTransfers = new ArrayList<>();
+    for (int i = 0; i < leaves; i++)
+      leafTransfers.add(
+          () -> {
+            engine.requestSettledRecomputation();
+            return engine.isSettling() ? vector : scalar;
+          });
+    Supplier<Object> gate =
+        () -> {
+          for (int i = 0; i < leaves; i++) engine.read("LEAF" + i, leafTransfers.get(i), true);
+          return scalar;
+        };
+    Supplier<Object> reader =
+        () -> {
+          engine.read("GATE", gate, true);
+          return scalar;
+        };
+
+    Object result =
+        engine.demand(
+            "STAR",
+            () -> {
+              engine.read("GATE", gate, true);
+              for (int j = 0; j < readers; j++) engine.read("READER" + j, reader, true);
+              return scalar;
+            },
+            true);
+
+    assertEquals(scalar, result);
+    for (int i = 0; i < leaves; i++)
+      assertEquals(vector, engine.demand("LEAF" + i, leafTransfers.get(i), true));
+    long[] counts = engine.readTestCounts();
+    // The readers' tests alone would make leaves × readers probes with the changed set iterated.
+    assertTrue(counts[2] >= (long) leaves * readers);
+    assertTrue(counts[3] < (long) leaves * readers / 2);
+  }
+
+  /**
    * The settlement sweep selects its targets through the read test, so the read-set census counts
    * the tests, their reads and their probes, and the probes stay within the reads (wala/ML#1176).
    */
