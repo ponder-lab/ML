@@ -352,7 +352,9 @@ final class WorklistTypeResolver {
    * reader closures held, the queries their condensations emitted and the time the closure and the
    * condensation took; the time of the staleness scans; and the outermost solves and their time.
    * Neither a walk nor a scan evaluates a transfer, so no nested solve is inside the times they
-   * record.
+   * record. The condensed queries are the restricted pass's in either mode, but in the check mode
+   * of {@link #checkSkip} a walk's time also holds the whole-graph condensation it is checked
+   * against.
    */
   private long promotionWalks,
       promotionWholeWalks,
@@ -1081,14 +1083,18 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Counts the queries in a condensation.
+   * Counts the queries in the components of a condensation that lie in a region. In the check mode
+   * of {@link #checkSkip} the condensation is the whole graph's, so either mode counts the
+   * restricted pass's queries; a component lies wholly inside or outside the region.
    *
    * @param sccs The condensation.
+   * @param region The region, or {@code null} for the whole graph.
    * @return The count.
    */
-  private static long condensedQueries(List<List<Object>> sccs) {
+  private static long condensedQueries(List<List<Object>> sccs, Set<Object> region) {
     long count = 0;
-    for (List<Object> scc : sccs) count += scc.size();
+    for (List<Object> scc : sccs)
+      if (region == null || region.contains(scc.get(0))) count += scc.size();
     return count;
   }
 
@@ -1320,7 +1326,7 @@ final class WorklistTypeResolver {
       this.checkRestriction(sccs, region);
     } else sccs = this.tarjan(region);
     this.sweepWalkNanos += System.nanoTime() - walkStart;
-    this.sweepCondensedQueries += condensedQueries(sccs);
+    this.sweepCondensedQueries += condensedQueries(sccs, region);
     if (region != null && this.checkSkips) this.checkedSweepRegion = region;
     try {
       for (List<Object> scc : sccs) {
@@ -2176,7 +2182,7 @@ final class WorklistTypeResolver {
       this.checkRestriction(sccs, region);
     } else sccs = this.tarjan(region);
     this.promotionWalkNanos += System.nanoTime() - walkStart;
-    this.promotionCondensedQueries += condensedQueries(sccs);
+    this.promotionCondensedQueries += condensedQueries(sccs, region);
     for (List<Object> scc : sccs) {
       boolean cyclic =
           scc.size() > 1
