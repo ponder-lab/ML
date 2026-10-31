@@ -348,19 +348,22 @@ final class WorklistTypeResolver {
 
   /**
    * The walk census (wala/ML#1176): for the pure-cycle promotion and for the settlement sweep, the
-   * walks, those over the whole graph, the queries their reader closures held, the queries their
-   * condensations emitted and the time the closure and the condensation took; the time of the
-   * staleness scans; and the outermost solves and their time. Neither a walk nor a scan evaluates a
-   * transfer, so no nested solve is inside the times they record.
+   * walks, those over the whole graph, the queries the graph held at each walk, the queries their
+   * reader closures held, the queries their condensations emitted and the time the closure and the
+   * condensation took; the time of the staleness scans; and the outermost solves and their time.
+   * Neither a walk nor a scan evaluates a transfer, so no nested solve is inside the times they
+   * record.
    */
   private long promotionWalks,
       promotionWholeWalks,
+      promotionGraphQueries,
       promotionClosureQueries,
       promotionCondensedQueries,
       promotionWalkNanos,
       sweepWalks,
       sweepWholeWalks,
       sweepGuardedWholeWalks,
+      sweepGraphQueries,
       sweepClosureQueries,
       sweepCondensedQueries,
       sweepWalkNanos,
@@ -1014,7 +1017,11 @@ final class WorklistTypeResolver {
    * @return The description.
    */
   String walkCensus() {
-    return this.outerSolves
+    return this.state.size()
+        + " queries and "
+        + this.reads.values().stream().mapToInt(Set::size).sum()
+        + " dependency edges; "
+        + this.outerSolves
         + " outermost solves in "
         + TimeUnit.NANOSECONDS.toMillis(this.outerSolveNanos)
         + " ms; promotion: "
@@ -1022,6 +1029,8 @@ final class WorklistTypeResolver {
         + " walks ("
         + this.promotionWholeWalks
         + " whole-graph), "
+        + this.promotionGraphQueries
+        + " graph queries, "
         + this.promotionClosureQueries
         + " closure queries, "
         + this.promotionCondensedQueries
@@ -1034,6 +1043,8 @@ final class WorklistTypeResolver {
         + " whole-graph, "
         + this.sweepGuardedWholeWalks
         + " of them inside a generator guard), "
+        + this.sweepGraphQueries
+        + " graph queries, "
         + this.sweepClosureQueries
         + " closure queries, "
         + this.sweepCondensedQueries
@@ -1045,9 +1056,10 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Returns the walk census's counts: promotion walks, whole-graph promotion walks, promotion
-   * closure queries, promotion condensed queries, sweep walks, whole-graph sweep walks, guarded
-   * whole-graph sweep walks, sweep closure queries, sweep condensed queries and outermost solves.
+   * Returns the walk census's counts: promotion walks, whole-graph promotion walks, promotion graph
+   * queries, promotion closure queries, promotion condensed queries, sweep walks, whole-graph sweep
+   * walks, guarded whole-graph sweep walks, sweep graph queries, sweep closure queries, sweep
+   * condensed queries and outermost solves.
    *
    * @return The counts, in that order.
    */
@@ -1055,11 +1067,13 @@ final class WorklistTypeResolver {
     return new long[] {
       this.promotionWalks,
       this.promotionWholeWalks,
+      this.promotionGraphQueries,
       this.promotionClosureQueries,
       this.promotionCondensedQueries,
       this.sweepWalks,
       this.sweepWholeWalks,
       this.sweepGuardedWholeWalks,
+      this.sweepGraphQueries,
       this.sweepClosureQueries,
       this.sweepCondensedQueries,
       this.outerSolves
@@ -1281,6 +1295,7 @@ final class WorklistTypeResolver {
     // be). Outside it no query is targeted and none is written, so walking it changes nothing.
     long walkStart = System.nanoTime();
     this.sweepWalks++;
+    this.sweepGraphQueries += this.state.size();
     Set<Object> region = null;
     if (this.restrictSettlement && !(full && (!this.skipEnabled || this.guardedSettlement))) {
       Set<Object> seeds = HashSetFactory.make();
@@ -2144,6 +2159,7 @@ final class WorklistTypeResolver {
     // the closure of such queries under their readers.
     long walkStart = System.nanoTime();
     this.promotionWalks++;
+    this.promotionGraphQueries += this.state.size();
     Set<Object> region = null;
     if (this.restrictSettlement) {
       region = this.readerClosure(this.shapeBottoms);

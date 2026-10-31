@@ -876,8 +876,8 @@ public class WorklistTypeResolverTest {
   }
 
   /**
-   * The walk census counts a pure cycle's promotion walks and settlement sweep, and the queries
-   * their closures held and their condensations emitted (wala/ML#1176).
+   * The walk census counts a pure cycle's promotion walks and settlement sweep, and the queries the
+   * graph held at each walk, their closures held and their condensations emitted (wala/ML#1176).
    */
   @Test
   public void testWalkCensusCountsCycleWalks() {
@@ -887,8 +887,9 @@ public class WorklistTypeResolverTest {
 
     // Two promotion walks, the second over an empty closure once the cycle is promoted, then one
     // restricted sweep, all in one outermost solve.
-    assertArrayEquals(new long[] {2, 0, 2, 2, 1, 0, 0, 2, 2, 1}, engine.walkCounts());
-    assertTrue(engine.walkCensus().startsWith("1 outermost solves in "));
+    assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 0, 0, 2, 2, 2, 1}, engine.walkCounts());
+    assertTrue(
+        engine.walkCensus().startsWith("2 queries and 2 dependency edges; 1 outermost solves in "));
   }
 
   /**
@@ -902,7 +903,7 @@ public class WorklistTypeResolverTest {
 
     demandPureCycle(engine, "WHOLE_A", "WHOLE_B");
 
-    assertArrayEquals(new long[] {2, 0, 2, 2, 1, 1, 0, 0, 2, 1}, engine.walkCounts());
+    assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 1, 0, 2, 0, 2, 1}, engine.walkCounts());
   }
 
   /**
