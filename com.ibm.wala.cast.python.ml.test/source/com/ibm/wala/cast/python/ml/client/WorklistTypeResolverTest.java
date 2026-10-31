@@ -10,6 +10,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -909,6 +910,52 @@ public class WorklistTypeResolverTest {
     demandPureCycle(engine, "WHOLE_A", "WHOLE_B");
 
     assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 1, 0, 2, 0, 2, 1}, engine.walkCounts());
+  }
+
+  /**
+   * The sweep's set intersection iterates the smaller set, whichever argument it is, so a query's
+   * few reads tested against a large changed set cost the reads, not the changed set
+   * (wala/ML#1176): {@link java.util.Collections#disjoint} iterates its second argument whenever
+   * its first is a set.
+   */
+  @Test
+  public void testIntersectionIteratesTheSmallerSet() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    Set<Object> changed = new HashSet<>();
+    for (int i = 0; i < 4096; i++) changed.add("CHANGED" + i);
+
+    assertTrue(!engine.intersects(Set.of("READ"), changed));
+    assertEquals(1, engine.readTestCounts()[3]);
+    assertTrue(!engine.intersects(changed, Set.of("READ")));
+    assertEquals(2, engine.readTestCounts()[3]);
+
+    // A shared element is found, from either side.
+    assertTrue(engine.intersects(Set.of("CHANGED7"), changed));
+    assertTrue(engine.intersects(changed, Set.of("READ", "CHANGED7")));
+    assertTrue(engine.readTestCounts()[3] <= 5);
+
+    // An empty set shares nothing and costs no probe.
+    assertTrue(!engine.intersects(Set.of(), changed));
+    assertTrue(!engine.intersects(changed, Set.of()));
+    assertTrue(engine.readTestCounts()[3] <= 5);
+  }
+
+  /**
+   * The settlement sweep selects its targets through the read test, so the read-set census counts
+   * the tests, their reads and their probes, and the probes stay within the reads (wala/ML#1176).
+   */
+  @Test
+  public void testSweepCountsItsReadTests() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    for (int i = 0; i < 4; i++) demandPureCycle(engine, "READS_A" + i, "READS_B" + i);
+
+    long[] counts = engine.readTestCounts();
+    assertTrue(counts[0] > 0);
+    assertTrue(counts[1] >= counts[0]);
+    assertTrue(counts[3] <= counts[1]);
+    assertTrue(engine.walkCensus().contains(" read tests over "));
+    assertTrue(engine.walkCensus().contains(" queries in buckets of 8 or more"));
   }
 
   /**

@@ -373,6 +373,14 @@ final class WorklistTypeResolver {
       outerSolves,
       outerSolveNanos;
 
+  /**
+   * The read-set census of the settlement sweep's target selection (wala/ML#1176): the queries it
+   * tested for having read a changed query, the sizes of their read sets and of the changed set
+   * summed over those tests, the containment probes the tests made and the time the selection took.
+   * The selection evaluates no transfer, so no nested solve is inside its time.
+   */
+  private long sweepReadTests, sweepReadsSum, sweepChangedSum, sweepReadProbes, sweepSelectNanos;
+
   /** How many solves are running, so only the outermost one is timed. */
   private int solveDepth;
 
@@ -1052,9 +1060,48 @@ final class WorklistTypeResolver {
         + this.sweepCondensedQueries
         + " condensed queries, "
         + TimeUnit.NANOSECONDS.toMillis(this.sweepWalkNanos)
+        + " ms; sweep target selection: "
+        + this.sweepReadTests
+        + " read tests over "
+        + this.sweepReadsSum
+        + " reads and "
+        + this.sweepChangedSum
+        + " changed queries, "
+        + this.sweepReadProbes
+        + " probes, "
+        + TimeUnit.NANOSECONDS.toMillis(this.sweepSelectNanos)
         + " ms; staleness scans: "
         + TimeUnit.NANOSECONDS.toMillis(this.staleScanNanos)
-        + " ms";
+        + " ms; "
+        + this.hashCensus();
+  }
+
+  /**
+   * Describes how the engine's query keys spread over hash buckets (wala/ML#1183): the distinct
+   * hash codes of the queries, and how many queries share a bucket with 7 or more others in a hash
+   * table holding them all, where {@link java.util.HashMap} turns a bucket into a tree.
+   *
+   * @return The description.
+   */
+  private String hashCensus() {
+    int queries = this.state.size();
+    int capacity = Integer.highestOneBit(Math.max(1, (int) (queries / 0.75f)) * 2 - 1);
+    Set<Integer> hashes = new HashSet<>();
+    int[] buckets = new int[capacity];
+    for (Object query : this.state.keySet()) {
+      int hash = query.hashCode();
+      hashes.add(hash);
+      buckets[(hash ^ (hash >>> 16)) & (capacity - 1)]++;
+    }
+    long crowded = 0;
+    for (int bucket : buckets) if (bucket >= 8) crowded += bucket;
+    return "query hashes: "
+        + hashes.size()
+        + " distinct of "
+        + queries
+        + ", "
+        + crowded
+        + " queries in buckets of 8 or more";
   }
 
   /**
@@ -1079,6 +1126,18 @@ final class WorklistTypeResolver {
       this.sweepClosureQueries,
       this.sweepCondensedQueries,
       this.outerSolves
+    };
+  }
+
+  /**
+   * Returns the read-set census's counts: the read tests, the reads and the changed queries summed
+   * over them, and the probes they made.
+   *
+   * @return The counts, in that order.
+   */
+  long[] readTestCounts() {
+    return new long[] {
+      this.sweepReadTests, this.sweepReadsSum, this.sweepChangedSum, this.sweepReadProbes
     };
   }
 
@@ -1281,6 +1340,43 @@ final class WorklistTypeResolver {
   }
 
   /**
+   * Whether a query read any of a set of queries, for the sweep's target selection.
+   *
+   * @param key The query.
+   * @param queries The queries.
+   * @return Whether {@code key} read any of {@code queries}.
+   */
+  private boolean readsAny(Object key, Set<Object> queries) {
+    Set<Object> keyReads = this.reads.getOrDefault(key, Collections.emptySet());
+    this.sweepReadTests++;
+    this.sweepReadsSum += keyReads.size();
+    this.sweepChangedSum += queries.size();
+    return this.intersects(keyReads, queries);
+  }
+
+  /**
+   * Whether two sets share an element. It iterates the smaller set and looks each element up in the
+   * larger, and answers at once when either is empty, so a test costs the smaller set's size. The
+   * sweep tests a query's few reads against a changed set that can hold much of the graph, and
+   * {@link Collections#disjoint} chooses which set to iterate by whether its first argument is a
+   * {@link Set} rather than by size (wala/ML#1176).
+   *
+   * @param first A set.
+   * @param second Another set.
+   * @return Whether the sets share an element.
+   */
+  boolean intersects(Set<?> first, Set<?> second) {
+    if (first.isEmpty() || second.isEmpty()) return false;
+    Set<?> iterated = first.size() <= second.size() ? first : second;
+    Set<?> probed = iterated == first ? second : first;
+    for (Object element : iterated) {
+      this.sweepReadProbes++;
+      if (probed.contains(element)) return true;
+    }
+    return false;
+  }
+
+  /**
    * One sweep of {@link #canonicalize} over the SCC condensation in reverse-topological order: a
    * key is recomputed when it reads a key in {@code changed}, and in the full sweep also when it
    * sits in a cyclic SCC, is an ever-stale reader or requested a settled recomputation; a
@@ -1339,10 +1435,10 @@ final class WorklistTypeResolver {
         // join history can hold artifacts of the since-grown consumption even after re-evaluation
         // caught it up), and so is a settlement-requested query (its transfer withheld a
         // finality-dependent arm that must now fire against the settled state). wala/ML#758.
+        long selectStart = System.nanoTime();
         for (Object key : scc)
           if ((full && (this.staleReaders.contains(key) || this.settlementRequested.contains(key)))
-              || !Collections.disjoint(
-                  this.reads.getOrDefault(key, Collections.emptySet()), changed)) targets.add(key);
+              || this.readsAny(key, changed)) targets.add(key);
           else if (full && cyclic) {
             // A cyclic query whose inputs have not changed since its last settled recomputation
             // would recompute to the value it settled at, which the write-back below would leave
@@ -1355,6 +1451,7 @@ final class WorklistTypeResolver {
               if (this.checkSkips) this.checkSkip(key);
             }
           }
+        this.sweepSelectNanos += System.nanoTime() - selectStart;
         if (full && probeFilter != null)
           for (Object key : scc) {
             Object settled = this.state.get(key);
