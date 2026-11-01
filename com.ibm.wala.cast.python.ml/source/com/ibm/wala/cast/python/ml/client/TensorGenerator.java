@@ -5263,13 +5263,29 @@ public abstract class TensorGenerator implements Cloneable {
     if (builder.getPropagationSystem().isImplicit(basePK)) return null;
     PointsToSetVariable baseVar = builder.getPropagationSystem().findOrCreatePointsToSet(basePK);
     if (baseVar == null) return null;
+    // Finding the base's creators decides the arms of the φs the walk passes, and a guard in a
+    // loop governs an arm of a φ that flows back into its own base, so the fold can re-enter
+    // itself. A re-entry declines, as the len fold's does: an interim decline during the fixpoint,
+    // whose dead arm then contributes nothing to the walk that asked, and a plain one after it.
+    Pair<CGNode, Integer> frame = Pair.make(node, baseVn);
+    Set<Pair<CGNode, Integer>> inProgress = RANK_PREDICATES_IN_PROGRESS.get();
+    if (!inProgress.add(frame)) {
+      if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
+      LOGGER.fine(
+          () -> "The rank fold of vn " + baseVn + " in " + describe(node) + " re-entered itself.");
+      return null;
+    }
     // Every creator of the base, not the first one a walk reaches: a base merged from several
     // tensors, such as a φ over two arms, has the rank of any of them at run time (wala/ML#1188).
     Set<List<Dimension<?>>> shapes = HashSetFactory.make();
-    for (PointsToSetVariable creator : TensorGeneratorFactory.findCreators(baseVar, builder)) {
-      Set<List<Dimension<?>>> creatorShapes = creatorShapes(builder, creator);
-      if (creatorShapes == null || creatorShapes.isEmpty()) return null;
-      shapes.addAll(creatorShapes);
+    try {
+      for (PointsToSetVariable creator : TensorGeneratorFactory.findCreators(baseVar, builder)) {
+        Set<List<Dimension<?>>> creatorShapes = creatorShapes(builder, creator);
+        if (creatorShapes == null || creatorShapes.isEmpty()) return null;
+        shapes.addAll(creatorShapes);
+      }
+    } finally {
+      inProgress.remove(frame);
     }
     Integer rank = null;
     for (List<Dimension<?>> member : shapes) {
@@ -5279,6 +5295,10 @@ public abstract class TensorGenerator implements Cloneable {
     }
     return rank;
   }
+
+  /** The rank folds on this thread's stack, by node and base value number (wala/ML#1188). */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RANK_PREDICATES_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
 
   /**
    * The shapes a rank predicate reads for one creator of its base.
