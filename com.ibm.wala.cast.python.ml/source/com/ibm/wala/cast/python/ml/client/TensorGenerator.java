@@ -108,6 +108,7 @@ import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
@@ -348,6 +349,17 @@ public abstract class TensorGenerator implements Cloneable {
       ThreadLocal.withInitial(NullEngineReads::new);
 
   /**
+   * The most queries a read outside an analysis run evaluates one inside another. A query met
+   * deeper is answered as a cycle is, with the unknown element. Each query is evaluated by
+   * recursion, so the depth of a read is the length of the longest chain of queries its value
+   * depends on, which a program's dataflow does not bound: a read of the last of {@code k} layers
+   * that each guard on their input's rank nests {@code 4k} queries, and a deep enough chain
+   * overflows the reading thread's stack. A worker of a client's parallel stream has the default
+   * stack, which holds well over a thousand of these queries.
+   */
+  static int nullEngineReadDepthLimit = 256;
+
+  /**
    * Evaluates a query with no {@link WorklistTypeResolver} installed, the path a read made through
    * the public surface after an analysis run takes (wala/ML#753), answering {@code onCycle} when
    * the same query is already being evaluated on this thread (<a
@@ -397,6 +409,12 @@ public abstract class TensorGenerator implements Cloneable {
       return onCycle;
     }
     int depth = reads.active.size();
+    if (depth >= nullEngineReadDepthLimit) {
+      // Answered as a query re-entered at this depth would be, so the queries above it are kept as
+      // they are for a cycle closed below them.
+      reads.cycleDepth = Math.min(reads.cycleDepth, depth);
+      return onCycle;
+    }
     reads.active.put(query, depth);
     int outerCycleDepth = reads.cycleDepth;
     reads.cycleDepth = Integer.MAX_VALUE;
@@ -5438,7 +5456,39 @@ public abstract class TensorGenerator implements Cloneable {
    */
   static Set<ISSABasicBlock> computeReachableBlocksUnderBindings(
       PropagationCallGraphBuilder builder, CGNode callee, Map<Integer, Object> env) {
+    return computeReachableBlocksUnderBindings(builder, callee, env, null);
+  }
+
+  /**
+   * As {@link #computeReachableBlocksUnderBindings(PropagationCallGraphBuilder, CGNode, Map)}, but
+   * deciding only the branches in blocks that can reach one of the given blocks. A branch no path
+   * to them passes through cannot change whether they are reachable, so their membership in the
+   * result is the same, and a block that cannot reach them may be in it where the full walk would
+   * prune it. Deciding such a branch can read a value its own block's call computes, as a guard on
+   * a call's result after the call does, so a read of that call's argument re-entered itself.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for constant lookup.
+   * @param callee The callee {@link CGNode}.
+   * @param env The call site's constant bindings, keyed by parameter value number.
+   * @param targets The blocks whose reachability is asked, or {@code null} for every block.
+   * @return The reachable blocks.
+   */
+  static Set<ISSABasicBlock> computeReachableBlocksUnderBindings(
+      PropagationCallGraphBuilder builder,
+      CGNode callee,
+      Map<Integer, Object> env,
+      Set<ISSABasicBlock> targets) {
     SSACFG cfg = callee.getIR().getControlFlowGraph();
+    Set<ISSABasicBlock> deciding = null;
+    if (targets != null) {
+      deciding = HashSetFactory.make(targets);
+      Deque<ISSABasicBlock> back = new ArrayDeque<>(targets);
+      while (!back.isEmpty())
+        for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(back.poll()); it.hasNext(); ) {
+          ISSABasicBlock pred = it.next();
+          if (deciding.add(pred)) back.add(pred);
+        }
+    }
     Set<ISSABasicBlock> reachable = HashSetFactory.make();
     Deque<ISSABasicBlock> work = new ArrayDeque<>();
     reachable.add(cfg.entry());
@@ -5448,6 +5498,7 @@ public abstract class TensorGenerator implements Cloneable {
       Collection<ISSABasicBlock> normals = cfg.getNormalSuccessors(block);
       Collection<ISSABasicBlock> kept = normals;
       if (normals.size() == 2
+          && (deciding == null || deciding.contains(block))
           && block.getLastInstructionIndex() >= block.getFirstInstructionIndex()
           && block.getLastInstructionIndex() >= 0
           && block.getLastInstruction() instanceof SSAConditionalBranchInstruction) {
@@ -8989,19 +9040,39 @@ public abstract class TensorGenerator implements Cloneable {
       // A call site in a block the caller's decided guards prove unreachable never runs, so its
       // arguments must not contribute to the callee's parameter reads (wala/ML#763): the shared
       // helper called only from a folded-dead arm otherwise unions every dead site's values.
-      Set<ISSABasicBlock> reachable =
-          reachableByCaller.computeIfAbsent(
-              caller, c -> computeReachableBlocksUnderBindings(builder, c, Collections.emptyMap()));
+      // After the analysis, only the branches that can reach the sites are decided, as the others
+      // cannot prune them, and a guard after a site on the site's own result made the read of its
+      // argument re-enter itself, which a read after the analysis cannot keep (wala/ML#1186).
+      // Under the resolver every branch is still decided, as its reads register the dependency
+      // edges cycle detection relies on.
+      List<SSAAbstractInvokeInstruction> calls = new ArrayList<>();
       for (Iterator<CallSiteReference> sites = callGraph.getPossibleSites(caller, node);
-          sites.hasNext(); )
-        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next())) {
+          sites.hasNext(); ) calls.addAll(Arrays.asList(caller.getIR().getCalls(sites.next())));
+      Set<ISSABasicBlock> targets = null;
+      if (afterAnalysisShortcuts && WorklistTypeResolver.active(builder) == null) {
+        targets = HashSetFactory.make();
+        for (SSAAbstractInvokeInstruction call : calls)
           if (call.iIndex() >= 0) {
             ISSABasicBlock block =
                 caller.getIR().getControlFlowGraph().getBlockForInstruction(call.iIndex());
-            if (block != null && !reachable.contains(block)) continue;
+            if (block != null) targets.add(block);
           }
-          ret.add(Pair.make(caller, call));
+      }
+      Set<ISSABasicBlock> sitesTargets = targets;
+      Set<ISSABasicBlock> reachable =
+          reachableByCaller.computeIfAbsent(
+              caller,
+              c ->
+                  computeReachableBlocksUnderBindings(
+                      builder, c, Collections.emptyMap(), sitesTargets));
+      for (SSAAbstractInvokeInstruction call : calls) {
+        if (call.iIndex() >= 0) {
+          ISSABasicBlock block =
+              caller.getIR().getControlFlowGraph().getBlockForInstruction(call.iIndex());
+          if (block != null && !reachable.contains(block)) continue;
         }
+        ret.add(Pair.make(caller, call));
+      }
     }
     return ret;
   }

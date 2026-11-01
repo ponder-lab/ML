@@ -28,7 +28,8 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
   /**
    * Fixtures whose reads after the analysis dispatch through callee returns, φs and branch folds,
    * and read dataset components. {@code tf2_test_mode_guard.py} prunes a callee's returns by its
-   * call sites' constants (wala/ML#746).
+   * call sites' constants (wala/ML#746), and {@code tf2_test_rank_guard_chain_short.py} prunes a
+   * call site by a guard before it and has a guard on its result after it.
    */
   private static final List<String> FIXTURES =
       List.of(
@@ -37,7 +38,8 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
           "tf2_test_fit_structured_component.py",
           "tf2_test_encoder_training_path.py",
           "tf2_test_subscript_param.py",
-          "tf2_test_branch_comparisons.py");
+          "tf2_test_branch_comparisons.py",
+          "tf2_test_rank_guard_chain_short.py");
 
   /**
    * The nodes of the program's own code, rather than of a summary.
