@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -27,6 +28,15 @@ public class NullEngineReadDepthLimitTest extends TestPythonMLCallGraphShape {
    */
   private static final String FIXTURE = "tf2_test_rank_guard_chain.py";
 
+  /**
+   * A value that is a constant on one path and the end of a three-step chain on the other, which a
+   * read reaches through a few queries.
+   */
+  private static final String UNION_FIXTURE = "tf2_test_rank_guard_chain_union.py";
+
+  /** How long a read may take before the test fails, within the test's own timeout. */
+  private static final long READ_TIMEOUT_MILLIS = 100_000;
+
   /** The stack of a thread a client's parallel stream reads on, the platform default. */
   private static final long DEFAULT_STACK = 1L << 20;
 
@@ -38,7 +48,19 @@ public class NullEngineReadDepthLimitTest extends TestPythonMLCallGraphShape {
    * @return The types read, rendered.
    */
   private String readChainEnd(long stack) throws Exception {
-    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FIXTURE);
+    return readConsumed(FIXTURE, stack);
+  }
+
+  /**
+   * Reads the tensor types of the argument of a fixture's {@code consume} after the analysis, on a
+   * thread with the given stack.
+   *
+   * @param fixture The fixture.
+   * @param stack The reading thread's stack size in bytes.
+   * @return The types read, rendered.
+   */
+  private String readConsumed(String fixture, long stack) throws Exception {
+    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), fixture);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     builder.makeCallGraph(builder.getOptions());
     engine.performAnalysis(builder);
@@ -67,8 +89,13 @@ public class NullEngineReadDepthLimitTest extends TestPythonMLCallGraphShape {
               },
               "chain-reader",
               stack);
+      // A read that does not finish cannot be stopped. The test stops waiting for it and fails
+      // within its own timeout, and the thread is a daemon, so it does not keep the fork from
+      // exiting.
+      reader.setDaemon(true);
       reader.start();
-      reader.join();
+      reader.join(READ_TIMEOUT_MILLIS);
+      assertFalse("Expecting the read to finish.", reader.isAlive());
       assertNull("Expecting the read to complete.", failure.get());
       return types.get();
     } finally {
@@ -103,6 +130,32 @@ public class NullEngineReadDepthLimitTest extends TestPythonMLCallGraphShape {
       assertEquals("[{[D:Constant,2, D:Constant,4] of float32}]", readChainEnd(64L << 20));
       assertEquals(
           "Expecting no query to be cut.", cuts, TensorGenerator.getNullEngineReadDepthCuts());
+    } finally {
+      TensorGenerator.nullEngineReadDepthLimit = limit;
+    }
+  }
+
+  /**
+   * A cut contributes the unknown element and keeps the members the read resolved without it: a
+   * value that is a constant on one path and a chain's end on the other reads, under a limit the
+   * chain exceeds, as the constant beside an unknown member, and under no limit as both exactly.
+   */
+  @Test(timeout = 120_000)
+  public void testCutKeepsResolvedMembers() throws Exception {
+    int limit = TensorGenerator.nullEngineReadDepthLimit;
+    try {
+      TensorGenerator.nullEngineReadDepthLimit = 2;
+      long cuts = TensorGenerator.getNullEngineReadDepthCuts();
+      assertEquals(
+          "[{[D:Constant,3, D:Constant,3] of float32}, {? of unknown}]",
+          readConsumed(UNION_FIXTURE, DEFAULT_STACK));
+      assertTrue(
+          "Expecting the read to cut a query.",
+          TensorGenerator.getNullEngineReadDepthCuts() > cuts);
+      TensorGenerator.nullEngineReadDepthLimit = Integer.MAX_VALUE;
+      assertEquals(
+          "[{[D:Constant,3, D:Constant,3] of float32}, {[D:Constant,2, D:Constant,4] of float32}]",
+          readConsumed(UNION_FIXTURE, DEFAULT_STACK));
     } finally {
       TensorGenerator.nullEngineReadDepthLimit = limit;
     }
