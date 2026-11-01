@@ -5228,18 +5228,19 @@ public abstract class TensorGenerator implements Cloneable {
    * Resolves a rank predicate operand — {@code x.shape.ndims} or {@code x.shape.rank} — to the base
    * tensor's statically-known rank (wala/ML#882). The operand's def is a property read of {@code
    * ndims}/{@code rank} whose object is itself a {@code shape} property read; the base tensor's
-   * rank is the common rank of its resolved shapes, read node-intrinsically through the same {@link
+   * rank is the common rank of the resolved shapes of every creator of the base ({@link
+   * TensorGeneratorFactory#findCreators}), each read through the same {@link
    * TensorGeneratorFactory#getGenerator} path the shape machinery uses. Being env-free, it serves
    * both the wala/ML#746 return-arm fold and the wala/ML#763 phi-arm fold; the phi-arm fold is what
    * removes the spurious member a rank guard's infeasible arm contributes.
    *
-   * <p>Declines (returns {@code null}) unless every resolved shape member is present and all agree
-   * on rank. That agreement is load-bearing in the field: a single embedding parameter resolves to
-   * seven different shapes across call contexts — {@code (8,10)}, {@code (16,100)}, {@code
-   * (1,512)}, {@code (2,10)}, {@code (6,128)}, {@code (2,4)}, {@code (8,100)} — all rank 2.
-   * Reducing to the shared rank decides; a design carrying the shape would find seven disagreeing
-   * values and give up. Reducing rather than carrying the shape is what makes the fold fire on the
-   * real site.
+   * <p>Declines (returns {@code null}) unless every creator resolves, every resolved shape member
+   * is present, and all agree on rank. That agreement is load-bearing in the field: a single
+   * embedding parameter resolves to seven different shapes across call contexts — {@code (8,10)},
+   * {@code (16,100)}, {@code (1,512)}, {@code (2,10)}, {@code (6,128)}, {@code (2,4)}, {@code
+   * (8,100)} — all rank 2. Reducing to the shared rank decides; a design carrying the shape would
+   * find seven disagreeing values and give up. Reducing rather than carrying the shape is what
+   * makes the fold fire on the real site.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for shape resolution.
    * @param node The {@link CGNode} whose IR defines the operand.
@@ -5262,9 +5263,35 @@ public abstract class TensorGenerator implements Cloneable {
     if (builder.getPropagationSystem().isImplicit(basePK)) return null;
     PointsToSetVariable baseVar = builder.getPropagationSystem().findOrCreatePointsToSet(basePK);
     if (baseVar == null) return null;
-    Set<List<Dimension<?>>> shapes;
+    // Every creator of the base, not the first one a walk reaches: a base merged from several
+    // tensors, such as a φ over two arms, has the rank of any of them at run time (wala/ML#1188).
+    Set<List<Dimension<?>>> shapes = HashSetFactory.make();
+    for (PointsToSetVariable creator : TensorGeneratorFactory.findCreators(baseVar, builder)) {
+      Set<List<Dimension<?>>> creatorShapes = creatorShapes(builder, creator);
+      if (creatorShapes == null || creatorShapes.isEmpty()) return null;
+      shapes.addAll(creatorShapes);
+    }
+    Integer rank = null;
+    for (List<Dimension<?>> member : shapes) {
+      if (member == null) return null;
+      if (rank == null) rank = member.size();
+      else if (rank != member.size()) return null;
+    }
+    return rank;
+  }
+
+  /**
+   * The shapes a rank predicate reads for one creator of its base.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for shape resolution.
+   * @param creator The creator.
+   * @return The creator's shapes, or {@code null} when it has no generator, its read is still
+   *     converging, it has an unknown remainder, or its read fails.
+   */
+  private static Set<List<Dimension<?>>> creatorShapes(
+      PropagationCallGraphBuilder builder, PointsToSetVariable creator) {
     try {
-      TensorGenerator generator = TensorGeneratorFactory.getGenerator(baseVar, builder);
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(creator, builder);
       if (generator == null) return null;
       // Diverted through the engine's memo layer, as ModelCall.getDefaultShapes is (wala/ML#753):
       // the direct one-argument read recursed outside the engine when the base's generator walked
@@ -5277,18 +5304,10 @@ public abstract class TensorGenerator implements Cloneable {
       // resolvable subset while an unknown remainder may hold another (wala/ML#934).
       ShapeResult read = memoizedShapeResult(builder, generator);
       if (recordInterimGuardDecline(builder, read)) return null;
-      shapes = read.toLegacy();
+      return read.toLegacy();
     } catch (RuntimeException e) {
       return null;
     }
-    if (shapes == null || shapes.isEmpty()) return null;
-    Integer rank = null;
-    for (List<Dimension<?>> member : shapes) {
-      if (member == null) return null;
-      if (rank == null) rank = member.size();
-      else if (rank != member.size()) return null;
-    }
-    return rank;
   }
 
   /**
