@@ -366,8 +366,10 @@ public abstract class TensorGenerator implements Cloneable {
    * The number of queries that reads made after the analysis have answered with the unknown element
    * because they were nested deeper than {@link #nullEngineReadDepthLimit}, since this class was
    * loaded (<a href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). A client reads it
-   * before and after its reads to learn whether the limit decided any of their answers; each cut is
-   * also logged at {@link Level#FINE} with the query it answered.
+   * before and after its reads to learn whether the limit decided any of their answers. The count
+   * is shared by every thread in the process, so while other threads read too, only an unchanged
+   * count is conclusive: it means no read cut a query, and a change may be another thread's. Each
+   * cut is also logged at {@link Level#FINE} with the query it answered.
    *
    * @return The number of such queries.
    */
