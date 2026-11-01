@@ -1964,14 +1964,15 @@ public abstract class TensorGenerator implements Cloneable {
   protected static boolean isObservationFinal(PropagationCallGraphBuilder builder) {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
     if (engine == null) return true;
-    // A re-entered len fold in progress is a cycle the engine cannot see: the fold runs on the Java
+    // A re-entered len or rank fold in progress is a cycle the engine cannot see: the fold runs on
+    // the Java
     // stack, not as a query, so no on-stack read sets the cycle flag for it. An observed ⊥ is then
     // interim as under any cycle, in both phases (see RANK_FOLDS_REENTERED). During the fixpoint
     // the deferring query is registered for the settled recomputation like any other: a deferral
     // that left no such request would stay ⊥ in the settled state whenever none of its reads grew,
     // by query order. At the settlement pass a recomputation that still re-enters answers ⊥, which
     // never replaces a non-⊥ settled value, and is noted for the pass's diagnostic.
-    if (!RANK_FOLDS_REENTERED.get().isEmpty()) {
+    if (!RANK_FOLDS_REENTERED.get().isEmpty() || !RANK_PREDICATES_REENTERED.get().isEmpty()) {
       if (engine.isSettling()) engine.noteReentryDeferralAtSettlement();
       else if (engine.isEvaluating()) engine.requestSettledRecomputation();
       return false;
@@ -5265,11 +5266,13 @@ public abstract class TensorGenerator implements Cloneable {
     if (baseVar == null) return null;
     // Finding the base's creators decides the arms of the φs the walk passes, and a guard in a
     // loop governs an arm of a φ that flows back into its own base, so the fold can re-enter
-    // itself. A re-entry declines, as the len fold's does: an interim decline during the fixpoint,
-    // whose dead arm then contributes nothing to the walk that asked, and a plain one after it.
+    // itself. A re-entry declines as the len fold's does (RANK_FOLDS_IN_PROGRESS): a cycle the
+    // engine cannot see, so an observed ⊥ is interim while it is open, and a plain decline on the
+    // null-engine path.
     Pair<CGNode, Integer> frame = Pair.make(node, baseVn);
     Set<Pair<CGNode, Integer>> inProgress = RANK_PREDICATES_IN_PROGRESS.get();
     if (!inProgress.add(frame)) {
+      RANK_PREDICATES_REENTERED.get().add(frame);
       if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
       LOGGER.fine(
           () -> "The rank fold of vn " + baseVn + " in " + describe(node) + " re-entered itself.");
@@ -5286,6 +5289,7 @@ public abstract class TensorGenerator implements Cloneable {
       }
     } finally {
       inProgress.remove(frame);
+      RANK_PREDICATES_REENTERED.get().remove(frame);
     }
     Integer rank = null;
     for (List<Dimension<?>> member : shapes) {
@@ -5296,8 +5300,15 @@ public abstract class TensorGenerator implements Cloneable {
     return rank;
   }
 
-  /** The rank folds on this thread's stack, by node and base value number (wala/ML#1188). */
+  /**
+   * The rank folds on this thread's stack, by node and base value number, and those among them that
+   * were re-entered (wala/ML#1188), the counterparts of {@link #RANK_FOLDS_IN_PROGRESS} for the
+   * rank predicate.
+   */
   private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RANK_PREDICATES_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> RANK_PREDICATES_REENTERED =
       ThreadLocal.withInitial(HashSetFactory::make);
 
   /**
@@ -9379,6 +9390,8 @@ public abstract class TensorGenerator implements Cloneable {
     return !PHI_FOLD_ON_STACK.get().isEmpty()
         || !RANK_FOLDS_IN_PROGRESS.get().isEmpty()
         || !RANK_FOLDS_REENTERED.get().isEmpty()
+        || !RANK_PREDICATES_IN_PROGRESS.get().isEmpty()
+        || !RANK_PREDICATES_REENTERED.get().isEmpty()
         || !PARAMETER_CALLER_STACK.get().isEmpty()
         || CreatorJoin.guardInProgress()
         || SliceBuiltinOperation.guardInProgress()
