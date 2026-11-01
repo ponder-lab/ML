@@ -395,11 +395,18 @@ public abstract class TensorGenerator implements Cloneable {
 
   /**
    * The most passes a read outside an analysis run makes to read again the queries {@link
-   * #nullEngineReadDepthLimit} cut. Each pass reads one cut query from an empty stack, or the read
-   * itself once no cut query is left, so a chain {@code d} queries deep takes about {@code d / 256}
-   * passes per query the limit cuts on it.
+   * #nullEngineReadDepthLimit} cut. A pass reads every query the last pass cut, each from an empty
+   * stack, or the read itself once none is left. How many passes a read takes depends on how many
+   * queries its chains share as well as on their depth: a read of a 600-step chain of matrix
+   * products took 23.
    */
   static int nullEngineReadPassLimit = 64;
+
+  /**
+   * Run before each cut query is read again, for tests to make that read throw; {@code null}
+   * otherwise.
+   */
+  static Runnable cutReadHook;
 
   /** The reads after the analysis whose answers still depend on a cut. */
   private static final AtomicLong NULL_ENGINE_READ_UNREPAIRED_CUTS = new AtomicLong();
@@ -478,16 +485,19 @@ public abstract class TensorGenerator implements Cloneable {
     // Every query cut so far. A pass makes progress when it reads a cut query without a cut, or
     // cuts a query none before it did, which lies deeper than every earlier cut.
     Set<Pair<PropagationCallGraphBuilder, Object>> everCut = new HashSet<>();
+    // Whether the next pass is the read's last, made once a pass resolves nothing more.
+    boolean stopping = false;
     try {
       for (int pass = 0; ; pass++) {
         // A result that met a cut is the cut's, not the query's, so it is evaluated anew.
         reads.results.keySet().removeAll(reads.tainted);
         reads.tainted.clear();
         reads.cuts.clear();
-        if (pending.isEmpty() || pass >= nullEngineReadPassLimit) {
+        boolean last = stopping || pass >= nullEngineReadPassLimit;
+        if (pending.isEmpty() || last) {
           T result = nullEngineReadOnce(builder, key, compute, onCycle);
           if (reads.cuts.isEmpty()) return result;
-          if (pass >= nullEngineReadPassLimit || !everCut.addAll(reads.cuts.keySet())) {
+          if (last || !everCut.addAll(reads.cuts.keySet())) {
             NULL_ENGINE_READ_UNREPAIRED_CUTS.incrementAndGet();
             int passes = pass;
             LOGGER.fine(
@@ -510,7 +520,17 @@ public abstract class TensorGenerator implements Cloneable {
         Map<Pair<PropagationCallGraphBuilder, Object>, Runnable> again = new LinkedHashMap<>();
         for (Map.Entry<Pair<PropagationCallGraphBuilder, Object>, Runnable> cut : batch) {
           reads.cuts.clear();
-          cut.getValue().run();
+          try {
+            if (cutReadHook != null) cutReadHook.run();
+            cut.getValue().run();
+          } catch (RuntimeException e) {
+            // Read outside the frames that asked for it, the query's evaluation throws where one of
+            // their handlers would have taken the failure as a declined answer. It keeps its cut
+            // answer instead, and the read stops with it still standing.
+            LOGGER.log(
+                Level.FINE, e, () -> "Reading a cut query again failed: " + cut.getKey().snd);
+            continue;
+          }
           if (reads.tainted.contains(cut.getKey()) && reads.cuts.isEmpty())
             // It met only results that met a cut, which this pass reads again before it.
             again.put(cut.getKey(), cut.getValue());
@@ -526,8 +546,10 @@ public abstract class TensorGenerator implements Cloneable {
         Map<Pair<PropagationCallGraphBuilder, Object>, Runnable> next = new LinkedHashMap<>(again);
         next.putAll(pending);
         pending = next;
-        // Reading the cut queries again resolved nothing more, so the read stops at the next pass.
-        if (!progress) pass = nullEngineReadPassLimit - 1;
+        // Reading the cut queries again resolved nothing more, so the next pass reads the read
+        // itself
+        // for the last time.
+        if (!progress) stopping = true;
       }
     } finally {
       reads.passing = false;

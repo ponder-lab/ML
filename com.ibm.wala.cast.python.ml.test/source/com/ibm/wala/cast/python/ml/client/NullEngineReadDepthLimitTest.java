@@ -200,6 +200,33 @@ public class NullEngineReadDepthLimitTest extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A cut query whose evaluation throws when it is read again keeps its cut answer: the failure
+   * does not escape the read, which gives what it gives with no passes and is counted as one a cut
+   * still decides.
+   */
+  @Test(timeout = 120_000)
+  public void testFailingCutReadKeepsCutAnswer() throws Exception {
+    int limit = TensorGenerator.nullEngineReadDepthLimit;
+    try {
+      TensorGenerator.nullEngineReadDepthLimit = 2;
+      TensorGenerator.cutReadHook =
+          () -> {
+            throw new IllegalStateException("A cut query's evaluation failing when read again.");
+          };
+      long unrepaired = TensorGenerator.getNullEngineReadUnrepairedCuts();
+      assertEquals(
+          "[{[D:Constant,3, D:Constant,3] of float32}, {? of unknown}]",
+          readConsumed(UNION_FIXTURE, DEFAULT_STACK));
+      assertTrue(
+          "Expecting the read to be counted as decided by a cut.",
+          TensorGenerator.getNullEngineReadUnrepairedCuts() > unrepaired);
+    } finally {
+      TensorGenerator.nullEngineReadDepthLimit = limit;
+      TensorGenerator.cutReadHook = null;
+    }
+  }
+
+  /**
    * A cut contributes the unknown element and keeps the members the read resolved without it: a
    * value that is a constant on one path and a chain's end on the other reads, under a limit the
    * chain exceeds and with no passes to read the cut queries again, as the constant beside an
