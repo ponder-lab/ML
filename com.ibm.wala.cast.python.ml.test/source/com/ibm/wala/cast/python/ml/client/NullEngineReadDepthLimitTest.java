@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
@@ -79,20 +80,29 @@ public class NullEngineReadDepthLimitTest extends TestPythonMLCallGraphShape {
    * The read completes on a thread with the default stack, which evaluating every link of the chain
    * overflows, and keeps the queries it evaluated above the cut, so it reads each link once rather
    * than once per path to it. The end's type does not depend on the links past the cut, so it is
-   * exact.
+   * exact. The cuts are counted.
    */
   @Test(timeout = 120_000)
   public void testDeepReadCompletes() throws Exception {
+    long cuts = TensorGenerator.getNullEngineReadDepthCuts();
     assertEquals("[{[D:Constant,2, D:Constant,4] of float32}]", readChainEnd(DEFAULT_STACK));
+    assertTrue(
+        "Expecting the read to cut a query.", TensorGenerator.getNullEngineReadDepthCuts() > cuts);
   }
 
-  /** Without the limit, on a stack deep enough to hold the whole chain, the read is exact too. */
+  /**
+   * Without the limit, on a stack deep enough to hold the whole chain, the read is exact too, and
+   * no query is cut.
+   */
   @Test(timeout = 120_000)
   public void testUnlimitedReadOnDeepStack() throws Exception {
     int limit = TensorGenerator.nullEngineReadDepthLimit;
     TensorGenerator.nullEngineReadDepthLimit = Integer.MAX_VALUE;
     try {
+      long cuts = TensorGenerator.getNullEngineReadDepthCuts();
       assertEquals("[{[D:Constant,2, D:Constant,4] of float32}]", readChainEnd(64L << 20));
+      assertEquals(
+          "Expecting no query to be cut.", cuts, TensorGenerator.getNullEngineReadDepthCuts());
     } finally {
       TensorGenerator.nullEngineReadDepthLimit = limit;
     }
