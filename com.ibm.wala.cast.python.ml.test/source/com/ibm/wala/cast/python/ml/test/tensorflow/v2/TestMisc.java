@@ -1521,6 +1521,97 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * A rank guard on a value merged from tensors of different ranks has no single rank to decide
+   * from, so both of its arms run (<a
+   * href="https://github.com/wala/ML/issues/1188">wala/ML#1188</a>). {@code pick}'s {@code x} is a
+   * rank-2 {@code tf.ones([2, 2])} on one path and a rank-3 {@code tf.ones([2, 2, 2])} on the
+   * other, and {@code if x.shape.rank == 3} replaces it with {@code tf.ones([4, 2])}. The fold
+   * reads every creator of {@code x}, finds both ranks, and declines, so {@code consume} sees the
+   * replacement {@code (4, 2)} and both values the guard skips. Before, the fold read only the
+   * first creator its walk reached, decided the guard from that one's rank, and dropped an arm that
+   * runs.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRankFoldDeclinesOnMergedRanks()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ndims_fold_merged.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32, TENSOR_2_2_2_FLOAT32, TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
+   * A rank guard in a loop whose base is the loop's own φ reads to an end (<a
+   * href="https://github.com/wala/ML/issues/1188">wala/ML#1188</a>). Finding the base's creators
+   * decides the arms of the φs the walk passes, one of which this same guard governs, so the fold
+   * meets itself again and declines there rather than recursing. The loop may run any number of
+   * times, so {@code consume} sees both the reshaped {@code (4)} and the original {@code (2, 2)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRankFoldInLoop()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ndims_fold_loop.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * {@link #testRankFoldInLoop()} with the loop in a function called twice, so the guard is read in
+   * two contexts (<a href="https://github.com/wala/ML/issues/1188">wala/ML#1188</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRankFoldInLoopFunction()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ndims_fold_loop_function.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * {@link #testRankFoldDeclinesOnMergedRanks()} with the two arms of the merge in the other order,
+   * which the first-creator read decided the other way (<a
+   * href="https://github.com/wala/ML/issues/1188">wala/ML#1188</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRankFoldDeclinesOnMergedRanksSwapped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ndims_fold_merged_swapped.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32, TENSOR_2_2_2_FLOAT32, TENSOR_4_2_FLOAT32)));
+  }
+
+  /**
    * Captures the sidecar warnings a run raises for one driver, so a test can assert what the
    * analysis SAYS about an entry rather than only what it binds.
    *
