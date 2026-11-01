@@ -116,6 +116,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -342,6 +343,19 @@ public abstract class TensorGenerator implements Cloneable {
      * now being evaluated, or {@link Integer#MAX_VALUE} for none.
      */
     private int cycleDepth = Integer.MAX_VALUE;
+
+    /** Whether the outermost read is reading its queries again in passes. */
+    private boolean passing;
+
+    /** The number of queries this thread has cut, or met a result that depends on a cut. */
+    private long cutReads;
+
+    /** The kept results whose evaluation met a cut, which the next pass evaluates anew. */
+    private final Set<Pair<PropagationCallGraphBuilder, Object>> tainted = new HashSet<>();
+
+    /** The queries cut in the current pass, each with its evaluation from an empty stack. */
+    private final Map<Pair<PropagationCallGraphBuilder, Object>, Runnable> cuts =
+        new LinkedHashMap<>();
   }
 
   /** This thread's reads outside an analysis run. */
@@ -368,13 +382,43 @@ public abstract class TensorGenerator implements Cloneable {
    * loaded (<a href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). A client reads it
    * before and after its reads to learn whether the limit decided any of their answers. The count
    * is shared by every thread in the process, so while other threads read too, only an unchanged
-   * count is conclusive: it means no read cut a query, and a change may be another thread's. Each
-   * cut is also logged at {@link Level#FINE} with the query it answered.
+   * count is conclusive: it means no read cut a query, and a change may be another thread's. A cut
+   * query is read again, so a cut does not by itself make an answer less precise; {@link
+   * #getNullEngineReadUnrepairedCuts} counts the reads whose answers a cut still decides. Each cut
+   * is also logged at {@link Level#FINE} with the query it answered.
    *
    * @return The number of such queries.
    */
   public static long getNullEngineReadDepthCuts() {
     return NULL_ENGINE_READ_DEPTH_CUTS.get();
+  }
+
+  /**
+   * The most passes a read outside an analysis run makes to read again the queries {@link
+   * #nullEngineReadDepthLimit} cut. Each pass reads one cut query from an empty stack, or the read
+   * itself once no cut query is left, so a chain {@code d} queries deep takes about {@code d / 256}
+   * passes per query the limit cuts on it.
+   */
+  static int nullEngineReadPassLimit = 64;
+
+  /** The reads after the analysis whose answers still depend on a cut. */
+  private static final AtomicLong NULL_ENGINE_READ_UNREPAIRED_CUTS = new AtomicLong();
+
+  /**
+   * The number of reads made after the analysis whose answers still depend on a query that {@link
+   * #nullEngineReadDepthLimit} cut, since this class was loaded (<a
+   * href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). A read reads the queries the
+   * limit cuts again, each from an empty stack, and repeats itself with their results, so a cut
+   * usually leaves its answer exact; {@link #getNullEngineReadDepthCuts} counts every cut, repaired
+   * or not. A read is counted here when it stops with a cut still standing, because it reached
+   * {@link #nullEngineReadPassLimit} or a pass resolved no more of its queries. Its answer then has
+   * the unknown element where the cut was, which is sound. The count is shared by every thread in
+   * the process, so while other threads read too, only an unchanged count is conclusive.
+   *
+   * @return The number of such reads.
+   */
+  public static long getNullEngineReadUnrepairedCuts() {
+    return NULL_ENGINE_READ_UNREPAIRED_CUTS.get();
   }
 
   /**
@@ -402,6 +446,17 @@ public abstract class TensorGenerator implements Cloneable {
    * cycle reads it, while one first met inside the cycle is not kept, and the cycle reads its value
    * with the cycle answer. Either order gives a sound value.
    *
+   * <p>A query nested deeper than {@link #nullEngineReadDepthLimit} is cut: answered as a cycle is,
+   * and recorded with its evaluation. The outermost read then reads in passes (<a
+   * href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). Each pass first drops every
+   * kept result that met a cut, directly or by reading a kept result that did, and then reads each
+   * query cut in the last pass from an empty stack, the most recently cut first, or, when none is
+   * left, the read itself. A cut query read this way reaches up to the limit below itself, so each
+   * pass resolves the limit's depth more of a chain, and the read's answer no longer depends on
+   * where the limit fell. The read stops with a cut still standing when it reaches {@link
+   * #nullEngineReadPassLimit} or a pass neither resolves a cut query nor cuts one deeper than
+   * before; its answer then holds the cut's unknown element, which is sound.
+   *
    * @param <T> The query's result type.
    * @param builder The {@link PropagationCallGraphBuilder} the query reads.
    * @param key The query's key, the one the resolver would memoize it under.
@@ -415,8 +470,95 @@ public abstract class TensorGenerator implements Cloneable {
       java.util.function.Supplier<T> compute,
       T onCycle) {
     NullEngineReads reads = NULL_ENGINE_READS.get();
+    if (!reads.active.isEmpty() || reads.passing)
+      return nullEngineReadOnce(builder, key, compute, onCycle);
+    reads.passing = true;
+    // The cut queries to read again in the next pass, each from an empty stack.
+    Map<Pair<PropagationCallGraphBuilder, Object>, Runnable> pending = new LinkedHashMap<>();
+    // Every query cut so far. A pass makes progress when it reads a cut query without a cut, or
+    // cuts a query none before it did, which lies deeper than every earlier cut.
+    Set<Pair<PropagationCallGraphBuilder, Object>> everCut = new HashSet<>();
+    try {
+      for (int pass = 0; ; pass++) {
+        // A result that met a cut is the cut's, not the query's, so it is evaluated anew.
+        reads.results.keySet().removeAll(reads.tainted);
+        reads.tainted.clear();
+        reads.cuts.clear();
+        if (pending.isEmpty() || pass >= nullEngineReadPassLimit) {
+          T result = nullEngineReadOnce(builder, key, compute, onCycle);
+          if (reads.cuts.isEmpty()) return result;
+          if (pass >= nullEngineReadPassLimit || !everCut.addAll(reads.cuts.keySet())) {
+            NULL_ENGINE_READ_UNREPAIRED_CUTS.incrementAndGet();
+            int passes = pass;
+            LOGGER.fine(
+                () ->
+                    "A read after the analysis stopped after "
+                        + passes
+                        + " passes with a query the depth limit cut: "
+                        + key);
+            return result;
+          }
+          pending.putAll(reads.cuts);
+          continue;
+        }
+        // The most recently cut first, so each query is read after those cut below it.
+        List<Map.Entry<Pair<PropagationCallGraphBuilder, Object>, Runnable>> batch =
+            new ArrayList<>(pending.entrySet());
+        Collections.reverse(batch);
+        pending.clear();
+        boolean progress = false;
+        Map<Pair<PropagationCallGraphBuilder, Object>, Runnable> again = new LinkedHashMap<>();
+        for (Map.Entry<Pair<PropagationCallGraphBuilder, Object>, Runnable> cut : batch) {
+          reads.cuts.clear();
+          cut.getValue().run();
+          if (reads.tainted.contains(cut.getKey()) && reads.cuts.isEmpty())
+            // It met only results that met a cut, which this pass reads again before it.
+            again.put(cut.getKey(), cut.getValue());
+          else if (reads.cuts.isEmpty()) progress = true;
+          else {
+            if (everCut.addAll(reads.cuts.keySet())) progress = true;
+            again.put(cut.getKey(), cut.getValue());
+            pending.putAll(reads.cuts);
+          }
+        }
+        // A query still cut is read again after the deeper ones its reading cut.
+        again.keySet().removeAll(pending.keySet());
+        Map<Pair<PropagationCallGraphBuilder, Object>, Runnable> next = new LinkedHashMap<>(again);
+        next.putAll(pending);
+        pending = next;
+        // Reading the cut queries again resolved nothing more, so the read stops at the next pass.
+        if (!progress) pass = nullEngineReadPassLimit - 1;
+      }
+    } finally {
+      reads.passing = false;
+      reads.results.clear();
+      reads.tainted.clear();
+      reads.cuts.clear();
+    }
+  }
+
+  /**
+   * Evaluates a query once, as {@link #nullEngineRead} describes, without reading again the queries
+   * the depth limit cuts.
+   *
+   * @param <T> The query's result type.
+   * @param builder The {@link PropagationCallGraphBuilder} the query reads.
+   * @param key The query's key.
+   * @param compute The query's evaluation.
+   * @param onCycle The answer for a query met again while it is being evaluated, or nested too
+   *     deep.
+   * @return The query's result, or {@code onCycle}.
+   */
+  private static <T> T nullEngineReadOnce(
+      PropagationCallGraphBuilder builder,
+      Object key,
+      java.util.function.Supplier<T> compute,
+      T onCycle) {
+    NullEngineReads reads = NULL_ENGINE_READS.get();
     Pair<PropagationCallGraphBuilder, Object> query = Pair.make(builder, key);
     if (reads.results.containsKey(query)) {
+      // A result that met a cut makes whatever reads it depend on the cut too.
+      if (reads.tainted.contains(query)) reads.cutReads++;
       @SuppressWarnings("unchecked")
       T result = (T) reads.results.get(query);
       return result;
@@ -438,9 +580,12 @@ public abstract class TensorGenerator implements Cloneable {
       // Answered as a query re-entered at this depth would be, so the queries above it are kept as
       // they are for a cycle closed below them.
       reads.cycleDepth = Math.min(reads.cycleDepth, depth);
+      reads.cutReads++;
+      reads.cuts.putIfAbsent(query, () -> nullEngineReadOnce(builder, key, compute, onCycle));
       return onCycle;
     }
     reads.active.put(query, depth);
+    long cutReadsBefore = reads.cutReads;
     int outerCycleDepth = reads.cycleDepth;
     reads.cycleDepth = Integer.MAX_VALUE;
     boolean completed = false;
@@ -453,9 +598,12 @@ public abstract class TensorGenerator implements Cloneable {
       reads.active.remove(query);
       // A cycle answered at this query or below it is closed here; one answered above it is not.
       boolean closed = reads.cycleDepth >= depth;
-      if (completed && closed) reads.results.put(query, result);
+      if (completed && closed) {
+        reads.results.put(query, result);
+        if (reads.cutReads > cutReadsBefore) reads.tainted.add(query);
+      }
       reads.cycleDepth = Math.min(outerCycleDepth, closed ? Integer.MAX_VALUE : reads.cycleDepth);
-      if (reads.active.isEmpty()) reads.results.clear();
+      if (reads.active.isEmpty() && !reads.passing) reads.results.clear();
     }
   }
 
