@@ -362,6 +362,57 @@ public final class ContainerElements {
   }
 
   /**
+   * Reads the elements of a value that is a dataset element's component ({@link
+   * #datasetComponent}), as {@link #ofValue} reads them, or answers that the value is no such
+   * component. It dispatches the value's generator once, where asking {@link #datasetComponent} and
+   * then {@link #ofValue} dispatches it twice (<a
+   * href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis models the value.
+   * @param value The value.
+   * @return Its elements, or {@code null} when the value is no dataset element's component.
+   */
+  public static ContainerElements ofDatasetComponent(
+      PropagationCallGraphBuilder builder, PointerKey value) {
+    DatasetComponent component = datasetComponent(builder, value);
+    return component == null ? null : ofComponent(builder, component);
+  }
+
+  /**
+   * Reads the elements of a dataset element's component; see {@link #ofValue}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis models the
+   *     component.
+   * @param component The component.
+   * @return Its elements.
+   */
+  private static ContainerElements ofComponent(
+      PropagationCallGraphBuilder builder, DatasetComponent component) {
+    OptionalInt declared = component.declaredArity(builder);
+    if (declared.isPresent()) {
+      List<Set<TensorType>> positions = new ArrayList<>(declared.getAsInt());
+      boolean complete = true;
+      for (int i = 0; i < declared.getAsInt(); i++) {
+        List<Object> at = new ArrayList<>(component.path());
+        at.add(i);
+        Set<TensorType> types = pathTypes(builder, component.provider(), at);
+        positions.add(types == null ? null : Collections.unmodifiableSet(new HashSet<>(types)));
+        complete &= isTensor(builder, component.provider(), at, types);
+      }
+      return new ContainerElements(
+          declared.getAsInt(), List.of(), Set.of(), complete, builder, structure(positions));
+    }
+    Set<TensorType> types = componentTypes(builder, component);
+    return new ContainerElements(
+        -1,
+        List.of(),
+        Set.of(),
+        isTensor(builder, component.provider(), component.path(), types),
+        builder,
+        flat(types));
+  }
+
+  /**
    * Reads the elements of a value, whatever the instances it may hold. The value's points-to set
    * need not name a container: a dataset element's component, such as the {@code inputs} a Keras
    * step hands to {@code call} when {@code fit} is given {@code from_tensor_slices(((x, mask),
@@ -394,30 +445,7 @@ public final class ContainerElements {
    */
   public static ContainerElements ofValue(PropagationCallGraphBuilder builder, PointerKey value) {
     DatasetComponent component = datasetComponent(builder, value);
-    if (component != null) {
-      OptionalInt declared = component.declaredArity(builder);
-      if (declared.isPresent()) {
-        List<Set<TensorType>> positions = new ArrayList<>(declared.getAsInt());
-        boolean complete = true;
-        for (int i = 0; i < declared.getAsInt(); i++) {
-          List<Object> at = new ArrayList<>(component.path());
-          at.add(i);
-          Set<TensorType> types = pathTypes(builder, component.provider(), at);
-          positions.add(types == null ? null : Collections.unmodifiableSet(new HashSet<>(types)));
-          complete &= isTensor(builder, component.provider(), at, types);
-        }
-        return new ContainerElements(
-            declared.getAsInt(), List.of(), Set.of(), complete, builder, structure(positions));
-      }
-      Set<TensorType> types = componentTypes(builder, component);
-      return new ContainerElements(
-          -1,
-          List.of(),
-          Set.of(),
-          isTensor(builder, component.provider(), component.path(), types),
-          builder,
-          flat(types));
-    }
+    if (component != null) return ofComponent(builder, component);
     List<ContainerElements> parts = new ArrayList<>();
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value))
       parts.add(of(builder, ik));
