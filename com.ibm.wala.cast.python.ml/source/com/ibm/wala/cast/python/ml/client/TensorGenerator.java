@@ -124,6 +124,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -4597,6 +4598,21 @@ public abstract class TensorGenerator implements Cloneable {
       SSAConditionalBranchInstruction branch,
       Map<Integer, Object> env) {
     Object left = resolveComparableConstant(builder, node, branch.getUse(0), env);
+    // An unresolved left operand leaves the comparison undecided whatever the right one resolves
+    // to, so a read after the analysis does not resolve it, which can read shapes (wala/ML#1186).
+    // Under the resolver it is still resolved, as its reads register the dependency edges cycle
+    // detection relies on.
+    if (left == null && afterAnalysisShortcuts && WorklistTypeResolver.active(builder) == null) {
+      AFTER_ANALYSIS_SKIPS.incrementAndGet();
+      LOGGER.finer(
+          () ->
+              "Branch comparison undecided in "
+                  + describe(node)
+                  + ": use "
+                  + branch.getUse(0)
+                  + " does not resolve.");
+      return null;
+    }
     Object right = resolveComparableConstant(builder, node, branch.getUse(1), env);
     if (left == null || right == null) {
       LOGGER.finer(
@@ -5470,6 +5486,16 @@ public abstract class TensorGenerator implements Cloneable {
   static Set<Integer> computeFeasibleReturnValueNumbers(
       PropagationCallGraphBuilder builder, CGNode callee, Map<Integer, Object> env) {
     if (callee.getIR() == null) return null;
+    // A callee with fewer than two returns prunes none and keeps one, so the answer is null
+    // whatever the walk finds. A read after the analysis skips the walk's branch folds, which can
+    // read shapes (wala/ML#1186); under the resolver the walk still runs, as its reads register the
+    // dependency edges cycle detection relies on.
+    if (afterAnalysisShortcuts
+        && WorklistTypeResolver.active(builder) == null
+        && countReturns(callee.getIR()) < 2) {
+      AFTER_ANALYSIS_SKIPS.incrementAndGet();
+      return null;
+    }
     Set<ISSABasicBlock> reachable = computeReachableBlocksUnderBindings(builder, callee, env);
     Set<Integer> feasible = HashSetFactory.make();
     boolean pruned = false;
@@ -5480,6 +5506,29 @@ public abstract class TensorGenerator implements Cloneable {
         else feasible.add(((SSAReturnInstruction) instruction).getResult());
       }
     return pruned && !feasible.isEmpty() ? feasible : null;
+  }
+
+  /**
+   * Whether a read after the analysis skips the branch-fold work whose result it discards (<a
+   * href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). Only a test turns it off, to
+   * compare the answers either way.
+   */
+  static volatile boolean afterAnalysisShortcuts = true;
+
+  /** The number of times a read after the analysis skipped such work, for tests. */
+  static final AtomicLong AFTER_ANALYSIS_SKIPS = new AtomicLong();
+
+  /**
+   * Counts the returns in an IR.
+   *
+   * @param ir The IR.
+   * @return The number of its {@link SSAReturnInstruction}s.
+   */
+  private static int countReturns(IR ir) {
+    int ret = 0;
+    for (SSAInstruction instruction : ir.getInstructions())
+      if (instruction instanceof SSAReturnInstruction) ret++;
+    return ret;
   }
 
   /**
