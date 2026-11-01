@@ -359,6 +359,24 @@ public abstract class TensorGenerator implements Cloneable {
    */
   static int nullEngineReadDepthLimit = 256;
 
+  /** The queries reads after the analysis answered at {@link #nullEngineReadDepthLimit}. */
+  private static final AtomicLong NULL_ENGINE_READ_DEPTH_CUTS = new AtomicLong();
+
+  /**
+   * The number of queries that reads made after the analysis have answered with the unknown element
+   * because they were nested deeper than {@link #nullEngineReadDepthLimit}, since this class was
+   * loaded (<a href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). A client reads it
+   * before and after its reads to learn whether the limit decided any of their answers. The count
+   * is shared by every thread in the process, so while other threads read too, only an unchanged
+   * count is conclusive: it means no read cut a query, and a change may be another thread's. Each
+   * cut is also logged at {@link Level#FINE} with the query it answered.
+   *
+   * @return The number of such queries.
+   */
+  public static long getNullEngineReadDepthCuts() {
+    return NULL_ENGINE_READ_DEPTH_CUTS.get();
+  }
+
   /**
    * Evaluates a query with no {@link WorklistTypeResolver} installed, the path a read made through
    * the public surface after an analysis run takes (wala/ML#753), answering {@code onCycle} when
@@ -410,6 +428,13 @@ public abstract class TensorGenerator implements Cloneable {
     }
     int depth = reads.active.size();
     if (depth >= nullEngineReadDepthLimit) {
+      NULL_ENGINE_READ_DEPTH_CUTS.incrementAndGet();
+      LOGGER.fine(
+          () ->
+              "A read after the analysis answered a query nested "
+                  + depth
+                  + " deep with the unknown element: "
+                  + key);
       // Answered as a query re-entered at this depth would be, so the queries above it are kept as
       // they are for a cycle closed below them.
       reads.cycleDepth = Math.min(reads.cycleDepth, depth);
