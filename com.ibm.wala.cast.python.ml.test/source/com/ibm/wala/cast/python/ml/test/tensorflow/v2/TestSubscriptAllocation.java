@@ -143,6 +143,23 @@ public class TestSubscriptAllocation extends AbstractTensorTest {
     test(FILE, "consume_tensor_integer_pair", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
   }
 
+  /** {@code a[..., None].astype(np.float32) / 255.0}: the subscript's result, cast, then scaled. */
+  @Test
+  public void testCastScaled() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_cast_scaled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 2, 1))));
+  }
+
+  /** {@code tf.cast(t[..., tf.newaxis], tf.float32) / 255.0} on a tensor. */
+  @Test
+  public void testTensorCastScaled() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_tensor_cast_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 2, 1))));
+  }
+
   /**
    * Each subscript's result is an object of the receiver's kind that the subscript itself
    * allocates: in the script's node, at the subscript's read or at the {@code slice} call a slice
