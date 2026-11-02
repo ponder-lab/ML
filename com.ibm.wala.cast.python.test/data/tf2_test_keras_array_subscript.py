@@ -1,5 +1,5 @@
-# A subscript or a slice of an array a Keras dataset loader returns is a new NumPy array, as one
-# of an `ndarray` is (https://github.com/wala/ML/issues/400).
+# A subscript adding an axis to an array a Keras dataset loader returns is a new NumPy array, as
+# one of an `ndarray` is (https://github.com/wala/ML/issues/400).
 import numpy as np
 import tensorflow as tf
 

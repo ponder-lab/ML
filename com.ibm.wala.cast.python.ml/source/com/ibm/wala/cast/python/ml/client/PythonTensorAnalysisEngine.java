@@ -904,16 +904,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // pass-through; that is the named remainder. A dataset element's component, which the
     // iterator's `__next__` allocates under a class naming its index, is a tensor, so its slice is
     // one: `x[i * n : (i + 1) * n]` on a loop's batch used to alias the whole batch and read its
-    // full extent (wala/ML#1010). An array a Keras dataset loader returns is a NumPy array, so its
-    // slice, and a subscript of it adding an axis, `x_train[..., None]`, is one (wala/ML#400).
+    // full extent (wala/ML#1010).
     Map<TypeReference, TypeReference> sliceResults = new HashMap<>();
     sliceResults.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE);
     sliceResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
     for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
       sliceResults.put(component, TensorFlowTypes.TENSOR_TYPE);
-    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
-      sliceResults.put(array, NumpyTypes.NDARRAY_TYPE);
     builder.setFreshSliceResultTypes(sliceResults);
+
+    // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
+    // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
+    // A slice of the loader's array keeps aliasing the array, as before: allocated, its extent
+    // under a
+    // start-only bound reads unresolved (wala/ML#841), where the alias reads the array's full one.
+    Map<TypeReference, TypeReference> axisResults = new HashMap<>(sliceResults);
+    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
+      axisResults.put(array, NumpyTypes.NDARRAY_TYPE);
+    builder.setFreshAxisResultTypes(axisResults);
 
     // Arithmetic over an array yields an array the pointer analysis can see (wala/ML#1009): a
     // tensor or a variable operand yields a tensor and an ndarray operand an ndarray, so a
@@ -1720,14 +1727,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // A subscript adding an axis to an array read off another value, such as one a Keras
             // dataset loader's tuple unpacks to, `x_train[..., None]`, is seeded as one over an
             // elementwise result is below (wala/ML#400).
-            if (!added && NdarraySubscriptOperation.isApplicable(src, builder)) {
-              sources.add(src);
-              LOGGER.fine(
-                  () ->
-                      "Added dataflow source from a dim-adding subscript of a read value: "
-                          + describe(src)
-                          + ".");
-            }
+            if (!added)
+              try {
+                if (NdarraySubscriptOperation.isApplicable(src, builder)) {
+                  sources.add(src);
+                  LOGGER.fine(
+                      () ->
+                          "Added dataflow source from a dim-adding subscript of a read value: "
+                              + describe(src)
+                              + ".");
+                }
+              } catch (IllegalArgumentException e) {
+                LOGGER.log(
+                    Level.FINE, e, () -> "Not a dim-adding subscript: " + propertyRead + ".");
+              }
           } else if (def instanceof SSABinaryOpInstruction) {
             // The subscript's receiver is an elementwise result (`(x / 255.0)[..., tf.newaxis]`):
             // it carries dataflow state but no allocation, so no points-to walk reaches this

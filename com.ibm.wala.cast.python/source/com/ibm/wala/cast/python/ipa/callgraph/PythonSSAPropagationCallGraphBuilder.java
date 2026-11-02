@@ -320,6 +320,34 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The receiver types whose subscripts adding an axis without a slice, {@code x[..., None]},
+   * allocate their result (wala/ML#400), each mapped to the type of the result. Empty by default,
+   * when such a subscript allocates as a slice of the same receiver does, by the {@link
+   * #freshSliceResultTypes}.
+   */
+  private Map<TypeReference, TypeReference> freshAxisResultTypes = Collections.emptyMap();
+
+  /**
+   * Names the receiver types whose subscripts adding an axis allocate (wala/ML#400); see {@link
+   * #freshAxisResultTypes}.
+   *
+   * @param types Each receiver type mapped to the type of the result.
+   */
+  public void setFreshAxisResultTypes(Map<TypeReference, TypeReference> types) {
+    this.freshAxisResultTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
+  }
+
+  /**
+   * The result types of a subscript adding an axis: the {@link #freshAxisResultTypes} when any are
+   * named, the {@link #freshSliceResultTypes} otherwise.
+   *
+   * @return The types.
+   */
+  private Map<TypeReference, TypeReference> axisResultTypes() {
+    return freshAxisResultTypes.isEmpty() ? freshSliceResultTypes : freshAxisResultTypes;
+  }
+
+  /**
    * The receiver instance of the dispatch being resolved, while a target for it is chosen
    * (wala/ML#1012). WALA resolves a dispatching call once per receiver instance but hands the
    * method target selector only the instance's concrete type, and a program instance's concrete
@@ -1823,8 +1851,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * x[..., tf.newaxis]}, {@code x[None, ...]} or {@code x[[0, 2]]}, or a literal {@code None},
      * indexes several axes at once, selects several rows, or adds an axis, so its result is an
      * array of the receiver's own kind rather than an element: the read allocates as a slice does,
-     * by the {@link #freshSliceResultTypes} (wala/ML#400). A tuple of integers alone, {@code x[0,
-     * 1]}, yields a scalar of the array's dtype, which this models as a 0-d array of the receiver's
+     * by the {@link #axisResultTypes} (wala/ML#400). A tuple of integers alone, {@code x[0, 1]},
+     * yields a scalar of the array's dtype, which this models as a 0-d array of the receiver's
      * kind. The result's shape and dtype are again the read's own generator's. A subscript with a
      * slice lowers to the {@code slice} builtin and allocates there instead. A member that is not
      * such a literal, {@code tf.newaxis} alone or an index tuple held in a variable, is read as an
@@ -1841,10 +1869,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         if (symtab.isConstant(member)) {
           // An integer literal is a `Long` constant in this front end; a string is an attribute.
           Object index = symtab.getConstantValue(member);
-          if (index == null) types = getBuilder().freshSliceResultTypes;
+          if (index == null) types = getBuilder().axisResultTypes();
           else if (!(index instanceof Long) && !(index instanceof Integer)) return;
         } else if (du.getDef(member) instanceof SSANewInstruction)
-          types = getBuilder().freshSliceResultTypes;
+          types = getBuilder().axisResultTypes();
       }
       if (types.isEmpty()) return;
       int object = read.getObjectRef();

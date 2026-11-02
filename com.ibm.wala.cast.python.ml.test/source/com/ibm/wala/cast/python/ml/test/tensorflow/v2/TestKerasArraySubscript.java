@@ -22,8 +22,8 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * A subscript or a slice of an array a Keras dataset loader returns is a new NumPy array, which the
- * pointer analysis allocates in the program, as it does one of an {@code ndarray} (<a
+ * A subscript adding an axis to an array a Keras dataset loader returns is a new NumPy array, which
+ * the pointer analysis allocates in the program, as it does one of an {@code ndarray} (<a
  * href="https://github.com/wala/ML/issues/400">wala/ML#400</a>).
  */
 public class TestKerasArraySubscript extends AbstractTensorTest {
@@ -55,8 +55,9 @@ public class TestKerasArraySubscript extends AbstractTensorTest {
   }
 
   /**
-   * Each result is one NumPy array allocated in the script, not the loader's array: a result that
-   * aliased its receiver, which the loader's summary allocates, would not pass.
+   * Each subscript adding an axis, and arithmetic over one, is one NumPy array allocated in the
+   * script, not the loader's array: a result that aliased its receiver, which the loader's summary
+   * allocates, would not pass. A slice of the loader's array still aliases it.
    */
   @Test
   public void testResultsAllocatedInTheProgram() throws Exception {
@@ -64,7 +65,7 @@ public class TestKerasArraySubscript extends AbstractTensorTest {
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     builder.makeCallGraph(builder.getOptions());
     engine.performAnalysis(builder);
-    for (String sink : new String[] {"consume_ellipsis_none", "consume_slice", "consume_scaled"}) {
+    for (String sink : new String[] {"consume_ellipsis_none", "consume_scaled"}) {
       int nodes = 0;
       for (CGNode node : builder.getCallGraph()) {
         if (!node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + sink))
