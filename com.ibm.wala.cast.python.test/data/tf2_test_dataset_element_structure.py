@@ -1,5 +1,7 @@
 # The element of a `tf.data.Dataset` built from a structure, reached by iteration and by `next`: a
 # tuple or a dict of tensors, whose members are tensors and which is not one itself.
+import sys
+
 import tensorflow as tf
 
 
@@ -119,3 +121,23 @@ for inputs, y in mapped:
     consume_mapped_inputs(inputs)
     a, b = inputs
     consume_mapped_b(b)
+
+
+# A value that is a dataset's element on one arm and an ordinary tensor on the other.
+def consume_either_cast(x):
+    assert x.shape in ((2, 4), (3, 5)) and x.dtype == tf.int32
+
+
+flat = tf.data.Dataset.from_tensor_slices(tf.ones([8, 4])).batch(2)
+either = next(iter(flat)) if len(sys.argv) > 5 else tf.ones([3, 5])
+consume_either_cast(tf.cast(either, tf.int32))
+
+
+# A member nested nine tuples deep, past the depth the element's copy records.
+def consume_deep(x):
+    assert x.shape == (4,) and x.dtype == tf.float32
+
+
+deep = tf.data.Dataset.from_tensor_slices((((((((((tf.ones([8, 4]),),),),),),),),),))
+for d in deep:
+    consume_deep(d[0][0][0][0][0][0][0][0][0])

@@ -150,7 +150,15 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
                   .getPointerAnalysis()
                   .getPointsToSet(builder.getPointerKeyForInstanceField(allocation, field)));
       if (held == null) continue;
-      for (TensorGenerator generator : datasetsIn(held, builder))
+      // A dataset whose element is mirrored types it through the mirror, not through this
+      // allocation (wala/ML#1190).
+      List<InstanceKey> unmirrored = new ArrayList<>();
+      for (InstanceKey ik : held) {
+        AllocationSiteInNode dataset = getAllocationSiteInNode(ik);
+        if (dataset == null || !TensorGeneratorFactory.isElementMirrored(dataset, builder))
+          unmirrored.add(ik);
+      }
+      for (TensorGenerator generator : datasetsIn(unmirrored, builder))
         if (!ret.contains(generator)) ret.add(generator);
     }
     LOGGER.fine(() -> "Dataset element's dataset generators: " + ret + ".");

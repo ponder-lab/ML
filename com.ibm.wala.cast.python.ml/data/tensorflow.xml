@@ -236,6 +236,9 @@
         <putfield class="LRoot" field="deserialize" fieldType="LRoot" ref="initializers" value="deser_fn"/>
         <putfield class="LRoot" field="get" fieldType="LRoot" ref="initializers" value="get_fn"/>
         <new def="Dataset" class="Ltensorflow/data/Dataset"/>
+        <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+        <new def="legacy" class="Ltensorflow/data/element"/>
+        <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="Dataset" value="legacy"/>
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data#INFINITE_CARDINALITY and #UNKNOWN_CARDINALITY: the values `Dataset.cardinality()` reports for an infinite dataset and for one whose size it cannot tell (wala/ML#1072). -->
         <constant name="infinite_cardinality" type="int" value="-1"/>
@@ -3970,11 +3973,18 @@
     </package>
     <package name="tensorflow/keras/utils">
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/unpack_x_y_sample_weight (wala/ML#997): `(x, y, sample_weight)` from a step's data; the result's components are `data`'s when `data` is a tuple and `data` itself at index 0 otherwise, which `FitDataGenerator` types. -->
+      <!-- The holder joining `unpack_x_y_sample_weight`'s two readings (wala/ML#1190). -->
+      <class name="unpack_join" allocatable="true"></class>
       <class name="unpack_x_y_sample_weight" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self data">
           <new def="u" class="Ltensorflow/keras/UnpackedData"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="u" value="data"/>
-          <return value="u"/>
+          <!-- A tuple is unpacked by its own positions, so the result is also `data` itself, whose fields a mirrored dataset element types (wala/ML#1190). A tuple read through the pack, or anything else read through the tuple's positions, is no tensor, so the join adds no type. -->
+          <new def="joined" class="Ltensorflow/keras/utils/unpack_join"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="u"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="data"/>
+          <getfield class="LRoot" field="value" fieldType="LRoot" ref="joined" def="unpacked"/>
+          <return value="unpacked"/>
         </method>
       </class>
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/serialize_keras_object and deserialize_keras_object (wala/ML#996): the round trip through a configuration is modeled as the identity, so a layer rebuilt from its configuration is the layer it was serialized from, flow-insensitively the same configuration, constraints included. -->
@@ -5232,6 +5242,8 @@
       <class name="iterator" allocatable="true">
         <method name="__next__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
           <getfield class="LRoot" field="dataset" fieldType="LRoot" ref="self" def="ds"/>
+          <!-- The element is allocated only for a dataset whose element is not mirrored, which its producer marks (wala/ML#1190): the builder allocates it once this read may hold the marker. -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="ds" def="legacy"/>
           <new def="e" class="Ltensorflow/data/element"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="e" value="ds"/>
           <new def="c0" class="Ltensorflow/data/element_0"/>
@@ -5246,10 +5258,20 @@
           <new def="c3" class="Ltensorflow/data/element_3"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c3" value="ds"/>
           <putfield class="LRoot" field="3" fieldType="LRoot" ref="e" value="c3"/>
-          <return value="e"/>
+          <!-- A dataset whose element is mirrored carries it (wala/ML#1190); the allocated element stands for the element of any other, and its generator answers nothing for a mirrored one. -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="ds" def="mirrored"/>
+          <new def="joined" class="Ltensorflow/data/element_join"/>
+          <!-- A use of the marker read, without which the read has no points-to set of its own for the conditional allocation to depend on. -->
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="joined" value="legacy"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="e"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="mirrored"/>
+          <getfield class="LRoot" field="value" fieldType="LRoot" ref="joined" def="next"/>
+          <return value="next"/>
         </method>
         <method name="next" descriptor="()LRoot;" numArgs="2" paramNames="func self">
           <getfield class="LRoot" field="dataset" fieldType="LRoot" ref="self" def="ds"/>
+          <!-- The element is allocated only for a dataset whose element is not mirrored, which its producer marks (wala/ML#1190): the builder allocates it once this read may hold the marker. -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="ds" def="legacy"/>
           <new def="e" class="Ltensorflow/data/element"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="e" value="ds"/>
           <new def="c0" class="Ltensorflow/data/element_0"/>
@@ -5264,7 +5286,15 @@
           <new def="c3" class="Ltensorflow/data/element_3"/>
           <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="c3" value="ds"/>
           <putfield class="LRoot" field="3" fieldType="LRoot" ref="e" value="c3"/>
-          <return value="e"/>
+          <!-- A dataset whose element is mirrored carries it (wala/ML#1190); the allocated element stands for the element of any other, and its generator answers nothing for a mirrored one. -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="ds" def="mirrored"/>
+          <new def="joined" class="Ltensorflow/data/element_join"/>
+          <!-- A use of the marker read, without which the read has no points-to set of its own for the conditional allocation to depend on. -->
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="joined" value="legacy"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="e"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="mirrored"/>
+          <getfield class="LRoot" field="value" fieldType="LRoot" ref="joined" def="next"/>
+          <return value="next"/>
         </method>
       </class>
       <!-- A dataset element and its components; `<new>` targets only, typed by their generators from the `dataset` field their allocator writes (wala/ML#1010). -->
@@ -5273,6 +5303,17 @@
       <class name="element_1" allocatable="true"></class>
       <class name="element_2" allocatable="true"></class>
       <class name="element_3" allocatable="true"></class>
+      <!-- A call of this mirrors its structure argument into the element of its dataset argument (wala/ML#1190): the builder copies the structure's tuples, dicts and namedtuples, and makes a leaf of anything else, as the result. The body reads a field nothing writes, so it contributes nothing itself. -->
+      <class name="element_mirror" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self structure dataset">
+          <getfield class="LRoot" field="mirrored" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
+      <!-- A leaf of a mirrored element, a tensor typed by its dataset's generator at its path (wala/ML#1190). -->
+      <class name="element_leaf" allocatable="true"></class>
+      <!-- The holder joining an iterator's element kinds (wala/ML#1190). -->
+      <class name="element_join" allocatable="true"></class>
       <!-- Distinct type for `tf.data.TextLineDataset` so the factory dispatches to `TextLineDatasetGenerator` (intrinsic 0-D string element type). `do` allocates a fresh `TextLineDataset` per call site (parallel to the per-endpoint allocation pattern in `shuffle`/`batch`/etc.) so 1-CFA context preserves call-site distinctness rather than aliasing every `tf.data.TextLineDataset(...)` to the same singleton from the import-time field allocation. The chain-method fields are bound on the new instance just like the other dataset endpoints, so `tf.data.TextLineDataset(...).shuffle(...).batch(...)` chains resolve. See wala/ML#452. -->
       <class name="TextLineDataset" allocatable="true">
         <method name="read_dataset" descriptor="()LRoot;" numArgs="1" paramNames="self">
@@ -5280,6 +5321,8 @@
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self filenames compression_type">
           <new def="x" class="Ltensorflow/data/TextLineDataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5309,6 +5352,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
@@ -5324,6 +5382,8 @@
       <class name="TFRecordDataset" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self filenames compression_type buffer_size num_parallel_reads name">
           <new def="x" class="Ltensorflow/data/TFRecordDataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5353,6 +5413,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
@@ -5408,6 +5483,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#shuffle -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
@@ -5439,17 +5519,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5457,8 +5562,15 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#batch -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size drop_remainder num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
+          <!-- The element mirrors the receiver's mirrored element, which this method object carries, typed at its paths by this dataset's generator; a receiver whose element is not mirrored leaves this one unmirrored too (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="received"/>
+          <new def="mirror_fn" class="Ltensorflow/data/element_mirror"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="mirror_fn" arg1="received" arg2="x" numArgs="3" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5488,17 +5600,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5506,8 +5643,15 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#padded_batch — modeled like `batch` (a fresh Dataset carrying the chainable transform fields); shape inference reuses `DatasetBatchGenerator`. The field-init block is duplicated per the structural reason documented on `batch.do`. wala/ML#623. -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size padded_shapes padding_values drop_remainder name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
+          <!-- The element mirrors the receiver's mirrored element, which this method object carries, typed at its paths by this dataset's generator; a receiver whose element is not mirrored leaves this one unmirrored too (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="received"/>
+          <new def="mirror_fn" class="Ltensorflow/data/element_mirror"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="mirror_fn" arg1="received" arg2="x" numArgs="3" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -5536,17 +5680,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5554,6 +5723,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#repeat -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
@@ -5585,17 +5759,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5603,6 +5802,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#prefetch -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self buffer_size name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
@@ -5634,17 +5838,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5652,6 +5881,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#window (wala/ML#776). Level-collapsed model: the runtime yields windows (sub-datasets) whose own iteration yields the source elements; this model returns an element-preserving Dataset, so the generic pass-through dataset generator delegates element types to the source and the two-level iteration observes the source element types. -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self size shift stride drop_remainder name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5681,6 +5912,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>
@@ -5688,6 +5934,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#with_options -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self options name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
@@ -5719,17 +5970,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5737,6 +6013,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#take -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
@@ -5768,17 +6049,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5786,6 +6092,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#map -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self map_func num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- The argument map_func is given, from `map_argument`: the receiver dataset joined with a fresh `dict` (wala/ML#1088). -->
           <new def="argument_fn" class="Ltensorflow/functions/map_argument"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="argument_fn" arg1="self" numArgs="2" def="argument"/>
@@ -5821,6 +6129,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the function's return. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="mapped_element"/>
@@ -5839,6 +6162,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#filter -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
@@ -5870,17 +6198,42 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -5888,6 +6241,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
           <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
@@ -5919,6 +6274,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
@@ -5950,6 +6320,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#enumerate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -5979,6 +6351,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>
@@ -5989,6 +6376,10 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
           <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The element mirrors the structure the dataset was built from, typed at its paths by this dataset's generator (wala/ML#1190). -->
+          <new def="mirror_fn" class="Ltensorflow/data/element_mirror"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="mirror_fn" arg1="tensors" arg2="x" numArgs="3" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6020,15 +6411,25 @@
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the structure of `tensors`. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -6036,6 +6437,10 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The element mirrors the structure the dataset was built from, typed at its paths by this dataset's generator (wala/ML#1190). -->
+          <new def="mirror_fn" class="Ltensorflow/data/element_mirror"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="mirror_fn" arg1="tensors" arg2="x" numArgs="3" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6067,15 +6472,25 @@
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the structure of `tensors`. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="tensors"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
@@ -6083,6 +6498,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#sample_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6112,6 +6529,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>
@@ -6156,6 +6588,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self datasets choice_dataset stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6185,6 +6619,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>
@@ -6194,6 +6643,8 @@
           <!-- Invoke the generator so its body enters the call graph: a `yield a, b` inside it lowers to a tuple stored on the generator's `__content__` field, which `DatasetFromGeneratorGenerator` reads per index when neither `output_signature` nor `output_shapes` is supplied (wala/ML#903). Without this call a generator that user code never invokes has no node, and its yields are invisible; `map` invokes its `map_func` the same way (wala/ML#506). -->
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="generator" numArgs="1" def="generator_result"/>
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6223,6 +6674,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the declared one. -->
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="output_types"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="output_signature"/>
@@ -6251,6 +6717,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self datasets name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6280,6 +6748,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- FIXME: This could return tuples of tensors. See https://github.com/wala/ML/issues/165. -->
           <return value="x"/>
         </method>
@@ -6288,6 +6771,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#range -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start stop step output_type name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6317,6 +6802,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>
@@ -6324,6 +6824,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self seed name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- This dataset's element is not mirrored: the marker makes an iterator over it allocate the element (wala/ML#1190). -->
+          <new def="legacy" class="Ltensorflow/data/element"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
@@ -6353,6 +6855,21 @@
           <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>

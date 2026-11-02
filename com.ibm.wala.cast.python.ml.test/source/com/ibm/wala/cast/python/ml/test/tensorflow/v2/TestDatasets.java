@@ -589,13 +589,8 @@ public class TestDatasets extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset28.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
     test("tf2_test_dataset28.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
-    // TODO: Change to 0, 0 when https://github.com/wala/ML/issues/164 is fixed:
-    test(
-        "tf2_test_dataset28.py",
-        "h",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_3_INT32, SCALAR_TENSOR_OF_STRING)));
+    // The element is a tuple, no tensor (https://github.com/wala/ML/issues/1190).
+    test("tf2_test_dataset28.py", "h", 0, 0, Map.of());
   }
 
   @Test

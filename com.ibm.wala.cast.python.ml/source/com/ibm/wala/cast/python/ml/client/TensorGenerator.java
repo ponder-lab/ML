@@ -44,6 +44,7 @@ import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -6756,7 +6757,14 @@ public abstract class TensorGenerator implements Cloneable {
     boolean replay = activeEngine != null && activeEngine.isReplaying();
 
     for (InstanceKey valueIK : valuePointsToSet)
-      if (valueIK instanceof ConstantKey) {
+      if (valueIK instanceof ElementMirrorKey mirror) {
+        // A mirrored dataset element's structure is no tensor, and its leaf is its own reading,
+        // not the summary allocation's (wala/ML#1190).
+        if (!mirror.isLeaf()) continue;
+        for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(mirror, builder))
+          if (type.getDims() == null) hasUnknown = true;
+          else ret.add(type.getDims());
+      } else if (valueIK instanceof ConstantKey) {
         // A null constant is analysis substrate (loop-carried phi defaults, the generator
         // iteration protocol) or an explicit `None` argument, never a scalar value; typing it as
         // shape [] fabricates a scalar member the downstream pass-throughs then propagate (the
@@ -7992,6 +8000,13 @@ public abstract class TensorGenerator implements Cloneable {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
+      if (valueIK instanceof ElementMirrorKey mirror) {
+        // As in the shape read, a mirrored dataset element (wala/ML#1190).
+        if (mirror.isLeaf())
+          for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(mirror, builder))
+            ret.add(type.getDType());
+        continue;
+      }
       if (valueIK instanceof AllocationSiteInNode && !visited.add(valueIK)) continue;
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
@@ -12208,9 +12223,13 @@ public abstract class TensorGenerator implements Cloneable {
     // from the dataset the allocation's `dataset` field holds, a component by its index into the
     // element's structure when the dataset yields tuples. A `next` result read as a value is typed
     // in the factory's `next` branch instead, where the reading node's iterated value is known.
-    if (sanitized.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE))
-      return new DatasetIteratorElementGenerator(
-          node, DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder));
+    if (sanitized.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)) {
+      List<TensorGenerator> datasets =
+          DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder);
+      // An element allocated for datasets whose elements are all mirrored stands for nothing
+      // (wala/ML#1190).
+      return datasets.isEmpty() ? null : new DatasetIteratorElementGenerator(node, datasets);
+    }
     int component = TensorFlowTypes.datasetElementComponentIndex(sanitized);
     if (component >= 0) {
       List<TensorGenerator> datasets =

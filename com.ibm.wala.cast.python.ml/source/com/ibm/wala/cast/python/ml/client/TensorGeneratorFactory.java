@@ -264,19 +264,25 @@ import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -305,6 +311,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
@@ -1331,6 +1338,16 @@ public class TensorGeneratorFactory {
     // is read from its arguments there), where a generator anchored on the allocation inside the
     // summary node reads the same dataset without its frame. Several datasets, or an iterated
     // value naming none of them, are typed from the allocations and joined.
+    // An element allocated for a dataset whose element is mirrored stands for nothing: the mirror
+    // carries that dataset's element (wala/ML#1190).
+    elements =
+        elements.stream()
+            .filter(
+                element ->
+                    DatasetIteratorElementGenerator.datasetAllocationsOf(element, builder).stream()
+                        .anyMatch(dataset -> !isElementMirrored(dataset, builder)))
+            .toList();
+    if (elements.isEmpty()) return null;
     Set<AllocationSiteInNode> datasets = HashSetFactory.make();
     for (AllocationSiteInNode element : elements)
       datasets.addAll(DatasetIteratorElementGenerator.datasetAllocationsOf(element, builder));
@@ -1358,6 +1375,207 @@ public class TensorGeneratorFactory {
     List<TensorGenerator> generators =
         DatasetIteratorElementGenerator.datasetsOf(elements, builder);
     return generators.isEmpty() ? null : new DatasetIteratorElementGenerator(source, generators);
+  }
+
+  /**
+   * The parts reading the mirrored dataset element leaves a value holds (wala/ML#1190).
+   *
+   * @param parts One generator per leaf, path and dataset, or per cutoff leaf.
+   * @param only Whether the value holds nothing else but the element allocations of datasets whose
+   *     elements are mirrored, which stand for nothing beside the mirror.
+   */
+  private record MirroredLeaves(List<TensorGenerator> parts, boolean only) {
+
+    /**
+     * The join of the parts.
+     *
+     * @param source The value.
+     * @return The generator, or {@code null} when there are no parts.
+     */
+    TensorGenerator join(PointsToSetVariable source) {
+      if (parts.isEmpty()) return null;
+      return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+    }
+  }
+
+  /**
+   * The generators of the mirrored dataset element leaves a value holds (wala/ML#1190). A leaf is
+   * read as its dataset's element at each path the mirror recorded for it, the reading that seeds
+   * the fields holding it: by (dataset, path), not by the upstream leaf, so a source reached at two
+   * paths, as in {@code (x, x)}, is read at both and joined. A leaf the mirror reached only past
+   * the path length it records is the unknown-marked element. Generators run before the tensor
+   * analysis, so an operation over the value reads its type here.
+   *
+   * @param source The value.
+   * @param builder The propagation call graph builder.
+   * @return The leaves' parts, or {@code null} when the value holds no mirrored leaf.
+   */
+  private static MirroredLeaves mirroredLeaves(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (source == null
+        || !(builder instanceof PythonSSAPropagationCallGraphBuilder python)
+        || source.getPointerKey() == null) return null;
+    List<ElementMirrorKey> leaves = new ArrayList<>();
+    boolean only = true;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())) {
+      if (ik instanceof ElementMirrorKey mirror) {
+        if (mirror.isLeaf()) leaves.add(mirror);
+        else only = false;
+        continue;
+      }
+      if (!isSuppressedElement(ik, builder)) only = false;
+    }
+    if (leaves.isEmpty()) return null;
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (ElementMirrorKey leaf : leaves) {
+      if (python.isElementMirrorCutoff(leaf)) parts.add(new DatasetElementGenerator(source, null));
+      List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
+      if (datasets.isEmpty()) continue;
+      DatasetIteratorElementGenerator element =
+          new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
+      for (List<String> names : python.getElementMirrorPaths(leaf)) {
+        if (names.isEmpty()) {
+          parts.add(element);
+          continue;
+        }
+        List<Object> path = new ArrayList<>();
+        // A tuple's positions are integers, a dict's keys strings.
+        for (String name : names)
+          path.add(name.matches("\\d+") ? (Object) Integer.valueOf(name) : (Object) name);
+        // A single index reads the element's tuple position, as a subscript of the element does.
+        if ((path.size() == 1 && path.get(0) instanceof Integer)
+            || element.resolvesPath(builder, path))
+          parts.add(new DatasetTupleElementGenerator(source, element, path));
+      }
+    }
+    return new MirroredLeaves(parts, only);
+  }
+
+  /**
+   * A mirrored leaf's tensor types (wala/ML#1190): its dataset's element at each path the mirror
+   * recorded for it, by (dataset, path), joined over the paths and the datasets, and the
+   * unknown-marked element when the mirror reached it only past the length it records. The field
+   * seeds and the value reads both read a leaf through this.
+   *
+   * @param leaf The leaf.
+   * @param builder The propagation call graph builder.
+   * @return The types.
+   */
+  static Set<TensorType> mirroredLeafTypes(
+      ElementMirrorKey leaf, PropagationCallGraphBuilder builder) {
+    Set<TensorType> ret = HashSetFactory.make();
+    if (!(builder instanceof PythonSSAPropagationCallGraphBuilder python)) return ret;
+    if (python.isElementMirrorCutoff(leaf)) ret.add(new TensorType(DType.UNKNOWN, null));
+    List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
+    if (datasets.isEmpty()) return ret;
+    DatasetIteratorElementGenerator element =
+        new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
+    for (List<String> names : python.getElementMirrorPaths(leaf)) {
+      if (names.isEmpty()) {
+        ret.addAll(element.getTensorTypes(builder));
+        continue;
+      }
+      List<Object> path = new ArrayList<>();
+      // A tuple's positions are integers, a dict's keys strings.
+      for (String name : names)
+        path.add(name.matches("\\d+") ? (Object) Integer.valueOf(name) : (Object) name);
+      // A single index reads the element's tuple position, as a subscript of the element does.
+      if (path.size() == 1 && path.get(0) instanceof Integer index)
+        ret.addAll(element.getTensorTypesForIndex(builder, index));
+      else if (element.resolvesPath(builder, path))
+        ret.addAll(element.getTensorTypesForPath(builder, path));
+    }
+    return ret;
+  }
+
+  /**
+   * The generators of the dataset a mirrored key's element belongs to (wala/ML#1190), read in the
+   * frame of each call to the producer whose summary mirrored it: the call's result there is the
+   * dataset the program built, with its arguments resolved in the program's frame, where a
+   * generator anchored on the summary's own allocation reads them without it. A producer with no
+   * such caller is read from the summary's allocation.
+   *
+   * @param key The mirrored key.
+   * @param builder The propagation call graph builder.
+   * @return The dataset generators, without duplicates.
+   */
+  static List<TensorGenerator> mirroredDatasets(
+      ElementMirrorKey key, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    CGNode producer = key.getNode();
+    CallGraph cg = builder.getCallGraph();
+    for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(producer))) {
+      if (caller.getIR() == null) continue;
+      for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, producer))) {
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site)) {
+          if (!call.hasDef()) continue;
+          PointerKey result =
+              builder
+                  .getPointerAnalysis()
+                  .getHeapModel()
+                  .getPointerKeyForLocal(caller, call.getDef());
+          PointsToSetVariable variable = getPointsToSetVariable(result, builder);
+          if (variable == null) continue;
+          TensorGenerator generator =
+              tryGetGenerator(variable, builder, new DispatchPath(UNMEMOIZED_WALKS.get() == 0));
+          if (generator instanceof DatasetGenerator && !ret.contains(generator)) ret.add(generator);
+        }
+      }
+    }
+    if (!ret.isEmpty()) return ret;
+    return DatasetIteratorElementGenerator.datasetsIn(
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key.getDataset())),
+        builder);
+  }
+
+  /**
+   * Whether a key is the element, or a component of the element, the iterator allocates for
+   * datasets whose elements are all mirrored, which stands for nothing beside the mirror
+   * (wala/ML#1190).
+   *
+   * @param ik The key.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the key is such an allocation.
+   */
+  private static boolean isSuppressedElement(InstanceKey ik, PropagationCallGraphBuilder builder) {
+    AllocationSiteInNode asin = findAllocationSiteInNode(ik);
+    if (asin == null) return false;
+    TypeReference type = asin.concreteType().getReference();
+    if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+        && TensorFlowTypes.datasetElementComponentIndex(type) < 0) return false;
+    List<AllocationSiteInNode> datasets =
+        DatasetIteratorElementGenerator.datasetAllocationsOf(asin, builder);
+    return !datasets.isEmpty()
+        && datasets.stream().allMatch(dataset -> isElementMirrored(dataset, builder));
+  }
+
+  /**
+   * Whether a dataset's element is mirrored (wala/ML#1190): its {@code mirrored_element} field
+   * holds a mirror's copy of the structure the dataset was built from.
+   *
+   * @param dataset The dataset's allocation.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the dataset carries a mirrored element.
+   *     <p>Every reader of the element the iterator allocates decides through this predicate, so a
+   *     mirrored dataset's element is read through its mirror alone.
+   */
+  static boolean isElementMirrored(
+      AllocationSiteInNode dataset, PropagationCallGraphBuilder builder) {
+    IField element =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    Atom.findOrCreateUnicodeAtom("mirrored_element"),
+                    PythonTypes.Root));
+    if (element == null) return false;
+    for (InstanceKey ik :
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, element)))
+      if (ik instanceof ElementMirrorKey) return true;
+    return false;
   }
 
   /**
@@ -2694,6 +2912,27 @@ public class TensorGeneratorFactory {
    */
   private static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
+    MirroredLeaves mirrored = mirroredLeaves(source, builder);
+    if (mirrored == null) return getOrdinaryGenerator(source, builder, visited);
+    if (mirrored.only()) return mirrored.join(source);
+    // The other keys' generator joins the leaves' parts, so neither side is dropped.
+    TensorGenerator others = getOrdinaryGenerator(source, builder, visited);
+    List<TensorGenerator> parts = new ArrayList<>(mirrored.parts());
+    if (others != null) parts.add(others);
+    return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
+   * The dispatch of {@link #getGenerator(PointsToSetVariable, PropagationCallGraphBuilder,
+   * DispatchPath)} for the keys of a value that are not mirrored leaves (wala/ML#1190).
+   *
+   * @param source the points-to set variable representing the source of the tensor
+   * @param builder the propagation call graph builder used for the analysis
+   * @param visited the dispatch path so far
+   * @return the generator, or {@code null} when there is none
+   */
+  private static TensorGenerator getOrdinaryGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     source = findCreator(source, builder);
     // `findCreator` can return null (an unresolvable points-to variable, e.g. a null source or a
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
@@ -2940,6 +3179,19 @@ public class TensorGeneratorFactory {
                 datasetIteratorElement(
                     source, iterArgument(builder, node, iterableVn), builder, visited);
             if (fromElement != null) return fromElement;
+            // A mirrored element is typed through the fields that hold it, not by a generator, so
+            // the result has none (wala/ML#1190); reading the iterated dataset as a tensor and
+            // peeling a dimension would type the batch's rows instead.
+            boolean mirroredOnly = false;
+            for (InstanceKey ik :
+                builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())) {
+              if (ik instanceof ElementMirrorKey) mirroredOnly = true;
+              else if (!isSuppressedElement(ik, builder)) {
+                mirroredOnly = false;
+                break;
+              }
+            }
+            if (mirroredOnly) return null;
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
