@@ -50,6 +50,14 @@ def consume_fancy(x):
     pass
 
 
+def consume_cast_scaled(x):
+    pass
+
+
+def consume_tensor_cast_scaled(x):
+    pass
+
+
 a = np.ones((3, 2), dtype=np.float32)
 
 x1 = a[..., tf.newaxis]
@@ -97,3 +105,12 @@ consume_tensor_slice_ellipsis_newaxis(x10)
 x11 = t[0, 1]
 assert x11.shape == () and x11.dtype == tf.float32
 consume_tensor_integer_pair(x11)
+
+# A subscript's result used further: cast, then scaled.
+x12 = a[..., None].astype(np.float32) / 255.0
+assert x12.shape == (3, 2, 1) and x12.dtype == np.float32
+consume_cast_scaled(x12)
+
+x13 = tf.cast(t[..., tf.newaxis], tf.float32) / 255.0
+assert x13.shape == (3, 2, 1) and x13.dtype == tf.float32
+consume_tensor_cast_scaled(x13)

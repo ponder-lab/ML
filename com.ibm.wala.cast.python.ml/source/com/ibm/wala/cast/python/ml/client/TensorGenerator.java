@@ -7172,9 +7172,12 @@ public abstract class TensorGenerator implements Cloneable {
     IR ir = node.getIR();
     if (ir == null) return null;
     int pc = asin.getSite().getProgramCounter();
-    SSAInstruction[] instructions = ir.getInstructions();
-    if (pc < 0 || pc >= instructions.length) return null;
-    SSAInstruction at = instructions[pc];
+    // The site's program counter is the allocating instruction's index, which need not be its
+    // position in the instruction array.
+    SSAInstruction at = null;
+    for (SSAInstruction instruction : ir.getInstructions())
+      if (instruction != null && instruction.iIndex() == pc) at = instruction;
+    if (at == null) return null;
     // A binary operator's result allocated at the operator, and an array's element allocated at
     // the read that binds it (wala/ML#1009), resolve the same way: the shape and dtype are the
     // operator's, or the read's, own generator's.
