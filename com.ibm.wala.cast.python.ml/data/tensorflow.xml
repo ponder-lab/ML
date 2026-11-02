@@ -3973,18 +3973,11 @@
     </package>
     <package name="tensorflow/keras/utils">
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/unpack_x_y_sample_weight (wala/ML#997): `(x, y, sample_weight)` from a step's data; the result's components are `data`'s when `data` is a tuple and `data` itself at index 0 otherwise, which `FitDataGenerator` types. -->
-      <!-- The holder joining `unpack_x_y_sample_weight`'s two readings (wala/ML#1190). -->
-      <class name="unpack_join" allocatable="true"></class>
       <class name="unpack_x_y_sample_weight" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self data">
           <new def="u" class="Ltensorflow/keras/UnpackedData"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="u" value="data"/>
-          <!-- A tuple is unpacked by its own positions, so the result is also `data` itself, whose fields a mirrored dataset element types (wala/ML#1190). A tuple read through the pack, or anything else read through the tuple's positions, is no tensor, so the join adds no type. -->
-          <new def="joined" class="Ltensorflow/keras/utils/unpack_join"/>
-          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="u"/>
-          <putfield class="LRoot" field="value" fieldType="LRoot" ref="joined" value="data"/>
-          <getfield class="LRoot" field="value" fieldType="LRoot" ref="joined" def="unpacked"/>
-          <return value="unpacked"/>
+          <return value="u"/>
         </method>
       </class>
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/serialize_keras_object and deserialize_keras_object (wala/ML#996): the round trip through a configuration is modeled as the identity, so a layer rebuilt from its configuration is the layer it was serialized from, flow-insensitively the same configuration, constraints included. -->
