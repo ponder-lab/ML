@@ -2949,7 +2949,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final InstanceKey source;
     private final PointerKey dataset;
     private final boolean leaf;
-    private final String position;
 
     private ElementMirrorKey(
         CGNode node,
@@ -2957,23 +2956,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         IClass type,
         InstanceKey source,
         PointerKey dataset,
-        boolean leaf,
-        String position) {
+        boolean leaf) {
       super(node, site, type);
       this.source = source;
       this.dataset = dataset;
       this.leaf = leaf;
-      this.position = position;
-    }
-
-    /**
-     * The field of {@link #getSource()} this leaf stands for, when it is a position leaf: the leaf
-     * of a structure's position, whatever the position holds.
-     *
-     * @return The field's name, or {@code null} for a copy of a key.
-     */
-    public String getPosition() {
-      return position;
     }
 
     /**
@@ -3008,24 +2995,17 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return o instanceof ElementMirrorKey other
           && getNode().equals(other.getNode())
           && getSite().equals(other.getSite())
-          && source.equals(other.source)
-          && Objects.equals(position, other.position);
+          && source.equals(other.source);
     }
 
     @Override
     public int hashCode() {
-      return ((getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode()) * 31
-          + Objects.hashCode(position);
+      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode();
     }
 
     @Override
     public String toString() {
-      return "ElementMirror["
-          + (leaf ? "leaf" : "structure")
-          + " of "
-          + source
-          + (position == null ? "" : " at " + position)
-          + "]";
+      return "ElementMirror[" + (leaf ? "leaf" : "structure") + " of " + source + "]";
     }
   }
 
@@ -3133,8 +3113,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       // Past the recorded length the copy stops: the key is a leaf standing for the unknown rest.
       boolean beyond = path.size() > MAX_PATH;
       boolean structure = !beyond && isStructure(source.concreteType());
-      // Below the root, a position's leaf stands for whatever is not structure there.
-      if (!structure && !beyond && !path.isEmpty()) return;
       IClass type = structure ? source.concreteType() : cha.lookupClass(elementLeafType);
       if (type == null) return;
       ElementMirrorKey mirror =
@@ -3144,8 +3122,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               type,
               source,
               datasetKey,
-              !structure,
-              null);
+              !structure);
       if (beyond) elementMirrorCutoffs.add(mirror);
       else elementMirrorPaths.computeIfAbsent(mirror, k -> HashSetFactory.make()).add(path);
       getSystem().newConstraint(target, mirror);
@@ -3176,28 +3153,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                 .newConstraint(factory.getPointerKeyForObjectCatalog(mirror), name);
                             List<String> next = new ArrayList<>(path);
                             next.add(field);
-                            // The position's leaf, whatever its source field holds: a field the
-                            // pointer analysis left empty is still a position of the element.
-                            if (next.size() <= MAX_PATH) {
-                              IClass leafType = cha.lookupClass(elementLeafType);
-                              if (leafType != null) {
-                                ElementMirrorKey position =
-                                    new ElementMirrorKey(
-                                        node,
-                                        NewSiteReference.make(pc, leafType.getReference()),
-                                        leafType,
-                                        source,
-                                        datasetKey,
-                                        true,
-                                        field);
-                                elementMirrorPaths
-                                    .computeIfAbsent(position, k -> HashSetFactory.make())
-                                    .add(List.copyOf(next));
-                                getSystem()
-                                    .newConstraint(
-                                        factory.getPointerKeyForInstanceField(mirror, f), position);
-                              }
-                            }
                             getSystem()
                                 .newSideEffect(
                                     new ElementMirrorOperator(

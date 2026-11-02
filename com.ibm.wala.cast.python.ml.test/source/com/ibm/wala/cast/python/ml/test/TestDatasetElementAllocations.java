@@ -15,12 +15,10 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * A loop over a dataset binds an element, and an unpack binds the element's components (<a
+ * A loop over a dataset binds an element the iterator's {@code __next__} allocates, and an unpack
+ * binds the element's component allocations (<a
  * href="https://github.com/wala/ML/issues/1010">wala/ML#1010</a>), so the values reaching the loop
- * body have points-to sets; they used to be the dataset itself, or empty. A dataset built from a
- * structure carries its element as a mirror of that structure (<a
- * href="https://github.com/wala/ML/issues/1190">wala/ML#1190</a>), so a tensor element, and each
- * tensor component of a tuple element, is a leaf of the mirror, not an allocation of the iterator.
+ * body have points-to sets a generator can read; they used to be the dataset itself, or empty.
  */
 public class TestDatasetElementAllocations extends TestPythonMLCallGraphShape {
 
@@ -32,16 +30,16 @@ public class TestDatasetElementAllocations extends TestPythonMLCallGraphShape {
     CallGraph cg = builder.makeCallGraph(builder.getOptions());
     assertNotNull(cg);
     assertEquals(
-        "The whole loop variable is the mirrored element's leaf.",
-        Set.of("summary:Ltensorflow/data/element_leaf"),
+        "The whole loop variable is the iterator's element allocation.",
+        Set.of("summary:Ltensorflow/data/element"),
         parameterAllocations(builder, cg, "consume_single"));
     assertEquals(
-        "The first unpacked component is the mirrored element's first position leaf.",
-        Set.of("summary:Ltensorflow/data/element_leaf"),
+        "The first unpacked component is the element's first component allocation.",
+        Set.of("summary:Ltensorflow/data/element_0"),
         parameterAllocations(builder, cg, "consume_x"));
     assertEquals(
-        "The second unpacked component is the mirrored element's second position leaf.",
-        Set.of("summary:Ltensorflow/data/element_leaf"),
+        "The second unpacked component is the element's second component allocation.",
+        Set.of("summary:Ltensorflow/data/element_1"),
         parameterAllocations(builder, cg, "consume_y"));
   }
 
