@@ -2990,6 +2990,20 @@ public class TensorGeneratorFactory {
    */
   private static TensorGenerator getOrdinaryGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
+    // A constant-key read of a dict built by a comprehension over `items()` re-derives the value
+    // written under the key (wala/ML#1071), before the creator walk: the read's creators are the
+    // values written under every key, so following them joins the keys the read selects among.
+    // The property-read arm below recognizes it too, where the walk stays at the read.
+    if (source != null && source.getPointerKey() instanceof LocalPointerKey local) {
+      CGNode node = local.getNode();
+      if (node.getDU() != null
+          && node.getDU().getDef(local.getValueNumber()) instanceof PythonPropertyRead read) {
+        DictComprehensionComponent.Read comprehensionRead =
+            DictComprehensionComponent.recognizeRead(node, read, builder);
+        if (comprehensionRead != null)
+          return new DictComprehensionComponent(source, comprehensionRead);
+      }
+    }
     source = findCreator(source, builder);
     // `findCreator` can return null (an unresolvable points-to variable, e.g. a null source or a
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null

@@ -4112,9 +4112,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         boolean fitComponent =
             generator instanceof DatasetTupleElementGenerator selected
                 && selected.getUnderlying() instanceof FitDataGenerator;
+        // A key read of a comprehension-built dict is pinned too (wala/ML#1071): the dict is
+        // written
+        // under a key the analysis does not know, so its fields join every key's value, and the
+        // read's own re-derivation for its key would otherwise be joined with all of them. That
+        // join used to be empty when a dataset element's components had no points-to set; a
+        // mirrored element's do (wala/ML#1190).
+        boolean comprehensionRead = generator instanceof DictComprehensionComponent;
         if (!(generator instanceof SliceBuiltinOperation)
             && !(generator instanceof NdarraySubscriptOperation)
-            && !fitComponent) continue;
+            && !fitComponent
+            && !comprehensionRead) continue;
         Set<TensorType> types = init.get(src);
         if (fitComponent && types != null && types.isEmpty()) nonTensorFitComponents.add(src);
         if (types == null || types.isEmpty()) continue;

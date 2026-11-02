@@ -3723,13 +3723,14 @@ public abstract class TensorGenerator implements Cloneable {
     // it reports the pinned slice: the two disagree about the same value (wala/ML#825). The
     // dispatch criterion mirrors the pin's own (a slice-builtin call or an ndarray-subscript
     // read).
-    ShapeResult fromSubscript = this.shapeResultOfSubscript(builder, node, valueNumber, exact);
-    if (fromSubscript != null) return fromSubscript;
-
     // A key read of a comprehension-built dict re-derives the value written under the key, ahead
-    // of the points-to set, which joins the values written under every key (wala/ML#1071).
+    // of the points-to set, which joins the values written under every key (wala/ML#1071), and
+    // ahead of the subscript stage, which reads the same key of the dict through that set.
     TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
     if (comprehensionRead != null) return memoizedShapeResult(builder, comprehensionRead);
+
+    ShapeResult fromSubscript = this.shapeResultOfSubscript(builder, node, valueNumber, exact);
+    if (fromSubscript != null) return fromSubscript;
 
     ShapeResult partial = null;
     if (!valuePointsToSet.isEmpty()) {
