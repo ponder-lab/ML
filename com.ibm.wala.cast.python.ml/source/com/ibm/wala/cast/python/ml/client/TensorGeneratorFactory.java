@@ -1429,6 +1429,7 @@ public class TensorGeneratorFactory {
     List<TensorGenerator> parts = new ArrayList<>();
     for (ElementMirrorKey leaf : leaves) {
       if (python.isElementMirrorCutoff(leaf)) parts.add(new DatasetElementGenerator(source, null));
+      if (holdsOnlyStructure(leaf, builder)) continue;
       List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
       if (datasets.isEmpty()) continue;
       DatasetIteratorElementGenerator element =
@@ -1466,6 +1467,7 @@ public class TensorGeneratorFactory {
     Set<TensorType> ret = HashSetFactory.make();
     if (!(builder instanceof PythonSSAPropagationCallGraphBuilder python)) return ret;
     if (python.isElementMirrorCutoff(leaf)) ret.add(new TensorType(DType.UNKNOWN, null));
+    if (holdsOnlyStructure(leaf, builder)) return ret;
     List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
     if (datasets.isEmpty()) return ret;
     DatasetIteratorElementGenerator element =
@@ -1486,6 +1488,61 @@ public class TensorGeneratorFactory {
         ret.addAll(element.getTensorTypesForPath(builder, path));
     }
     return ret;
+  }
+
+  /**
+   * Whether a position leaf's source field holds only structure (wala/ML#1190): the position is
+   * then a nested tuple or dict, copied as such, and its leaf stands for nothing. A field the
+   * pointer analysis left empty does not, so its leaf reads the position at its path.
+   *
+   * @param leaf The leaf.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the leaf is a position leaf whose field holds structure alone.
+   */
+  private static boolean holdsOnlyStructure(
+      ElementMirrorKey leaf, PropagationCallGraphBuilder builder) {
+    return holdsOnlyStructure(leaf, builder, HashSetFactory.make());
+  }
+
+  /**
+   * As {@link #holdsOnlyStructure(ElementMirrorKey, PropagationCallGraphBuilder)}, where a mirrored
+   * leaf in the field, a copy's position leaf, is evidence of a tensor only when it does not hold
+   * structure alone itself.
+   *
+   * @param leaf The leaf.
+   * @param builder The propagation call graph builder.
+   * @param visited The leaves already being decided, read as holding structure alone.
+   * @return {@code true} iff the leaf is a position leaf whose field holds structure alone.
+   */
+  private static boolean holdsOnlyStructure(
+      ElementMirrorKey leaf, PropagationCallGraphBuilder builder, Set<ElementMirrorKey> visited) {
+    if (leaf.getPosition() == null) return false;
+    if (!visited.add(leaf)) return true;
+    IField field =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    Atom.findOrCreateUnicodeAtom(leaf.getPosition()),
+                    PythonTypes.Root));
+    if (field == null) return false;
+    boolean any = false;
+    for (InstanceKey ik :
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(builder.getPointerKeyForInstanceField(leaf.getSource(), field))) {
+      any = true;
+      if (ik instanceof ElementMirrorKey mirrored && mirrored.isLeaf()) {
+        if (!holdsOnlyStructure(mirrored, builder, visited)) return false;
+        continue;
+      }
+      TypeReference type = ik.concreteType().getReference();
+      if (!type.equals(PythonTypes.tuple)
+          && !type.equals(PythonTypes.dict)
+          && !type.equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE)) return false;
+    }
+    return any;
   }
 
   /**
