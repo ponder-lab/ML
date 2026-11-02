@@ -147,6 +147,35 @@ public class TestDatasetElementStructure extends AbstractTensorTest {
     test(FILE, "consume_deep", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
+  /** A tuple member read off a loop's element, cast and then scaled. */
+  @Test
+  public void testMemberCastScaled() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_member_cast_scaled", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2, 4))));
+  }
+
+  /** A dict member read off a loop's element, cast and then divided. */
+  @Test
+  public void testKeyedMemberCastScaled()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_keyed_member_cast_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /** A dict member read off an element {@code next} reads, plus a constant. */
+  @Test
+  public void testNextMemberShifted() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_next_member_shifted",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
   /**
    * Whether the parameter of the named sink points to anything, in every node of the sink.
    *

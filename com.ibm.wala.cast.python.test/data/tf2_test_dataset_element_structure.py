@@ -141,3 +141,31 @@ def consume_deep(x):
 deep = tf.data.Dataset.from_tensor_slices((((((((((tf.ones([8, 4]),),),),),),),),),))
 for d in deep:
     consume_deep(d[0][0][0][0][0][0][0][0][0])
+
+
+# A member read off an element, then used: cast, then arithmetic.
+def consume_member_cast_scaled(x):
+    pass
+
+
+def consume_keyed_member_cast_scaled(b):
+    pass
+
+
+def consume_next_member_shifted(a):
+    pass
+
+
+for (x, mask), y in pairs():
+    x_cast_scaled = tf.cast(x, tf.int32) * 2
+    assert x_cast_scaled.shape == (2, 4) and x_cast_scaled.dtype == tf.int32
+    consume_member_cast_scaled(x_cast_scaled)
+
+for features, y in keyed():
+    b_cast_scaled = tf.cast(features["b"], tf.float32) / 2.0
+    assert b_cast_scaled.shape == (2, 3) and b_cast_scaled.dtype == tf.float32
+    consume_keyed_member_cast_scaled(b_cast_scaled)
+
+a_shifted = next(iter(flat_keyed))["a"] + 1.0
+assert a_shifted.shape == (2, 4) and a_shifted.dtype == tf.float32
+consume_next_member_shifted(a_shifted)
