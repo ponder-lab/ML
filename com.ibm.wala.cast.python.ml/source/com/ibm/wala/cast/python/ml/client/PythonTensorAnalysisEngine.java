@@ -272,11 +272,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!(var.getPointerKey() instanceof InstanceFieldKey fieldKey)) continue;
       if (!(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
           && !(fieldKey.getField().getName().toString().equals("mirrored_element")
-              && fieldKey
-                  .getInstanceKey()
-                  .concreteType()
-                  .getReference()
-                  .equals(TensorFlowTypes.DATASET))) continue;
+              && isDataset(builder, fieldKey.getInstanceKey()))) continue;
       Set<TensorType> types = null;
       for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(fieldKey)) {
         if (!(value instanceof ElementMirrorKey leaf) || !leaf.isLeaf()) continue;
@@ -288,9 +284,37 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (types == null) continue;
       final Set<TensorType> seeded = types;
       LOGGER.fine(() -> "Seeding mirrored element field " + fieldKey + " with " + seeded + ".");
-      init.put(var, seeded);
-      initOrigins.put(var, EnumSet.of(TensorOrigin.TENSORFLOW));
+      // A seed another path made for the variable stays beside this one.
+      init.merge(
+          var,
+          seeded,
+          (earlier, later) -> {
+            Set<TensorType> joined = HashSetFactory.make(earlier);
+            joined.addAll(later);
+            return joined;
+          });
+      initOrigins.merge(
+          var,
+          EnumSet.of(TensorOrigin.TENSORFLOW),
+          (earlier, later) -> {
+            EnumSet<TensorOrigin> joined = EnumSet.copyOf(earlier);
+            joined.addAll(later);
+            return joined;
+          });
     }
+  }
+
+  /**
+   * Whether an instance is a dataset, of {@link TensorFlowTypes#DATASET} or a subclass of it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param instance The instance.
+   * @return {@code true} iff the instance's class is the dataset class or one of its subclasses.
+   */
+  private static boolean isDataset(PropagationCallGraphBuilder builder, InstanceKey instance) {
+    IClass dataset = builder.getClassHierarchy().lookupClass(TensorFlowTypes.DATASET);
+    return dataset != null
+        && builder.getClassHierarchy().isSubclassOf(instance.concreteType(), dataset);
   }
 
   /**

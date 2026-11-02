@@ -3088,7 +3088,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       started = true;
       getSystem()
           .newSideEffect(
-              new ElementMirrorOperator(node, pc, datasetKey, resultKey, List.of()), structureKey);
+              new ElementMirrorOperator(node, pc, datasetKey, resultKey, List.of(), Set.of()),
+              structureKey);
     }
 
     @Override
@@ -3131,15 +3132,29 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final PointerKey datasetKey;
     private final PointerKey target;
     private final List<String> path;
+
+    /**
+     * The originals of the structures copied along {@link #path}. A source structure that is one of
+     * them closes a cycle, which a flow-insensitive points-to set makes of a structure built in a
+     * loop around itself, and no run-time element nests without end; the copy stops there.
+     */
+    private final Set<InstanceKey> ancestors;
+
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
     private ElementMirrorOperator(
-        CGNode node, int pc, PointerKey datasetKey, PointerKey target, List<String> path) {
+        CGNode node,
+        int pc,
+        PointerKey datasetKey,
+        PointerKey target,
+        List<String> path,
+        Set<InstanceKey> ancestors) {
       this.node = node;
       this.pc = pc;
       this.datasetKey = datasetKey;
       this.target = target;
       this.path = path;
+      this.ancestors = ancestors;
     }
 
     @Override
@@ -3151,17 +3166,25 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private void copy(InstanceKey source) {
       if (!copied.add(source)) return;
       IClassHierarchy cha = getClassHierarchy();
-      // Past the recorded length the copy stops: the key is a leaf standing for the unknown rest.
-      boolean beyond = path.size() > MAX_PATH;
+      InstanceKey original = source;
+      while (original instanceof ElementMirrorKey copy) original = copy.getSource();
+      InstanceKey root = original;
+      // Past the recorded length, or where the path returns to a structure it already copies, the
+      // copy stops: the key is a leaf standing for the unknown rest.
+      boolean beyond = path.size() > MAX_PATH || ancestors.contains(original);
       boolean structure = !beyond && isStructure(source.concreteType());
       IClass type = structure ? source.concreteType() : cha.lookupClass(elementLeafType);
       if (type == null) return;
+      // A copy is identified by the object it ultimately copies, not by the copy it was made from:
+      // a dataset that feeds its own element back, such as a `batch` in a loop over its own
+      // result, would otherwise copy its copies without end. A copy's types are read from its
+      // dataset and path, which this does not change.
       ElementMirrorKey mirror =
           new ElementMirrorKey(
               node,
               NewSiteReference.make(pc, type.getReference()),
               type,
-              source,
+              root,
               datasetKey,
               !structure);
       if (beyond) elementMirrorCutoffs.add(mirror);
@@ -3194,6 +3217,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                 .newConstraint(factory.getPointerKeyForObjectCatalog(mirror), name);
                             List<String> next = new ArrayList<>(path);
                             next.add(field);
+                            Set<InstanceKey> above = HashSetFactory.make(ancestors);
+                            above.add(root);
                             getSystem()
                                 .newSideEffect(
                                     new ElementMirrorOperator(
@@ -3201,7 +3226,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                         pc,
                                         datasetKey,
                                         factory.getPointerKeyForInstanceField(mirror, f),
-                                        List.copyOf(next)),
+                                        List.copyOf(next),
+                                        Set.copyOf(above)),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
                   return NOT_CHANGED;
@@ -3245,7 +3271,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && node.equals(other.node)
           && pc == other.pc
           && target.equals(other.target)
-          && path.equals(other.path);
+          && path.equals(other.path)
+          && ancestors.equals(other.ancestors);
     }
 
     @Override

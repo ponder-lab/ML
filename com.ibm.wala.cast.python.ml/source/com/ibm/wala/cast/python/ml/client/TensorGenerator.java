@@ -645,6 +645,7 @@ public abstract class TensorGenerator implements Cloneable {
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
     MAY_RUN_IN_GRAPH_MODE.remove(builder);
     BLOCK_FEASIBILITIES.remove(builder);
+    PASSED_COMPREHENSION_READS.remove(builder);
     TensorGeneratorFactory.clearDispatches(builder);
     FlowFromDirectoryGenerator.clearClassAxes(builder);
   }
@@ -3505,6 +3506,40 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * Per builder, whether some call passes a parameter a key read of a comprehension over a dataset
+   * element's dict ({@link #passesComprehensionRead}). The keys hold the builder's nodes, which
+   * keep the weak key reachable, so {@link #clearCaches} removes the entry.
+   */
+  static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Boolean>>
+      PASSED_COMPREHENSION_READS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Whether some call passes a parameter a key read of a comprehension over a dataset element's
+   * dict (wala/ML#1071, wala/ML#1190).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The parameter's node.
+   * @param valueNumber The parameter's value number.
+   * @return {@code true} iff a call in a caller passes it such a read.
+   */
+  private static boolean passesComprehensionRead(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    // A parameter's value number is one past its position among a call's uses, whose first is
+    // the callee.
+    int use = valueNumber - 1;
+    CallGraph cg = builder.getCallGraph();
+    for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(node))) {
+      if (caller.getIR() == null || caller.getDU() == null) continue;
+      for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, node)))
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site))
+          if (use < call.getNumberOfUses()
+              && caller.getDU().getDef(call.getUse(use)) instanceof PythonPropertyRead read
+              && readsDatasetElementComprehension(builder, caller, read)) return true;
+    }
+    return false;
+  }
+
+  /**
    * The generator of a parameter some call passes a constant-key read of a dict built by a
    * comprehension over {@code items()} (wala/ML#1071, wala/ML#1190), carrying this generator's
    * binding, if any: the factory's generator for the parameter, whose creator walk reaches the
@@ -3521,18 +3556,14 @@ public abstract class TensorGenerator implements Cloneable {
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     if (node.getIR() == null || !node.getIR().getSymbolTable().isParameter(valueNumber))
       return null;
-    // A parameter's value number is one past its position among a call's uses, whose first is
-    // the callee.
-    int use = valueNumber - 1;
-    boolean passed = false;
-    CallGraph cg = builder.getCallGraph();
-    for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(node))) {
-      if (caller.getIR() == null || caller.getDU() == null) continue;
-      for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, node)))
-        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site))
-          if (use < call.getNumberOfUses()
-              && caller.getDU().getDef(call.getUse(use)) instanceof PythonPropertyRead read
-              && readsDatasetElementComprehension(builder, caller, read)) passed = true;
+    Map<Pair<CGNode, Integer>, Boolean> passes =
+        PASSED_COMPREHENSION_READS.computeIfAbsent(
+            builder, b -> new java.util.concurrent.ConcurrentHashMap<>());
+    Pair<CGNode, Integer> parameter = Pair.make(node, valueNumber);
+    Boolean passed = passes.get(parameter);
+    if (passed == null) {
+      passed = passesComprehensionRead(builder, node, valueNumber);
+      passes.put(parameter, passed);
     }
     if (!passed) return null;
     PointerKey pk =
