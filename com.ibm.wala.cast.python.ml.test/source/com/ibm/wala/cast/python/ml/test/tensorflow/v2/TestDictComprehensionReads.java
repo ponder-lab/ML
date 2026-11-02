@@ -298,4 +298,61 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
     if (value == null) System.clearProperty(property);
     else System.setProperty(property, value);
   }
+
+  /**
+   * A function passing its parameter to {@code tf.identity}, called once with a key read of a
+   * comprehension over a dataset element's dict and once with another tensor: each call's result
+   * has its own argument's type, neither dropped for the other.
+   *
+   * <p>TODO: The key read's result holds every key's value, since {@code tf.identity} reads its
+   * operand's points-to set, which the per-key read does not reach, until
+   * https://github.com/wala/ML/issues/1077 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testTwoCallers()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "two_callers_read", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 3))));
+  }
+
+  /**
+   * The other call of {@link #testTwoCallers}'s function keeps its own argument's type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTwoCallersOther()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "two_callers_other", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 7))));
+  }
+
+  /**
+   * A function scaling its parameter, called once with a key read of a comprehension over a dataset
+   * element's dict and once with another tensor: the product reads its operand per call, so each
+   * call's result has its own argument's type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTwoCallersScaled()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        FIXTURE, "two_callers_scaled_read", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 3))));
+    test(
+        FIXTURE,
+        "two_callers_scaled_other",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 7))));
+  }
 }

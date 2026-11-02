@@ -159,6 +159,46 @@ def stacked(batch):
     stacked_sink(tf.expand_dims(packed["audios"], -1))
 
 
+def two_callers_sink(v):
+    return tf.identity(v)
+
+
+def two_callers_read(x):
+    pass
+
+
+def two_callers_other(x):
+    pass
+
+
+def two_callers_scaled(v):
+    return v * 2
+
+
+def two_callers_scaled_read(x):
+    pass
+
+
+def two_callers_scaled_other(x):
+    pass
+
+
+def two_callers(batch):
+    sliced = {k: v[0:1] for k, v in batch.items()}
+    read = two_callers_sink(sliced["audios"])
+    assert read.shape == (1, 3) and read.dtype == tf.float32
+    two_callers_read(read)
+    other = two_callers_sink(tf.ones((5, 7)))
+    assert other.shape == (5, 7) and other.dtype == tf.float32
+    two_callers_other(other)
+    scaled_read = two_callers_scaled(sliced["audios"])
+    assert scaled_read.shape == (1, 3) and scaled_read.dtype == tf.float32
+    two_callers_scaled_read(scaled_read)
+    scaled_other = two_callers_scaled(tf.ones((5, 7)))
+    assert scaled_other.shape == (5, 7) and scaled_other.dtype == tf.float32
+    two_callers_scaled_other(scaled_other)
+
+
 records = tf.data.Dataset.from_tensor_slices(
     {
         "audios": tf.ones((4, 3), dtype=tf.float32),
@@ -177,6 +217,7 @@ for batch in records:
     cyclic(batch)
     nested(batch)
     shared(batch)
+    two_callers(batch)
 
 unknown_keys(["audios"], [tf.ones((2, 3), dtype=tf.float32)])
 keywords(audios=tf.ones((2, 3), dtype=tf.float32))
