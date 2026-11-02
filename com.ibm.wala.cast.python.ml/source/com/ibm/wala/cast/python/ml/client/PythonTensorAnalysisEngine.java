@@ -912,6 +912,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       sliceResults.put(component, TensorFlowTypes.TENSOR_TYPE);
     builder.setFreshSliceResultTypes(sliceResults);
 
+    // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
+    // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
+    // A slice of the loader's array keeps aliasing the array, as before: allocated, its extent
+    // under a
+    // start-only bound reads unresolved (wala/ML#841), where the alias reads the array's full one.
+    Map<TypeReference, TypeReference> axisResults = new HashMap<>(sliceResults);
+    for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
+      axisResults.put(array, NumpyTypes.NDARRAY_TYPE);
+    builder.setFreshAxisResultTypes(axisResults);
+
     // Arithmetic over an array yields an array the pointer analysis can see (wala/ML#1009): a
     // tensor or a variable operand yields a tensor and an ndarray operand an ndarray, so a
     // container that stores the result holds it. Its shape and dtype are the operator's own
@@ -1713,6 +1723,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                           + describe(src)
                           + ".");
             }
+
+            // A subscript adding an axis to an array read off another value, such as one a Keras
+            // dataset loader's tuple unpacks to, `x_train[..., None]`, is seeded as one over an
+            // elementwise result is below (wala/ML#400).
+            if (!added)
+              try {
+                if (NdarraySubscriptOperation.isApplicable(src, builder)) {
+                  sources.add(src);
+                  LOGGER.fine(
+                      () ->
+                          "Added dataflow source from a dim-adding subscript of a read value: "
+                              + describe(src)
+                              + ".");
+                }
+              } catch (IllegalArgumentException e) {
+                LOGGER.log(
+                    Level.FINE, e, () -> "Not a dim-adding subscript: " + propertyRead + ".");
+              }
           } else if (def instanceof SSABinaryOpInstruction) {
             // The subscript's receiver is an elementwise result (`(x / 255.0)[..., tf.newaxis]`):
             // it carries dataflow state but no allocation, so no points-to walk reaches this
