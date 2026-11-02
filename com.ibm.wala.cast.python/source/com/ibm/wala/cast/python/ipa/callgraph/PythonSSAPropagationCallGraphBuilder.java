@@ -1921,23 +1921,36 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * shape and dtype are the read's own generator's, which peels the receiver's leading axis. The
      * read is an element read when its member is drawn by iteration (a loop variable, or the
      * element a summary reads for one) or is an index: a constant integer, or a value that is not a
-     * literal tuple (the ellipsis and newaxis forms, which add axes and keep their own modeling). A
-     * string member is an attribute and {@code None} alone adds an axis; neither is an element.
+     * literal tuple. A string member is an attribute, which is no element.
+     *
+     * <p>A member that is a tuple or list literal of this frame without a slice, such as {@code
+     * x[..., tf.newaxis]}, {@code x[None, ...]} or {@code x[[0, 2]]}, or a literal {@code None},
+     * indexes several axes at once, selects several rows, or adds an axis, so its result is an
+     * array of the receiver's own kind rather than an element: the read allocates as a slice does,
+     * by the {@link #freshSliceResultTypes} (wala/ML#400). A tuple of integers alone, {@code x[0,
+     * 1]}, yields a scalar of the array's dtype, which this models as a 0-d array of the receiver's
+     * kind. The result's shape and dtype are again the read's own generator's. A subscript with a
+     * slice lowers to the {@code slice} builtin and allocates there instead. A member that is not
+     * such a literal, {@code tf.newaxis} alone or an index tuple held in a variable, is read as an
+     * element.
      *
      * @param read The property read.
      */
     private void processElementRead(AstPropertyRead read) {
       Map<TypeReference, TypeReference> types = getBuilder().freshElementTypes;
-      if (types.isEmpty() || !read.hasDef()) return;
+      if (!read.hasDef()) return;
       SymbolTable symtab = ir.getSymbolTable();
       int member = read.getMemberRef();
       if (!isLoopVariable(read.getDef())) {
         if (symtab.isConstant(member)) {
           // An integer literal is a `Long` constant in this front end; a string is an attribute.
           Object index = symtab.getConstantValue(member);
-          if (!(index instanceof Long) && !(index instanceof Integer)) return;
-        } else if (du.getDef(member) instanceof SSANewInstruction) return;
+          if (index == null) types = getBuilder().freshSliceResultTypes;
+          else if (!(index instanceof Long) && !(index instanceof Integer)) return;
+        } else if (du.getDef(member) instanceof SSANewInstruction)
+          types = getBuilder().freshSliceResultTypes;
       }
+      if (types.isEmpty()) return;
       int object = read.getObjectRef();
       if (object <= 0 || symtab.isConstant(object)) return;
       PointerKey resultKey = getPointerKeyForLocal(read.getDef());
