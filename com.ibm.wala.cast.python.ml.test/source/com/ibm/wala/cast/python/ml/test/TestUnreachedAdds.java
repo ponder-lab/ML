@@ -83,4 +83,138 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   public void testParameterReceiver() throws Exception {
     assertFalse(consumed("tf2_test_unreached_adds_parameter.py").isComplete());
   }
+
+  /**
+   * An unreached {@code counts.update} on a dict display built in the same function leaves a list
+   * elsewhere complete.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testDisplayReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_display.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code update} on a dict built by the {@code dict} builtin, read through a {@code
+   * global} declaration, leaves a list elsewhere complete.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testGlobalBuiltinReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_global_builtin.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code update} on a dict built by the {@code dict} builtin leaves a list elsewhere
+   * complete when only a variable of another function's frame binds {@code dict} to a function of
+   * the program's own.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testFrameLocalBuiltinReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_local_builtin.py").isComplete());
+  }
+
+  /**
+   * Unreached {@code tf.keras.backend.update} calls, on TensorFlow imported by the enclosing frame,
+   * leave a list elsewhere complete.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testEnclosingLibraryReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_enclosing.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code defaults().update(source)}, where {@code defaults} is the module's own
+   * function returning a shared dict, may add to that dict.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testNonBuiltinCallReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_call.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code factory().extend(items)}, where {@code factory} is a variable of the
+   * enclosing frame, may add to any list.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testClosureCallReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_closure.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code make().extend(items)}, where {@code make} is a parameter, may add to any
+   * list.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testParameterCallReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_factory.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code tables[key].update(entries)} may add to any dict.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testSubscriptReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_subscript.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code CACHE.update(entries)} on a global the function declares may add to the
+   * dict that global is written.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testGlobalReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_global.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code os.environ.update(settings)} may add to any dict.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testUnlistedAttributeReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_environ.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code tf.backend.update}, which is not {@code tf.keras.backend.update}, may add
+   * to any dict.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testUnlistedLibraryReceiver() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_library_unlisted.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code counts.update} on a dict built by the {@code dict} builtin leaves a list
+   * elsewhere complete, though another function defines a {@code dict} of its own inside it.
+   *
+   * <p>TODO: The nested definition makes the builtin look rebound everywhere until
+   * https://github.com/wala/ML/issues/1196 is fixed.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNestedBuiltinNameReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_nested_builtin.py").isComplete());
+  }
 }
