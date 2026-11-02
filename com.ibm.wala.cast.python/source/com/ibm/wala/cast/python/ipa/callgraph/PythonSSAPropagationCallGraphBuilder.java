@@ -1819,12 +1819,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * element a summary reads for one) or is an index: a constant integer, or a value that is not a
      * literal tuple. A string member is an attribute, which is no element.
      *
-     * <p>A literal tuple member without a slice, such as {@code x[..., tf.newaxis]} or {@code
-     * x[None, ...]}, or {@code None} alone, indexes several axes at once or adds one, so its result
-     * is an array of the receiver's own kind rather than an element: the read allocates as a slice
-     * does, by the {@link #freshSliceResultTypes} (wala/ML#400). Its shape and dtype are again the
-     * read's own generator's. A subscript with a slice lowers to the {@code slice} builtin and
-     * allocates there instead.
+     * <p>A member that is a tuple or list literal of this frame without a slice, such as {@code
+     * x[..., tf.newaxis]}, {@code x[None, ...]} or {@code x[[0, 2]]}, or a literal {@code None},
+     * indexes several axes at once, selects several rows, or adds an axis, so its result is an
+     * array of the receiver's own kind rather than an element: the read allocates as a slice does,
+     * by the {@link #freshSliceResultTypes} (wala/ML#400). A tuple of integers alone, {@code x[0,
+     * 1]}, yields a scalar of the array's dtype, which this models as a 0-d array of the receiver's
+     * kind. The result's shape and dtype are again the read's own generator's. A subscript with a
+     * slice lowers to the {@code slice} builtin and allocates there instead. A member that is not
+     * such a literal, {@code tf.newaxis} alone or an index tuple held in a variable, is read as an
+     * element.
      *
      * @param read The property read.
      */
