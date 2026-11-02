@@ -2914,12 +2914,33 @@ public class TensorGeneratorFactory {
       PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
     MirroredLeaves mirrored = mirroredLeaves(source, builder);
     if (mirrored == null) return getOrdinaryGenerator(source, builder, visited);
+    // An operation's result that passes a mirrored leaf through, `tf.identity(v)`, is typed by the
+    // operation, which reads its operand as a value; a generator carrying a comprehension's binding
+    // then reads the bound key's leaf alone (wala/ML#1071). The leaves type it only when the
+    // operation has no generator, as an iterator's `next` has none for a mirrored element.
+    if (mirrored.only() && isCallResult(source)) {
+      TensorGenerator operation = getOrdinaryGenerator(source, builder, visited);
+      if (operation != null) return operation;
+    }
     if (mirrored.only()) return mirrored.join(source);
     // The other keys' generator joins the leaves' parts, so neither side is dropped.
     TensorGenerator others = getOrdinaryGenerator(source, builder, visited);
     List<TensorGenerator> parts = new ArrayList<>(mirrored.parts());
     if (others != null) parts.add(others);
     return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
+   * Whether a value is the result of a call in its node.
+   *
+   * @param source The value.
+   * @return {@code true} iff the value's definition is an invoke.
+   */
+  private static boolean isCallResult(PointsToSetVariable source) {
+    return source.getPointerKey() instanceof LocalPointerKey local
+        && local.getNode().getDU() != null
+        && local.getNode().getDU().getDef(local.getValueNumber())
+            instanceof SSAAbstractInvokeInstruction;
   }
 
   /**

@@ -404,6 +404,12 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               + "'s default getDefaultDTypes (which reads from the input arg) but did not"
               + " override getInputParameterPosition. Either override the input-arg getters or"
               + " override getDefaultDTypes entirely.");
+    // A key read of a comprehension-built dict, read per key ahead of its points-to set, which
+    // joins every key's value (wala/ML#1071, wala/ML#1190).
+    Set<DType> keyRead =
+        this.comprehensionReadDTypes(
+            builder, this.argumentValueNumberIfAny(builder, paramPos, paramName));
+    if (keyRead != null && !keyRead.isEmpty()) return keyRead;
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       // The shape read's twin (wala/ML#961): a None-only input yields no tensor on this axis too,

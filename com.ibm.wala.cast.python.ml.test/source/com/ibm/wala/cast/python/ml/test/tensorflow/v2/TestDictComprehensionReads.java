@@ -138,7 +138,12 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
 
   /**
    * A value chosen by the key differs per key in a way the binding does not model, so the read
-   * falls back to the unknown component.
+   * falls back to what the dict holds under every key: each key's value, sliced or not, each shape
+   * paired with each dtype. At run time {@code key_dependent_sink} receives {@code (2, 3, 1)
+   * float32}, among them.
+   *
+   * <p>TODO: Expect {@code (2, 3, 1) float32} alone once <a
+   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -149,12 +154,31 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   public void testKeyDependentFallsBack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        FIXTURE, "key_dependent_sink", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        FIXTURE,
+        "key_dependent_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 1),
+                TensorType.of(FLOAT_32, 2, 5, 1),
+                TensorType.of(FLOAT_32, 1, 3, 1),
+                TensorType.of(FLOAT_32, 1, 5, 1),
+                TensorType.of(INT_32, 2, 3, 1),
+                TensorType.of(INT_32, 2, 5, 1),
+                TensorType.of(INT_32, 1, 3, 1),
+                TensorType.of(INT_32, 1, 5, 1))));
   }
 
   /**
    * A value stored into a container on its way to the written value is read back through the
-   * container, so the read falls back.
+   * container, so the read falls back to what the dict holds under every key, each shape paired
+   * with each dtype. At run time {@code stacked_sink} receives {@code (1, 2, 3, 1) float32}, among
+   * them.
+   *
+   * <p>TODO: Expect {@code (1, 2, 3, 1) float32} alone once <a
+   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -164,7 +188,18 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   @Test
   public void testHeapEscapeFallsBack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FIXTURE, "stacked_sink", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(
+        FIXTURE,
+        "stacked_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 1, 2, 3, 1),
+                TensorType.of(FLOAT_32, 1, 2, 5, 1),
+                TensorType.of(INT_32, 1, 2, 3, 1),
+                TensorType.of(INT_32, 1, 2, 5, 1))));
   }
 
   /**
