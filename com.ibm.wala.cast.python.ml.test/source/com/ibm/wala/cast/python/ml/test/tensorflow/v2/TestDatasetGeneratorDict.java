@@ -129,13 +129,19 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
   /**
    * An attribute written with a dataset and with a distributed view of another object's attribute:
    * the second write brings the other object's datasets, so it is no rewrite of this attribute's
-   * own value. Its part resolves no element here, so the element is not typed, rather than typed as
-   * the first write's dataset alone.
+   * own value. Each dataset's element is mirrored (wala/ML#1190), so the element is typed as both
+   * writes' elements, the {@code float32} rows of this object's own dataset and the {@code int32}
+   * rows of the other object's, rather than as the first write's alone.
    */
   @Test
   public void testOtherObjectsAttribute()
       throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_dataset_generator_trainer.py", "copier_sink", 0, 0, Map.of());
+    test(
+        "tf2_test_dataset_generator_trainer.py",
+        "copier_sink",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 3), TensorType.of(FLOAT_32, 2, 3))));
   }
 
   /** A padded batch without {@code padded_shapes}: each key pads to the longest in its batch. */

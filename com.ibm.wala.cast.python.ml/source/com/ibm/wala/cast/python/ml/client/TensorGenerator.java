@@ -104,6 +104,7 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -3440,6 +3441,48 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The generator of a parameter some call passes a constant-key read of a dict built by a
+   * comprehension over {@code items()} (wala/ML#1071, wala/ML#1190), carrying this generator's
+   * binding, if any: the factory's generator for the parameter, whose creator walk reaches the
+   * read. The parameter's own points-to set joins the values written under every key, which a
+   * mirrored dataset element's components make non-empty; scoped to such reads, every other
+   * parameter is read as before.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number to resolve.
+   * @return The parameter's generator, or {@code null} when no call passes it such a read.
+   */
+  private TensorGenerator passedComprehensionReadGenerator(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    if (node.getIR() == null || !node.getIR().getSymbolTable().isParameter(valueNumber))
+      return null;
+    // A parameter's value number is one past its position among a call's uses, whose first is
+    // the callee.
+    int use = valueNumber - 1;
+    boolean passed = false;
+    CallGraph cg = builder.getCallGraph();
+    for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(node))) {
+      if (caller.getIR() == null || caller.getDU() == null) continue;
+      for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, node)))
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site))
+          if (use < call.getNumberOfUses()
+              && caller.getDU().getDef(call.getUse(use)) instanceof PythonPropertyRead read
+              && DictComprehensionComponent.recognizeRead(caller, read, builder) != null)
+            passed = true;
+    }
+    if (!passed) return null;
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    if (builder.getPropagationSystem().isImplicit(pk)) return null;
+    TensorGenerator generator =
+        TensorGeneratorFactory.getGenerator(
+            builder.getPropagationSystem().findOrCreatePointsToSet(pk), builder);
+    if (generator == null || this.isSameOperation(generator)) return null;
+    return this.inheritBinding(generator);
+  }
+
+  /**
    * The generator of a value that is a constant-key read of a dict built by a comprehension over
    * {@code items()} (wala/ML#1071), carrying this generator's binding, if any.
    *
@@ -3728,6 +3771,14 @@ public abstract class TensorGenerator implements Cloneable {
     // ahead of the subscript stage, which reads the same key of the dict through that set.
     TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
     if (comprehensionRead != null) return memoizedShapeResult(builder, comprehensionRead);
+
+    // So is a parameter a call passes such a read (wala/ML#1190): the parameter's points-to set
+    // holds the values written under every key, so the parameter is read through its creator,
+    // which the factory walks to the read and re-derives.
+    TensorGenerator passedComprehensionRead =
+        this.passedComprehensionReadGenerator(builder, node, valueNumber);
+    if (passedComprehensionRead != null)
+      return memoizedShapeResult(builder, passedComprehensionRead);
 
     ShapeResult fromSubscript = this.shapeResultOfSubscript(builder, node, valueNumber, exact);
     if (fromSubscript != null) return fromSubscript;
@@ -7794,6 +7845,9 @@ public abstract class TensorGenerator implements Cloneable {
     // See the comprehension-read bypass in computeShapes (wala/ML#1071).
     TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
     if (comprehensionRead != null) return memoizedDTypes(builder, comprehensionRead);
+    TensorGenerator passedComprehensionRead =
+        this.passedComprehensionReadGenerator(builder, node, valueNumber);
+    if (passedComprehensionRead != null) return memoizedDTypes(builder, passedComprehensionRead);
 
     // wala/ML#570: a property read of a NamedTuple/object field (e.g. `inputs.node_embeddings`)
     // often has no usable points-to set at the read site when the object was constructed in a
