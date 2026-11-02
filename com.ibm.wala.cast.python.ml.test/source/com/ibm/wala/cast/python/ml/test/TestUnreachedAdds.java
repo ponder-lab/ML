@@ -203,4 +203,18 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   public void testUnlistedLibraryReceiver() throws Exception {
     assertFalse(consumed("tf2_test_unreached_adds_library_unlisted.py").isComplete());
   }
+
+  /**
+   * An unreached {@code counts.update} on a dict built by the {@code dict} builtin leaves a list
+   * elsewhere complete, though another function defines a {@code dict} of its own inside it.
+   *
+   * <p>TODO: The nested definition makes the builtin look rebound everywhere until
+   * https://github.com/wala/ML/issues/1196 is fixed.
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNestedBuiltinNameReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_nested_builtin.py").isComplete());
+  }
 }
