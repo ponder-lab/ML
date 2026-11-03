@@ -2,13 +2,16 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -129,15 +132,20 @@ public interface TupleElementProvider {
   }
 
   /**
-   * Whether a points-to set holds only structures a dataset element is built from: tuples and
-   * dicts, which {@code tf.data} reads as structures of components, where a list is converted to a
-   * tensor.
+   * Whether a points-to set holds only structures a dataset element is built from ({@link
+   * TensorFlowTypes#DATASET_ELEMENT_STRUCTURE_TYPES}), decided as the element's mirror decides it,
+   * by subclass, so a reader skips a dataset exactly where the mirror copied a structure rather
+   * than a leaf (wala/ML#1200).
    *
+   * @param builder The propagation call graph builder whose class hierarchy decides.
    * @param pointsToSet The points-to set, possibly {@code null}.
-   * @return {@code true} iff the set is non-empty and every member is a tuple or a dict allocation.
+   * @return {@code true} iff the set is non-empty and every member is an allocation of a structure
+   *     class.
    */
-  static boolean holdsOnlyStructures(OrdinalSet<InstanceKey> pointsToSet) {
+  static boolean holdsOnlyStructures(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pointsToSet) {
     if (pointsToSet == null || pointsToSet.isEmpty()) return false;
+    IClassHierarchy cha = builder.getClassHierarchy();
     for (InstanceKey ik : pointsToSet) {
       AllocationSiteInNode asin;
       try {
@@ -145,10 +153,25 @@ public interface TupleElementProvider {
       } catch (IllegalArgumentException e) {
         return false;
       }
-      TypeReference type = asin == null ? null : asin.concreteType().getReference();
-      if (!PythonTypes.tuple.equals(type) && !PythonTypes.dict.equals(type)) return false;
+      if (asin == null || !isElementStructure(cha, asin.concreteType())) return false;
     }
     return true;
+  }
+
+  /**
+   * Whether a class is a subclass of one of {@link
+   * TensorFlowTypes#DATASET_ELEMENT_STRUCTURE_TYPES}.
+   *
+   * @param cha The class hierarchy.
+   * @param type The class.
+   * @return {@code true} iff it is.
+   */
+  private static boolean isElementStructure(IClassHierarchy cha, IClass type) {
+    for (TypeReference structure : TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES) {
+      IClass c = cha.lookupClass(structure);
+      if (c != null && cha.isSubclassOf(type, c)) return true;
+    }
+    return false;
   }
 
   /**

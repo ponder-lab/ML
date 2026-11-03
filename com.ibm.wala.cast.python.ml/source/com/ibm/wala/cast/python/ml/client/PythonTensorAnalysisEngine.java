@@ -1001,10 +1001,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     builder.setElementMirror(
         TensorFlowTypes.DATASET_ELEMENT_MIRROR,
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
-        Set.of(
-            PythonTypes.tuple,
-            PythonTypes.dict,
-            PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
+        TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
 
     // A zip's element is the structure of datasets it is given, each replaced by its element
     // (wala/ML#164).

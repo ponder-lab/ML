@@ -504,14 +504,14 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    * {@inheritDoc}
    *
    * @implNote The component is a structure when the {@code output_signature}, or else the legacy
-   *     {@code output_types}, holds only tuples and dicts there.
+   *     {@code output_types}, holds only tuples, dicts and namedtuples there.
    */
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
     OrdinalSet<InstanceKey> signature = this.component(builder, Parameters.OUTPUT_SIGNATURE, path);
-    if (signature != null) return TupleElementProvider.holdsOnlyStructures(signature);
+    if (signature != null) return TupleElementProvider.holdsOnlyStructures(builder, signature);
     return TupleElementProvider.holdsOnlyStructures(
-        this.component(builder, Parameters.OUTPUT_TYPES, path));
+        builder, this.component(builder, Parameters.OUTPUT_TYPES, path));
   }
 
   /**

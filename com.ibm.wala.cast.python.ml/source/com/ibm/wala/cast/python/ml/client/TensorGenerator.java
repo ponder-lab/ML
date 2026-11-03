@@ -5405,8 +5405,10 @@ public abstract class TensorGenerator implements Cloneable {
    * both the wala/ML#746 return-arm fold and the wala/ML#763 phi-arm fold; the phi-arm fold is what
    * removes the spurious member a rank guard's infeasible arm contributes.
    *
-   * <p>Declines (returns {@code null}) unless every resolved shape member is present and all agree
-   * on rank. That agreement is load-bearing in the field: a single embedding parameter resolves to
+   * <p>Declines (returns {@code null}) when the base may have more than one creator ({@link
+   * TensorGeneratorFactory#mayHaveSeveralCreators}), since the generator reads only the first one
+   * (wala/ML#1188), and otherwise unless every resolved shape member is present and all agree on
+   * rank. That agreement is load-bearing in the field: a single embedding parameter resolves to
    * seven different shapes across call contexts — {@code (8,10)}, {@code (16,100)}, {@code
    * (1,512)}, {@code (2,10)}, {@code (6,128)}, {@code (2,4)}, {@code (8,100)} — all rank 2.
    * Reducing to the shared rank decides; a design carrying the shape would find seven disagreeing
@@ -5434,6 +5436,10 @@ public abstract class TensorGenerator implements Cloneable {
     if (builder.getPropagationSystem().isImplicit(basePK)) return null;
     PointsToSetVariable baseVar = builder.getPropagationSystem().findOrCreatePointsToSet(basePK);
     if (baseVar == null) return null;
+    // The generator below reads the first creator the walk back from the base reaches. A base
+    // merged from several creators, such as a φ over a rank-2 and a rank-3 tensor, may take a rank
+    // that one does not have, so the guard is left undecided (wala/ML#1188).
+    if (TensorGeneratorFactory.mayHaveSeveralCreators(baseVar, builder)) return null;
     Set<List<Dimension<?>>> shapes;
     try {
       TensorGenerator generator = TensorGeneratorFactory.getGenerator(baseVar, builder);
