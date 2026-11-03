@@ -138,7 +138,12 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
 
   /**
    * A value chosen by the key differs per key in a way the binding does not model, so the read
-   * falls back to the unknown component.
+   * falls back to what the dict holds under every key: each key's value, sliced or not, each shape
+   * paired with each dtype. At run time {@code key_dependent_sink} receives {@code (2, 3, 1)
+   * float32}, among them.
+   *
+   * <p>TODO: Expect {@code (2, 3, 1) float32} alone once <a
+   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -149,12 +154,31 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   public void testKeyDependentFallsBack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        FIXTURE, "key_dependent_sink", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        FIXTURE,
+        "key_dependent_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 1),
+                TensorType.of(FLOAT_32, 2, 5, 1),
+                TensorType.of(FLOAT_32, 1, 3, 1),
+                TensorType.of(FLOAT_32, 1, 5, 1),
+                TensorType.of(INT_32, 2, 3, 1),
+                TensorType.of(INT_32, 2, 5, 1),
+                TensorType.of(INT_32, 1, 3, 1),
+                TensorType.of(INT_32, 1, 5, 1))));
   }
 
   /**
    * A value stored into a container on its way to the written value is read back through the
-   * container, so the read falls back.
+   * container, so the read falls back to what the dict holds under every key, each shape paired
+   * with each dtype. At run time {@code stacked_sink} receives {@code (1, 2, 3, 1) float32}, among
+   * them.
+   *
+   * <p>TODO: Expect {@code (1, 2, 3, 1) float32} alone once <a
+   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -164,7 +188,18 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   @Test
   public void testHeapEscapeFallsBack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FIXTURE, "stacked_sink", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(
+        FIXTURE,
+        "stacked_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 1, 2, 3, 1),
+                TensorType.of(FLOAT_32, 1, 2, 5, 1),
+                TensorType.of(INT_32, 1, 2, 3, 1),
+                TensorType.of(INT_32, 1, 2, 5, 1))));
   }
 
   /**
@@ -262,5 +297,62 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   private static void restore(String property, String value) {
     if (value == null) System.clearProperty(property);
     else System.setProperty(property, value);
+  }
+
+  /**
+   * A function passing its parameter to {@code tf.identity}, called once with a key read of a
+   * comprehension over a dataset element's dict and once with another tensor: each call's result
+   * has its own argument's type, neither dropped for the other.
+   *
+   * <p>TODO: The key read's result holds every key's value, since {@code tf.identity} reads its
+   * operand's points-to set, which the per-key read does not reach, until
+   * https://github.com/wala/ML/issues/1077 is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testTwoCallers()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "two_callers_read", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 3))));
+  }
+
+  /**
+   * The other call of {@link #testTwoCallers}'s function keeps its own argument's type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTwoCallersOther()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "two_callers_other", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 7))));
+  }
+
+  /**
+   * A function scaling its parameter, called once with a key read of a comprehension over a dataset
+   * element's dict and once with another tensor: the product reads its operand per call, so each
+   * call's result has its own argument's type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTwoCallersScaled()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        FIXTURE, "two_callers_scaled_read", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 3))));
+    test(
+        FIXTURE,
+        "two_callers_scaled_other",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 7))));
   }
 }

@@ -251,6 +251,27 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element"));
 
+  /**
+   * The classes of a dataset iterator's {@code __next__} and {@code next} methods, which allocate
+   * the element of a dataset whose element is not mirrored (wala/ML#1190).
+   */
+  public static final Set<TypeReference> DATASET_ITERATOR_NEXT_METHODS =
+      Set.of(
+          TypeReference.findOrCreate(
+              pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "iterator/__next__")),
+          TypeReference.findOrCreate(
+              pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "iterator/next")));
+
+  /** The summary class whose call mirrors a structure into a dataset's element (wala/ML#1190). */
+  public static final TypeReference DATASET_ELEMENT_MIRROR =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_mirror"));
+
+  /** The class of a leaf of a dataset's mirrored element, a tensor (wala/ML#1190). */
+  public static final TypeReference DATASET_ELEMENT_LEAF =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_leaf"));
+
   /** How many components of a dataset element the iterator's {@code __next__} allocates. */
   public static final int DATASET_ELEMENT_COMPONENTS = 4;
 

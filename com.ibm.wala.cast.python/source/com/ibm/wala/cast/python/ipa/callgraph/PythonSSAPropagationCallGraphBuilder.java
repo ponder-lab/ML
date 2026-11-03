@@ -521,6 +521,79 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         allocations == null ? Collections.emptyMap() : Map.copyOf(allocations);
   }
 
+  /**
+   * The summary class whose call mirrors a structure into a dataset's element (wala/ML#1190), or
+   * {@code null} when no client names one; see {@link ElementMirrorOperator}.
+   */
+  private TypeReference elementMirrorType;
+
+  /** The class of a mirrored structure's leaves; see {@link ElementMirrorOperator}. */
+  private TypeReference elementLeafType;
+
+  /** The classes a mirror copies as structure; any other key it meets is a leaf. */
+  private Set<TypeReference> elementStructureTypes = Collections.emptySet();
+
+  /**
+   * The paths from its element's root at which each mirrored key was reached, keyed by the mirror
+   * key; a key reached along several paths has each. A path is a list of field names.
+   */
+  private final Map<InstanceKey, Set<List<String>>> elementMirrorPaths = HashMapFactory.make();
+
+  /**
+   * The mirror keys reached along a path longer than the mirror records: each stands for whatever
+   * the structure holds below the cutoff, so it reads as the unknown-marked element, not as ⊥.
+   */
+  private final Set<InstanceKey> elementMirrorCutoffs = HashSetFactory.make();
+
+  /**
+   * Names the classes of dataset element mirroring (wala/ML#1190): a call whose callee is an
+   * instance of {@code mirror} returns a copy of its first argument's structure, with the second
+   * argument as the dataset whose element it is.
+   *
+   * @param mirror The summary class whose call mirrors a structure.
+   * @param leaf The class of a mirrored leaf.
+   * @param structures The classes copied as structure.
+   */
+  public void setElementMirror(
+      TypeReference mirror, TypeReference leaf, Set<TypeReference> structures) {
+    this.elementMirrorType = mirror;
+    this.elementLeafType = leaf;
+    this.elementStructureTypes =
+        structures == null ? Collections.emptySet() : Set.copyOf(structures);
+  }
+
+  /**
+   * The paths at which a mirrored key was reached from its element's root (wala/ML#1190).
+   *
+   * @param key A key a mirror allocated.
+   * @return The paths, each a list of field names; empty for a key no mirror allocated.
+   */
+  public Set<List<String>> getElementMirrorPaths(InstanceKey key) {
+    Set<List<String>> paths = elementMirrorPaths.get(key);
+    return paths == null ? Collections.emptySet() : Collections.unmodifiableSet(paths);
+  }
+
+  /**
+   * Whether a mirror reached a key only past the path length it records (wala/ML#1190), so the key
+   * stands for an unknown remainder of the structure.
+   *
+   * @param key A key.
+   * @return {@code true} iff the key is such a cutoff.
+   */
+  public boolean isElementMirrorCutoff(InstanceKey key) {
+    return elementMirrorCutoffs.contains(key);
+  }
+
+  /**
+   * Whether a key is a leaf a mirror allocated (wala/ML#1190).
+   *
+   * @param key A key.
+   * @return {@code true} iff the key is a mirrored leaf.
+   */
+  public boolean isElementMirrorLeaf(InstanceKey key) {
+    return key instanceof ElementMirrorKey mirrored && mirrored.isLeaf();
+  }
+
   /** The classes already decided by {@link #declaresIterationProtocol}. */
   private final Map<IClass, Boolean> iterationProtocolClasses = HashMapFactory.make();
 
@@ -1226,6 +1299,37 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processTextRead(inst);
       processDictMethod(inst);
       processNamedTupleConstruction(inst);
+      processElementMirror(inst);
+    }
+
+    /**
+     * Mirrors a structure into a dataset's element where a call's callee may be the mirror class
+     * (wala/ML#1190); see {@link ElementMirrorOperator}.
+     *
+     * @param inst The call.
+     */
+    private void processElementMirror(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.elementMirrorType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 3) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      PointerKey calleeKey = getPointerKeyForLocal(calleeVn);
+      ElementMirrorCallOperator operator =
+          builder
+          .new ElementMirrorCallOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              getPointerKeyForLocal(inst.getUse(1)),
+              getPointerKeyForLocal(inst.getUse(2)));
+      if (contentsAreInvariant(symtab, du, calleeVn) || system.isImplicit(calleeKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+          operator.start(key);
+        return;
+      }
+      system.newSideEffect(operator, calleeKey);
     }
 
     /**
@@ -2875,6 +2979,307 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public static final TypeReference NAMED_TUPLE_INSTANCE =
       TypeReference.findOrCreate(
           PythonTypes.pythonLoader, TypeName.findOrCreate("Lcollections/namedtuple/instance"));
+
+  /**
+   * A key a mirror allocated for a dataset's element (wala/ML#1190): the copy, at one mirror call,
+   * of one key of the mirrored structure. A copy of a structure has the structure's class, and a
+   * copy of anything else is a leaf of the leaf class. Keyed by the call and the copied key, so a
+   * structure reached along several paths, or a cyclic one, is copied once.
+   */
+  public static final class ElementMirrorKey extends AllocationSiteInNode {
+    private final InstanceKey source;
+    private final PointerKey dataset;
+    private final boolean leaf;
+
+    private ElementMirrorKey(
+        CGNode node,
+        NewSiteReference site,
+        IClass type,
+        InstanceKey source,
+        PointerKey dataset,
+        boolean leaf) {
+      super(node, site, type);
+      this.source = source;
+      this.dataset = dataset;
+      this.leaf = leaf;
+    }
+
+    /**
+     * The key this one copies.
+     *
+     * @return The copied key.
+     */
+    public InstanceKey getSource() {
+      return source;
+    }
+
+    /**
+     * The value naming the dataset whose element this key is part of, in the mirror call's node.
+     *
+     * @return The dataset's pointer key.
+     */
+    public PointerKey getDataset() {
+      return dataset;
+    }
+
+    /**
+     * Whether this key is a leaf rather than a structure.
+     *
+     * @return {@code true} iff a leaf.
+     */
+    public boolean isLeaf() {
+      return leaf;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ElementMirrorKey other
+          && getNode().equals(other.getNode())
+          && getSite().equals(other.getSite())
+          && source.equals(other.source);
+    }
+
+    @Override
+    public int hashCode() {
+      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return "ElementMirror[" + (leaf ? "leaf" : "structure") + " of " + source + "]";
+    }
+  }
+
+  /**
+   * Starts a mirror where a call's callee may be the mirror class (wala/ML#1190). Equal for the
+   * same call, so the propagation system keeps one per call site.
+   */
+  public final class ElementMirrorCallOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final PointerKey structureKey;
+    private final PointerKey datasetKey;
+    private boolean started;
+
+    private ElementMirrorCallOperator(
+        CGNode node, int pc, PointerKey resultKey, PointerKey structureKey, PointerKey datasetKey) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.structureKey = structureKey;
+      this.datasetKey = datasetKey;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> start(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Mirrors the structure argument into the result when a key the callee may be is the mirror
+     * class.
+     *
+     * @param callee A key the callee may be.
+     */
+    void start(InstanceKey callee) {
+      if (started || !callee.concreteType().getReference().equals(elementMirrorType)) return;
+      started = true;
+      getSystem()
+          .newSideEffect(
+              new ElementMirrorOperator(node, pc, datasetKey, resultKey, List.of(), Set.of()),
+              structureKey);
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ElementMirrorCallOperator other
+          && node.equals(other.node)
+          && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "element mirror call at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Copies the keys of a value into a target, as a dataset's element mirrors the structure it was
+   * built from (wala/ML#1190). A key whose class is a structure class (a tuple, a dict, a
+   * namedtuple) is copied as an {@link ElementMirrorKey} of its class, whose fields copy the key's
+   * catalogued fields as they arrive; any other key, a tensor, a list or an array that the dataset
+   * stacks into one tensor, is copied as a leaf. The copies are typed by the dataset's generator at
+   * their paths, not here. The catalog is order-free, so a key written into a source structure
+   * after the dataset was built is a field of the element too, an over-approximation. Equal for the
+   * same call, target and path.
+   */
+  private final class ElementMirrorOperator extends UnaryOperator<PointsToSetVariable> {
+    /**
+     * Paths longer than this are not recorded: a key reached only past it is a cutoff leaf, so a
+     * cyclic or deeply nested structure records finitely many paths.
+     */
+    private static final int MAX_PATH = 8;
+
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey datasetKey;
+    private final PointerKey target;
+    private final List<String> path;
+
+    /**
+     * The originals of the structures copied along {@link #path}. A source structure that is one of
+     * them closes a cycle, which a flow-insensitive points-to set makes of a structure built in a
+     * loop around itself, and no run-time element nests without end; the copy stops there.
+     */
+    private final Set<InstanceKey> ancestors;
+
+    private final Set<InstanceKey> copied = HashSetFactory.make();
+
+    private ElementMirrorOperator(
+        CGNode node,
+        int pc,
+        PointerKey datasetKey,
+        PointerKey target,
+        List<String> path,
+        Set<InstanceKey> ancestors) {
+      this.node = node;
+      this.pc = pc;
+      this.datasetKey = datasetKey;
+      this.target = target;
+      this.path = path;
+      this.ancestors = ancestors;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> copy(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    private void copy(InstanceKey source) {
+      if (!copied.add(source)) return;
+      IClassHierarchy cha = getClassHierarchy();
+      InstanceKey original = source;
+      while (original instanceof ElementMirrorKey copy) original = copy.getSource();
+      InstanceKey root = original;
+      // Past the recorded length, or where the path returns to a structure it already copies, the
+      // copy stops: the key is a leaf standing for the unknown rest.
+      boolean beyond = path.size() > MAX_PATH || ancestors.contains(original);
+      boolean structure = !beyond && isStructure(source.concreteType());
+      IClass type = structure ? source.concreteType() : cha.lookupClass(elementLeafType);
+      if (type == null) return;
+      // A copy is identified by the object it ultimately copies, not by the copy it was made from:
+      // a dataset that feeds its own element back, such as a `batch` in a loop over its own
+      // result, would otherwise copy its copies without end. A copy's types are read from its
+      // dataset and path, which this does not change.
+      ElementMirrorKey mirror =
+          new ElementMirrorKey(
+              node,
+              NewSiteReference.make(pc, type.getReference()),
+              type,
+              root,
+              datasetKey,
+              !structure);
+      if (beyond) elementMirrorCutoffs.add(mirror);
+      else elementMirrorPaths.computeIfAbsent(mirror, k -> HashSetFactory.make()).add(path);
+      getSystem().newConstraint(target, mirror);
+      if (!structure) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                private final Set<String> names = HashSetFactory.make();
+
+                @Override
+                public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+                  if (catalog.getValue() == null) return NOT_CHANGED;
+                  catalog
+                      .getValue()
+                      .foreach(
+                          c -> {
+                            if (!(getSystem().getInstanceKey(c) instanceof ConstantKey<?> name))
+                              return;
+                            Object value = name.getValue();
+                            // A tuple's fields are named by integers, a dict's by strings.
+                            if (!(value instanceof String) && !(value instanceof Number)) return;
+                            String field = value.toString();
+                            if (!names.add(field)) return;
+                            IField f = resolveRootField(cha, field);
+                            if (f == null) return;
+                            getSystem()
+                                .newConstraint(factory.getPointerKeyForObjectCatalog(mirror), name);
+                            List<String> next = new ArrayList<>(path);
+                            next.add(field);
+                            Set<InstanceKey> above = HashSetFactory.make(ancestors);
+                            above.add(root);
+                            getSystem()
+                                .newSideEffect(
+                                    new ElementMirrorOperator(
+                                        node,
+                                        pc,
+                                        datasetKey,
+                                        factory.getPointerKeyForInstanceField(mirror, f),
+                                        List.copyOf(next),
+                                        Set.copyOf(above)),
+                                    factory.getPointerKeyForInstanceField(source, f));
+                          });
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return mirror.hashCode();
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "element mirror fields of " + source;
+                }
+              },
+              factory.getPointerKeyForObjectCatalog(source));
+    }
+
+    private boolean isStructure(IClass type) {
+      IClassHierarchy cha = getClassHierarchy();
+      for (TypeReference structure : elementStructureTypes) {
+        IClass c = cha.lookupClass(structure);
+        if (c != null && cha.isSubclassOf(type, c)) return true;
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + target.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ElementMirrorOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && target.equals(other.target)
+          && path.equals(other.path)
+          && ancestors.equals(other.ancestors);
+    }
+
+    @Override
+    public String toString() {
+      return "element mirror at " + pc + " into " + target + " at " + path;
+    }
+  }
 
   /**
    * Constructs a {@code collections.namedtuple} instance (<a
