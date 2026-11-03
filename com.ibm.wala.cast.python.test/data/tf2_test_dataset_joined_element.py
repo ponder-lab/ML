@@ -11,8 +11,16 @@ def consume_shuffled(x):
     pass
 
 
+def consume_flats(x):
+    pass
+
+
 def flat_dataset():
     return tf.data.Dataset.from_tensor_slices((tf.ones([8, 6]), tf.zeros([8])))
+
+
+def narrow_dataset():
+    return tf.data.Dataset.from_tensor_slices((tf.ones([8, 5]), tf.zeros([8])))
 
 
 def pair_dataset():
@@ -37,6 +45,13 @@ def shuffled(flag):
         consume_shuffled(x)
 
 
+def flats(flag):
+    for x, y in (flat_dataset() if flag else narrow_dataset()).shuffle(4).batch(2):
+        assert x.shape in ((2, 6), (2, 5)) and x.dtype == tf.float32
+        consume_flats(x)
+
+
 for flag in (True, False):
     batched(flag)
     shuffled(flag)
+    flats(flag)

@@ -41,4 +41,21 @@ public class TestDatasetJoinedElement extends AbstractTensorTest {
   public void testShuffled() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_shuffled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 6))));
   }
+
+  /**
+   * A batch of a shuffle over either of two flat datasets: both datasets' tensors.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testFlats() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_flats",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), TensorType.of(FLOAT_32, 2, 5))));
+  }
 }
