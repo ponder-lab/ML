@@ -35,6 +35,14 @@ def consume_keyed_a(a):
     pass
 
 
+def consume_mapped_a(a):
+    pass
+
+
+def consume_mapped_b(b):
+    pass
+
+
 def consume_keyed_b(b):
     pass
 
@@ -72,3 +80,10 @@ for e in tf.data.Dataset.zip({"a": floats, "b": ints}):
     b = e["b"]
     assert b.shape == (3,) and b.dtype == tf.int32
     consume_keyed_b(b)
+
+# A zipped dataset whose element is not copied keeps the element its generator types.
+for a, b in tf.data.Dataset.zip((floats.map(lambda v: v * 2), ints)):
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_mapped_a(a)
+    assert b.shape == (3,) and b.dtype == tf.int32
+    consume_mapped_b(b)

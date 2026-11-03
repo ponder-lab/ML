@@ -3406,6 +3406,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 new ElementMirrorOperator(
                     node, pc, datasetKey, null, target, path, ancestors, false),
                 factory.getPointerKeyForInstanceField(zipped, element));
+      // The zip's dataset is a summary's allocation, so its keys are known here; were it not, the
+      // marker would not pass, and a zipped dataset whose element is not copied would read as ⊥.
       IField legacy = resolveRootField(cha, elementZipLegacyField);
       if (legacy == null || zipDatasets == null) return;
       for (InstanceKey dataset : zipDatasets)

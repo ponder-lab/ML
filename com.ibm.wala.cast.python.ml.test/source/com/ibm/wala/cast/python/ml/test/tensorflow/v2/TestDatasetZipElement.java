@@ -151,4 +151,29 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   public void testKeyedB() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_keyed_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
   }
+
+  /**
+   * A zip of a mapped dataset, whose element is not copied, keeps the element its generator types:
+   * the mapped member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testMappedA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_mapped_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * The other member of that zip.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testMappedB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_mapped_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
 }
