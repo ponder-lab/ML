@@ -102,7 +102,7 @@ PythonTensorAnalysisEngine.performAnalysis()
 - The **call graph and the pointer analysis are final.** `makeCallGraph` completes before `getDataflowSources` seeds anything, so no generator can change what the PA knows, and a generator-side change cannot move a call-graph node or edge *by construction*.
 - **`TensorTypeAnalysis` state does not exist yet.** A generator cannot read the dataflow fixpoint it is helping to seed — if a mechanism needs a variable's tensor *state*, it is in the wrong phase.
 - **`WorklistTypeResolver` is a fixpoint over generator queries** — chaotic iteration over the query-dependency graph, joining at every update — **not** merely a re-entrancy guard. It promotes bottom-valued members of nontrivial SCCs to the unknown-marked element and re-solves, so ⊤-on-cycle is the engine's own policy and a guard that answers a cycle with ⊥ disagrees with it.
-- **But the resolver is absent on the null-engine path** (`applyRecursionGuards`, wala/ML#753). There a query runs **once** and is memoized, so an *optimistic* value is never revised and ships as read: optimism is sound only where something iterates. That path is reachable through the public API (`TensorGeneratorFactory.getGenerator(...).getTensorTypes(builder)` outside `performAnalysis`), so it is a contract, not dead code.
+- **But the resolver is absent on the null-engine path** (`applyRecursionGuards`, wala/ML#753). There a query runs **once** and is memoized, so an *optimistic* value is never revised and ships as read: optimism is sound only where something iterates.
 
 ### PTS vs `TensorTypeAnalysis` — two separate systems
 
@@ -173,9 +173,16 @@ Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When addin
 
 ### Issue-blocked tests
 
-The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`, `testModelCallConsume`) is the idiom for "this test documents a known failure, tracked by issue #N." When adding one, always include a `TODO:` line in the Javadoc naming the blocking issue — without it, the suppression is indistinguishable from an intentional positive negative-assertion (as in `testDecoratedMethod9`) and tooling can't distinguish the two. When the underlying issue is resolved, flip the annotation to plain `@Test` and remove the `TODO` to convert the test into a positive regression guard.
+A test documents a known failure, tracked by issue #N, in either of two equally accepted forms:
 
-**When more than one fixed result would be acceptable, pin today's reading instead.** Use a plain `@Test` that asserts what the analysis reads now (often ⊤), with a `TODO: wala/ML#N` line naming the issue and the type expected once fixed. An expected failure stays green on any change, including a fix that gives the wrong answer or a regression to ⊥, while a positive pin goes red on every change and forces whoever moves it to write the new expectation. `TestUnknownRankGaps` is the precedent: wala/ML#1158's fix may give `52` or `Unresolved`, and both are correct.
+- **An expected failure.** The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`) asserts the type expected once the issue is fixed. When the issue is resolved, flip the annotation to plain `@Test`.
+- **A pin of today's wrong reading.** A plain `@Test` asserts what the analysis reads now (see `TestSidecarSlice#testSidecarSequence`). When the issue is resolved, change the expectation to the fixed type.
+
+Either way, include a `TODO:` line naming the issue, removed when the test is flipped; a pin's `TODO` also names the type expected once it is fixed. Without it, an expected failure is indistinguishable from an intentional negative assertion (as in `testDecoratedMethod9`), and a pin of a wrong reading is indistinguishable from a correct one.
+
+**Closing an issue means searching the tests for `TODO`s that name it and flipping them.** wala/ML#164 was closed with its `TODO` still in `testDataset28`, so the test kept pinning the bug the issue tracked.
+
+**When more than one fixed result would be acceptable, pin today's reading instead.** Use a plain `@Test` that asserts what the analysis reads now (often ⊤), with a `TODO: wala/ML#N` line naming the issue and the type expected once fixed. An expected failure stays green on any change, including a fix that gives the wrong answer or a regression to ⊥, while a positive pin goes red on every change and forces whoever moves it to write the new expectation. `TestUnknownRankGaps` was the precedent: wala/ML#1158's fix could give `52` or `Unresolved`, and both were correct.
 
 ## What HFR Computes and What Ariadne Computes
 
