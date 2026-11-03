@@ -1433,15 +1433,16 @@ public class TensorGeneratorFactory {
       if (datasets.isEmpty()) continue;
       DatasetIteratorElementGenerator element =
           new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
+      List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
       for (List<Object> path : python.getElementMirrorPaths(leaf)) {
         if (path.isEmpty()) {
           parts.add(element);
           continue;
         }
+        DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
         // A single index reads the element's tuple position, as a subscript of the element does.
-        if ((path.size() == 1 && path.get(0) instanceof Integer)
-            || element.resolvesPath(builder, path))
-          parts.add(new DatasetTupleElementGenerator(source, element, path));
+        if ((path.size() == 1 && path.get(0) instanceof Integer) || at.resolvesPath(builder, path))
+          parts.add(new DatasetTupleElementGenerator(source, at, path));
       }
     }
     return new MirroredLeaves(parts, only);
@@ -1466,18 +1467,65 @@ public class TensorGeneratorFactory {
     if (datasets.isEmpty()) return ret;
     DatasetIteratorElementGenerator element =
         new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
+    List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
     for (List<Object> path : python.getElementMirrorPaths(leaf)) {
       if (path.isEmpty()) {
         ret.addAll(element.getTensorTypes(builder));
         continue;
       }
+      DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
       // A single index reads the element's tuple position, as a subscript of the element does.
       if (path.size() == 1 && path.get(0) instanceof Integer index)
-        ret.addAll(element.getTensorTypesForIndex(builder, index));
-      else if (element.resolvesPath(builder, path))
-        ret.addAll(element.getTensorTypesForPath(builder, path));
+        ret.addAll(at.getTensorTypesForIndex(builder, index));
+      else if (at.resolvesPath(builder, path)) ret.addAll(at.getTensorTypesForPath(builder, path));
     }
     return ret;
+  }
+
+  /**
+   * Datasets spread over the datasets their receivers may be ({@link DatasetGenerator#spread}), so
+   * a read at a path follows each of them rather than the first that resolves (wala/ML#1199).
+   *
+   * @param datasets The datasets' generators.
+   * @param builder The propagation call graph builder.
+   * @return The spread datasets, without duplicates; a dataset whose chain cannot be spread is
+   *     kept.
+   */
+  private static List<TensorGenerator> spreadOverReceivers(
+      List<TensorGenerator> datasets, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator dataset : datasets) {
+      List<TensorGenerator> parts = DatasetGenerator.spread(builder, dataset, new ArrayList<>());
+      for (TensorGenerator part : parts == null ? List.of(dataset) : parts)
+        if (!ret.contains(part)) ret.add(part);
+    }
+    return ret;
+  }
+
+  /**
+   * The element a mirrored leaf is read from at a path (wala/ML#1199): the spread datasets with no
+   * structure at the path, since a leaf there came from a dataset whose element has a tensor there.
+   * In {@code (flat if flag else pair).batch(2)}, a leaf at position 0 is the flat dataset's
+   * tensor, not the pair's tuple at position 0.
+   *
+   * @param leaf The leaf.
+   * @param datasets The leaf's datasets ({@link #mirroredDatasets}).
+   * @param spread The datasets spread over their receivers ({@link #spreadOverReceivers}).
+   * @param path The path.
+   * @param builder The propagation call graph builder.
+   * @return The element, over the given datasets when every spread one has a structure there.
+   */
+  private static DatasetIteratorElementGenerator leafElementAt(
+      ElementMirrorKey leaf,
+      List<TensorGenerator> datasets,
+      List<TensorGenerator> spread,
+      List<Object> path,
+      PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> at = new ArrayList<>();
+    for (TensorGenerator dataset : spread)
+      if (!(dataset instanceof TupleElementProvider tep && tep.isStructureAt(builder, path)))
+        at.add(dataset);
+    return new DatasetIteratorElementGenerator(leaf.getNode(), at.isEmpty() ? datasets : at);
   }
 
   /**
