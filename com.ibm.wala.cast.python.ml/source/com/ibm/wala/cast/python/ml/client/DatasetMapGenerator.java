@@ -542,7 +542,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * {@inheritDoc}
    *
    * @implNote As {@link #resolvesPath}, a component of {@code map_func}'s return: a structure when
-   *     the return holds only tuples and dicts there, and no values the points-to set cannot hold.
+   *     the return holds only tuples, dicts and namedtuples there, and no values the points-to set
+   *     cannot hold.
    */
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
@@ -552,7 +553,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
       return super.isStructureAt(builder, path);
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
         this.getMappedElementComponent(builder, path);
-    return component.snd.isEmpty() && TupleElementProvider.holdsOnlyStructures(component.fst);
+    return component.snd.isEmpty()
+        && TupleElementProvider.holdsOnlyStructures(builder, component.fst);
   }
 
   /**
