@@ -175,10 +175,10 @@ Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When addin
 
 A test documents a known failure, tracked by issue #N, in either of two equally accepted forms:
 
-- **An expected failure.** The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`, `testModelCallConsume`) asserts the type expected once the issue is fixed. When the issue is resolved, flip the annotation to plain `@Test`.
-- **A pin of today's wrong reading.** A plain `@Test` asserts what the analysis reads now (see `testDataset28` before wala/ML#1190). When the issue is resolved, change the expectation to the fixed type.
+- **An expected failure.** The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`) asserts the type expected once the issue is fixed. When the issue is resolved, flip the annotation to plain `@Test`.
+- **A pin of today's wrong reading.** A plain `@Test` asserts what the analysis reads now (see `TestUnknownRankGaps`). When the issue is resolved, change the expectation to the fixed type.
 
-Either way, include a `TODO:` line naming the issue, removed when the test is flipped. Without it, an expected failure is indistinguishable from an intentional negative assertion (as in `testDecoratedMethod9`), and a pin of a wrong reading is indistinguishable from a correct one.
+Either way, include a `TODO:` line naming the issue and the type expected once it is fixed, removed when the test is flipped. Without it, an expected failure is indistinguishable from an intentional negative assertion (as in `testDecoratedMethod9`), and a pin of a wrong reading is indistinguishable from a correct one.
 
 **Closing an issue means searching the tests for `TODO`s that name it and flipping them.** wala/ML#164 was closed with its `TODO` still in `testDataset28`, so the test kept pinning the bug the issue tracked.
 
