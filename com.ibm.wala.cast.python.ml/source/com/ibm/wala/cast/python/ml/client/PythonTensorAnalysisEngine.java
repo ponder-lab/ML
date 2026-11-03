@@ -1005,6 +1005,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             PythonTypes.tuple,
             PythonTypes.dict,
             PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
+    // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
+    // element (wala/ML#1190).
+    builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
