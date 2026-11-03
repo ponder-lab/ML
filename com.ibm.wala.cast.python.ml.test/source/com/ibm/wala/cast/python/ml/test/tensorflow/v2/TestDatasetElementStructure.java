@@ -222,4 +222,19 @@ public class TestDatasetElementStructure extends AbstractTensorTest {
   public void testLongDigitKey() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_long_digit_key", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
   }
+
+  /**
+   * A dict member whose key is digits, {@code "0"}: the key is no tuple position (<a
+   * href="https://github.com/wala/ML/issues/1198">wala/ML#1198</a>).
+   */
+  @Test
+  public void testDigitKey() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_digit_key", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
+
+  /** A tuple element's member read at position 0, the digit key's positional twin. */
+  @Test
+  public void testTuplePosition() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_tuple_position", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
 }

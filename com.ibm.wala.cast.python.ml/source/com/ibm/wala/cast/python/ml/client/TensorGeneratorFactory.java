@@ -1433,13 +1433,11 @@ public class TensorGeneratorFactory {
       if (datasets.isEmpty()) continue;
       DatasetIteratorElementGenerator element =
           new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
-      for (List<String> names : python.getElementMirrorPaths(leaf)) {
-        if (names.isEmpty()) {
+      for (List<Object> path : python.getElementMirrorPaths(leaf)) {
+        if (path.isEmpty()) {
           parts.add(element);
           continue;
         }
-        List<Object> path = new ArrayList<>();
-        for (String name : names) path.add(mirrorPathElement(name));
         // A single index reads the element's tuple position, as a subscript of the element does.
         if ((path.size() == 1 && path.get(0) instanceof Integer)
             || element.resolvesPath(builder, path))
@@ -1447,19 +1445,6 @@ public class TensorGeneratorFactory {
       }
     }
     return new MirroredLeaves(parts, only);
-  }
-
-  /**
-   * An element of a mirrored leaf's path (wala/ML#1190): a tuple's position is an integer, a dict's
-   * key a string. A name of digits too long for an {@code int} is no tuple's position, so it stays
-   * a key.
-   *
-   * @param name The name the mirror recorded.
-   * @return The position, or the key.
-   */
-  private static Object mirrorPathElement(String name) {
-    Integer position = name.matches("\\d+") ? parseIntOrNull(name) : null;
-    return position != null ? position : name;
   }
 
   /**
@@ -1481,13 +1466,11 @@ public class TensorGeneratorFactory {
     if (datasets.isEmpty()) return ret;
     DatasetIteratorElementGenerator element =
         new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
-    for (List<String> names : python.getElementMirrorPaths(leaf)) {
-      if (names.isEmpty()) {
+    for (List<Object> path : python.getElementMirrorPaths(leaf)) {
+      if (path.isEmpty()) {
         ret.addAll(element.getTensorTypes(builder));
         continue;
       }
-      List<Object> path = new ArrayList<>();
-      for (String name : names) path.add(mirrorPathElement(name));
       // A single index reads the element's tuple position, as a subscript of the element does.
       if (path.size() == 1 && path.get(0) instanceof Integer index)
         ret.addAll(element.getTensorTypesForIndex(builder, index));
