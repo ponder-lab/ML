@@ -44,6 +44,7 @@ import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -103,6 +104,7 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -643,6 +645,7 @@ public abstract class TensorGenerator implements Cloneable {
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
     MAY_RUN_IN_GRAPH_MODE.remove(builder);
     BLOCK_FEASIBILITIES.remove(builder);
+    PASSED_COMPREHENSION_READS.remove(builder);
     TensorGeneratorFactory.clearDispatches(builder);
     FlowFromDirectoryGenerator.clearClassAxes(builder);
   }
@@ -3439,6 +3442,141 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * Whether a binding's source is a dataset element's mirrored dict (wala/ML#1190). The per-key
+   * reads below apply only there, as on master, where only such a source had no points-to set; a
+   * plain dict's comprehension keeps the join (wala/ML#1077).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param binding The binding.
+   * @return {@code true} iff the binding's source points to a mirrored structure.
+   */
+  static boolean overDatasetElement(PropagationCallGraphBuilder builder, ValueBinding binding) {
+    PointerKey source =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(binding.sourceNode(), binding.sourceValueNumber());
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(source))
+      if (key instanceof ElementMirrorKey mirror && !mirror.isLeaf()) return true;
+    return false;
+  }
+
+  /**
+   * Whether a read is a constant-key read of a dict a comprehension builds over a dataset element's
+   * mirrored dict (wala/ML#1071, wala/ML#1190).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The node of the read.
+   * @param read The read.
+   * @return {@code true} iff the read is one.
+   */
+  private static boolean readsDatasetElementComprehension(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
+    DictComprehensionComponent.Read recognized =
+        DictComprehensionComponent.recognizeRead(node, read, builder);
+    if (recognized == null) return false;
+    for (Pair<DictComprehensionComponent.Comprehension, ValueBinding> binding :
+        recognized.bindings()) if (overDatasetElement(builder, binding.snd)) return true;
+    return false;
+  }
+
+  /**
+   * The dtypes of a value in this generator's node that is a constant-key read of a dict built by a
+   * comprehension over {@code items()}, or a parameter a call passes such a read, read per key as
+   * {@link #computeDTypes} reads them (wala/ML#1071, wala/ML#1190). A reader that takes an
+   * argument's dtypes from its points-to set would otherwise join the values written under every
+   * key.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param valueNumber The value number, in this generator's node.
+   * @return The read's dtypes, or {@code null} when the value is no such read.
+   */
+  protected Set<DType> comprehensionReadDTypes(
+      PropagationCallGraphBuilder builder, int valueNumber) {
+    CGNode node = this.getNode();
+    if (node == null || valueNumber <= 0) return null;
+    TensorGenerator generator =
+        node.getDU().getDef(valueNumber) instanceof PythonPropertyRead read
+                && readsDatasetElementComprehension(builder, node, read)
+            ? this.comprehensionReadGenerator(builder, node, valueNumber)
+            : null;
+    if (generator == null)
+      generator = this.passedComprehensionReadGenerator(builder, node, valueNumber);
+    return generator == null ? null : memoizedDTypes(builder, generator);
+  }
+
+  /**
+   * Per builder, whether some call passes a parameter a key read of a comprehension over a dataset
+   * element's dict ({@link #passesComprehensionRead}). The keys hold the builder's nodes, which
+   * keep the weak key reachable, so {@link #clearCaches} removes the entry.
+   */
+  static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Boolean>>
+      PASSED_COMPREHENSION_READS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Whether some call passes a parameter a key read of a comprehension over a dataset element's
+   * dict (wala/ML#1071, wala/ML#1190).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The parameter's node.
+   * @param valueNumber The parameter's value number.
+   * @return {@code true} iff a call in a caller passes it such a read.
+   */
+  private static boolean passesComprehensionRead(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    // A parameter's value number is one past its position among a call's uses, whose first is
+    // the callee.
+    int use = valueNumber - 1;
+    CallGraph cg = builder.getCallGraph();
+    for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(node))) {
+      if (caller.getIR() == null || caller.getDU() == null) continue;
+      for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, node)))
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site))
+          if (use < call.getNumberOfUses()
+              && caller.getDU().getDef(call.getUse(use)) instanceof PythonPropertyRead read
+              && readsDatasetElementComprehension(builder, caller, read)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The generator of a parameter some call passes a constant-key read of a dict built by a
+   * comprehension over {@code items()} (wala/ML#1071, wala/ML#1190), carrying this generator's
+   * binding, if any: the factory's generator for the parameter, whose creator walk reaches the
+   * read. The parameter's own points-to set joins the values written under every key, which a
+   * mirrored dataset element's components make non-empty; scoped to such reads, every other
+   * parameter is read as before.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number to resolve.
+   * @return The parameter's generator, or {@code null} when no call passes it such a read.
+   */
+  private TensorGenerator passedComprehensionReadGenerator(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    if (node.getIR() == null || !node.getIR().getSymbolTable().isParameter(valueNumber))
+      return null;
+    Map<Pair<CGNode, Integer>, Boolean> passes =
+        PASSED_COMPREHENSION_READS.computeIfAbsent(
+            builder, b -> new java.util.concurrent.ConcurrentHashMap<>());
+    Pair<CGNode, Integer> parameter = Pair.make(node, valueNumber);
+    Boolean passed = passes.get(parameter);
+    if (passed == null) {
+      passed = passesComprehensionRead(builder, node, valueNumber);
+      passes.put(parameter, passed);
+    }
+    if (!passed) return null;
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    if (builder.getPropagationSystem().isImplicit(pk)) return null;
+    TensorGenerator generator =
+        TensorGeneratorFactory.getGenerator(
+            builder.getPropagationSystem().findOrCreatePointsToSet(pk), builder);
+    if (generator == null || this.isSameOperation(generator)) return null;
+    return this.inheritBinding(generator);
+  }
+
+  /**
    * The generator of a value that is a constant-key read of a dict built by a comprehension over
    * {@code items()} (wala/ML#1071), carrying this generator's binding, if any.
    *
@@ -3722,13 +3860,22 @@ public abstract class TensorGenerator implements Cloneable {
     // it reports the pinned slice: the two disagree about the same value (wala/ML#825). The
     // dispatch criterion mirrors the pin's own (a slice-builtin call or an ndarray-subscript
     // read).
-    ShapeResult fromSubscript = this.shapeResultOfSubscript(builder, node, valueNumber, exact);
-    if (fromSubscript != null) return fromSubscript;
-
     // A key read of a comprehension-built dict re-derives the value written under the key, ahead
-    // of the points-to set, which joins the values written under every key (wala/ML#1071).
+    // of the points-to set, which joins the values written under every key (wala/ML#1071), and
+    // ahead of the subscript stage, which reads the same key of the dict through that set.
     TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
     if (comprehensionRead != null) return memoizedShapeResult(builder, comprehensionRead);
+
+    // So is a parameter a call passes such a read (wala/ML#1190): the parameter's points-to set
+    // holds the values written under every key, so the parameter is read through its creator,
+    // which the factory walks to the read and re-derives.
+    TensorGenerator passedComprehensionRead =
+        this.passedComprehensionReadGenerator(builder, node, valueNumber);
+    if (passedComprehensionRead != null)
+      return memoizedShapeResult(builder, passedComprehensionRead);
+
+    ShapeResult fromSubscript = this.shapeResultOfSubscript(builder, node, valueNumber, exact);
+    if (fromSubscript != null) return fromSubscript;
 
     ShapeResult partial = null;
     if (!valuePointsToSet.isEmpty()) {
@@ -6756,7 +6903,14 @@ public abstract class TensorGenerator implements Cloneable {
     boolean replay = activeEngine != null && activeEngine.isReplaying();
 
     for (InstanceKey valueIK : valuePointsToSet)
-      if (valueIK instanceof ConstantKey) {
+      if (valueIK instanceof ElementMirrorKey mirror) {
+        // A mirrored dataset element's structure is no tensor, and its leaf is its own reading,
+        // not the summary allocation's (wala/ML#1190).
+        if (!mirror.isLeaf()) continue;
+        for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(mirror, builder))
+          if (type.getDims() == null) hasUnknown = true;
+          else ret.add(type.getDims());
+      } else if (valueIK instanceof ConstantKey) {
         // A null constant is analysis substrate (loop-carried phi defaults, the generator
         // iteration protocol) or an explicit `None` argument, never a scalar value; typing it as
         // shape [] fabricates a scalar member the downstream pass-throughs then propagate (the
@@ -7788,6 +7942,9 @@ public abstract class TensorGenerator implements Cloneable {
     // See the comprehension-read bypass in computeShapes (wala/ML#1071).
     TensorGenerator comprehensionRead = this.comprehensionReadGenerator(builder, node, valueNumber);
     if (comprehensionRead != null) return memoizedDTypes(builder, comprehensionRead);
+    TensorGenerator passedComprehensionRead =
+        this.passedComprehensionReadGenerator(builder, node, valueNumber);
+    if (passedComprehensionRead != null) return memoizedDTypes(builder, passedComprehensionRead);
 
     // wala/ML#570: a property read of a NamedTuple/object field (e.g. `inputs.node_embeddings`)
     // often has no usable points-to set at the read site when the object was constructed in a
@@ -7995,6 +8152,13 @@ public abstract class TensorGenerator implements Cloneable {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
+      if (valueIK instanceof ElementMirrorKey mirror) {
+        // As in the shape read, a mirrored dataset element (wala/ML#1190).
+        if (mirror.isLeaf())
+          for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(mirror, builder))
+            ret.add(type.getDType());
+        continue;
+      }
       if (valueIK instanceof AllocationSiteInNode && !visited.add(valueIK)) continue;
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
@@ -8876,7 +9040,70 @@ public abstract class TensorGenerator implements Cloneable {
         && (paramPos == LAYER_SELF_ARGUMENT_POSITION || paramPos == RECEIVER_PARAMETER_POSITION))
       return this.composedArguments.receiver();
 
+    // The value a binding rebinds reads as the bound component (wala/ML#1071): an operation in a
+    // comprehension's derivation, `tf.identity(v)`, that reads its argument's points-to set would
+    // otherwise read `v` joined over every key, where a dataset element's dict is a mirrored dict
+    // whose values all point somewhere (wala/ML#1190).
+    if (this.valueBinding != null && overDatasetElement(builder, this.valueBinding)) {
+      int valueNumber = this.argumentValueNumberIfAny(builder, paramPos, paramName);
+      boolean bound = valueNumber > 0 && this.valueBinding.binds(this.getNode(), valueNumber);
+      // A generator anchored on a summary's node, which the derivation reaches by delegating to the
+      // summary's allocation, has no value in the bound node: the bound value is then the argument
+      // a call in that node passes the summary.
+      if (!bound) bound = this.passesBoundValue(builder, paramPos);
+      if (bound) {
+        OrdinalSet<InstanceKey> component = boundComponentPointsToSet(builder, this.valueBinding);
+        if (component != null && !component.isEmpty()) {
+          // Read the bound value's own queries, which answer the component's types, so the
+          // derivation's convergence check sees this consumer read it through the binding.
+          CGNode node = this.valueBinding.node();
+          this.getShapeResult(builder, node, this.valueBinding.valueNumber(), false);
+          this.getDTypes(builder, node, this.valueBinding.valueNumber());
+          return component;
+        }
+      }
+    }
+
     return getArgumentPointsToSet(builder, this.getNode(), paramPos, paramName);
+  }
+
+  /**
+   * Whether a call in the bound node to this generator's node passes the bound value at a position.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The position of the argument, {@code self} excluded.
+   * @return {@code true} iff such a call passes the bound value there.
+   */
+  private boolean passesBoundValue(PropagationCallGraphBuilder builder, int paramPos) {
+    CGNode boundNode = this.valueBinding.node();
+    CGNode node = this.getNode();
+    if (node == null || paramPos < 0 || boundNode.equals(node) || boundNode.getIR() == null)
+      return false;
+    CallGraph cg = builder.getCallGraph();
+    for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(boundNode, node)))
+      for (SSAAbstractInvokeInstruction call : boundNode.getIR().getCalls(site)) {
+        int argument = callerArgumentValueNumber(call, paramPos);
+        if (argument > 0 && this.valueBinding.binds(boundNode, argument)) return true;
+      }
+    return false;
+  }
+
+  /**
+   * The value number of the argument at a position or with a name, in this generator's node.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The position of the argument in the function call.
+   * @param paramName The name of the argument in the function call.
+   * @return The value number, or {@code -1} when the argument has none, such as a receiver this
+   *     generator's call does not pass.
+   */
+  protected int argumentValueNumberIfAny(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    try {
+      return this.getArgumentValueNumber(builder, paramPos, paramName, false);
+    } catch (IllegalStateException e) {
+      return -1;
+    }
   }
 
   /**
@@ -12211,9 +12438,13 @@ public abstract class TensorGenerator implements Cloneable {
     // from the dataset the allocation's `dataset` field holds, a component by its index into the
     // element's structure when the dataset yields tuples. A `next` result read as a value is typed
     // in the factory's `next` branch instead, where the reading node's iterated value is known.
-    if (sanitized.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE))
-      return new DatasetIteratorElementGenerator(
-          node, DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder));
+    if (sanitized.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)) {
+      List<TensorGenerator> datasets =
+          DatasetIteratorElementGenerator.datasetsOf(java.util.List.of(allocation), builder);
+      // An element allocated for datasets whose elements are all mirrored stands for nothing
+      // (wala/ML#1190).
+      return datasets.isEmpty() ? null : new DatasetIteratorElementGenerator(node, datasets);
+    }
     int component = TensorFlowTypes.datasetElementComponentIndex(sanitized);
     if (component >= 0) {
       List<TensorGenerator> datasets =

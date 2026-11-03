@@ -25,6 +25,7 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
@@ -246,6 +247,87 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * because the base engine consumes its path without keeping it.
    */
   private List<File> sidecarSearchPath;
+
+  /**
+   * Seeds each field a mirrored dataset element's leaf is stored in (wala/ML#1190): a field of a
+   * mirrored structure, or the {@code mirrored_element} field of a dataset whose element is itself
+   * a leaf. A leaf is typed by the generator of the dataset the mirror built it for, at each path
+   * the mirror reached it by, so the element's members are typed where they are stored and reach
+   * their readers through the fields, as any container's members do. A mirrored structure itself is
+   * seeded nowhere: it is no tensor.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param dataflow The analysis's dataflow graph.
+   * @param init The initial tensor-type seeding map.
+   * @param initOrigins The initial origin seeding map.
+   */
+  private static void seedElementMirrorFields(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins) {
+    if (!(builder instanceof PythonSSAPropagationCallGraphBuilder python)) return;
+    Map<InstanceKey, Set<TensorType>> leafTypes = HashMapFactory.make();
+    for (PointsToSetVariable var : dataflow) {
+      if (!(var.getPointerKey() instanceof InstanceFieldKey fieldKey)) continue;
+      if (!(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
+          && !(fieldKey.getField().getName().toString().equals("mirrored_element")
+              && isDataset(builder, fieldKey.getInstanceKey()))) continue;
+      Set<TensorType> types = null;
+      for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(fieldKey)) {
+        if (!(value instanceof ElementMirrorKey leaf) || !leaf.isLeaf()) continue;
+        Set<TensorType> leafTyped =
+            leafTypes.computeIfAbsent(leaf, k -> typesOfMirroredLeaf(python, leaf));
+        if (types == null) types = HashSetFactory.make();
+        types.addAll(leafTyped);
+      }
+      if (types == null) continue;
+      final Set<TensorType> seeded = types;
+      LOGGER.fine(() -> "Seeding mirrored element field " + fieldKey + " with " + seeded + ".");
+      // A seed another path made for the variable stays beside this one.
+      init.merge(
+          var,
+          seeded,
+          (earlier, later) -> {
+            Set<TensorType> joined = HashSetFactory.make(earlier);
+            joined.addAll(later);
+            return joined;
+          });
+      initOrigins.merge(
+          var,
+          EnumSet.of(TensorOrigin.TENSORFLOW),
+          (earlier, later) -> {
+            EnumSet<TensorOrigin> joined = EnumSet.copyOf(earlier);
+            joined.addAll(later);
+            return joined;
+          });
+    }
+  }
+
+  /**
+   * Whether an instance is a dataset, of {@link TensorFlowTypes#DATASET} or a subclass of it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param instance The instance.
+   * @return {@code true} iff the instance's class is the dataset class or one of its subclasses.
+   */
+  private static boolean isDataset(PropagationCallGraphBuilder builder, InstanceKey instance) {
+    IClass dataset = builder.getClassHierarchy().lookupClass(TensorFlowTypes.DATASET);
+    return dataset != null
+        && builder.getClassHierarchy().isSubclassOf(instance.concreteType(), dataset);
+  }
+
+  /**
+   * A mirrored leaf's types: its dataset's element at each path the mirror reached it by.
+   *
+   * @param builder The builder whose mirror allocated the leaf.
+   * @param leaf The leaf.
+   * @return The types, joined over the paths and the datasets.
+   */
+  private static Set<TensorType> typesOfMirroredLeaf(
+      PythonSSAPropagationCallGraphBuilder builder, ElementMirrorKey leaf) {
+    return TensorGeneratorFactory.mirroredLeafTypes(leaf, builder);
+  }
 
   /**
    * Seeds each key a map function reads from the {@code dict} {@code map} hands it (wala/ML#1088).
@@ -910,13 +992,25 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     sliceResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
     for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
       sliceResults.put(component, TensorFlowTypes.TENSOR_TYPE);
+    sliceResults.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.TENSOR_TYPE);
     builder.setFreshSliceResultTypes(sliceResults);
+
+    // A dataset's element mirrors the structure it was built from: tuples, dicts and namedtuples
+    // are copied as structure, and anything else, a list or an array `tf.data` stacks, is a leaf
+    // (wala/ML#1190).
+    builder.setElementMirror(
+        TensorFlowTypes.DATASET_ELEMENT_MIRROR,
+        TensorFlowTypes.DATASET_ELEMENT_LEAF,
+        Set.of(
+            PythonTypes.tuple,
+            PythonTypes.dict,
+            PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
     // A slice of the loader's array keeps aliasing the array, as before: allocated, its extent
-    // under a
-    // start-only bound reads unresolved (wala/ML#841), where the alias reads the array's full one.
+    // under a start-only bound reads unresolved (wala/ML#841), where the alias reads the array's
+    // full one.
     Map<TypeReference, TypeReference> axisResults = new HashMap<>(sliceResults);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       axisResults.put(array, NumpyTypes.NDARRAY_TYPE);
@@ -955,18 +1049,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // `tf.GradientTape.gradient` returns a list of gradients for a list of sources, and a tuple
     // for a tuple, so its result holds the container exactly when `sources` may be one
     // (wala/ML#464).
-    builder.setConditionalAllocations(
-        Map.of(
-            TensorFlowTypes.MAP_ARGUMENT_TYPE,
-            List.of(
-                new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
-                    "element_structure", PythonTypes.dict)),
-            TensorFlowTypes.GRADIENT.getDeclaringClass(),
-            List.of(
-                new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
-                    "sources", PythonTypes.list),
-                new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
-                    "sources", PythonTypes.tuple))));
+    Map<TypeReference, List<PythonSSAPropagationCallGraphBuilder.ConditionalAllocation>>
+        conditionalAllocations =
+            new HashMap<>(
+                Map.of(
+                    TensorFlowTypes.MAP_ARGUMENT_TYPE,
+                    List.of(
+                        new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                            "element_structure", PythonTypes.dict)),
+                    TensorFlowTypes.GRADIENT.getDeclaringClass(),
+                    List.of(
+                        new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                            "sources", PythonTypes.list),
+                        new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                            "sources", PythonTypes.tuple))));
+    // An iterator allocates the element only for a dataset whose producer marks it as not
+    // mirrored (wala/ML#1190), so a mirrored dataset's element is its mirror alone.
+    for (TypeReference next : TensorFlowTypes.DATASET_ITERATOR_NEXT_METHODS)
+      conditionalAllocations.put(
+          next,
+          List.of(
+              new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
+                  "legacy_element", TensorFlowTypes.DATASET_ELEMENT_TYPE)));
+    builder.setConditionalAllocations(conditionalAllocations);
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     // A tensor's `shape` attribute reads its static shape, whose `as_list()` is a list of Python
@@ -979,6 +1084,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     shapeTypes.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
       shapeTypes.put(component, TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    shapeTypes.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     // An ndarray's `shape` attribute reads its shape, a tuple of Python ints, for points-to clients
     // only, as a tensor's does (wala/ML#1159).
     shapeTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.STATIC_ARRAY_SHAPE);
@@ -4015,6 +4121,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       seedMapDictElementFields(builder, dataflow, init, initOrigins);
 
+      seedElementMirrorFields(builder, dataflow, init, initOrigins);
+
       this.seedTypeAnnotationSidecarEntries(builder, dataflow, init, initOrigins);
 
       // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
@@ -4056,9 +4164,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         boolean fitComponent =
             generator instanceof DatasetTupleElementGenerator selected
                 && selected.getUnderlying() instanceof FitDataGenerator;
+        // A key read of a comprehension-built dict is pinned too (wala/ML#1071): the dict is
+        // written
+        // under a key the analysis does not know, so its fields join every key's value, and the
+        // read's own re-derivation for its key would otherwise be joined with all of them. That
+        // join used to be empty when a dataset element's components had no points-to set; a
+        // mirrored element's do (wala/ML#1190).
+        boolean comprehensionRead = generator instanceof DictComprehensionComponent;
         if (!(generator instanceof SliceBuiltinOperation)
             && !(generator instanceof NdarraySubscriptOperation)
-            && !fitComponent) continue;
+            && !fitComponent
+            && !comprehensionRead) continue;
         Set<TensorType> types = init.get(src);
         if (fitComponent && types != null && types.isEmpty()) nonTensorFitComponents.add(src);
         if (types == null || types.isEmpty()) continue;

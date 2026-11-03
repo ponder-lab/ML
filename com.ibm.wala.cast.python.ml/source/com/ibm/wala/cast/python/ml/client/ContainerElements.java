@@ -18,6 +18,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -859,6 +860,10 @@ public final class ContainerElements {
    * @return {@code true} iff the container is such a display.
    */
   private static boolean isProgramDisplay(InstanceKey container) {
+    // A dataset element's structure copies the positions of the structure it was built from
+    // (wala/ML#1190), so its catalog holds run-time elements exactly when its source's does.
+    if (container instanceof ElementMirrorKey mirror && !mirror.isLeaf())
+      return isProgramDisplay(mirror.getSource());
     if (!(container instanceof AllocationSiteInNode asin)) return false;
     CGNode node = asin.getNode();
     if (!(node.getMethod() instanceof AstMethod) || node.getMethod().isWalaSynthetic())
