@@ -183,3 +183,29 @@ for long_element in long_keyed:
     long_member = long_element["12345678901234567890"]
     assert long_member.shape == (3,) and long_member.dtype == tf.float32
     consume_long_digit_key(long_member)
+
+
+def consume_digit_key(x):
+    pass
+
+
+digit_keyed = tf.data.Dataset.from_tensor_slices(
+    {"0": tf.ones((4, 3), dtype=tf.float32), "b": tf.zeros((4, 2), dtype=tf.int32)}
+)
+for digit_element in digit_keyed:
+    digit_member = digit_element["0"]
+    assert digit_member.shape == (3,) and digit_member.dtype == tf.float32
+    consume_digit_key(digit_member)
+
+
+def consume_tuple_position(x):
+    pass
+
+
+positioned = tf.data.Dataset.from_tensor_slices(
+    (tf.ones((4, 3), dtype=tf.float32), tf.zeros((4, 2), dtype=tf.int32))
+)
+for positioned_element in positioned:
+    position_member = positioned_element[0]
+    assert position_member.shape == (3,) and position_member.dtype == tf.float32
+    consume_tuple_position(position_member)

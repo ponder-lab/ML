@@ -535,9 +535,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
   /**
    * The paths from its element's root at which each mirrored key was reached, keyed by the mirror
-   * key; a key reached along several paths has each. A path is a list of field names.
+   * key; a key reached along several paths has each. A path is a list of the catalog's own values:
+   * an {@link Integer} for a tuple's position, a {@link String} for a dict's key.
    */
-  private final Map<InstanceKey, Set<List<String>>> elementMirrorPaths = HashMapFactory.make();
+  private final Map<InstanceKey, Set<List<Object>>> elementMirrorPaths = HashMapFactory.make();
 
   /**
    * The mirror keys reached along a path longer than the mirror records: each stands for whatever
@@ -566,10 +567,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * The paths at which a mirrored key was reached from its element's root (wala/ML#1190).
    *
    * @param key A key a mirror allocated.
-   * @return The paths, each a list of field names; empty for a key no mirror allocated.
+   * @return The paths, each a list of the catalog's values, an {@link Integer} for a tuple's
+   *     position and a {@link String} for a dict's key; empty for a key no mirror allocated.
    */
-  public Set<List<String>> getElementMirrorPaths(InstanceKey key) {
-    Set<List<String>> paths = elementMirrorPaths.get(key);
+  public Set<List<Object>> getElementMirrorPaths(InstanceKey key) {
+    Set<List<Object>> paths = elementMirrorPaths.get(key);
     return paths == null ? Collections.emptySet() : Collections.unmodifiableSet(paths);
   }
 
@@ -3131,7 +3133,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final int pc;
     private final PointerKey datasetKey;
     private final PointerKey target;
-    private final List<String> path;
+    private final List<Object> path;
 
     /**
      * The originals of the structures copied along {@link #path}. A source structure that is one of
@@ -3147,7 +3149,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         int pc,
         PointerKey datasetKey,
         PointerKey target,
-        List<String> path,
+        List<Object> path,
         Set<InstanceKey> ancestors) {
       this.node = node;
       this.pc = pc;
@@ -3195,7 +3197,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       getSystem()
           .newSideEffect(
               new UnaryOperator<PointsToSetVariable>() {
-                private final Set<String> names = HashSetFactory.make();
+                private final Set<Object> names = HashSetFactory.make();
 
                 @Override
                 public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
@@ -3207,16 +3209,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                             if (!(getSystem().getInstanceKey(c) instanceof ConstantKey<?> name))
                               return;
                             Object value = name.getValue();
-                            // A tuple's fields are named by integers, a dict's by strings.
+                            // A tuple's fields are named by integers, a dict's by strings. The
+                            // path keeps the value itself, so a dict's key "0" stays a key where
+                            // the field it names is the one a tuple's position 0 names.
                             if (!(value instanceof String) && !(value instanceof Number)) return;
-                            String field = value.toString();
-                            if (!names.add(field)) return;
-                            IField f = resolveRootField(cha, field);
+                            Object element = mirrorPathElement(value);
+                            if (!names.add(element)) return;
+                            IField f = resolveRootField(cha, value.toString());
                             if (f == null) return;
                             getSystem()
                                 .newConstraint(factory.getPointerKeyForObjectCatalog(mirror), name);
-                            List<String> next = new ArrayList<>(path);
-                            next.add(field);
+                            List<Object> next = new ArrayList<>(path);
+                            next.add(element);
                             Set<InstanceKey> above = HashSetFactory.make(ancestors);
                             above.add(root);
                             getSystem()
@@ -3249,6 +3253,25 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 }
               },
               factory.getPointerKeyForObjectCatalog(source));
+    }
+
+    /**
+     * An element of a path (wala/ML#1198): a string is a dict's key, and an integral number in
+     * {@code int} range a tuple's position. Any other number, a dict's key like {@code 1.5}, is
+     * kept as its text.
+     *
+     * @param value A catalogued field's value, a string or a number.
+     * @return The key or the position.
+     */
+    private Object mirrorPathElement(Object value) {
+      if (value instanceof String) return value;
+      if ((value instanceof Integer
+              || value instanceof Long
+              || value instanceof Short
+              || value instanceof Byte)
+          && ((Number) value).longValue() == ((Number) value).intValue())
+        return ((Number) value).intValue();
+      return value.toString();
     }
 
     private boolean isStructure(IClass type) {
