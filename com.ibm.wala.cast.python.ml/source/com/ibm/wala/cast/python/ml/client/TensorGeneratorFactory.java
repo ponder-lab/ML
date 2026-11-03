@@ -1153,6 +1153,45 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether the walk back from a variable can reach more than one creator, so that {@link
+   * #findCreator}'s first creator may not be the variable's only definition (wala/ML#1188).
+   *
+   * <p>The walk is {@link #findCreators}'s without its φ-arm feasibility, so the creators it counts
+   * are a superset of that method's, and a variable this method says has one creator has at most
+   * that one there too. It decides no branch, so it cannot reach a guard and recurse into one, and
+   * it stops at the second creator it finds.
+   *
+   * @param source The {@link PointsToSetVariable} to trace backwards from.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @return {@code true} iff the walk reaches at least two creators.
+   */
+  public static boolean mayHaveSeveralCreators(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    Graph<PointsToSetVariable> assignmentGraph =
+        builder.getPropagationSystem().getAssignmentGraph();
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    Queue<PointsToSetVariable> queue = new LinkedList<>();
+    queue.add(source);
+    visited.add(source);
+    boolean found = false;
+    while (!queue.isEmpty()) {
+      PointsToSetVariable current = queue.poll();
+      if (current == null) continue; // An unresolved predecessor; see findCreator (wala/ML#613).
+      if (isCreator(current, builder)) {
+        if (found) return true;
+        found = true;
+        continue;
+      }
+      for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(current);
+          it.hasNext(); ) {
+        PointsToSetVariable pred = it.next();
+        if (pred != null && visited.add(pred)) queue.add(pred);
+      }
+    }
+    return false;
+  }
+
+  /**
    * The value numbers a φ-defined variable takes on arms its node's context decides cannot run
    * (wala/ML#962's φ-arm feasibility): a creator on such an arm is not one of the value's
    * definitions in this context.
