@@ -55,6 +55,29 @@ public class TestKerasArraySubscript extends AbstractTensorTest {
   }
 
   /**
+   * {@code x_train[:2, ..., None]}: a subscript with a slice lowers to the {@code slice} builtin,
+   * so it is typed as one adding an axis to the slice.
+   */
+  @Test
+  public void testSliceEllipsisNone() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_slice_ellipsis_none",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 2, 28, 28, 1))));
+  }
+
+  /**
+   * A subscript adding an axis to an array read off a tuple, whose dtype the analysis does not
+   * resolve: the result is a tensor of the subscript's shape and an unknown dtype, not no tensor.
+   */
+  @Test
+  public void testUnknownDType() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_unknown_dtype", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 3, 4, 1))));
+  }
+
+  /**
    * Each subscript adding an axis, and arithmetic over one, is one NumPy array allocated in the
    * script, not the loader's array: a result that aliased its receiver, which the loader's summary
    * allocates, would not pass. A slice of the loader's array still aliases it.
@@ -92,5 +115,34 @@ public class TestKerasArraySubscript extends AbstractTensorTest {
       }
       assertEquals("Nodes of " + sink + ".", 1, nodes);
     }
+  }
+
+  /**
+   * {@code x_train[:2, ..., None]} has a slice, so it takes the slice's allocation rule, under
+   * which a subscript of a Keras dataset loader's array still aliases the loader's array
+   * (wala/ML#841).
+   */
+  @Test
+  public void testSliceEllipsisNoneAliasesTheLoadersArray() throws Exception {
+    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FILE);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    engine.performAnalysis(builder);
+    String sink = "consume_slice_ellipsis_none";
+    int nodes = 0;
+    for (CGNode node : builder.getCallGraph()) {
+      if (!node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + sink)) continue;
+      nodes++;
+      PointerKey parameter =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2);
+      Set<InstanceKey> keys = new HashSet<>();
+      builder.getPointerAnalysis().getPointsToSet(parameter).forEach(keys::add);
+      assertEquals(sink + "'s parameter: " + keys + ".", 1, keys.size());
+      assertEquals(
+          sink + "'s object's kind.",
+          "Ltensorflow/keras/datasets/mnist/x_train",
+          keys.iterator().next().concreteType().getName().toString());
+    }
+    assertEquals("Nodes of " + sink + ".", 1, nodes);
   }
 }
