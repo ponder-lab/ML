@@ -914,9 +914,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
-    // A slice of the loader's array keeps aliasing the array, as before: allocated, its extent
-    // under a
-    // start-only bound reads unresolved (wala/ML#841), where the alias reads the array's full one.
+    // A slice of the loader's array keeps aliasing the array, as before, and so does a subscript
+    // with a slice and an added axis, `x_train[:2, ..., None]`, which lowers to the slice builtin:
+    // allocated, its extent under a start-only bound reads unresolved (wala/ML#841), where the
+    // alias reads the array's full one.
     Map<TypeReference, TypeReference> axisResults = new HashMap<>(sliceResults);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       axisResults.put(array, NumpyTypes.NDARRAY_TYPE);
