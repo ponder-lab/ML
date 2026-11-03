@@ -1001,10 +1001,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     builder.setElementMirror(
         TensorFlowTypes.DATASET_ELEMENT_MIRROR,
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
-        Set.of(
-            PythonTypes.tuple,
-            PythonTypes.dict,
-            PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
+        TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).

@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UINT8;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -266,6 +267,18 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_ELEMENT_MIRROR =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_mirror"));
+
+  /**
+   * The classes a dataset's element is built from as structure: tuples, dicts and namedtuples, each
+   * of whose members {@code tf.data} reads as a component, where a list is converted to a tensor.
+   * The element's mirror copies these as structure (wala/ML#1190), and a reader of the element
+   * skips a dataset that holds one at a path (wala/ML#1200), so the two agree on what a leaf is.
+   */
+  public static final Set<TypeReference> DATASET_ELEMENT_STRUCTURE_TYPES =
+      Set.of(
+          PythonTypes.tuple,
+          PythonTypes.dict,
+          PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE);
 
   /** The class of a leaf of a dataset's mirrored element, a tensor (wala/ML#1190). */
   public static final TypeReference DATASET_ELEMENT_LEAF =

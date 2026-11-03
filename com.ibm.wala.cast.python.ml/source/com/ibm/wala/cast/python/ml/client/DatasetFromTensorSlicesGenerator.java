@@ -380,13 +380,14 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
   /**
    * {@inheritDoc}
    *
-   * @implNote The component is a structure when the {@code tensors} argument holds only tuples and
-   *     dicts there, as {@code (x, mask)} in {@code ((x, mask), y)}: each member is sliced on its
-   *     own, and the dataset's element holds the structure of the slices.
+   * @implNote The component is a structure when the {@code tensors} argument holds only tuples,
+   *     dicts and namedtuples there, as {@code (x, mask)} in {@code ((x, mask), y)}: each member is
+   *     sliced on its own, and the dataset's element holds the structure of the slices.
    */
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
-    return TupleElementProvider.holdsOnlyStructures(this.componentPointsToSet(builder, path));
+    return TupleElementProvider.holdsOnlyStructures(
+        builder, this.componentPointsToSet(builder, path));
   }
 
   /**
