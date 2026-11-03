@@ -363,23 +363,6 @@ public final class ContainerElements {
   }
 
   /**
-   * Reads the elements of a value that is a dataset element's component ({@link
-   * #datasetComponent}), as {@link #ofValue} reads them, or answers that the value is no such
-   * component. It dispatches the value's generator once, where asking {@link #datasetComponent} and
-   * then {@link #ofValue} dispatches it twice (<a
-   * href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>).
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis models the value.
-   * @param value The value.
-   * @return Its elements, or {@code null} when the value is no dataset element's component.
-   */
-  public static ContainerElements ofDatasetComponent(
-      PropagationCallGraphBuilder builder, PointerKey value) {
-    DatasetComponent component = datasetComponent(builder, value);
-    return component == null ? null : ofComponent(builder, component);
-  }
-
-  /**
    * Reads the elements of a dataset element's component; see {@link #ofValue}.
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis models the

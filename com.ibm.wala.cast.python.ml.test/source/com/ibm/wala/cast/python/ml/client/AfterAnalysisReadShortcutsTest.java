@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -19,9 +18,8 @@ import java.util.Map;
 import org.junit.Test;
 
 /**
- * A read after the analysis skips the branch-fold work whose result it discards, and a dataset
- * component's elements are read with one dispatch (<a
- * href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). Neither changes an answer.
+ * A read after the analysis skips the branch-fold work whose result it discards, without changing
+ * an answer (<a href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>).
  */
 public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
 
@@ -75,8 +73,8 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Reads, after the analysis, every value of the script's code: its generator's types, its
-   * elements, and its elements as a dataset component.
+   * Reads, after the analysis, every value of the script's code: its generator's types and its
+   * elements.
    *
    * @param builder The builder.
    * @param analysis The analysis.
@@ -101,17 +99,7 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
           types = e.getClass().getName();
         }
         ContainerElements elements = ContainerElements.ofValue(builder, value);
-        ContainerElements component = ContainerElements.ofDatasetComponent(builder, value);
-        if (ContainerElements.datasetComponent(builder, value) == null)
-          assertNull("A value that is no dataset component has no component elements.", component);
-        else
-          assertEquals(
-              "A dataset component's elements read the same either way.",
-              render(elements, analysis),
-              render(component, analysis));
-        ret.put(
-            node + " v" + vn,
-            types + " | " + render(elements, analysis) + " | " + render(component, analysis));
+        ret.put(node + " v" + vn, types + " | " + render(elements, analysis));
       }
     }
     return ret;
