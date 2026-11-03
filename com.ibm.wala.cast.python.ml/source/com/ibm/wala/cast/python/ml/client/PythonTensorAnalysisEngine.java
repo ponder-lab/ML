@@ -1006,6 +1006,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             PythonTypes.dict,
             PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
 
+    // A window's element is its receiver's with each component a dataset of it (wala/ML#164).
+    builder.setElementWindow(
+        TensorFlowTypes.DATASET_ELEMENT_WINDOW, TensorFlowTypes.DATASET, "mirrored_element");
+
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
     // A slice of the loader's array keeps aliasing the array, as before, and so does a subscript

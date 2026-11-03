@@ -534,6 +534,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private Set<TypeReference> elementStructureTypes = Collections.emptySet();
 
   /**
+   * The summary class whose call mirrors a structure into a window's element (wala/ML#164), or
+   * {@code null} when no client names one: as {@link #elementMirrorType} does, except that each
+   * leaf is copied as a dataset whose element is the copied leaf.
+   */
+  private TypeReference elementWindowType;
+
+  /** The class of a window's dataset of a leaf; see {@link #elementWindowType}. */
+  private TypeReference elementWindowDatasetType;
+
+  /** The field of a window's dataset holding its element; see {@link #elementWindowType}. */
+  private String elementWindowElementField;
+
+  /**
    * The paths from its element's root at which each mirrored key was reached, keyed by the mirror
    * key; a key reached along several paths has each. A path is a list of the catalog's own values:
    * an {@link Integer} for a tuple's position, a {@link String} for a dict's key.
@@ -561,6 +574,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     this.elementLeafType = leaf;
     this.elementStructureTypes =
         structures == null ? Collections.emptySet() : Set.copyOf(structures);
+  }
+
+  /**
+   * Names the classes of window element mirroring (wala/ML#164): a call whose callee is an instance
+   * of {@code window} mirrors its first argument's structure as {@link #setElementMirror}'s class
+   * does, except that each leaf becomes an instance of {@code dataset} whose {@code elementField}
+   * holds the copied leaf, as a window of a dataset is a structure of datasets of its components.
+   *
+   * @param window The summary class whose call mirrors a structure into a window's element.
+   * @param dataset The class of a window's dataset of a leaf.
+   * @param elementField The field of that dataset holding its element.
+   */
+  public void setElementWindow(TypeReference window, TypeReference dataset, String elementField) {
+    this.elementWindowType = window;
+    this.elementWindowDatasetType = dataset;
+    this.elementWindowElementField = elementField;
   }
 
   /**
@@ -1312,12 +1341,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private void processElementMirror(PythonInvokeInstruction inst) {
       PythonSSAPropagationCallGraphBuilder builder = getBuilder();
-      if (builder.elementMirrorType == null
+      if ((builder.elementMirrorType == null && builder.elementWindowType == null)
           || !inst.hasDef()
           || inst.getNumberOfPositionalParameters() < 3) return;
       SymbolTable symtab = ir.getSymbolTable();
       int calleeVn = inst.getUse(0);
       PointerKey calleeKey = getPointerKeyForLocal(calleeVn);
+      int datasetVn = inst.getUse(2);
+      PointerKey datasetKey = getPointerKeyForLocal(datasetVn);
+      // A dataset a summary allocates is represented implicitly, so its keys are read here.
+      Set<InstanceKey> datasets =
+          contentsAreInvariant(symtab, du, datasetVn) || system.isImplicit(datasetKey)
+              ? Set.of(getInvariantContents(symtab, du, node, datasetVn))
+              : null;
       ElementMirrorCallOperator operator =
           builder
           .new ElementMirrorCallOperator(
@@ -1325,7 +1361,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               inst.iIndex(),
               getPointerKeyForLocal(inst.getDef()),
               getPointerKeyForLocal(inst.getUse(1)),
-              getPointerKeyForLocal(inst.getUse(2)));
+              datasetKey,
+              datasets);
       if (contentsAreInvariant(symtab, du, calleeVn) || system.isImplicit(calleeKey)) {
         for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
           operator.start(key);
@@ -3035,15 +3072,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public boolean equals(Object o) {
+      // A site is equal by its position alone, so the class tells apart a window's dataset of a
+      // leaf from the leaf itself, which the same call copies from the same object (wala/ML#164).
       return o instanceof ElementMirrorKey other
           && getNode().equals(other.getNode())
           && getSite().equals(other.getSite())
+          && concreteType().equals(other.concreteType())
           && source.equals(other.source);
     }
 
     @Override
     public int hashCode() {
-      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode();
+      return ((getNode().hashCode() * 31 + getSite().hashCode()) * 31 + concreteType().hashCode())
+              * 31
+          + source.hashCode();
     }
 
     @Override
@@ -3062,15 +3104,25 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final PointerKey resultKey;
     private final PointerKey structureKey;
     private final PointerKey datasetKey;
+
+    /** The keys of the dataset when its value is represented implicitly, else {@code null}. */
+    private final Set<InstanceKey> datasets;
+
     private boolean started;
 
     private ElementMirrorCallOperator(
-        CGNode node, int pc, PointerKey resultKey, PointerKey structureKey, PointerKey datasetKey) {
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        PointerKey structureKey,
+        PointerKey datasetKey,
+        Set<InstanceKey> datasets) {
       this.node = node;
       this.pc = pc;
       this.resultKey = resultKey;
       this.structureKey = structureKey;
       this.datasetKey = datasetKey;
+      this.datasets = datasets;
     }
 
     @Override
@@ -3086,11 +3138,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @param callee A key the callee may be.
      */
     void start(InstanceKey callee) {
-      if (started || !callee.concreteType().getReference().equals(elementMirrorType)) return;
+      if (started) return;
+      TypeReference type = callee.concreteType().getReference();
+      boolean window = type.equals(elementWindowType);
+      if (!window && !type.equals(elementMirrorType)) return;
       started = true;
       getSystem()
           .newSideEffect(
-              new ElementMirrorOperator(node, pc, datasetKey, resultKey, List.of(), Set.of()),
+              new ElementMirrorOperator(
+                  node, pc, datasetKey, datasets, resultKey, List.of(), Set.of(), window),
               structureKey);
     }
 
@@ -3142,21 +3198,34 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private final Set<InstanceKey> ancestors;
 
+    /**
+     * Whether this copies a window's element (wala/ML#164): each leaf is then a dataset whose
+     * element is the copied leaf.
+     */
+    private final boolean window;
+
+    /** The keys of the dataset when its value is represented implicitly, else {@code null}. */
+    private final Set<InstanceKey> datasets;
+
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
     private ElementMirrorOperator(
         CGNode node,
         int pc,
         PointerKey datasetKey,
+        Set<InstanceKey> datasets,
         PointerKey target,
         List<Object> path,
-        Set<InstanceKey> ancestors) {
+        Set<InstanceKey> ancestors,
+        boolean window) {
       this.node = node;
       this.pc = pc;
       this.datasetKey = datasetKey;
+      this.datasets = datasets;
       this.target = target;
       this.path = path;
       this.ancestors = ancestors;
+      this.window = window;
     }
 
     @Override
@@ -3191,9 +3260,76 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               !structure);
       if (beyond) elementMirrorCutoffs.add(mirror);
       else elementMirrorPaths.computeIfAbsent(mirror, k -> HashSetFactory.make()).add(path);
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      if (!structure && window) {
+        // A window of a dataset is its structure with each component a dataset of it: the copied
+        // leaf is that dataset's element, and the dataset stands where the leaf would.
+        IClass datasetType = cha.lookupClass(elementWindowDatasetType);
+        IField element = resolveRootField(cha, elementWindowElementField);
+        if (datasetType == null || element == null) return;
+        ElementMirrorKey dataset =
+            new ElementMirrorKey(
+                node,
+                NewSiteReference.make(pc, datasetType.getReference()),
+                datasetType,
+                root,
+                datasetKey,
+                false);
+        getSystem().newConstraint(target, dataset);
+        getSystem().newConstraint(factory.getPointerKeyForInstanceField(dataset, element), mirror);
+        // A summary's dataset carries its iteration method as a field its allocation writes; this
+        // one takes it from the dataset the window call allocates, so a loop over it iterates it.
+        IField iter = resolveRootField(cha, BuiltinFunctions.ITER_METHOD_NAME);
+        if (iter == null) return;
+        PointerKey datasetIter = factory.getPointerKeyForInstanceField(dataset, iter);
+        if (datasets != null) {
+          for (InstanceKey window : datasets)
+            getSystem()
+                .newConstraint(
+                    datasetIter,
+                    assignOperator,
+                    factory.getPointerKeyForInstanceField(window, iter));
+          return;
+        }
+        getSystem()
+            .newSideEffect(
+                new UnaryOperator<PointsToSetVariable>() {
+                  @Override
+                  public byte evaluate(PointsToSetVariable l, PointsToSetVariable windows) {
+                    if (windows.getValue() != null)
+                      windows
+                          .getValue()
+                          .foreach(
+                              i ->
+                                  getSystem()
+                                      .newConstraint(
+                                          datasetIter,
+                                          assignOperator,
+                                          factory.getPointerKeyForInstanceField(
+                                              getSystem().getInstanceKey(i), iter)));
+                    return NOT_CHANGED;
+                  }
+
+                  @Override
+                  public int hashCode() {
+                    return dataset.hashCode();
+                  }
+
+                  @Override
+                  public boolean equals(Object o) {
+                    return this == o;
+                  }
+
+                  @Override
+                  public String toString() {
+                    return "window dataset iteration of " + dataset;
+                  }
+                },
+                datasetKey);
+        return;
+      }
       getSystem().newConstraint(target, mirror);
       if (!structure) return;
-      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
       getSystem()
           .newSideEffect(
               new UnaryOperator<PointsToSetVariable>() {
@@ -3229,9 +3365,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                         node,
                                         pc,
                                         datasetKey,
+                                        datasets,
                                         factory.getPointerKeyForInstanceField(mirror, f),
                                         List.copyOf(next),
-                                        Set.copyOf(above)),
+                                        Set.copyOf(above),
+                                        window),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
                   return NOT_CHANGED;
@@ -3295,7 +3433,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && pc == other.pc
           && target.equals(other.target)
           && path.equals(other.path)
-          && ancestors.equals(other.ancestors);
+          && ancestors.equals(other.ancestors)
+          && window == other.window;
     }
 
     @Override

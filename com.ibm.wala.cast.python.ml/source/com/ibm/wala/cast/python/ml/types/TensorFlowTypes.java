@@ -267,6 +267,14 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_mirror"));
 
+  /**
+   * The summary class whose call mirrors a structure into a window's element, each leaf a dataset
+   * of it (wala/ML#164).
+   */
+  public static final TypeReference DATASET_ELEMENT_WINDOW =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_window"));
+
   /** The class of a leaf of a dataset's mirrored element, a tensor (wala/ML#1190). */
   public static final TypeReference DATASET_ELEMENT_LEAF =
       TypeReference.findOrCreate(
