@@ -309,6 +309,43 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     return this.getClass() == DatasetGenerator.class;
   }
 
+  /** How deep {@link #spread} follows a chain of transformations. */
+  static final int SPREAD_DEPTH = 16;
+
+  /**
+   * One dataset spread over its receivers: each transformation whose element follows a receiver
+   * that may be several datasets applied to each of them on its own ({@link #overReceiver}),
+   * through a chain of such transformations, so that {@code (a if flag else b).shuffle(4).batch(2)}
+   * is the batch of the shuffle of {@code a} and that of {@code b}.
+   *
+   * @param builder The propagation call graph builder.
+   * @param generator The dataset's generator.
+   * @param path The transformations the chain has passed through to reach the given one.
+   * @return The datasets, the given one alone when it is not spread, or {@code null} when the chain
+   *     reaches a transformation again or is deeper than {@link #SPREAD_DEPTH}.
+   */
+  static List<TensorGenerator> spread(
+      PropagationCallGraphBuilder builder, TensorGenerator generator, List<TensorGenerator> path) {
+    if (!(generator instanceof DatasetGenerator dg && dg.elementFollowsReceiver()))
+      return List.of(generator);
+    if (path.contains(generator) || path.size() >= SPREAD_DEPTH) return null;
+    List<TensorGenerator> receivers = dg.getReceiverGenerators(builder);
+    if (receivers == null || receivers.isEmpty()) return List.of(generator);
+    path.add(generator);
+    List<TensorGenerator> spreadReceivers = new ArrayList<>();
+    for (TensorGenerator receiver : receivers) {
+      List<TensorGenerator> parts = spread(builder, receiver, path);
+      if (parts == null) return null; // Abandons the whole spread, so the path is not reused.
+      for (TensorGenerator part : parts)
+        if (!spreadReceivers.contains(part)) spreadReceivers.add(part);
+    }
+    path.remove(path.size() - 1);
+    if (spreadReceivers.size() <= 1) return List.of(generator);
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator receiver : spreadReceivers) ret.add(dg.overReceiver(receiver));
+    return ret;
+  }
+
   /**
    * This transformation applied to the given receiver alone, one of {@link #getReceiverGenerators}.
    *
