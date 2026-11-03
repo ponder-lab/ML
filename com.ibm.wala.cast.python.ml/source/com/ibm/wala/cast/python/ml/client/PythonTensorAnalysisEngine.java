@@ -249,6 +249,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private List<File> sidecarSearchPath;
 
   /**
+   * Whether a key is the holder of {@code map}'s function's arguments (wala/ML#164), whose fields
+   * hold a mirrored element's keys and are seeded as a mirrored structure's are.
+   *
+   * @param key The key.
+   * @return {@code true} iff the key is such a holder.
+   */
+  private static boolean isMapArguments(InstanceKey key) {
+    return key.concreteType().getReference().equals(TensorFlowTypes.DATASET_MAP_ARGUMENTS);
+  }
+
+  /**
    * Seeds each field a mirrored dataset element's leaf is stored in (wala/ML#1190): a field of a
    * mirrored structure, or the {@code mirrored_element} field of a dataset whose element is itself
    * a leaf. A leaf is typed by the generator of the dataset the mirror built it for, at each path
@@ -272,7 +283,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!(var.getPointerKey() instanceof InstanceFieldKey fieldKey)) continue;
       if (!(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
           && !(fieldKey.getField().getName().toString().equals("mirrored_element")
-              && isDataset(builder, fieldKey.getInstanceKey()))) continue;
+              && isDataset(builder, fieldKey.getInstanceKey()))
+          && !isMapArguments(fieldKey.getInstanceKey())) continue;
       Set<TensorType> types = null;
       for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(fieldKey)) {
         if (!(value instanceof ElementMirrorKey leaf) || !leaf.isLeaf()) continue;
@@ -1002,6 +1014,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         TensorFlowTypes.DATASET_ELEMENT_MIRROR,
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
         TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
+
+    // `map` calls its function with an exact tuple element's members as positional arguments and
+    // any other element whole, up to four positions, one call per arity (wala/ML#164).
+    builder.setElementMap(TensorFlowTypes.DATASET_MAP_SPREAD, 4, "element");
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
