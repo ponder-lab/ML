@@ -214,4 +214,12 @@ public class TestDatasetElementStructure extends AbstractTensorTest {
     assertFalse(
         "A sink the program never calls has no node.", pointsToSomething(builder, "absent"));
   }
+
+  /**
+   * A dict member whose key is digits too long for an {@code int}: the key is no tuple position.
+   */
+  @Test
+  public void testLongDigitKey() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_long_digit_key", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3))));
+  }
 }

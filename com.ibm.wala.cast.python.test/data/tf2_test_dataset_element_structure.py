@@ -169,3 +169,17 @@ for features, y in keyed():
 a_shifted = next(iter(flat_keyed))["a"] + 1.0
 assert a_shifted.shape == (2, 4) and a_shifted.dtype == tf.float32
 consume_next_member_shifted(a_shifted)
+
+
+# A dict key of digits too long for an int.
+def consume_long_digit_key(x):
+    pass
+
+
+long_keyed = tf.data.Dataset.from_tensor_slices(
+    {"12345678901234567890": tf.ones((4, 3), dtype=tf.float32)}
+)
+for long_element in long_keyed:
+    long_member = long_element["12345678901234567890"]
+    assert long_member.shape == (3,) and long_member.dtype == tf.float32
+    consume_long_digit_key(long_member)
