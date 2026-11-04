@@ -55,6 +55,10 @@ def consume_enumerated_x(x):
     pass
 
 
+def consume_zipped_enumerated_index(i):
+    pass
+
+
 def consume_zipped_x(x):
     pass
 
@@ -120,3 +124,13 @@ for i, (x, y) in tfds.load("mnist", split="train", as_supervised=True).enumerate
     consume_enumerated_index(i)
     assert x.shape == (28, 28, 1) and x.dtype == tf.uint8
     consume_enumerated_x(x)
+
+# The same enumeration zipped with another dataset: its index has no generic element to fall back on.
+for (i, (x, y)), z in tf.data.Dataset.zip(
+    (
+        tfds.load("mnist", split="train", as_supervised=True).enumerate(),
+        tf.data.Dataset.from_tensor_slices(tf.ones([60000, 4])),
+    )
+):
+    assert i.shape == () and i.dtype == tf.int64
+    consume_zipped_enumerated_index(i)

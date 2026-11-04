@@ -289,4 +289,19 @@ public class TestDatasetTfdsElement extends AbstractTensorTest {
   public void testEnumeratedX() throws Exception {
     testLeaf("consume_enumerated_x");
   }
+
+  /**
+   * The index of an enumerated supervised dataset zipped with another is an int64 scalar. Unlike
+   * the index of the enumeration alone, it has no generic element to fall back on, so it reads as
+   * no tensor unless the dataset hands its element to {@code enumerate}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testZippedEnumeratedIndex()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_zipped_enumerated_index", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
 }
