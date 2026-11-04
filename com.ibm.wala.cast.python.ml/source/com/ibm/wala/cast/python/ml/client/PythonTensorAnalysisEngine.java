@@ -1888,7 +1888,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               try {
                 TensorGenerator generator = getGenerator(src, builder);
 
-                if (generator instanceof DatasetTupleElementGenerator) {
+                // A Keras step's read of data that joins its pack with the element of the pack's
+                // dataset is such a read too (wala/ML#1213).
+                if (generator instanceof DatasetTupleElementGenerator
+                    || isFitComponentRead(generator)) {
                   sources.add(src);
                   LOGGER.fine(
                       () ->
@@ -4316,9 +4319,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // data, is pinned for the same reason (wala/ML#997): the pack's slot holds the user's
         // `x`, and when that is a dataset, its whole-element type would otherwise leak into the
         // component the step reads from it.
-        boolean fitComponent =
-            generator instanceof DatasetTupleElementGenerator selected
-                && selected.getUnderlying() instanceof FitDataGenerator;
+        boolean fitComponent = isFitComponentRead(generator);
         // A key read of a comprehension-built dict is pinned too (wala/ML#1071): the dict is
         // written
         // under a key the analysis does not know, so its fields join every key's value, and the
@@ -5392,5 +5393,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   @Override
   protected Collection<String> getSummaryClassShellSummaries() {
     return List.of("tensorflow.xml");
+  }
+
+  /**
+   * Whether a generator reads a component of the data a Keras step is handed (wala/ML#997): a
+   * selection of the pack, or a join of a selection of the pack with selections of the element of
+   * the dataset it holds, as a step's data that joins the two reads (wala/ML#1213).
+   *
+   * @param generator The generator.
+   * @return {@code true} iff it selects a component of a pack, alone or beside the element's.
+   */
+  private static boolean isFitComponentRead(TensorGenerator generator) {
+    if (generator instanceof DatasetTupleElementGenerator selected)
+      return selected.getUnderlying() instanceof FitDataGenerator;
+    if (!(generator instanceof CreatorJoin join)) return false;
+    boolean pack = false;
+    for (TensorGenerator part : join.getParts()) {
+      if (!(part instanceof DatasetTupleElementGenerator selected)) return false;
+      if (selected.getUnderlying() instanceof FitDataGenerator) pack = true;
+      else if (!(selected.getUnderlying() instanceof DatasetIteratorElementGenerator)) return false;
+    }
+    return pack;
   }
 }

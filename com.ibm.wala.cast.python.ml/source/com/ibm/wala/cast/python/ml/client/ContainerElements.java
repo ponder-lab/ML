@@ -428,7 +428,10 @@ public final class ContainerElements {
    * @return Its elements.
    */
   public static ContainerElements ofValue(PropagationCallGraphBuilder builder, PointerKey value) {
-    DatasetComponent component = datasetComponent(builder, value);
+    // A value a dataset element's copy reaches is read through the copy's objects, which carry the
+    // component's structure themselves (wala/ML#1190).
+    DatasetComponent component =
+        holdsElementCopyStructure(builder, value) ? null : datasetComponent(builder, value);
     if (component != null) return ofComponent(builder, component);
     List<ContainerElements> parts = new ArrayList<>();
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value))
@@ -446,6 +449,20 @@ public final class ContainerElements {
     }
     return new ContainerElements(
         arity, List.of(), allElements, complete, builder, merged(parts, arity));
+  }
+
+  /**
+   * Whether a value may be a structure of a dataset element's copy.
+   *
+   * @param builder The builder.
+   * @param value The value.
+   * @return {@code true} iff its points-to set holds a copy's tuple, dict or namedtuple.
+   */
+  private static boolean holdsElementCopyStructure(
+      PropagationCallGraphBuilder builder, PointerKey value) {
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(value))
+      if (key instanceof ElementMirrorKey mirror && !mirror.isLeaf()) return true;
+    return false;
   }
 
   /**

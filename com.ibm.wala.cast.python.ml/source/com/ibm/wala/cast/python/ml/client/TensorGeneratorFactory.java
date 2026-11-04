@@ -1345,6 +1345,9 @@ public class TensorGeneratorFactory {
     AllocationSiteInNode data = null;
     for (InstanceKey ik :
         withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
+      // The element a summary iterates the pack's dataset for is the same data, which the pack
+      // reads through its dataset slot (wala/ML#1213).
+      if (ik instanceof ElementMirrorKey mirror && !mirror.isLeaf()) continue;
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
         return null;
@@ -1354,6 +1357,36 @@ public class TensorGeneratorFactory {
     if (data == null) return null;
     PointsToSetVariable object = getPointsToSetVariable(objectKey, builder);
     return object == null ? null : new PackComponentRead(object, data, index);
+  }
+
+  /**
+   * The generator of a Keras step's data that a summary joins from its pack and the element of the
+   * pack's dataset (wala/ML#1213): the pack's, when every key the value holds is the pack or a
+   * structure of the element's copy.
+   *
+   * @param source The value.
+   * @param builder The builder.
+   * @return The pack's generator, or {@code null} when the value is no such join.
+   */
+  private static TensorGenerator stepDataGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (source == null || !(source.getPointerKey() instanceof LocalPointerKey lpk)) return null;
+    SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+    if (def != null && !(def instanceof SSANewInstruction)) return null;
+    AllocationSiteInNode data = null;
+    boolean copy = false;
+    for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(lpk))) {
+      if (ik instanceof ElementMirrorKey mirror && !mirror.isLeaf()) {
+        copy = true;
+        continue;
+      }
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
+        return null;
+      if (data == null) data = asin;
+      else if (!data.equals(asin)) return null;
+    }
+    return copy && data != null ? new FitDataGenerator(data.getNode(), data) : null;
   }
 
   /**
@@ -3194,6 +3227,11 @@ public class TensorGeneratorFactory {
           return new DictComprehensionComponent(source, comprehensionRead);
       }
     }
+    // The data a Keras step is handed is the pack its summary makes or the element of the dataset
+    // the pack holds, joined (wala/ML#1213), so its creator is no one allocation; read it as the
+    // pack, whose dataset slot reads that element, before the creator walk picks one of the two.
+    TensorGenerator stepData = stepDataGenerator(source, builder);
+    if (stepData != null) return stepData;
     source = findCreator(source, builder);
     // `findCreator` can return null (an unresolvable points-to variable, e.g. a null source or a
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
@@ -3264,6 +3302,9 @@ public class TensorGeneratorFactory {
         boolean allData = true;
         for (InstanceKey ik :
             withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(k))) {
+          // The element a summary iterates the pack's dataset for is the same data, which the pack
+          // reads through its dataset slot (wala/ML#1213).
+          if (ik instanceof ElementMirrorKey mirror && !mirror.isLeaf()) continue;
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
           if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference())) {
             if (data == null) data = asin;
@@ -3635,11 +3676,15 @@ public class TensorGeneratorFactory {
         // the receiver is typed by the join of its creators' generators, not by the first creator
         // the walk reaches (wala/ML#1009). Other reads keep the single-creator dispatch, so the
         // ubiquitous `self.attr` read never pays the walk.
+        // A Keras step's data is read as its pack, whatever its callers' creators (wala/ML#1213).
+        TensorGenerator stepData = stepDataGenerator(objSrc, builder);
         TensorGenerator containerGenerator =
-            node.getDU().getDef(objRef) == null
-                    && readsIntegerIndex(node, propRead.getMemberRef(), builder)
-                ? parameterGenerator(objSrc, builder, visited)
-                : tryGetGenerator(objSrc, builder, visited);
+            stepData != null
+                ? stepData
+                : node.getDU().getDef(objRef) == null
+                        && readsIntegerIndex(node, propRead.getMemberRef(), builder)
+                    ? parameterGenerator(objSrc, builder, visited)
+                    : tryGetGenerator(objSrc, builder, visited);
 
         TensorGenerator effectiveGenerator = containerGenerator;
         boolean changed = true;
