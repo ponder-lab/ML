@@ -27,6 +27,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -411,5 +412,121 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
       ret.addAll(dtypes);
     }
     return ret;
+  }
+
+  /** How deep {@link #sizesOf} follows a nested structure of datasets. */
+  private static final int SIZE_DEPTH = 8;
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A zip has as many elements as its shortest dataset (wala/ML#1203), so each size it
+   *     may have is the least of one size of each dataset it zips. The sizes are unknown when any
+   *     zipped dataset's are, or when the structure holds anything but datasets and structures of
+   *     them.
+   */
+  @Override
+  public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> datasetsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());
+    if (datasetsPTS == null || datasetsPTS.isEmpty()) return Collections.emptySet();
+    Set<Long> ret = this.sizesOf(builder, datasetsPTS, 0);
+    return ret == null ? Collections.emptySet() : ret;
+  }
+
+  /**
+   * The sizes a structure of datasets, or a dataset, may have when zipped. The members of a
+   * points-to set are alternatives, so their sizes join; the fields of one structure are zipped
+   * together, so a size is the least of one size of each.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param members The keys the zipped value may be.
+   * @param depth How many structures the walk has entered.
+   * @return The sizes, or {@code null} when some member's size is unknown.
+   */
+  private Set<Long> sizesOf(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> members, int depth) {
+    Set<Long> ret = HashSetFactory.make();
+    for (InstanceKey member : members) {
+      // The structures are those the path reads walk (wala/ML#1208), a namedtuple among them.
+      if (!isStructureOfDatasets(member) || depth >= SIZE_DEPTH) return null;
+      Set<Long> sizes = this.structureSizes(builder, member, depth);
+      if (sizes == null) return null;
+      ret.addAll(sizes);
+    }
+    return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * The sizes a structure of datasets may have when zipped: the least of one size of each field.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param structure The structure, a tuple, list, dict or namedtuple.
+   * @param depth How many structures the walk has entered.
+   * @return The sizes, or {@code null} when some field's size is unknown.
+   */
+  private Set<Long> structureSizes(
+      PropagationCallGraphBuilder builder, InstanceKey structure, int depth) {
+    OrdinalSet<InstanceKey> catalog =
+        withoutClientOnlyKeys(
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(structure)));
+    boolean keyed = structure.concreteType().getReference().equals(dict);
+    Set<Long> ret = null;
+    for (InstanceKey name : catalog) {
+      if (!(name instanceof ConstantKey<?> constant)) return null;
+      // A dict's fields are named by its keys, a positional structure's by its positions, as the
+      // path reads select them.
+      Integer index = getFieldIndex(constant);
+      Object selector = keyed ? constant.getValue() : index;
+      PointerKey fieldPK = selector == null ? null : fieldOf(builder, structure, selector);
+      if (fieldPK == null) return null;
+      Set<Long> sizes = this.fieldSizes(builder, fieldPK, depth);
+      if (sizes == null) return null;
+      if (ret == null) ret = sizes;
+      else {
+        Set<Long> least = HashSetFactory.make();
+        for (Long a : ret) for (Long b : sizes) least.add(Math.min(a, b));
+        ret = least;
+      }
+    }
+    return ret;
+  }
+
+  /**
+   * The sizes the datasets, or structures of them, a field of the zipped structure holds may have.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param fieldPK The field.
+   * @param depth How many structures the walk has entered.
+   * @return The sizes, or {@code null} when they are unknown.
+   */
+  private Set<Long> fieldSizes(PropagationCallGraphBuilder builder, PointerKey fieldPK, int depth) {
+    OrdinalSet<InstanceKey> members =
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(fieldPK));
+    if (members.isEmpty()) return null;
+    boolean structures = false;
+    boolean datasets = false;
+    for (InstanceKey member : members)
+      if (isStructureOfDatasets(member)) structures = true;
+      else datasets = true;
+    // A field that may be a dataset or a structure of datasets is left unknown.
+    if (structures && datasets) return null;
+    if (structures) return this.sizesOf(builder, members, depth + 1);
+    TensorGenerator generator;
+    try {
+      generator =
+          TensorGeneratorFactory.getGenerator(
+              builder.getPropagationSystem().findOrCreatePointsToSet(fieldPK), builder);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    if (!(generator instanceof DatasetGenerator dataset)) return null;
+    Set<Long> sizes = dataset.getDatasetSizes(builder);
+    return sizes == null || sizes.isEmpty() ? null : sizes;
   }
 }
