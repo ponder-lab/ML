@@ -93,13 +93,13 @@ jobs:
     # directory, each part named for that directory, makes Codecov's lookup the repository path.
     - name: Split the coverage report by module
       run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v7
+    # The `coverage` job uploads every job's reports to Codecov at once.
+    - name: Save the coverage reports
+      uses: actions/upload-artifact@v7
       with:
-        token: $CODECOV_TOKEN
-        slug: ponder-lab/ML
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        name: coverage-build
+        path: com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco-*.xml
+        if-no-files-found: error
   # The suite's long pole (the whole-project corpus analyses) runs beside the rest of the suite
   # instead of after it, sharded per subject so each leg stays short enough to serve as a required
   # check without restoring the old queue latency (wala/ML#755; measured: the corpus class alone is
@@ -165,11 +165,35 @@ jobs:
     # directory, each part named for that directory, makes Codecov's lookup the repository path.
     - name: Split the coverage report by module
       run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
+    # The `coverage` job uploads every job's reports to Codecov at once.
+    - name: Save the coverage reports
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-${{ matrix.shard }}
+        path: com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco-*.xml
+        if-no-files-found: error
+  # Codecov posts its statuses after each upload it receives, so an upload per job posted them
+  # from the shards' partial reports while `build` still ran. One upload of every job's reports,
+  # once all have finished, makes Codecov's first status its last; a new shard needs no count.
+  # Only one run per head uploads: a branch push also runs on `pull_request`.
+  coverage:
+    needs: [build, whole-project-fixtures]
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out wala/ML sources
+      uses: actions/checkout@v7
+    - name: Collect the coverage reports
+      uses: actions/download-artifact@v8
+      with:
+        pattern: coverage-*
+        path: coverage
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v7
       with:
         token: $CODECOV_TOKEN
         slug: ponder-lab/ML
+        directory: coverage
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   # Deploy after every test has passed: `needs` waits for `build` and every leg of
