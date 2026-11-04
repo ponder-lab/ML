@@ -116,7 +116,8 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     ContainerElements elements = ofValue("consume_pair");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertTrue(elements.isComplete());
-    assertTrue(elements.positions().isEmpty());
+    // The component is the element's copy of the pair, so each position has its key.
+    assertEquals(2, elements.positions().size());
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
         elements.positionTypes(analysis));
@@ -127,16 +128,19 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A dict component has no declared order, so it has no length, and it is no tensor, so its types
-   * are not all of it.
+   * A dict component has no declared order, so it has no length. It is the element's copy of the
+   * dict, so its entries are all its elements, each of its own type.
    */
   @Test
   public void testKeyed() {
     ContainerElements elements = ofValue("consume_keyed");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
-    assertFalse(elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+    assertTrue(elements.isComplete());
+    assertEquals(
+        Set.of(TensorType.of(FLOAT32, 2, 5), TensorType.of(INT32, 2, 3)),
+        elements.elementTypes(analysis));
+    assertFalse(elements.mayHoldNone());
   }
 
   /** A {@code from_generator} component its {@code output_signature} declares as three specs. */
@@ -198,8 +202,8 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A component {@code ((a, b), m)}: two positions, the first itself a tuple, so its types are not
-   * all of it.
+   * A component {@code ((a, b), m)}: two positions, the first itself a tuple, which is no tensor
+   * and whose members are its own elements.
    */
   @Test
   public void testNested() {
@@ -209,10 +213,14 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
         "Positions: " + elements.positionTypes(analysis) + ".",
         Set.of(TensorType.of(FLOAT32, 2, 5)),
         elements.positionTypes(analysis).get(1));
-    assertFalse(elements.isComplete());
+    assertEquals(Set.of(), elements.positionTypes(analysis).get(0));
+    assertTrue(elements.isComplete());
   }
 
-  /** A component {@code (*xs, c)}, whose length the display does not show. */
+  /**
+   * A component {@code (*xs, c)}, whose length the display does not show. Its members are the
+   * element's copy's, at positions it does not know, each of its own type (wala/ML#1212).
+   */
   @Test
   public void testStarred() {
     ContainerElements elements = ofValue("consume_starred");
@@ -220,8 +228,14 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
         "Positions: " + elements.positionTypes(analysis) + ".",
         OptionalInt.empty(),
         elements.arity());
-    assertFalse(elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+    assertEquals(
+        Set.of(
+            TensorType.of(FLOAT32, 2, 4),
+            TensorType.of(FLOAT32, 2, 3),
+            TensorType.of(FLOAT32, 2, 5)),
+        elements.elementTypes(analysis));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
   }
 
   /** A component of a {@code flat_map}'s datasets, which no declared structure reaches. */
@@ -244,22 +258,23 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
 
   /**
    * In one frame, the dataset is either a structured one or a flat one, so {@code inputs} is a
-   * tuple or a tensor: it has no length, and its types include the flat tensor's.
+   * tuple or a tensor: it has no length, and its elements are the tuple's members. The flat tensor
+   * is the value itself, not an element of it.
    */
   @Test
   public void testMixed() {
     ContainerElements elements = ofValue("consume_mixed");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
-    assertTrue(
-        "Types: " + elements.elementTypes(analysis) + ".",
-        elements.elementTypes(analysis).contains(TensorType.of(FLOAT32, 2, 6)));
-    assertFalse("Types: " + elements.elementTypes(analysis) + ".", elements.isComplete());
+    assertEquals(
+        Set.of(TensorType.of(FLOAT32, 2, 4), TensorType.of(FLOAT32, 2, 3)),
+        elements.elementTypes(analysis));
+    assertTrue(elements.isComplete());
   }
 
   /**
-   * As {@link #testMixed}, with the batching applied to the chosen dataset: no length, and the flat
-   * tensor's type.
+   * As {@link #testMixed}, with the batching applied to the chosen dataset: no length, and the
+   * tuple's members, beside an unknown type from the batch over either dataset.
    */
   @Test
   public void testMixedBatched() {
@@ -268,9 +283,11 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertTrue(
         "Types: " + elements.elementTypes(analysis) + ".",
-        elements.elementTypes(analysis).contains(TensorType.of(FLOAT32, 2, 6)));
-    assertFalse(elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+        elements
+            .elementTypes(analysis)
+            .containsAll(Set.of(TensorType.of(FLOAT32, 2, 4), TensorType.of(FLOAT32, 2, 3))));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
   }
 
   /**
@@ -285,8 +302,8 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A shuffled and batched dataset that is either a flat dataset or a pair one: no length, and its
-   * types are not all of it.
+   * A shuffled and batched dataset that is either a flat dataset or a pair one: no length, and the
+   * pair's members among its elements.
    */
   @Test
   public void testMixedShuffled() {
@@ -294,9 +311,11 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(
         "Types: " + elements.elementTypes(analysis) + ".",
-        elements.elementTypes(analysis).contains(TensorType.of(FLOAT32, 2, 6)));
-    assertFalse(elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+        elements
+            .elementTypes(analysis)
+            .containsAll(Set.of(TensorType.of(FLOAT32, 2, 4), TensorType.of(FLOAT32, 2, 3))));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
   }
 
   /**
