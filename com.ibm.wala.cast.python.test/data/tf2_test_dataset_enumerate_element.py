@@ -174,3 +174,31 @@ for (i, x), y in tf.data.Dataset.zip((floats.enumerate(), ints)):
     consume_zipped_inner_index(i)
     consume_zipped_inner_x(x)
     consume_zipped_inner_y(y)
+
+
+def consume_mapped_index(i):
+    pass
+
+
+def consume_mapped_x(x):
+    pass
+
+
+def consume_mapped_y(y):
+    pass
+
+
+def double_first(a, b):
+    return a * 2.0, b
+
+
+pairs = tf.data.Dataset.from_tensor_slices(
+    (tf.ones([6, 4]), tf.zeros([6, 2], tf.int32))
+)
+for i, (x, y) in pairs.map(double_first).enumerate():
+    assert i.shape == () and i.dtype == tf.int64
+    assert x.shape == (4,) and x.dtype == tf.float32
+    assert y.shape == (2,) and y.dtype == tf.int32
+    consume_mapped_index(i)
+    consume_mapped_x(x)
+    consume_mapped_y(y)

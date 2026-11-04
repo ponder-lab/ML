@@ -543,6 +543,78 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private Set<TypeReference> elementStructureTypes = Collections.emptySet();
 
   /**
+   * The summary class whose call spreads a dataset's element into the arguments of {@code map}'s
+   * function, one call per arity, and mirrors each call's return into the mapped dataset's element
+   * once that arity occurs (wala/ML#164), or {@code null} when no client names one; see {@link
+   * MapSpreadOperator}.
+   */
+  private TypeReference elementMapSpreadType;
+
+  /**
+   * The library summary classes whose calls pass a function exactly the program's positional
+   * arguments, not padded to a fixed count, so a {@code *args} pack such a call allocates has their
+   * length (wala/ML#164); see {@link #setExactArityCallers}.
+   */
+  private Set<TypeReference> exactArityCallers = Collections.emptySet();
+
+  /**
+   * Names the library summary classes whose calls pass exactly the program's positional arguments,
+   * as {@code map}'s one call per arity does (wala/ML#164), so a {@code *args} pack they allocate
+   * has a known length.
+   *
+   * @param callers The summary classes.
+   */
+  public void setExactArityCallers(Set<TypeReference> callers) {
+    this.exactArityCallers = callers == null ? Collections.emptySet() : Set.copyOf(callers);
+  }
+
+  /** The most positional arguments {@link #elementMapSpreadType} spreads a tuple element into. */
+  private int elementMapMaxArity;
+
+  /**
+   * The field of a mapped dataset holding its function's returns; see {@link MapSpreadOperator}.
+   */
+  private String elementMapReturnField;
+
+  /** The field of a mapped dataset holding its marker that its element is not mirrored. */
+  private static final String ELEMENT_MAP_LEGACY_FIELD = "legacy_element";
+
+  /**
+   * The mapped datasets whose receiver's element is a tuple longer than {@code map}'s calls spread
+   * into, so their element is unknown (wala/ML#164).
+   */
+  private final Set<InstanceKey> mapOverflowDatasets = HashSetFactory.make();
+
+  /**
+   * Whether a mapped dataset's element is unknown because its receiver's element is a tuple longer
+   * than {@code map}'s calls spread into (wala/ML#164).
+   *
+   * @param dataset The mapped dataset's key.
+   * @return {@code true} iff its element is unknown for that reason.
+   */
+  public boolean isMapOverflow(InstanceKey dataset) {
+    return mapOverflowDatasets.contains(dataset);
+  }
+
+  /**
+   * The field of the holder {@link #elementMapSpreadType}'s call fills that holds positional
+   * argument {@code i} of the call of arity {@code n}.
+   *
+   * @param n The arity.
+   * @param i The position.
+   * @return The field's name.
+   */
+  public static String mapArgumentField(int n, int i) {
+    return "argument_" + n + "_" + i;
+  }
+
+  /**
+   * The field of the holder {@link #elementMapSpreadType}'s call fills that holds the function's
+   * copy of the element's containers.
+   */
+  public static final String MAP_RECEIVED_FIELD = "received";
+
+  /**
    * The summary class whose call mirrors a structure of datasets into a zip's element
    * (wala/ML#164), or {@code null} when no client names one: as {@link #elementMirrorType} does,
    * except that a dataset in the structure is replaced by its own element.
@@ -589,6 +661,26 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     this.elementLeafType = leaf;
     this.elementStructureTypes =
         structures == null ? Collections.emptySet() : Set.copyOf(structures);
+  }
+
+  /**
+   * Names the class of {@code map}'s spreading (wala/ML#164): a call {@code spread(element, holder,
+   * legacy, argument, r_1, ..., r_max, dataset)} whose callee is an instance of {@code spread}
+   * spreads each key of {@code element} as {@code tf.data} does. An exact tuple of {@code n}
+   * members fills the holder's {@link #mapArgumentField fields} for arity {@code n}, one per
+   * member, and any other key fills the single argument of arity 1 whole. Once arity {@code n}
+   * occurs, the return {@code r_n} becomes the call's result and is stored on {@code dataset}'s
+   * {@code returnField}. A receiver whose element is not mirrored, which {@code legacy} marks,
+   * passes {@code argument} to arity 1 and stores {@code r_1} unmirrored.
+   *
+   * @param spread The summary class whose call spreads.
+   * @param maxArity The most positional arguments a tuple is spread into.
+   * @param returnField The field of the mapped dataset holding the function's returns.
+   */
+  public void setElementMap(TypeReference spread, int maxArity, String returnField) {
+    this.elementMapSpreadType = spread;
+    this.elementMapMaxArity = maxArity;
+    this.elementMapReturnField = returnField;
   }
 
   /**
@@ -1459,8 +1551,61 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processDictMethod(inst);
       processNamedTupleConstruction(inst);
       processElementMirror(inst);
+      processMapSpread(inst);
       processElementDeclared(inst);
       processElementSupervised(inst);
+    }
+
+    /**
+     * Spreads a dataset's element into {@code map}'s function where a call's callee may be the
+     * spread class (wala/ML#164); see {@link MapSpreadOperator}.
+     *
+     * @param inst The call.
+     */
+    private void processMapSpread(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      int max = builder.elementMapMaxArity;
+      if (builder.elementMapSpreadType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 6 + max) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      PointerKey calleeKey = getPointerKeyForLocal(calleeVn);
+      List<PointerKey> returns = new ArrayList<>();
+      for (int n = 1; n <= max; n++) returns.add(getPointerKeyForLocal(inst.getUse(4 + n)));
+      MapSpreadOperator operator =
+          builder
+          .new MapSpreadOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              getPointerKeyForLocal(inst.getUse(1)),
+              invariantKeys(symtab, inst.getUse(2)),
+              getPointerKeyForLocal(inst.getUse(3)),
+              getPointerKeyForLocal(inst.getUse(4)),
+              returns,
+              getPointerKeyForLocal(inst.getUse(5 + max)),
+              invariantKeys(symtab, inst.getUse(5 + max)));
+      if (contentsAreInvariant(symtab, du, calleeVn) || system.isImplicit(calleeKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+          operator.start(key);
+        return;
+      }
+      system.newSideEffect(operator, calleeKey);
+    }
+
+    /**
+     * The keys of a value a summary allocates, which is represented implicitly.
+     *
+     * @param symtab The symbol table.
+     * @param vn The value.
+     * @return Its keys, or {@code null} when the value is not implicit.
+     */
+    private Set<InstanceKey> invariantKeys(SymbolTable symtab, int vn) {
+      PointerKey key = getPointerKeyForLocal(vn);
+      return contentsAreInvariant(symtab, du, vn) || system.isImplicit(key)
+          ? Set.of(getInvariantContents(symtab, du, node, vn))
+          : null;
     }
 
     /**
@@ -3701,6 +3846,339 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Spreads a dataset's element into the arguments of {@code map}'s function as {@code tf.data}
+   * does, and mirrors the function's return into the mapped dataset's element (wala/ML#164); see
+   * {@link #setElementMap}. Each arity has its own call in the summary, so the function's defaulted
+   * and variadic parameters bind as they do at run time, and a key reaches an argument as an
+   * instance, not along an assignment from the whole element. Equal for the same call.
+   */
+  public final class MapSpreadOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final PointerKey elementKey;
+    private final Set<InstanceKey> holders;
+    private final PointerKey legacyKey;
+    private final PointerKey argumentKey;
+    private final List<PointerKey> returns;
+    private final PointerKey datasetKey;
+    private final Set<InstanceKey> datasets;
+    private final Set<Integer> arities = HashSetFactory.make();
+    private final Set<InstanceKey> spread = HashSetFactory.make();
+    private boolean started;
+    private boolean legacy;
+    private boolean overflowed;
+
+    private MapSpreadOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        PointerKey elementKey,
+        Set<InstanceKey> holders,
+        PointerKey legacyKey,
+        PointerKey argumentKey,
+        List<PointerKey> returns,
+        PointerKey datasetKey,
+        Set<InstanceKey> datasets) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.elementKey = elementKey;
+      this.holders = holders;
+      this.legacyKey = legacyKey;
+      this.argumentKey = argumentKey;
+      this.returns = returns;
+      this.datasetKey = datasetKey;
+      this.datasets = datasets;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> start(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Starts spreading when a key the callee may be is the spread class.
+     *
+     * @param callee A key the callee may be.
+     */
+    void start(InstanceKey callee) {
+      if (started
+          || holders == null
+          || datasets == null
+          || !callee.concreteType().getReference().equals(elementMapSpreadType)) return;
+      started = true;
+      // `tf.data` hands the function a fresh structure of the element's tensors, so the function
+      // reads a copy of the element's containers sharing its leaves, and a container it mutates is
+      // its own, not the receiver's element.
+      IField received = resolveRootField(getClassHierarchy(), MAP_RECEIVED_FIELD);
+      if (received == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey holder : holders) {
+        PointerKey copy = factory.getPointerKeyForInstanceField(holder, received);
+        getSystem()
+            .newSideEffect(
+                new ElementMirrorOperator(
+                    node, pc, datasetKey, null, copy, List.of(), Set.of(), false, true),
+                elementKey);
+        spreadFrom(copy);
+      }
+      watchLegacy();
+    }
+
+    /**
+     * Spreads each key of the function's copy of the element as it arrives.
+     *
+     * @param copy The holder's field holding the copy.
+     */
+    private void spreadFrom(PointerKey copy) {
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                @Override
+                public byte evaluate(PointsToSetVariable l, PointsToSetVariable element) {
+                  if (element.getValue() != null)
+                    element.getValue().foreach(i -> spread(getSystem().getInstanceKey(i)));
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return MapSpreadOperator.this.hashCode() * 31 + 1;
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "map spread of the element at " + pc + " in " + node;
+                }
+              },
+              copy);
+    }
+
+    /** Passes the legacy argument once the receiver's marker says its element is not mirrored. */
+    private void watchLegacy() {
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                @Override
+                public byte evaluate(PointsToSetVariable l, PointsToSetVariable marker) {
+                  if (marker.getValue() != null && !marker.getValue().isEmpty()) passLegacy();
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return MapSpreadOperator.this.hashCode() * 31 + 2;
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "map spread of the legacy argument at " + pc + " in " + node;
+                }
+              },
+              legacyKey);
+    }
+
+    /**
+     * Spreads one key of the element: an exact tuple into the arguments of its arity, as its
+     * catalogued positions arrive, and any other key whole into the single argument.
+     *
+     * @param key The key.
+     */
+    private void spread(InstanceKey key) {
+      if (!spread.add(key)) return;
+      IClassHierarchy cha = getClassHierarchy();
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClass tuple = cha.lookupClass(PythonTypes.tuple);
+      if (tuple == null || !key.concreteType().equals(tuple)) {
+        bind(1, 0, key);
+        return;
+      }
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                private final Set<Integer> positions = HashSetFactory.make();
+
+                @Override
+                public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+                  if (catalog.getValue() == null) return NOT_CHANGED;
+                  catalog
+                      .getValue()
+                      .foreach(
+                          c -> {
+                            if (getSystem().getInstanceKey(c) instanceof ConstantKey<?> name
+                                && name.getValue() instanceof Number number
+                                && number.longValue() >= 0
+                                && number.longValue() <= Integer.MAX_VALUE)
+                              positions.add(number.intValue());
+                          });
+                  // The tuple's length is its positions so far, so a copy whose catalog fills over
+                  // several rounds may first activate a lower arity, which only over-approximates.
+                  // A tuple longer than the summary's calls spread into makes the mapped element
+                  // unknown, since no call binds its members as the function receives them.
+                  int n = positions.size();
+                  if (n < 1) return NOT_CHANGED;
+                  if (n > elementMapMaxArity) {
+                    overflow();
+                    return NOT_CHANGED;
+                  }
+                  for (int i = 0; i < n; i++) {
+                    IField position = resolveRootField(cha, Integer.toString(i));
+                    if (position == null) continue;
+                    bindField(n, i, factory.getPointerKeyForInstanceField(key, position));
+                  }
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return key.hashCode();
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "map spread of " + key;
+                }
+              },
+              factory.getPointerKeyForObjectCatalog(key));
+    }
+
+    /**
+     * Makes the mapped dataset's element unknown, for a tuple element longer than the summary's
+     * calls spread into: the dataset is marked as not mirrored, so an iterator over it allocates
+     * the element its generator types, and the generator reads it as unknown ({@link
+     * #isMapOverflow}).
+     */
+    private void overflow() {
+      if (overflowed) return;
+      overflowed = true;
+      IField legacyField = resolveRootField(getClassHierarchy(), ELEMENT_MAP_LEGACY_FIELD);
+      if (legacyField == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey dataset : datasets) {
+        mapOverflowDatasets.add(dataset);
+        // Any key marks the field non-empty; the holder is one this call already allocated.
+        for (InstanceKey holder : holders)
+          getSystem()
+              .newConstraint(factory.getPointerKeyForInstanceField(dataset, legacyField), holder);
+      }
+    }
+
+    /**
+     * Passes the argument a receiver whose element is not mirrored gives the function, its legacy
+     * one, to the single argument, and stores that call's return unmirrored.
+     */
+    private void passLegacy() {
+      if (legacy) return;
+      legacy = true;
+      IField field = resolveRootField(getClassHierarchy(), mapArgumentField(1, 0));
+      IField returned = resolveRootField(getClassHierarchy(), elementMapReturnField);
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      if (field != null)
+        for (InstanceKey holder : holders)
+          getSystem()
+              .newConstraint(
+                  factory.getPointerKeyForInstanceField(holder, field),
+                  assignOperator,
+                  argumentKey);
+      if (returned != null)
+        for (InstanceKey dataset : datasets)
+          getSystem()
+              .newConstraint(
+                  factory.getPointerKeyForInstanceField(dataset, returned),
+                  assignOperator,
+                  returns.get(0));
+    }
+
+    /**
+     * Binds a key to argument {@code i} of the call of arity {@code n} and activates that arity.
+     *
+     * @param n The arity.
+     * @param i The position.
+     * @param key The key.
+     */
+    private void bind(int n, int i, InstanceKey key) {
+      IField field = resolveRootField(getClassHierarchy(), mapArgumentField(n, i));
+      if (field == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey holder : holders)
+        getSystem().newConstraint(factory.getPointerKeyForInstanceField(holder, field), key);
+      activate(n);
+    }
+
+    /**
+     * Binds a tuple's position to argument {@code i} of the call of arity {@code n} and activates
+     * that arity.
+     *
+     * @param n The arity.
+     * @param i The position.
+     * @param position The tuple's field at the position.
+     */
+    private void bindField(int n, int i, PointerKey position) {
+      IField field = resolveRootField(getClassHierarchy(), mapArgumentField(n, i));
+      if (field == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey holder : holders)
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForInstanceField(holder, field), assignOperator, position);
+      activate(n);
+    }
+
+    /**
+     * Takes the return of the call of arity {@code n} as the mapped dataset's element once that
+     * arity occurs, and stores it on the mapped dataset for its generator.
+     *
+     * @param n The arity.
+     */
+    private void activate(int n) {
+      if (!arities.add(n)) return;
+      PointerKey returned = returns.get(n - 1);
+      // The mapped element is what the function returns, not a copy: unlike a structure a dataset
+      // is built from, it is not sliced, and the function's own dataflow types its members.
+      getSystem().newConstraint(resultKey, assignOperator, returned);
+      IField field = resolveRootField(getClassHierarchy(), elementMapReturnField);
+      if (field == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey dataset : datasets)
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForInstanceField(dataset, field), assignOperator, returned);
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof MapSpreadOperator other && node.equals(other.node) && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "map spread call at " + pc + " in " + node;
+    }
+  }
+
+  /**
    * Makes the element of an enumerated dataset (wala/ML#1190), {@code (index, element)} at run
    * time: a tuple, allocated at the call, whose position 0 is a leaf standing for the index and
    * whose position 1 mirrors the receiver's mirrored element at the paths below {@code [1]}. Both
@@ -3923,6 +4401,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final Set<InstanceKey> ancestors;
 
     /**
+     * Whether a leaf is shared rather than copied, so only the containers are fresh, as {@code map}
+     * hands its function a fresh structure of the same tensors (wala/ML#164).
+     */
+    private final boolean shareLeaves;
+
+    /**
      * Whether this copies a zip's element (wala/ML#164): a dataset in the structure is then
      * replaced by the copy of its element.
      */
@@ -3945,6 +4429,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         List<Object> path,
         Set<InstanceKey> ancestors,
         boolean zip) {
+      this(node, pc, datasetKey, zipDatasets, target, path, ancestors, zip, false);
+    }
+
+    private ElementMirrorOperator(
+        CGNode node,
+        int pc,
+        PointerKey datasetKey,
+        Set<InstanceKey> zipDatasets,
+        PointerKey target,
+        List<Object> path,
+        Set<InstanceKey> ancestors,
+        boolean zip,
+        boolean shareLeaves) {
       this.node = node;
       this.pc = pc;
       this.datasetKey = datasetKey;
@@ -3953,6 +4450,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       this.path = path;
       this.ancestors = ancestors;
       this.zip = zip;
+      this.shareLeaves = shareLeaves;
     }
 
     @Override
@@ -3963,6 +4461,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     private void copy(InstanceKey source) {
       if (!copied.add(source)) return;
+      // A None member is no tensor and has no members, so the element holds it as it is.
+      if (isNoneConstant(source)) {
+        getSystem().newConstraint(target, source);
+        return;
+      }
       IClassHierarchy cha = getClassHierarchy();
       InstanceKey original = source;
       while (original instanceof ElementMirrorKey copy) original = copy.getSource();
@@ -3975,6 +4478,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         return;
       }
       boolean structure = !beyond && isStructure(source.concreteType());
+      if (!structure && shareLeaves) {
+        getSystem().newConstraint(target, source);
+        return;
+      }
       IClass type = structure ? source.concreteType() : cha.lookupClass(elementLeafType);
       if (type == null) return;
       // A copy is identified by the object it ultimately copies, not by the copy it was made from:
@@ -4036,7 +4543,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                         factory.getPointerKeyForInstanceField(mirror, f),
                                         List.copyOf(next),
                                         Set.copyOf(above),
-                                        zip),
+                                        zip,
+                                        shareLeaves),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
                   return NOT_CHANGED;
@@ -4146,7 +4654,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && target.equals(other.target)
           && path.equals(other.path)
           && ancestors.equals(other.ancestors)
-          && zip == other.zip;
+          && zip == other.zip
+          && shareLeaves == other.shareLeaves;
     }
 
     @Override
@@ -5840,7 +6349,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           // arguments to a fixed count (`strategy.run`, `tf.while_loop`), so its positions are not
           // the program's.
           int length =
-              this.call.firstStarredPosition() < 0 && !isLibrarySummaryBody(this.caller.getMethod())
+              this.call.firstStarredPosition() < 0
+                      && (!isLibrarySummaryBody(this.caller.getMethod())
+                          || exactArityCallers.contains(
+                              this.caller.getMethod().getDeclaringClass().getReference()))
                   ? Math.max(
                       0, this.call.getNumberOfPositionalParameters() - Math.max(1, this.varargs))
                   : -1;
