@@ -72,4 +72,82 @@ public class TestDatasetJoinedElement extends AbstractTensorTest {
   public void testNamed() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_named", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
   }
+
+  /**
+   * A batch of a dataset that may be either of two datasets of different dtypes pairs each shape
+   * with its own dataset's dtype (<a
+   * href="https://github.com/wala/ML/issues/1207">wala/ML#1207</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testCrossedBatched() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_crossed_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(INT_32, 2, 3))));
+  }
+
+  /**
+   * A batch of a pass-through transformation of a dataset that may be either of two datasets of
+   * different dtypes pairs each shape with its own dataset's dtype (<a
+   * href="https://github.com/wala/ML/issues/1207">wala/ML#1207</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testCrossedShuffledBatched()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_crossed_shuffled_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(INT_32, 2, 3))));
+  }
+
+  /**
+   * A member of a batch of a dataset that may be either of two datasets of different member dtypes
+   * pairs each shape with its own dataset's dtype (<a
+   * href="https://github.com/wala/ML/issues/1207">wala/ML#1207</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testCrossedMemberBatched()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_crossed_member_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), TensorType.of(INT_32, 2, 5))));
+  }
+
+  /**
+   * A padded batch of a dataset that may be either of two datasets of different dtypes pairs each
+   * shape with its own dataset's dtype (<a
+   * href="https://github.com/wala/ML/issues/1207">wala/ML#1207</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testCrossedPadded() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_crossed_padded",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(INT_32, 2, 3))));
+  }
 }
