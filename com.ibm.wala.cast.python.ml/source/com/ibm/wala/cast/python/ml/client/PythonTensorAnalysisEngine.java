@@ -1054,6 +1054,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // Those calls pass exactly the element's members, so a variadic function's pack has their
     // count.
     builder.setExactArityCallers(Set.of(TensorFlowTypes.DATASET_MAP_TYPE));
+
+    // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
+    // element (wala/ML#1190).
+    builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
+
     // A zip's element is the structure of datasets it is given, each replaced by its element
     // (wala/ML#164).
     builder.setElementZip(

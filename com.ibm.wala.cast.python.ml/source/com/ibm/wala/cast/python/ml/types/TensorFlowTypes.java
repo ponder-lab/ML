@@ -269,6 +269,14 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_mirror"));
 
   /**
+   * The summary class whose call makes the element of an enumerated dataset, a tuple of an index
+   * and the receiver's mirrored element (wala/ML#1190).
+   */
+  public static final TypeReference DATASET_ELEMENT_ENUMERATE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_enumerate"));
+
+  /**
    * The summary class whose call mirrors a structure of datasets into a zip's element, each dataset
    * replaced by its own element (wala/ML#164).
    */

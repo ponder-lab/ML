@@ -72,6 +72,7 @@ import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKeyFactory;
+import com.ibm.wala.ipa.callgraph.propagation.NormalAllocationInNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
@@ -529,6 +530,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private TypeReference elementMirrorType;
 
+  /**
+   * The summary class whose call makes an enumerated dataset's element (wala/ML#1190), or {@code
+   * null} when no client names one; see {@link EnumeratedElementOperator}.
+   */
+  private TypeReference elementEnumerateType;
+
   /** The class of a mirrored structure's leaves; see {@link ElementMirrorOperator}. */
   private TypeReference elementLeafType;
 
@@ -674,6 +681,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     this.elementMapSpreadType = spread;
     this.elementMapMaxArity = maxArity;
     this.elementMapReturnField = returnField;
+  }
+
+  /**
+   * Names the summary class whose call makes the element of an enumerated dataset (wala/ML#1190): a
+   * call whose callee is an instance of {@code enumerate} returns a tuple whose position 0 is a
+   * leaf, the index, and whose position 1 mirrors its first argument, the receiver's mirrored
+   * element, with the second argument as the dataset whose element it is. It is a mirror call in
+   * every other respect; see {@link #setElementMirror}.
+   *
+   * @param enumerate The summary class whose call makes the element.
+   */
+  public void setElementEnumerate(TypeReference enumerate) {
+    this.elementEnumerateType = enumerate;
   }
 
   /**
@@ -1547,7 +1567,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private void processElementMirror(PythonInvokeInstruction inst) {
       PythonSSAPropagationCallGraphBuilder builder = getBuilder();
-      if ((builder.elementMirrorType == null && builder.elementZipType == null)
+      if ((builder.elementMirrorType == null
+              && builder.elementEnumerateType == null
+              && builder.elementZipType == null)
           || !inst.hasDef()
           || inst.getNumberOfPositionalParameters() < 3) return;
       SymbolTable symtab = ir.getSymbolTable();
@@ -3472,6 +3494,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     void start(InstanceKey callee) {
       if (started) return;
       TypeReference type = callee.concreteType().getReference();
+      if (type.equals(elementEnumerateType)) {
+        started = true;
+        getSystem()
+            .newSideEffect(
+                new EnumeratedElementOperator(
+                    node, pc, datasetKey, resultKey, structureKey, callee),
+                structureKey);
+        return;
+      }
       boolean zip = type.equals(elementZipType);
       if (!zip && !type.equals(elementMirrorType)) return;
       started = true;
@@ -3833,6 +3864,118 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "map spread call at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Makes the element of an enumerated dataset (wala/ML#1190), {@code (index, element)} at run
+   * time: a tuple, allocated at the call, whose position 0 is a leaf standing for the index and
+   * whose position 1 mirrors the receiver's mirrored element at the paths below {@code [1]}. Both
+   * are typed by the enumerated dataset's generator at their paths, as any mirrored key is. The
+   * tuple is made once the receiver's element holds a key, so a receiver whose element is not
+   * mirrored leaves this one unmirrored too, as a {@code batch} over it does. Keyed by the call and
+   * the callee, which no other mirror copies.
+   */
+  private final class EnumeratedElementOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey datasetKey;
+    private final PointerKey resultKey;
+    private final PointerKey elementKey;
+    private final InstanceKey callee;
+    private boolean made;
+
+    private EnumeratedElementOperator(
+        CGNode node,
+        int pc,
+        PointerKey datasetKey,
+        PointerKey resultKey,
+        PointerKey elementKey,
+        InstanceKey callee) {
+      this.node = node;
+      this.pc = pc;
+      this.datasetKey = datasetKey;
+      this.resultKey = resultKey;
+      this.elementKey = elementKey;
+      this.callee = callee;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (made || rhs.getValue() == null || rhs.getValue().isEmpty()) return NOT_CHANGED;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass tupleClass = cha.lookupClass(PythonTypes.tuple);
+      IClass leafClass = cha.lookupClass(elementLeafType);
+      IField zero = resolveRootField(cha, "0");
+      IField one = resolveRootField(cha, "1");
+      if (tupleClass == null || leafClass == null || zero == null || one == null)
+        return NOT_CHANGED;
+      made = true;
+      ElementMirrorKey tuple =
+          new ElementMirrorKey(
+              node,
+              NewSiteReference.make(pc, PythonTypes.tuple),
+              tupleClass,
+              callee,
+              datasetKey,
+              false);
+      // A key's site compares by its program counter alone, so the index copies a source of its
+      // own, the value the enumeration makes at the call, and is a key distinct from the tuple.
+      NewSiteReference indexSite = NewSiteReference.make(pc, elementLeafType);
+      ElementMirrorKey index =
+          new ElementMirrorKey(
+              node,
+              indexSite,
+              leafClass,
+              new NormalAllocationInNode(node, indexSite, leafClass),
+              datasetKey,
+              true);
+      elementMirrorPaths.computeIfAbsent(tuple, k -> HashSetFactory.make()).add(List.of());
+      elementMirrorPaths.computeIfAbsent(index, k -> HashSetFactory.make()).add(List.of(0));
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      PointerKey catalog = factory.getPointerKeyForObjectCatalog(tuple);
+      getSystem().newConstraint(resultKey, tuple);
+      getSystem()
+          .newConstraint(
+              catalog, getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0));
+      getSystem()
+          .newConstraint(
+              catalog, getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(1), 1));
+      getSystem().newConstraint(factory.getPointerKeyForInstanceField(tuple, zero), index);
+      // The receiver's element, copied below position 1, so its members keep their own objects and
+      // are typed at their paths in this dataset's element.
+      getSystem()
+          .newSideEffect(
+              new ElementMirrorOperator(
+                  node,
+                  pc,
+                  datasetKey,
+                  null,
+                  factory.getPointerKeyForInstanceField(tuple, one),
+                  List.of(1),
+                  Set.of(callee),
+                  false),
+              elementKey);
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + resultKey.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof EnumeratedElementOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && resultKey.equals(other.resultKey)
+          && callee.equals(other.callee);
+    }
+
+    @Override
+    public String toString() {
+      return "enumerated element at " + pc + " into " + resultKey;
     }
   }
 
