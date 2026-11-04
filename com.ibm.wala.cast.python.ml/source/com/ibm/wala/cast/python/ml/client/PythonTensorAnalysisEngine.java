@@ -1018,6 +1018,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // `map` calls its function with an exact tuple element's members as positional arguments and
     // any other element whole, up to four positions, one call per arity (wala/ML#164).
     builder.setElementMap(TensorFlowTypes.DATASET_MAP_SPREAD, 4, "element");
+    // Those calls pass exactly the element's members, so a variadic function's pack has their
+    // count.
+    builder.setExactArityCallers(Set.of(TensorFlowTypes.DATASET_MAP_TYPE));
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).

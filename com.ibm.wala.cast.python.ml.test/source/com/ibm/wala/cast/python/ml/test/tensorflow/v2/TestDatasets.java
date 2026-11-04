@@ -2887,10 +2887,10 @@ public class TestDatasets extends AbstractTensorTest {
 
   /**
    * A path read into the element of a {@code map} whose returns pass different parameters through,
-   * the pair or the label: the element is not one fixed component of the receiver's element, so its
-   * first part reads as a tensor of unknown type, not as the pair's first component (wala/ML#1088).
-   * At run time the fixture's flag picks the pair, whose first component is {@code (4,)}; the
-   * analysis cannot read the flag.
+   * the pair or the label: the element is the function's return, the pair or the label
+   * (wala/ML#164), so its first part is the pair's first component, {@code (4,)}, or a row of the
+   * {@code (5,)} label, {@code ()}. At run time the fixture's flag picks the pair; the analysis
+   * cannot read the flag, so both are sound.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2905,7 +2905,7 @@ public class TestDatasets extends AbstractTensorTest {
         "consume_first",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4), TensorType.of(FLOAT_32))));
   }
 
   /**

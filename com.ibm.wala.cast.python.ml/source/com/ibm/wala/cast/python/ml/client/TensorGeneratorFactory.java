@@ -3043,6 +3043,21 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether a value may be a leaf of a dataset's mirrored element (wala/ML#1190), a tensor.
+   *
+   * @param builder The propagation call graph builder.
+   * @param value The value, possibly {@code null}.
+   * @return {@code true} iff its points-to set holds a mirrored leaf.
+   */
+  private static boolean holdsMirroredLeaf(
+      PropagationCallGraphBuilder builder, PointsToSetVariable value) {
+    if (value == null || value.getPointerKey() == null) return false;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey()))
+      if (ik instanceof ElementMirrorKey mirror && mirror.isLeaf()) return true;
+    return false;
+  }
+
+  /**
    * Whether a value is the result of a call in its node.
    *
    * @param source The value.
@@ -3627,6 +3642,13 @@ public class TensorGeneratorFactory {
             LOGGER.fine(() -> "Found a dataset element component at path " + path + ".");
             return new DatasetTupleElementGenerator(objSrc, tep, path);
           }
+          // A component already selected that is a mirrored leaf, a tensor, is subscripted as a
+          // tensor: an index reads a row of it, not the element's own position (wala/ML#164).
+          if (!basePath.isEmpty()
+              && propertyIndex != null
+              && holdsMirroredLeaf(builder, objSrc)
+              && !tep.isStructureAt(builder, basePath))
+            return new TensorElementGenerator(source, containerGenerator);
         }
 
         if (effectiveGenerator instanceof TupleElementProvider tep && propertyIndex != null) {

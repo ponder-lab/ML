@@ -541,6 +541,24 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private TypeReference elementMapSpreadType;
 
+  /**
+   * The library summary classes whose calls pass a function exactly the program's positional
+   * arguments, not padded to a fixed count, so a {@code *args} pack such a call allocates has their
+   * length (wala/ML#164); see {@link #setExactArityCallers}.
+   */
+  private Set<TypeReference> exactArityCallers = Collections.emptySet();
+
+  /**
+   * Names the library summary classes whose calls pass exactly the program's positional arguments,
+   * as {@code map}'s one call per arity does (wala/ML#164), so a {@code *args} pack they allocate
+   * has a known length.
+   *
+   * @param callers The summary classes.
+   */
+  public void setExactArityCallers(Set<TypeReference> callers) {
+    this.exactArityCallers = callers == null ? Collections.emptySet() : Set.copyOf(callers);
+  }
+
   /** The most positional arguments {@link #elementMapSpreadType} spreads a tuple element into. */
   private int elementMapMaxArity;
 
@@ -560,6 +578,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public static String mapArgumentField(int n, int i) {
     return "argument_" + n + "_" + i;
   }
+
+  /**
+   * The field of the holder {@link #elementMapSpreadType}'s call fills that holds the function's
+   * copy of the element's containers.
+   */
+  public static final String MAP_RECEIVED_FIELD = "received";
 
   /**
    * The paths from its element's root at which each mirrored key was reached, keyed by the mirror
@@ -3277,6 +3301,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           || datasets == null
           || !callee.concreteType().getReference().equals(elementMapSpreadType)) return;
       started = true;
+      // `tf.data` hands the function a fresh structure of the element's tensors, so the function
+      // reads a copy of the element's containers sharing its leaves, and a container it mutates is
+      // its own, not the receiver's element.
+      IField received = resolveRootField(getClassHierarchy(), MAP_RECEIVED_FIELD);
+      if (received == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey holder : holders) {
+        PointerKey copy = factory.getPointerKeyForInstanceField(holder, received);
+        getSystem()
+            .newSideEffect(
+                new ElementMirrorOperator(
+                    node, pc, datasetKey, copy, List.of(), Set.of(), false, true),
+                elementKey);
+        spreadFrom(copy);
+      }
+      watchLegacy();
+    }
+
+    /**
+     * Spreads each key of the function's copy of the element as it arrives.
+     *
+     * @param copy The holder's field holding the copy.
+     */
+    private void spreadFrom(PointerKey copy) {
       getSystem()
           .newSideEffect(
               new UnaryOperator<PointsToSetVariable>() {
@@ -3302,7 +3350,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                   return "map spread of the element at " + pc + " in " + node;
                 }
               },
-              elementKey);
+              copy);
+    }
+
+    /** Passes the legacy argument once the receiver's marker says its element is not mirrored. */
+    private void watchLegacy() {
       getSystem()
           .newSideEffect(
               new UnaryOperator<PointsToSetVariable>() {
@@ -3528,6 +3580,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private final boolean rootListAsStructure;
 
+    /**
+     * Whether a leaf is shared rather than copied, so only the containers are fresh, as {@code map}
+     * hands its function a fresh structure of the same tensors (wala/ML#164).
+     */
+    private final boolean shareLeaves;
+
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
     private ElementMirrorOperator(
@@ -3537,7 +3595,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         PointerKey target,
         List<Object> path,
         Set<InstanceKey> ancestors) {
-      this(node, pc, datasetKey, target, path, ancestors, false);
+      this(node, pc, datasetKey, target, path, ancestors, false, false);
     }
 
     private ElementMirrorOperator(
@@ -3547,7 +3605,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         PointerKey target,
         List<Object> path,
         Set<InstanceKey> ancestors,
-        boolean rootListAsStructure) {
+        boolean rootListAsStructure,
+        boolean shareLeaves) {
       this.node = node;
       this.pc = pc;
       this.datasetKey = datasetKey;
@@ -3555,6 +3614,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       this.path = path;
       this.ancestors = ancestors;
       this.rootListAsStructure = rootListAsStructure;
+      this.shareLeaves = shareLeaves;
     }
 
     @Override
@@ -3578,6 +3638,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                   || (rootListAsStructure
                       && path.isEmpty()
                       && source.concreteType().equals(cha.lookupClass(PythonTypes.list))));
+      if (!structure && shareLeaves) {
+        getSystem().newConstraint(target, source);
+        return;
+      }
       IClass type = structure ? source.concreteType() : cha.lookupClass(elementLeafType);
       if (type == null) return;
       // A copy is identified by the object it ultimately copies, not by the copy it was made from:
@@ -3634,7 +3698,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                         datasetKey,
                                         factory.getPointerKeyForInstanceField(mirror, f),
                                         List.copyOf(next),
-                                        Set.copyOf(above)),
+                                        Set.copyOf(above),
+                                        false,
+                                        shareLeaves),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
                   return NOT_CHANGED;
@@ -3699,7 +3765,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && target.equals(other.target)
           && path.equals(other.path)
           && ancestors.equals(other.ancestors)
-          && rootListAsStructure == other.rootListAsStructure;
+          && rootListAsStructure == other.rootListAsStructure
+          && shareLeaves == other.shareLeaves;
     }
 
     @Override
@@ -5393,7 +5460,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           // arguments to a fixed count (`strategy.run`, `tf.while_loop`), so its positions are not
           // the program's.
           int length =
-              this.call.firstStarredPosition() < 0 && !isLibrarySummaryBody(this.caller.getMethod())
+              this.call.firstStarredPosition() < 0
+                      && (!isLibrarySummaryBody(this.caller.getMethod())
+                          || exactArityCallers.contains(
+                              this.caller.getMethod().getDeclaringClass().getReference()))
                   ? Math.max(
                       0, this.call.getNumberOfPositionalParameters() - Math.max(1, this.varargs))
                   : -1;

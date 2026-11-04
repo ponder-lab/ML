@@ -136,4 +136,71 @@ public class TestDatasetMapElement extends AbstractTensorTest {
   public void testBatchedX() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_batched_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
+
+  /**
+   * A function with a defaulted parameter beyond the element's arity still gets the members.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testDefaultX() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_default_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * A variadic function gets exactly the element's members, so its last is the last member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testStarLast() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_star_last", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A function returning a list makes a tuple element, as {@code tf.data} packs it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testListA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_list_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * A function over either of two datasets, one with a pair element and one flat, gets either's
+   * first argument.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testMixedFirst() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_mixed_first",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4), TensorType.of(FLOAT_32, 5))));
+  }
+
+  /**
+   * A function that replaces an entry of its dict argument changes its own dict, not the receiver's
+   * element, so iterating the receiver still reads the entry's own type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testUntouched() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_untouched", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
 }

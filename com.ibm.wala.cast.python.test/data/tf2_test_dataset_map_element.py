@@ -94,3 +94,79 @@ for a in keyed.map(pick_a):
 for x, ids in pairs.map(scale_pair).batch(2):
     assert x.shape == (2, 4) and x.dtype == tf.float32
     consume_batched_x(x)
+
+
+def consume_default_x(x):
+    pass
+
+
+def consume_star_last(last):
+    pass
+
+
+def consume_list_a(a):
+    pass
+
+
+def consume_mixed_first(first):
+    pass
+
+
+def with_default(x, ids, scale=2.0):
+    assert x.shape == (4,) and x.dtype == tf.float32
+    consume_default_x(x)
+    return x * scale
+
+
+def starred(*parts):
+    last = parts[-1]
+    assert last.shape == (3,) and last.dtype == tf.int32
+    consume_star_last(last)
+    return parts[0]
+
+
+for _ in pairs.map(with_default):
+    pass
+
+for _ in pairs.map(starred):
+    pass
+
+for a, b in pairs.map(lambda x, ids: [x, ids]):
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_list_a(a)
+
+FIRST = bool(int("1"))
+
+
+def first_part(*parts):
+    first = parts[0]
+    assert first.shape in ((4,), (5,)) and first.dtype == tf.float32
+    consume_mixed_first(first)
+    return first
+
+
+for _ in (pairs if FIRST else rows).map(first_part):
+    pass
+
+
+def consume_untouched(ids):
+    pass
+
+
+records = tf.data.Dataset.from_tensor_slices(
+    {"ids": tf.zeros([8, 3], tf.int32), "length": tf.zeros([8], tf.int32)}
+)
+
+
+def cast_record(e):
+    e.update({"ids": tf.cast(e["ids"], tf.float32)})
+    return e
+
+
+for _ in records.map(cast_record):
+    pass
+
+# The function's update replaced an entry of its own dict, not of the dataset's element.
+for e in records:
+    assert e["ids"].shape == (3,) and e["ids"].dtype == tf.int32
+    consume_untouched(e["ids"])
