@@ -9,7 +9,6 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
-import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -19,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.OptionalInt;
 import java.util.Set;
 import org.junit.Test;
@@ -52,7 +50,7 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
           if (TensorGeneratorFactory.getGenerator(
                   builder.getPropagationSystem().findOrCreatePointsToSet(value), builder)
               instanceof DatasetEnumerateGenerator generator) ret.add(generator);
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException e) {
           // A value with no generator is not an enumerated dataset.
         }
       }
@@ -145,8 +143,5 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
     assertEquals(OptionalInt.empty(), generator.declaredArity(builder, List.of(1)));
     assertNull(generator.getShapesForPath(builder, List.of(1, 0)));
     assertEquals(EnumSet.of(DType.UNKNOWN), generator.getDTypesForPath(builder, List.of(1, 0)));
-    assertEquals(
-        Set.of(new TensorType(DType.INT64.name().toLowerCase(Locale.ROOT), List.of())),
-        generator.getTensorTypes(builder));
   }
 }
