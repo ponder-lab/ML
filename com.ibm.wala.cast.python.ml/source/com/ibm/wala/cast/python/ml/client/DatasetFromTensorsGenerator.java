@@ -102,13 +102,83 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
    */
   @Override
   public OptionalInt declaredArity(PropagationCallGraphBuilder builder, List<Object> path) {
-    return TupleElementProvider.declaredArityOf(
+    return TupleElementProvider.declaredArityOf(builder, this.componentPointsToSet(builder, path));
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A path reaches a component of the {@code tensors} argument, which the dataset's one
+   *     element holds whole (wala/ML#1211). The dataset has no receiver to read it from.
+   */
+  @Override
+  public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer) return this.yieldsTuple(builder);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    return component != null && !component.isEmpty();
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The component is a structure when the {@code tensors} argument holds only tuples,
+   *     dicts and namedtuples there.
+   */
+  @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    return TupleElementProvider.holdsOnlyStructures(
+        builder, this.componentPointsToSet(builder, path));
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The shapes of the component of the {@code tensors} argument at the path, unsliced,
+   *     since the dataset's one element is the argument whole (wala/ML#1211).
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getShapesForIndex(builder, index);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    if (component == null || component.isEmpty()) return null;
+    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, component);
+    return shapes == null || shapes.isEmpty() ? null : shapes;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The dtypes of the component of the {@code tensors} argument at the path
+   *     (wala/ML#1211).
+   */
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getDTypesForIndex(builder, index);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    if (component == null || component.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    Set<DType> dtypes = this.getDTypesOfValue(builder, component);
+    return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
+  }
+
+  /**
+   * The points-to set of the component a path of selectors reaches within the {@code tensors}
+   * argument: an {@link Integer} selects a tuple's field by index, a {@link String} a dict's field
+   * by key.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set, or {@code null} when a step reaches nothing.
+   */
+  private OrdinalSet<InstanceKey> componentPointsToSet(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    return selectComponent(
         builder,
-        selectComponent(
-            builder,
-            this.getArgumentPointsToSet(
-                builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName()),
-            path));
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName()),
+        path);
   }
 
   /**
