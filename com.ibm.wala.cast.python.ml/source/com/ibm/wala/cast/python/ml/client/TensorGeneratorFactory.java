@@ -3570,7 +3570,12 @@ public class TensorGeneratorFactory {
           return new NpTranspose(source, false, true);
         }
 
-        if (effectiveGenerator instanceof DatasetEnumerateGenerator) {
+        // The enumerated element itself, not a component already selected from it, whose read the
+        // path below continues: `element[1][0]` reads the receiver's element at `[0]`, not the
+        // index (wala/ML#1190).
+        if (effectiveGenerator instanceof DatasetEnumerateGenerator
+            && !(containerGenerator instanceof DatasetTupleElementGenerator selectedComponent
+                && !selectedComponent.getPath().isEmpty())) {
           DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) effectiveGenerator;
           boolean isFirstElement = propertyIndex != null && propertyIndex == 0;
           boolean isSecondElement = propertyIndex != null && propertyIndex == 1;
@@ -3606,7 +3611,13 @@ public class TensorGeneratorFactory {
           }
         }
 
-        if (effectiveGenerator instanceof TupleElementProvider tep && propertyIndex != null) {
+        // A component already selected from an enumerated dataset's element, at a path the
+        // element's structure does not continue, is read as what it holds rather than at the
+        // element's own index: in `element[1][0]` over an enumerated dataset of tensors, `[0]`
+        // subscripts the tensor at `[1]`, not the index (wala/ML#1190).
+        if (effectiveGenerator instanceof TupleElementProvider tep
+            && propertyIndex != null
+            && (basePath.isEmpty() || !(effectiveGenerator instanceof DatasetEnumerateGenerator))) {
           if (tep.yieldsTuple(builder)) {
             LOGGER.fine(
                 "Found "
