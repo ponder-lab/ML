@@ -156,16 +156,9 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset10()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_dataset10.py",
-        "add",
-        2,
-        3,
-        Map.of(
-            2,
-            Set.of(SCALAR_TENSOR_OF_INT32, TENSOR_2_NONE_INT32),
-            3,
-            Set.of(SCALAR_TENSOR_OF_INT32, TENSOR_2_NONE_INT32)));
+    // The element its `output_signature` declares is a tuple, no tensor, so `add` concatenates two
+    // tuples (https://github.com/wala/ML/issues/164). Its members are typed in `testDataset10a`.
+    test("tf2_test_dataset10.py", "add", 0, 0);
   }
 
   @Test
@@ -550,13 +543,8 @@ public class TestDatasets extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset25.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
     test("tf2_test_dataset25.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
-    // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/165 is fixed.
-    test(
-        "tf2_test_dataset25.py",
-        "h",
-        1,
-        1,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64, SCALAR_TENSOR_OF_INT32)));
+    // The enumerated element is a tuple, no tensor (https://github.com/wala/ML/issues/165).
+    test("tf2_test_dataset25.py", "h", 0, 0);
   }
 
   @Test
@@ -566,13 +554,8 @@ public class TestDatasets extends AbstractTensorTest {
     test("tf2_test_dataset26.py", "g1", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
     test("tf2_test_dataset26.py", "g2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
     test("tf2_test_dataset26.py", "g3", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
-    // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/165 is fixed.
-    test(
-        "tf2_test_dataset26.py",
-        "h",
-        1,
-        1,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64, TENSOR_2_INT32)));
+    // The enumerated element is a tuple, no tensor (https://github.com/wala/ML/issues/165).
+    test("tf2_test_dataset26.py", "h", 0, 0);
   }
 
   @Test
@@ -608,26 +591,18 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset31()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    // A zipped element is a tuple, no tensor (https://github.com/wala/ML/issues/166).
+    test("tf2_test_dataset31.py", "f", 0, 0);
     test("tf2_test_dataset31.py", "g1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
     test("tf2_test_dataset31.py", "g2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
-    // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "h", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test("tf2_test_dataset31.py", "h", 0, 0);
     test("tf2_test_dataset31.py", "i1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
     test("tf2_test_dataset31.py", "i2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
-    // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
-    test(
-        "tf2_test_dataset31.py",
-        "j",
-        1,
-        1,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64, TENSOR_2_INT64)));
+    test("tf2_test_dataset31.py", "j", 0, 0);
     test("tf2_test_dataset31.py", "k1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
     test("tf2_test_dataset31.py", "k2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
     test("tf2_test_dataset31.py", "k3", 1, 1, Map.of(2, Set.of(TENSOR_2_INT64)));
-    // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "l", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test("tf2_test_dataset31.py", "l", 0, 0);
     test("tf2_test_dataset31.py", "m1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
     test("tf2_test_dataset31.py", "m2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
   }

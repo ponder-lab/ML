@@ -72,6 +72,7 @@ import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKeyFactory;
+import com.ibm.wala.ipa.callgraph.propagation.NormalAllocationInNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
@@ -80,6 +81,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.SummarizedMethod;
 import com.ibm.wala.ipa.summaries.SummarizedMethodWithNames;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IShiftInstruction;
@@ -528,6 +530,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private TypeReference elementMirrorType;
 
+  /**
+   * The summary class whose call makes an enumerated dataset's element (wala/ML#1190), or {@code
+   * null} when no client names one; see {@link EnumeratedElementOperator}.
+   */
+  private TypeReference elementEnumerateType;
+
   /** The class of a mirrored structure's leaves; see {@link ElementMirrorOperator}. */
   private TypeReference elementLeafType;
 
@@ -535,10 +543,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private Set<TypeReference> elementStructureTypes = Collections.emptySet();
 
   /**
-   * The paths from its element's root at which each mirrored key was reached, keyed by the mirror
-   * key; a key reached along several paths has each. A path is a list of field names.
+   * The summary class whose call mirrors a structure of datasets into a zip's element
+   * (wala/ML#164), or {@code null} when no client names one: as {@link #elementMirrorType} does,
+   * except that a dataset in the structure is replaced by its own element.
    */
-  private final Map<InstanceKey, Set<List<String>>> elementMirrorPaths = HashMapFactory.make();
+  private TypeReference elementZipType;
+
+  /** The class of a dataset a zip's structure holds; see {@link #elementZipType}. */
+  private TypeReference elementZipDatasetType;
+
+  /** The field of a dataset holding its mirrored element; see {@link #elementZipType}. */
+  private String elementZipElementField;
+
+  /**
+   * The field of a dataset holding its marker that its element is not mirrored; see {@link
+   * #elementZipType}.
+   */
+  private String elementZipLegacyField;
+
+  /**
+   * The paths from its element's root at which each mirrored key was reached, keyed by the mirror
+   * key; a key reached along several paths has each. A path is a list of the catalog's own values:
+   * an {@link Integer} for a tuple's position, a {@link String} for a dict's key.
+   */
+  private final Map<InstanceKey, Set<List<Object>>> elementMirrorPaths = HashMapFactory.make();
 
   /**
    * The mirror keys reached along a path longer than the mirror records: each stands for whatever
@@ -564,13 +592,95 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Names the summary class whose call makes the element of an enumerated dataset (wala/ML#1190): a
+   * call whose callee is an instance of {@code enumerate} returns a tuple whose position 0 is a
+   * leaf, the index, and whose position 1 mirrors its first argument, the receiver's mirrored
+   * element, with the second argument as the dataset whose element it is. It is a mirror call in
+   * every other respect; see {@link #setElementMirror}.
+   *
+   * @param enumerate The summary class whose call makes the element.
+   */
+  public void setElementEnumerate(TypeReference enumerate) {
+    this.elementEnumerateType = enumerate;
+  }
+
+  /**
+   * Names the classes of zip element mirroring (wala/ML#164): a call whose callee is an instance of
+   * {@code zip} mirrors its first argument's structure as {@link #setElementMirror}'s class does,
+   * except that an instance of {@code dataset} in it is replaced by the copy of that dataset's
+   * element, held in its {@code elementField}. A dataset whose element is not mirrored passes its
+   * {@code legacyField} marker to the zip's dataset, so iterating the zip still allocates the
+   * element its generator types.
+   *
+   * @param zip The summary class whose call mirrors a structure of datasets.
+   * @param dataset The class of a dataset.
+   * @param elementField The field of a dataset holding its mirrored element.
+   * @param legacyField The field of a dataset holding its marker that its element is not mirrored.
+   */
+  public void setElementZip(
+      TypeReference zip, TypeReference dataset, String elementField, String legacyField) {
+    this.elementZipType = zip;
+    this.elementZipDatasetType = dataset;
+    this.elementZipElementField = elementField;
+    this.elementZipLegacyField = legacyField;
+  }
+
+  /**
+   * The summary class whose call mirrors a dataset's declared structure into its element
+   * (wala/ML#164), or {@code null} when no client names one; see {@link #setElementDeclared}.
+   */
+  private TypeReference elementDeclaredType;
+
+  /**
+   * The field of a dataset holding its marker that its element is not mirrored; see {@link
+   * #setElementDeclared}.
+   */
+  private String elementDeclaredLegacyField;
+
+  /**
+   * The positions of the parameters a method passes as declared structures to a call of {@link
+   * #elementDeclaredType}, by method; empty for a method that makes no such call.
+   */
+  private final Map<IMethod, Set<Integer>> declaredStructureParameters = HashMapFactory.make();
+
+  /**
+   * The nodes some call reaches without passing any of the structures they declare their element
+   * by, so the element is not declared there; see {@link #setElementDeclared}.
+   */
+  private final Set<CGNode> undeclaredElementNodes = HashSetFactory.make();
+
+  /** The declared element calls started in each node, which a later undeclared call completes. */
+  private final Map<CGNode, Set<DeclaredElementCallOperator>> declaredElementCalls =
+      HashMapFactory.make();
+
+  /**
+   * Names the summary class of declared element mirroring (wala/ML#164): a call {@code
+   * declared(signature, dataset, types, marker)} whose callee is an instance of {@code declared}
+   * returns a copy of the structures its {@code signature} and {@code types} arguments declare, as
+   * {@link #setElementMirror}'s class copies its one structure, and {@code None} declares nothing.
+   * Where a call of the summary method passes neither argument, the dataset's element is not
+   * declared, so the {@code marker} argument's keys reach the dataset's {@code legacyField}, and an
+   * iterator over it allocates the element its generator types. Whether a call passes an argument
+   * is read from the call itself, positionally or by keyword, so the decision only grows as calls
+   * arrive.
+   *
+   * @param declared The summary class whose call mirrors a declared structure.
+   * @param legacyField The field of a dataset holding its marker that its element is not mirrored.
+   */
+  public void setElementDeclared(TypeReference declared, String legacyField) {
+    this.elementDeclaredType = declared;
+    this.elementDeclaredLegacyField = legacyField;
+  }
+
+  /**
    * The paths at which a mirrored key was reached from its element's root (wala/ML#1190).
    *
    * @param key A key a mirror allocated.
-   * @return The paths, each a list of field names; empty for a key no mirror allocated.
+   * @return The paths, each a list of the catalog's values, an {@link Integer} for a tuple's
+   *     position and a {@link String} for a dict's key; empty for a key no mirror allocated.
    */
-  public Set<List<String>> getElementMirrorPaths(InstanceKey key) {
-    Set<List<String>> paths = elementMirrorPaths.get(key);
+  public Set<List<Object>> getElementMirrorPaths(InstanceKey key) {
+    Set<List<Object>> paths = elementMirrorPaths.get(key);
     return paths == null ? Collections.emptySet() : Collections.unmodifiableSet(paths);
   }
 
@@ -1365,6 +1475,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processDictMethod(inst);
       processNamedTupleConstruction(inst);
       processElementMirror(inst);
+      processElementDeclared(inst);
     }
 
     /**
@@ -1375,26 +1486,89 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private void processElementMirror(PythonInvokeInstruction inst) {
       PythonSSAPropagationCallGraphBuilder builder = getBuilder();
-      if (builder.elementMirrorType == null
+      if ((builder.elementMirrorType == null
+              && builder.elementEnumerateType == null
+              && builder.elementZipType == null)
           || !inst.hasDef()
           || inst.getNumberOfPositionalParameters() < 3) return;
       SymbolTable symtab = ir.getSymbolTable();
       int calleeVn = inst.getUse(0);
       PointerKey calleeKey = getPointerKeyForLocal(calleeVn);
+      int datasetVn = inst.getUse(2);
+      PointerKey datasetKey = getPointerKeyForLocal(datasetVn);
+      // A dataset a summary allocates is represented implicitly, so its keys are read here.
+      Set<InstanceKey> datasets =
+          contentsAreInvariant(symtab, du, datasetVn) || system.isImplicit(datasetKey)
+              ? Set.of(getInvariantContents(symtab, du, node, datasetVn))
+              : null;
+      int structureVn = inst.getUse(1);
+      PointerKey structureKey = getPointerKeyForLocal(structureVn);
+      // A structure the summary allocates itself, as a dataset's one fresh scalar, is represented
+      // implicitly too.
+      Set<InstanceKey> structures =
+          contentsAreInvariant(symtab, du, structureVn) || system.isImplicit(structureKey)
+              ? Set.of(getInvariantContents(symtab, du, node, structureVn))
+              : null;
       ElementMirrorCallOperator operator =
           builder
           .new ElementMirrorCallOperator(
               node,
               inst.iIndex(),
               getPointerKeyForLocal(inst.getDef()),
-              getPointerKeyForLocal(inst.getUse(1)),
-              getPointerKeyForLocal(inst.getUse(2)));
+              structureKey,
+              structures,
+              datasetKey,
+              datasets);
       if (contentsAreInvariant(symtab, du, calleeVn) || system.isImplicit(calleeKey)) {
         for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
           operator.start(key);
         return;
       }
       system.newSideEffect(operator, calleeKey);
+    }
+
+    /**
+     * Mirrors a dataset's declared structure into its element where a call's callee is the declared
+     * element class (wala/ML#164); see {@link #setElementDeclared}. The summary allocates the
+     * callee, the dataset and the marker itself, so their keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processElementDeclared(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.elementDeclaredType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 5) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      boolean declared = false;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.elementDeclaredType)) declared = true;
+      if (!declared) return;
+      int datasetVn = inst.getUse(2);
+      int markerVn = inst.getUse(4);
+      Set<InstanceKey> datasets =
+          contentsAreInvariant(symtab, du, datasetVn)
+                  || system.isImplicit(getPointerKeyForLocal(datasetVn))
+              ? Set.of(getInvariantContents(symtab, du, node, datasetVn))
+              : Set.of();
+      Set<InstanceKey> markers =
+          contentsAreInvariant(symtab, du, markerVn)
+                  || system.isImplicit(getPointerKeyForLocal(markerVn))
+              ? Set.of(getInvariantContents(symtab, du, node, markerVn))
+              : Set.of();
+      builder
+          .new DeclaredElementCallOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              List.of(getPointerKeyForLocal(inst.getUse(1)), getPointerKeyForLocal(inst.getUse(3))),
+              getPointerKeyForLocal(datasetVn),
+              datasets,
+              markers)
+          .start();
     }
 
     /**
@@ -2535,6 +2709,58 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
   }
 
+  /**
+   * Records a call of a method that declares its dataset's element by structures it is passed
+   * (wala/ML#164): when the call passes none of them, the element is not declared in the target,
+   * and the declared element calls there mark their datasets as not mirrored; see {@link
+   * #setElementDeclared}.
+   *
+   * @param call The call.
+   * @param target The node it reaches.
+   * @param args The positions of the target's parameters the call binds, positionally or by
+   *     keyword; a position a starred argument may bind is not among them.
+   */
+  private void recordDeclaredElementCall(PythonInvokeInstruction call, CGNode target, IntSet args) {
+    if (elementDeclaredType == null) return;
+    Set<Integer> declared = declaredStructureParameters(target);
+    if (declared.isEmpty()) return;
+    for (int parameter : declared) if (args.contains(parameter)) return;
+    if (!undeclaredElementNodes.add(target)) return;
+    logger.fine(() -> "No declared element structure reaches " + target + " from " + call + ".");
+    Set<DeclaredElementCallOperator> started = declaredElementCalls.get(target);
+    if (started != null) for (DeclaredElementCallOperator operator : started) operator.undeclared();
+  }
+
+  /**
+   * The positions of the parameters a method passes as the structures of a declared element call
+   * (wala/ML#164): its calls whose callee it allocates as an instance of {@link
+   * #elementDeclaredType}, at their {@code signature} and {@code types} arguments.
+   *
+   * @param node A node of the method; the method's calls are read from its IR.
+   * @return The positions, each a parameter's value number less one; empty for a method that is no
+   *     library summary or makes no such call.
+   */
+  private Set<Integer> declaredStructureParameters(CGNode node) {
+    IMethod method = node.getMethod();
+    if (!(method instanceof SummarizedMethod)) return Collections.emptySet();
+    return declaredStructureParameters.computeIfAbsent(
+        method,
+        m -> {
+          IR ir = node.getIR();
+          if (ir == null) return Collections.emptySet();
+          DefUse du = node.getDU();
+          Set<Integer> ret = HashSetFactory.make();
+          for (SSAInstruction inst : ir.getInstructions())
+            if (inst instanceof SSAAbstractInvokeInstruction invoke
+                && invoke.getNumberOfUses() >= 4
+                && du.getDef(invoke.getUse(0)) instanceof SSANewInstruction allocation
+                && allocation.getConcreteType().equals(elementDeclaredType))
+              for (int use : new int[] {invoke.getUse(1), invoke.getUse(3)})
+                if (use <= m.getNumberOfParameters()) ret.add(use - 1);
+          return ret.isEmpty() ? Collections.emptySet() : Set.copyOf(ret);
+        });
+  }
+
   @Override
   protected void processCallingConstraints(
       CGNode caller,
@@ -2700,6 +2926,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
             src);
         paramNumber++;
       }
+
+      recordDeclaredElementCall(call, target, args);
 
       // A synthesized constructor's summary declares the wrapped `__init__`'s parameter count,
       // although its own formals stop one short (formal i mirrors `__init__`'s parameter i + 1),
@@ -3049,12 +3277,17 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * A key a mirror allocated for a dataset's element (wala/ML#1190): the copy, at one mirror call,
    * of one key of the mirrored structure. A copy of a structure has the structure's class, and a
    * copy of anything else is a leaf of the leaf class. Keyed by the call and the copied key, so a
-   * structure reached along several paths, or a cyclic one, is copied once.
+   * structure reached along several paths, or a cyclic one, is copied once. A leaf may be keyed by
+   * its path too, so one key a structure holds at two paths, as {@code (tf.float32, tf.float32)}
+   * holds one dtype, is two members of the element, each typed at its own path (wala/ML#164).
    */
   public static final class ElementMirrorKey extends AllocationSiteInNode {
     private final InstanceKey source;
     private final PointerKey dataset;
     private final boolean leaf;
+
+    /** The path a leaf is keyed by, or {@code null} for a key keyed by its source alone. */
+    private final List<Object> path;
 
     private ElementMirrorKey(
         CGNode node,
@@ -3063,10 +3296,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         InstanceKey source,
         PointerKey dataset,
         boolean leaf) {
+      this(node, site, type, source, dataset, leaf, null);
+    }
+
+    private ElementMirrorKey(
+        CGNode node,
+        NewSiteReference site,
+        IClass type,
+        InstanceKey source,
+        PointerKey dataset,
+        boolean leaf,
+        List<Object> path) {
       super(node, site, type);
       this.source = source;
       this.dataset = dataset;
       this.leaf = leaf;
+      this.path = path;
     }
 
     /**
@@ -3101,12 +3346,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return o instanceof ElementMirrorKey other
           && getNode().equals(other.getNode())
           && getSite().equals(other.getSite())
-          && source.equals(other.source);
+          && source.equals(other.source)
+          && Objects.equals(path, other.path);
     }
 
     @Override
     public int hashCode() {
-      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode();
+      return ((getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode()) * 31
+          + Objects.hashCode(path);
     }
 
     @Override
@@ -3125,15 +3372,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final PointerKey resultKey;
     private final PointerKey structureKey;
     private final PointerKey datasetKey;
+
+    /** The keys of the dataset when its value is represented implicitly, else {@code null}. */
+    private final Set<InstanceKey> datasets;
+
+    /** The keys of the structure when its value is represented implicitly, else {@code null}. */
+    private final Set<InstanceKey> structures;
+
     private boolean started;
 
     private ElementMirrorCallOperator(
-        CGNode node, int pc, PointerKey resultKey, PointerKey structureKey, PointerKey datasetKey) {
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        PointerKey structureKey,
+        Set<InstanceKey> structures,
+        PointerKey datasetKey,
+        Set<InstanceKey> datasets) {
       this.node = node;
       this.pc = pc;
       this.resultKey = resultKey;
       this.structureKey = structureKey;
+      this.structures = structures;
       this.datasetKey = datasetKey;
+      this.datasets = datasets;
     }
 
     @Override
@@ -3149,12 +3411,28 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @param callee A key the callee may be.
      */
     void start(InstanceKey callee) {
-      if (started || !callee.concreteType().getReference().equals(elementMirrorType)) return;
+      if (started) return;
+      TypeReference type = callee.concreteType().getReference();
+      if (type.equals(elementEnumerateType)) {
+        started = true;
+        getSystem()
+            .newSideEffect(
+                new EnumeratedElementOperator(
+                    node, pc, datasetKey, resultKey, structureKey, callee),
+                structureKey);
+        return;
+      }
+      boolean zip = type.equals(elementZipType);
+      if (!zip && !type.equals(elementMirrorType)) return;
       started = true;
-      getSystem()
-          .newSideEffect(
-              new ElementMirrorOperator(node, pc, datasetKey, resultKey, List.of(), Set.of()),
-              structureKey);
+      ElementMirrorOperator mirror =
+          new ElementMirrorOperator(
+              node, pc, datasetKey, zip ? datasets : null, resultKey, List.of(), Set.of(), zip);
+      if (structures != null) {
+        for (InstanceKey structure : structures) mirror.copy(structure);
+        return;
+      }
+      getSystem().newSideEffect(mirror, structureKey);
     }
 
     @Override
@@ -3172,6 +3450,198 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "element mirror call at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Makes the element of an enumerated dataset (wala/ML#1190), {@code (index, element)} at run
+   * time: a tuple, allocated at the call, whose position 0 is a leaf standing for the index and
+   * whose position 1 mirrors the receiver's mirrored element at the paths below {@code [1]}. Both
+   * are typed by the enumerated dataset's generator at their paths, as any mirrored key is. The
+   * tuple is made once the receiver's element holds a key, so a receiver whose element is not
+   * mirrored leaves this one unmirrored too, as a {@code batch} over it does. Keyed by the call and
+   * the callee, which no other mirror copies.
+   */
+  private final class EnumeratedElementOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey datasetKey;
+    private final PointerKey resultKey;
+    private final PointerKey elementKey;
+    private final InstanceKey callee;
+    private boolean made;
+
+    private EnumeratedElementOperator(
+        CGNode node,
+        int pc,
+        PointerKey datasetKey,
+        PointerKey resultKey,
+        PointerKey elementKey,
+        InstanceKey callee) {
+      this.node = node;
+      this.pc = pc;
+      this.datasetKey = datasetKey;
+      this.resultKey = resultKey;
+      this.elementKey = elementKey;
+      this.callee = callee;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (made || rhs.getValue() == null || rhs.getValue().isEmpty()) return NOT_CHANGED;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass tupleClass = cha.lookupClass(PythonTypes.tuple);
+      IClass leafClass = cha.lookupClass(elementLeafType);
+      IField zero = resolveRootField(cha, "0");
+      IField one = resolveRootField(cha, "1");
+      if (tupleClass == null || leafClass == null || zero == null || one == null)
+        return NOT_CHANGED;
+      made = true;
+      ElementMirrorKey tuple =
+          new ElementMirrorKey(
+              node,
+              NewSiteReference.make(pc, PythonTypes.tuple),
+              tupleClass,
+              callee,
+              datasetKey,
+              false);
+      // A key's site compares by its program counter alone, so the index copies a source of its
+      // own, the value the enumeration makes at the call, and is a key distinct from the tuple.
+      NewSiteReference indexSite = NewSiteReference.make(pc, elementLeafType);
+      ElementMirrorKey index =
+          new ElementMirrorKey(
+              node,
+              indexSite,
+              leafClass,
+              new NormalAllocationInNode(node, indexSite, leafClass),
+              datasetKey,
+              true);
+      elementMirrorPaths.computeIfAbsent(tuple, k -> HashSetFactory.make()).add(List.of());
+      elementMirrorPaths.computeIfAbsent(index, k -> HashSetFactory.make()).add(List.of(0));
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      PointerKey catalog = factory.getPointerKeyForObjectCatalog(tuple);
+      getSystem().newConstraint(resultKey, tuple);
+      getSystem()
+          .newConstraint(
+              catalog, getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0));
+      getSystem()
+          .newConstraint(
+              catalog, getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(1), 1));
+      getSystem().newConstraint(factory.getPointerKeyForInstanceField(tuple, zero), index);
+      // The receiver's element, copied below position 1, so its members keep their own objects and
+      // are typed at their paths in this dataset's element.
+      getSystem()
+          .newSideEffect(
+              new ElementMirrorOperator(
+                  node,
+                  pc,
+                  datasetKey,
+                  null,
+                  factory.getPointerKeyForInstanceField(tuple, one),
+                  List.of(1),
+                  Set.of(callee),
+                  false),
+              elementKey);
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + resultKey.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof EnumeratedElementOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && resultKey.equals(other.resultKey)
+          && callee.equals(other.callee);
+    }
+
+    @Override
+    public String toString() {
+      return "enumerated element at " + pc + " into " + resultKey;
+    }
+  }
+
+  /**
+   * Mirrors a dataset's declared structures into its element (wala/ML#164), and marks the dataset's
+   * element as not mirrored once a call of its node passes none of them; see {@link
+   * #setElementDeclared}. Each structure's keys, but {@code None}, are copied as {@link
+   * ElementMirrorOperator} copies a mirror call's one structure, into one copy, so a key both
+   * structures hold is copied once.
+   */
+  private final class DeclaredElementCallOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final List<PointerKey> structureKeys;
+    private final Set<InstanceKey> datasets;
+    private final Set<InstanceKey> markers;
+    private final ElementMirrorOperator mirror;
+
+    private DeclaredElementCallOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        List<PointerKey> structureKeys,
+        PointerKey datasetKey,
+        Set<InstanceKey> datasets,
+        Set<InstanceKey> markers) {
+      this.node = node;
+      this.structureKeys = structureKeys;
+      this.datasets = datasets;
+      this.markers = markers;
+      this.mirror =
+          new ElementMirrorOperator(
+              node, pc, datasetKey, null, resultKey, List.of(), Set.of(), false);
+    }
+
+    /** Copies the structures as they arrive, and marks the dataset if its node is undeclared. */
+    private void start() {
+      for (PointerKey structure : structureKeys) getSystem().newSideEffect(this, structure);
+      declaredElementCalls.computeIfAbsent(node, n -> HashSetFactory.make()).add(this);
+      if (undeclaredElementNodes.contains(node)) undeclared();
+    }
+
+    /**
+     * Marks the dataset's element as not mirrored: a call of this node passes no declared
+     * structure, so an iterator over the dataset allocates the element its generator types.
+     */
+    private void undeclared() {
+      IField legacy = resolveRootField(getClassHierarchy(), elementDeclaredLegacyField);
+      if (legacy == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey dataset : datasets)
+        for (InstanceKey marker : markers)
+          getSystem().newConstraint(factory.getPointerKeyForInstanceField(dataset, legacy), marker);
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      rhs.getValue()
+          .foreach(
+              i -> {
+                InstanceKey key = getSystem().getInstanceKey(i);
+                // A structure argument of `None` declares nothing.
+                if (!isNoneConstant(key)) mirror.copy(key);
+              });
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return mirror.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return this == o;
+    }
+
+    @Override
+    public String toString() {
+      return "declared element call in " + node;
     }
   }
 
@@ -3196,7 +3666,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final int pc;
     private final PointerKey datasetKey;
     private final PointerKey target;
-    private final List<String> path;
+    private final List<Object> path;
 
     /**
      * The originals of the structures copied along {@link #path}. A source structure that is one of
@@ -3205,21 +3675,37 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private final Set<InstanceKey> ancestors;
 
+    /**
+     * Whether this copies a zip's element (wala/ML#164): a dataset in the structure is then
+     * replaced by the copy of its element.
+     */
+    private final boolean zip;
+
+    /**
+     * The keys of the zip's dataset, which a zipped dataset whose element is not mirrored passes
+     * its marker to, or {@code null} when this is no zip's copy or the value is not implicit.
+     */
+    private final Set<InstanceKey> zipDatasets;
+
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
     private ElementMirrorOperator(
         CGNode node,
         int pc,
         PointerKey datasetKey,
+        Set<InstanceKey> zipDatasets,
         PointerKey target,
-        List<String> path,
-        Set<InstanceKey> ancestors) {
+        List<Object> path,
+        Set<InstanceKey> ancestors,
+        boolean zip) {
       this.node = node;
       this.pc = pc;
       this.datasetKey = datasetKey;
+      this.zipDatasets = zipDatasets;
       this.target = target;
       this.path = path;
       this.ancestors = ancestors;
+      this.zip = zip;
     }
 
     @Override
@@ -3237,6 +3723,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       // Past the recorded length, or where the path returns to a structure it already copies, the
       // copy stops: the key is a leaf standing for the unknown rest.
       boolean beyond = path.size() > MAX_PATH || ancestors.contains(original);
+      if (zip && !beyond && isZippedDataset(source.concreteType())) {
+        zipDataset(source);
+        return;
+      }
       boolean structure = !beyond && isStructure(source.concreteType());
       IClass type = structure ? source.concreteType() : cha.lookupClass(elementLeafType);
       if (type == null) return;
@@ -3244,6 +3734,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       // a dataset that feeds its own element back, such as a `batch` in a loop over its own
       // result, would otherwise copy its copies without end. A copy's types are read from its
       // dataset and path, which this does not change.
+      // A leaf within the recorded length is keyed by its path as well, so a key the structure
+      // holds at several paths, as a tuple of one dtype object twice, is a member at each.
       ElementMirrorKey mirror =
           new ElementMirrorKey(
               node,
@@ -3251,7 +3743,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               type,
               root,
               datasetKey,
-              !structure);
+              !structure,
+              structure || beyond ? null : path);
       if (beyond) elementMirrorCutoffs.add(mirror);
       else elementMirrorPaths.computeIfAbsent(mirror, k -> HashSetFactory.make()).add(path);
       getSystem().newConstraint(target, mirror);
@@ -3260,7 +3753,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       getSystem()
           .newSideEffect(
               new UnaryOperator<PointsToSetVariable>() {
-                private final Set<String> names = HashSetFactory.make();
+                private final Set<Object> names = HashSetFactory.make();
 
                 @Override
                 public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
@@ -3272,16 +3765,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                             if (!(getSystem().getInstanceKey(c) instanceof ConstantKey<?> name))
                               return;
                             Object value = name.getValue();
-                            // A tuple's fields are named by integers, a dict's by strings.
+                            // A tuple's fields are named by integers, a dict's by strings. The
+                            // path keeps the value itself, so a dict's key "0" stays a key where
+                            // the field it names is the one a tuple's position 0 names.
                             if (!(value instanceof String) && !(value instanceof Number)) return;
-                            String field = value.toString();
-                            if (!names.add(field)) return;
-                            IField f = resolveRootField(cha, field);
+                            Object element = mirrorPathElement(value);
+                            if (!names.add(element)) return;
+                            IField f = resolveRootField(cha, value.toString());
                             if (f == null) return;
                             getSystem()
                                 .newConstraint(factory.getPointerKeyForObjectCatalog(mirror), name);
-                            List<String> next = new ArrayList<>(path);
-                            next.add(field);
+                            List<Object> next = new ArrayList<>(path);
+                            next.add(element);
                             Set<InstanceKey> above = HashSetFactory.make(ancestors);
                             above.add(root);
                             getSystem()
@@ -3290,9 +3785,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                         node,
                                         pc,
                                         datasetKey,
+                                        zipDatasets,
                                         factory.getPointerKeyForInstanceField(mirror, f),
                                         List.copyOf(next),
-                                        Set.copyOf(above)),
+                                        Set.copyOf(above),
+                                        zip),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
                   return NOT_CHANGED;
@@ -3316,6 +3813,68 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               factory.getPointerKeyForObjectCatalog(source));
     }
 
+    /**
+     * An element of a path (wala/ML#1198): a string is a dict's key, and an integral number in
+     * {@code int} range a tuple's position. Any other number, a dict's key like {@code 1.5}, is
+     * kept as its text.
+     *
+     * @param value A catalogued field's value, a string or a number.
+     * @return The key or the position.
+     */
+    private Object mirrorPathElement(Object value) {
+      if (value instanceof String) return value;
+      if ((value instanceof Integer
+              || value instanceof Long
+              || value instanceof Short
+              || value instanceof Byte)
+          && ((Number) value).longValue() == ((Number) value).intValue())
+        return ((Number) value).intValue();
+      return value.toString();
+    }
+
+    /**
+     * Whether a zip's structure holds a dataset here, which the zip's element replaces by that
+     * dataset's element (wala/ML#164).
+     *
+     * @param type The class of a key the structure holds.
+     * @return {@code true} iff it is a dataset class.
+     */
+    private boolean isZippedDataset(IClass type) {
+      if (elementZipDatasetType == null) return false;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass dataset = cha.lookupClass(elementZipDatasetType);
+      return dataset != null && cha.isSubclassOf(type, dataset);
+    }
+
+    /**
+     * Copies a zipped dataset's element where the zip's structure holds the dataset, at the same
+     * path, and passes the dataset's marker that its element is not mirrored to the zip's dataset
+     * (wala/ML#164).
+     *
+     * @param zipped The zipped dataset.
+     */
+    private void zipDataset(InstanceKey zipped) {
+      IClassHierarchy cha = getClassHierarchy();
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IField element = resolveRootField(cha, elementZipElementField);
+      if (element != null)
+        getSystem()
+            .newSideEffect(
+                new ElementMirrorOperator(
+                    node, pc, datasetKey, null, target, path, ancestors, false),
+                factory.getPointerKeyForInstanceField(zipped, element));
+      // The zip's dataset is a summary's allocation, so its keys are known here; were it not, the
+      // marker would not pass, and a zipped dataset whose element is not copied would read as ⊥.
+      IField legacy = resolveRootField(cha, elementZipLegacyField);
+      if (legacy == null || zipDatasets == null) return;
+      for (InstanceKey dataset : zipDatasets)
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForInstanceField(dataset, legacy),
+                assignOperator,
+                factory.getPointerKeyForInstanceField(zipped, legacy));
+    }
+
     private boolean isStructure(IClass type) {
       IClassHierarchy cha = getClassHierarchy();
       for (TypeReference structure : elementStructureTypes) {
@@ -3337,7 +3896,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && pc == other.pc
           && target.equals(other.target)
           && path.equals(other.path)
-          && ancestors.equals(other.ancestors);
+          && ancestors.equals(other.ancestors)
+          && zip == other.zip;
     }
 
     @Override

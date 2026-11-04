@@ -1153,6 +1153,45 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether the walk back from a variable can reach more than one creator, so that {@link
+   * #findCreator}'s first creator may not be the variable's only definition (wala/ML#1188).
+   *
+   * <p>The walk is {@link #findCreators}'s without its φ-arm feasibility, so the creators it counts
+   * are a superset of that method's, and a variable this method says has one creator has at most
+   * that one there too. It decides no branch, so it cannot reach a guard and recurse into one, and
+   * it stops at the second creator it finds.
+   *
+   * @param source The {@link PointsToSetVariable} to trace backwards from.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @return {@code true} iff the walk reaches at least two creators.
+   */
+  public static boolean mayHaveSeveralCreators(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    Graph<PointsToSetVariable> assignmentGraph =
+        builder.getPropagationSystem().getAssignmentGraph();
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    Queue<PointsToSetVariable> queue = new LinkedList<>();
+    queue.add(source);
+    visited.add(source);
+    boolean found = false;
+    while (!queue.isEmpty()) {
+      PointsToSetVariable current = queue.poll();
+      if (current == null) continue; // An unresolved predecessor; see findCreator (wala/ML#613).
+      if (isCreator(current, builder)) {
+        if (found) return true;
+        found = true;
+        continue;
+      }
+      for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(current);
+          it.hasNext(); ) {
+        PointsToSetVariable pred = it.next();
+        if (pred != null && visited.add(pred)) queue.add(pred);
+      }
+    }
+    return false;
+  }
+
+  /**
    * The value numbers a φ-defined variable takes on arms its node's context decides cannot run
    * (wala/ML#962's φ-arm feasibility): a creator on such an arm is not one of the value's
    * definitions in this context.
@@ -1469,33 +1508,19 @@ public class TensorGeneratorFactory {
       if (datasets.isEmpty()) continue;
       DatasetIteratorElementGenerator element =
           new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
-      for (List<String> names : python.getElementMirrorPaths(leaf)) {
-        if (names.isEmpty()) {
+      List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
+      for (List<Object> path : python.getElementMirrorPaths(leaf)) {
+        if (path.isEmpty()) {
           parts.add(element);
           continue;
         }
-        List<Object> path = new ArrayList<>();
-        for (String name : names) path.add(mirrorPathElement(name));
+        DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
         // A single index reads the element's tuple position, as a subscript of the element does.
-        if ((path.size() == 1 && path.get(0) instanceof Integer)
-            || element.resolvesPath(builder, path))
-          parts.add(new DatasetTupleElementGenerator(source, element, path));
+        if ((path.size() == 1 && path.get(0) instanceof Integer) || at.resolvesPath(builder, path))
+          parts.add(new DatasetTupleElementGenerator(source, at, path));
       }
     }
     return new MirroredLeaves(parts, only);
-  }
-
-  /**
-   * An element of a mirrored leaf's path (wala/ML#1190): a tuple's position is an integer, a dict's
-   * key a string. A name of digits too long for an {@code int} is no tuple's position, so it stays
-   * a key.
-   *
-   * @param name The name the mirror recorded.
-   * @return The position, or the key.
-   */
-  private static Object mirrorPathElement(String name) {
-    Integer position = name.matches("\\d+") ? parseIntOrNull(name) : null;
-    return position != null ? position : name;
   }
 
   /**
@@ -1517,20 +1542,65 @@ public class TensorGeneratorFactory {
     if (datasets.isEmpty()) return ret;
     DatasetIteratorElementGenerator element =
         new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
-    for (List<String> names : python.getElementMirrorPaths(leaf)) {
-      if (names.isEmpty()) {
+    List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
+    for (List<Object> path : python.getElementMirrorPaths(leaf)) {
+      if (path.isEmpty()) {
         ret.addAll(element.getTensorTypes(builder));
         continue;
       }
-      List<Object> path = new ArrayList<>();
-      for (String name : names) path.add(mirrorPathElement(name));
+      DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
       // A single index reads the element's tuple position, as a subscript of the element does.
       if (path.size() == 1 && path.get(0) instanceof Integer index)
-        ret.addAll(element.getTensorTypesForIndex(builder, index));
-      else if (element.resolvesPath(builder, path))
-        ret.addAll(element.getTensorTypesForPath(builder, path));
+        ret.addAll(at.getTensorTypesForIndex(builder, index));
+      else if (at.resolvesPath(builder, path)) ret.addAll(at.getTensorTypesForPath(builder, path));
     }
     return ret;
+  }
+
+  /**
+   * Datasets spread over the datasets their receivers may be ({@link DatasetGenerator#spread}), so
+   * a read at a path follows each of them rather than the first that resolves (wala/ML#1199).
+   *
+   * @param datasets The datasets' generators.
+   * @param builder The propagation call graph builder.
+   * @return The spread datasets, without duplicates; a dataset whose chain cannot be spread is
+   *     kept.
+   */
+  private static List<TensorGenerator> spreadOverReceivers(
+      List<TensorGenerator> datasets, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator dataset : datasets) {
+      List<TensorGenerator> parts = DatasetGenerator.spread(builder, dataset, new ArrayList<>());
+      for (TensorGenerator part : parts == null ? List.of(dataset) : parts)
+        if (!ret.contains(part)) ret.add(part);
+    }
+    return ret;
+  }
+
+  /**
+   * The element a mirrored leaf is read from at a path (wala/ML#1199): the spread datasets with no
+   * structure at the path, since a leaf there came from a dataset whose element has a tensor there.
+   * In {@code (flat if flag else pair).batch(2)}, a leaf at position 0 is the flat dataset's
+   * tensor, not the pair's tuple at position 0.
+   *
+   * @param leaf The leaf.
+   * @param datasets The leaf's datasets ({@link #mirroredDatasets}).
+   * @param spread The datasets spread over their receivers ({@link #spreadOverReceivers}).
+   * @param path The path.
+   * @param builder The propagation call graph builder.
+   * @return The element, over the given datasets when every spread one has a structure there.
+   */
+  private static DatasetIteratorElementGenerator leafElementAt(
+      ElementMirrorKey leaf,
+      List<TensorGenerator> datasets,
+      List<TensorGenerator> spread,
+      List<Object> path,
+      PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> at = new ArrayList<>();
+    for (TensorGenerator dataset : spread)
+      if (!(dataset instanceof TupleElementProvider tep && tep.isStructureAt(builder, path)))
+        at.add(dataset);
+    return new DatasetIteratorElementGenerator(leaf.getNode(), at.isEmpty() ? datasets : at);
   }
 
   /**
@@ -1596,7 +1666,9 @@ public class TensorGeneratorFactory {
 
   /**
    * Whether a dataset's element is mirrored (wala/ML#1190): its {@code mirrored_element} field
-   * holds a mirror's copy of the structure the dataset was built from.
+   * holds a mirror's copy of the structure the dataset was built from, and its {@code
+   * legacy_element} field holds no marker that part of it is not, as a zip of a dataset whose
+   * element is not mirrored carries (wala/ML#164).
    *
    * @param dataset The dataset's allocation.
    * @param builder The propagation call graph builder.
@@ -1615,6 +1687,19 @@ public class TensorGeneratorFactory {
                     Atom.findOrCreateUnicodeAtom("mirrored_element"),
                     PythonTypes.Root));
     if (element == null) return false;
+    IField legacy =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    Atom.findOrCreateUnicodeAtom("legacy_element"),
+                    PythonTypes.Root));
+    if (legacy != null
+        && !builder
+            .getPointerAnalysis()
+            .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, legacy))
+            .isEmpty()) return false;
     for (InstanceKey ik :
         builder
             .getPointerAnalysis()
@@ -3526,7 +3611,12 @@ public class TensorGeneratorFactory {
           return new NpTranspose(source, false, true);
         }
 
-        if (effectiveGenerator instanceof DatasetEnumerateGenerator) {
+        // The enumerated element itself, not a component already selected from it, whose read the
+        // path below continues: `element[1][0]` reads the receiver's element at `[0]`, not the
+        // index (wala/ML#1190).
+        if (effectiveGenerator instanceof DatasetEnumerateGenerator
+            && !(containerGenerator instanceof DatasetTupleElementGenerator selectedComponent
+                && !selectedComponent.getPath().isEmpty())) {
           DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) effectiveGenerator;
           boolean isFirstElement = propertyIndex != null && propertyIndex == 0;
           boolean isSecondElement = propertyIndex != null && propertyIndex == 1;
@@ -3562,7 +3652,13 @@ public class TensorGeneratorFactory {
           }
         }
 
-        if (effectiveGenerator instanceof TupleElementProvider tep && propertyIndex != null) {
+        // A component already selected from an enumerated dataset's element, at a path the
+        // element's structure does not continue, is read as what it holds rather than at the
+        // element's own index: in `element[1][0]` over an enumerated dataset of tensors, `[0]`
+        // subscripts the tensor at `[1]`, not the index (wala/ML#1190).
+        if (effectiveGenerator instanceof TupleElementProvider tep
+            && propertyIndex != null
+            && (basePath.isEmpty() || !(effectiveGenerator instanceof DatasetEnumerateGenerator))) {
           if (tep.yieldsTuple(builder)) {
             LOGGER.fine(
                 "Found "

@@ -1001,16 +1001,30 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     builder.setElementMirror(
         TensorFlowTypes.DATASET_ELEMENT_MIRROR,
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
-        Set.of(
-            PythonTypes.tuple,
-            PythonTypes.dict,
-            PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
+        TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
+
+    // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
+    // element (wala/ML#1190).
+    builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
+
+    // A zip's element is the structure of datasets it is given, each replaced by its element
+    // (wala/ML#164).
+    builder.setElementZip(
+        TensorFlowTypes.DATASET_ELEMENT_ZIP,
+        TensorFlowTypes.DATASET,
+        "mirrored_element",
+        "legacy_element");
+
+    // A dataset built from a generator mirrors the structure it declares, and a call declaring none
+    // marks its element as not mirrored (wala/ML#164).
+    builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
-    // A slice of the loader's array keeps aliasing the array, as before: allocated, its extent
-    // under a start-only bound reads unresolved (wala/ML#841), where the alias reads the array's
-    // full one.
+    // A slice of the loader's array keeps aliasing the array, as before, and so does a subscript
+    // with a slice and an added axis, `x_train[:2, ..., None]`, which lowers to the slice builtin:
+    // allocated, its extent under a start-only bound reads unresolved (wala/ML#841), where the
+    // alias reads the array's full one.
     Map<TypeReference, TypeReference> axisResults = new HashMap<>(sliceResults);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       axisResults.put(array, NumpyTypes.NDARRAY_TYPE);
