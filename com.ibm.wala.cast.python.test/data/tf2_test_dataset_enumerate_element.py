@@ -250,3 +250,31 @@ for i, x in threes.map(lambda v: v + 1).enumerate():
 for i, x in (floats if picked else threes.map(lambda v: v + 1)).enumerate():
     assert x.shape in ((4,), (3,))
     consume_enumerated_mixed_map_x(x)
+
+
+def consume_mapped_index(i):
+    pass
+
+
+def consume_mapped_x(x):
+    pass
+
+
+def consume_mapped_y(y):
+    pass
+
+
+def double_first(a, b):
+    return a * 2.0, b
+
+
+pairs = tf.data.Dataset.from_tensor_slices(
+    (tf.ones([6, 4]), tf.zeros([6, 2], tf.int32))
+)
+for i, (x, y) in pairs.map(double_first).enumerate():
+    assert i.shape == () and i.dtype == tf.int64
+    assert x.shape == (4,) and x.dtype == tf.float32
+    assert y.shape == (2,) and y.dtype == tf.int32
+    consume_mapped_index(i)
+    consume_mapped_x(x)
+    consume_mapped_y(y)

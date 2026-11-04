@@ -212,13 +212,14 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
    * A control: an element of a dataset zipped with itself and mapped in a loop, read outside an
    * analysis run, a program shape that did not overflow before the cycle guard (<a
    * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>): the dataset generators' own
-   * reads of their receivers terminate. The program's element is {@code (3,)} float32; the read is
-   * that beside an unknown, as the analysis reads it.
+   * reads of their receivers terminate. The program's element is {@code (3,)} float32, and the read
+   * is that alone, as the analysis reads it: the zip and the map each copy their element
+   * (wala/ML#164).
    */
   @Test
   public void testDatasetZipReadDirectlyIsAControl()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    assertEquals(Set.of(TENSOR_3_FLOAT32, UNKNOWN_SHAPE_UNKNOWN), readDirectly("consume_zipped"));
+    assertEquals(Set.of(TENSOR_3_FLOAT32), readDirectly("consume_zipped"));
   }
 
   /**
@@ -248,6 +249,6 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
     assertEquals(Set.of(TENSOR_2_3_INT32), types.get("consume_recast"));
     assertEquals(Set.of(TENSOR_NONE_3_INT32), types.get("consume_grown"));
     assertEquals(Set.of(TENSOR_2_3_INT32, new TensorType(INT_32, null)), types.get("consume_cast"));
-    assertEquals(Set.of(TENSOR_3_FLOAT32, UNKNOWN_SHAPE_UNKNOWN), types.get("consume_zipped"));
+    assertEquals(Set.of(TENSOR_3_FLOAT32), types.get("consume_zipped"));
   }
 }
