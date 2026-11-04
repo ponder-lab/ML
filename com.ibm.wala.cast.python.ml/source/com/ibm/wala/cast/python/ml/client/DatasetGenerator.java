@@ -366,7 +366,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    * @return The generator, or {@code null} if the member is not an allocation or does not resolve
    *     to one.
    */
-  private static TensorGenerator receiverGenerator(
+  static TensorGenerator receiverGenerator(
       PropagationCallGraphBuilder builder, InstanceKey valueIK) {
     AllocationSiteInNode asin;
     try {

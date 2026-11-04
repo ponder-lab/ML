@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -326,6 +327,14 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
       PropagationCallGraphBuilder builder, InstanceKey valueIK) {
     AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
     if (asin == null) return null;
+    // A mapped dataset is read through the mapped element, as a transformation's receiver is
+    // (wala/ML#649).
+    if (asin.getNode()
+        .getMethod()
+        .getDeclaringClass()
+        .getReference()
+        .equals(TensorFlowTypes.DATASET_MAP_TYPE))
+      return DatasetGenerator.receiverGenerator(builder, valueIK);
     int vn = findDefinition(asin.getNode(), asin);
     if (vn <= 0) return null;
     PointerKey pk =

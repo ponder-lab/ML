@@ -378,4 +378,25 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 3),
                 TensorType.of(INT_32, 4))));
   }
+
+  /**
+   * The element of an enumerated mapped dataset is the mapped element (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMappedX() throws Exception {
+    test(FILE, "consume_mapped_x", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * The element of a dataset that may be either a dataset or a mapped one is the join of both
+   * elements, the mapped one included (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedMappedX() throws Exception {
+    test(FILE, "consume_mixed_mapped_x", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
 }
