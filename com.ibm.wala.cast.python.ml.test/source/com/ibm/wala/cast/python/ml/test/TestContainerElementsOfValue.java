@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -8,13 +9,18 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.client.ContainerElements;
+import com.ibm.wala.cast.python.ml.client.DatasetFromTensorSlicesGenerator;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.TensorGenerator;
+import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ssa.IR;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -80,6 +86,19 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
         ret.add(builder().getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
     assertEquals("Expecting one node for " + sink + ".", 1, ret.size());
     return ret.get(0);
+  }
+
+  /**
+   * The tensor types the analysis gives a sink's parameter.
+   *
+   * @param sink The sink's name.
+   * @return The types, empty when it gives none.
+   */
+  private static Set<TensorType> typesOf(String sink) {
+    PointsToSetVariable variable =
+        builder().getPropagationSystem().findOrCreatePointsToSet(parameter(sink));
+    Set<TensorType> state = analysis.getOutState(variable);
+    return state == null ? Set.of() : state;
   }
 
   /**
@@ -167,17 +186,19 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A zipped dataset's whole element, the pair {@code from_tensors} is given: two positions, which
-   * {@code fit}'s data reads as wholly unknown, so they may be anything.
+   * A zipped dataset's whole element, the pair {@code from_tensors} is given: two positions, each
+   * the tensor at its position of the pair, so the element is complete and holds no {@code None}
+   * (wala/ML#1211).
    */
   @Test
   public void testZippedTensors() {
     ContainerElements elements = ofValue("consume_zipped_tensors");
     assertEquals(OptionalInt.of(2), elements.arity());
-    TensorType top = new TensorType("unknown", null);
-    assertEquals(List.of(Set.of(top), Set.of(top)), elements.positionTypes(analysis));
-    assertFalse(elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+    assertEquals(
+        List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
+        elements.positionTypes(analysis));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
   }
 
   /**
@@ -426,5 +447,67 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 4))),
         elements.positionTypes(analysis));
+  }
+
+  /**
+   * A dataset's element built from a tuple with a starred part, {@code (*parts, c)}, whose
+   * positions the analysis does not know: it has no length, and its element types are every
+   * member's, each shape with its own dtype, so a client reads it as a container of those tensors
+   * rather than of none (wala/ML#1212).
+   */
+  @Test
+  public void testStarredElement() {
+    ContainerElements elements = ofValue("consume_starred_element");
+    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(
+        Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),
+        elements.elementTypes(analysis));
+  }
+
+  /**
+   * A member of that element, read by position: any member's type, since the position of each is
+   * not known (wala/ML#1212).
+   */
+  @Test
+  public void testStarredMember() {
+    assertEquals(
+        Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),
+        typesOf("consume_starred_member"));
+  }
+
+  /**
+   * A sliced dataset's element read at one position by path reads as it does by index, which reads
+   * some tensor, for every sliced dataset the script holds.
+   */
+  @Test
+  public void testSlicesPathAtOnePosition() {
+    PythonSSAPropagationCallGraphBuilder b = builder();
+    int read = 0;
+    for (CGNode node : b.getCallGraph()) {
+      IR ir = node.getIR();
+      if (ir == null
+          || !node.getMethod().getDeclaringClass().getName().toString().startsWith("Lscript "))
+        continue;
+      for (int vn = 1; vn <= ir.getSymbolTable().getMaxValueNumber(); vn++) {
+        PointerKey value = b.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+        if (b.getPropagationSystem().isImplicit(value)) continue;
+        TensorGenerator generator;
+        try {
+          generator =
+              TensorGeneratorFactory.getGenerator(
+                  b.getPropagationSystem().findOrCreatePointsToSet(value), b);
+        } catch (IllegalArgumentException e) {
+          // A value with no generator is not a sliced dataset.
+          continue;
+        }
+        if (generator instanceof DatasetFromTensorSlicesGenerator slices) {
+          assertFalse(slices.getTensorTypesForIndex(b, 0).isEmpty());
+          assertEquals(
+              slices.getTensorTypesForIndex(b, 0), slices.getTensorTypesForPath(b, List.of(0)));
+          read++;
+        }
+      }
+    }
+    assertTrue("The script holds a sliced dataset.", read > 0);
   }
 }

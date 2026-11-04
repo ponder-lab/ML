@@ -3692,7 +3692,16 @@ public class TensorGeneratorFactory {
           if (isFirstElement) {
             return new EnumerateIndexGenerator(objSrc);
           } else if (isSecondElement) {
-            return new DatasetElementGenerator(objSrc, enumGen.getUnderlyingGenerator(builder));
+            // A receiver that may be several datasets reads an element of each, so each element's
+            // shape stays paired with its own dataset's dtype (wala/ML#1204).
+            // A dataset that does not resolve contributes the element of no known dataset.
+            DatasetEnumerateGenerator.Receivers receivers = enumGen.receivers(builder);
+            List<TensorGenerator> elements = new ArrayList<>();
+            for (TensorGenerator receiver : receivers.generators())
+              elements.add(new DatasetElementGenerator(objSrc, receiver));
+            if (receivers.partial()) elements.add(new DatasetElementGenerator(objSrc, null));
+            if (elements.size() > 1) return new CreatorJoin(source, elements);
+            return elements.isEmpty() ? new DatasetElementGenerator(objSrc, null) : elements.get(0);
           }
         }
 
@@ -4048,6 +4057,9 @@ public class TensorGeneratorFactory {
       return new DatasetSampleFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SKIP_TYPE)) return new DatasetSkipGenerator(source);
     else if (isType(calledFunction, DATASET_SHARD_TYPE)) return new DatasetShardGenerator(source);
+    // A concatenation's element is either dataset's, so it follows both (wala/ML#1215).
+    else if (isType(calledFunction, DATASET_CONCATENATE_TYPE))
+      return new DatasetConcatenateGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_WINDOW_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
@@ -4056,7 +4068,6 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET_CACHE_TYPE)
         || isType(calledFunction, DATASET_TAKE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
-        || isType(calledFunction, DATASET_CONCATENATE_TYPE)
         || isType(calledFunction, DATASET_REDUCE_TYPE)
         || isType(calledFunction, DATASET_FILTER_TYPE)
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);

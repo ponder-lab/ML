@@ -621,6 +621,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private TypeReference elementZipType;
 
+  /**
+   * The summary class whose call joins the elements of a sequence of datasets into one dataset's
+   * element (wala/ML#1215), or {@code null} when no client names one: as {@link #elementZipType}
+   * does, except that the sequence itself is not copied, so the element is any one dataset's.
+   */
+  private TypeReference elementJoinType;
+
   /** The classes of a dataset a zip's structure holds; see {@link #elementZipType}. */
   private Set<TypeReference> elementZipDatasetTypes = Collections.emptySet();
 
@@ -645,6 +652,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * the structure holds below the cutoff, so it reads as the unknown-marked element, not as ⊥.
    */
   private final Set<InstanceKey> elementMirrorCutoffs = HashSetFactory.make();
+
+  /**
+   * The field names of each namedtuple instance by position (wala/ML#1210), as its type's names
+   * arrive: an instance's catalog names its positions alone, so a copy of the instance learns its
+   * names here. A position may have several names, where one site constructs either of two
+   * namedtuple types.
+   */
+  private final Map<InstanceKey, Map<Integer, Set<String>>> namedTupleFieldNames =
+      HashMapFactory.make();
+
+  /** The copies of each namedtuple instance in a dataset's element, keyed by the instance. */
+  private final Map<InstanceKey, Set<InstanceKey>> namedTupleCopies = HashMapFactory.make();
 
   /**
    * Names the classes of dataset element mirroring (wala/ML#1190): a call whose callee is an
@@ -715,6 +734,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     this.elementZipDatasetTypes = Set.copyOf(datasets);
     this.elementZipElementField = elementField;
     this.elementZipLegacyField = legacyField;
+  }
+
+  /**
+   * Names the class of element joining (wala/ML#1215): a call whose callee is an instance of {@code
+   * join} copies into its result the element of each dataset its first argument, a list or a tuple,
+   * holds, each at the root, so the result is any one dataset's element. The datasets' classes and
+   * fields are those {@link #setElementZip} names, and a dataset whose element is not mirrored
+   * passes its marker as a zipped one does.
+   *
+   * @param join The summary class whose call joins the elements.
+   */
+  public void setElementJoin(TypeReference join) {
+    this.elementJoinType = join;
   }
 
   /**
@@ -1618,7 +1650,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       PythonSSAPropagationCallGraphBuilder builder = getBuilder();
       if ((builder.elementMirrorType == null
               && builder.elementEnumerateType == null
-              && builder.elementZipType == null)
+              && builder.elementZipType == null
+              && builder.elementJoinType == null)
           || !inst.hasDef()
           || inst.getNumberOfPositionalParameters() < 3) return;
       SymbolTable symtab = ir.getSymbolTable();
@@ -3686,12 +3719,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 structureKey);
         return;
       }
-      boolean zip = type.equals(elementZipType);
+      boolean join = type.equals(elementJoinType);
+      boolean zip = join || type.equals(elementZipType);
       if (!zip && !type.equals(elementMirrorType)) return;
       started = true;
       ElementMirrorOperator mirror =
           new ElementMirrorOperator(
-              node, pc, datasetKey, zip ? datasets : null, resultKey, List.of(), Set.of(), zip);
+              node,
+              pc,
+              datasetKey,
+              zip ? datasets : null,
+              resultKey,
+              List.of(),
+              Set.of(),
+              zip,
+              false,
+              join);
       if (structures != null) {
         for (InstanceKey structure : structures) mirror.copy(structure);
         return;
@@ -4418,6 +4461,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private final Set<InstanceKey> zipDatasets;
 
+    /**
+     * Whether this joins a sequence's datasets' elements (wala/ML#1215): a sequence here is not
+     * copied, but each dataset it holds is replaced by its element at this path, as a zip's is.
+     */
+    private final boolean join;
+
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
     private ElementMirrorOperator(
@@ -4442,6 +4491,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         Set<InstanceKey> ancestors,
         boolean zip,
         boolean shareLeaves) {
+      this(node, pc, datasetKey, zipDatasets, target, path, ancestors, zip, shareLeaves, false);
+    }
+
+    private ElementMirrorOperator(
+        CGNode node,
+        int pc,
+        PointerKey datasetKey,
+        Set<InstanceKey> zipDatasets,
+        PointerKey target,
+        List<Object> path,
+        Set<InstanceKey> ancestors,
+        boolean zip,
+        boolean shareLeaves,
+        boolean join) {
       this.node = node;
       this.pc = pc;
       this.datasetKey = datasetKey;
@@ -4451,6 +4514,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       this.ancestors = ancestors;
       this.zip = zip;
       this.shareLeaves = shareLeaves;
+      this.join = join;
     }
 
     @Override
@@ -4475,6 +4539,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       boolean beyond = path.size() > MAX_PATH || ancestors.contains(original);
       if (zip && !beyond && isZippedDataset(source.concreteType())) {
         zipDataset(source);
+        return;
+      }
+      if (join && !beyond) {
+        joinDatasets(source, root);
         return;
       }
       boolean structure = !beyond && isStructure(source.concreteType());
@@ -4503,6 +4571,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       else elementMirrorPaths.computeIfAbsent(mirror, k -> HashSetFactory.make()).add(path);
       getSystem().newConstraint(target, mirror);
       if (!structure) return;
+      if (type.getReference().equals(NAMED_TUPLE_INSTANCE)) copyNamedTupleNames(root, mirror);
       AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
       getSystem()
           .newSideEffect(
@@ -4588,6 +4657,72 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Copies the element of each dataset a joined sequence holds into this copy's target, at its
+     * path, so the target is any one of their elements (wala/ML#1215). A member that is no dataset
+     * is copied as a zip's structure copies it.
+     *
+     * @param sequence The sequence, a list or a tuple of datasets.
+     * @param root The object the sequence ultimately copies.
+     */
+    private void joinDatasets(InstanceKey sequence, InstanceKey root) {
+      IClassHierarchy cha = getClassHierarchy();
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      Set<InstanceKey> above = HashSetFactory.make(ancestors);
+      above.add(root);
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                private final Set<Object> names = HashSetFactory.make();
+
+                @Override
+                public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+                  if (catalog.getValue() == null) return NOT_CHANGED;
+                  catalog
+                      .getValue()
+                      .foreach(
+                          c -> {
+                            if (!(getSystem().getInstanceKey(c) instanceof ConstantKey<?> name))
+                              return;
+                            Object value = name.getValue();
+                            if (!(value instanceof Number) || !names.add(value)) return;
+                            IField f = resolveRootField(cha, value.toString());
+                            if (f == null) return;
+                            getSystem()
+                                .newSideEffect(
+                                    new ElementMirrorOperator(
+                                        node,
+                                        pc,
+                                        datasetKey,
+                                        zipDatasets,
+                                        target,
+                                        path,
+                                        Set.copyOf(above),
+                                        true,
+                                        shareLeaves),
+                                    factory.getPointerKeyForInstanceField(sequence, f));
+                          });
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return sequence.hashCode();
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "element join of " + sequence;
+                }
+              },
+              factory.getPointerKeyForObjectCatalog(sequence));
+    }
+
+    /**
      * Whether a zip's structure holds a dataset here, which the zip's element replaces by that
      * dataset's element (wala/ML#164).
      *
@@ -4655,13 +4790,66 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && path.equals(other.path)
           && ancestors.equals(other.ancestors)
           && zip == other.zip
-          && shareLeaves == other.shareLeaves;
+          && shareLeaves == other.shareLeaves
+          && join == other.join;
     }
 
     @Override
     public String toString() {
       return "element mirror at " + pc + " into " + target + " at " + path;
     }
+  }
+
+  /**
+   * Records a namedtuple instance's field name at a position, and makes the field readable by that
+   * name on each copy of the instance in a dataset's element (wala/ML#1210).
+   *
+   * @param instance The namedtuple instance.
+   * @param index The position.
+   * @param name The field's name.
+   */
+  private void nameNamedTupleField(InstanceKey instance, int index, String name) {
+    if (!namedTupleFieldNames
+        .computeIfAbsent(instance, k -> HashMapFactory.make())
+        .computeIfAbsent(index, k -> HashSetFactory.make())
+        .add(name)) return;
+    for (InstanceKey copy : namedTupleCopies.getOrDefault(instance, Set.of()))
+      aliasNamedTupleField(copy, index, name);
+  }
+
+  /**
+   * Makes a copy of a namedtuple instance in a dataset's element readable by the instance's field
+   * names, as its positions are (wala/ML#1210): the copy walks the instance's catalog, which names
+   * its positions alone. Names that arrive later are added as they do.
+   *
+   * @param instance The namedtuple instance the copy copies.
+   * @param copy The copy.
+   */
+  private void copyNamedTupleNames(InstanceKey instance, InstanceKey copy) {
+    if (!namedTupleCopies.computeIfAbsent(instance, k -> HashSetFactory.make()).add(copy)) return;
+    for (Map.Entry<Integer, Set<String>> names :
+        List.copyOf(namedTupleFieldNames.getOrDefault(instance, Map.of()).entrySet()))
+      for (String name : List.copyOf(names.getValue()))
+        aliasNamedTupleField(copy, names.getKey(), name);
+  }
+
+  /**
+   * Makes a namedtuple copy's field named {@code name} hold what its position {@code index} does.
+   *
+   * @param copy The copy.
+   * @param index The position.
+   * @param name The field's name.
+   */
+  private void aliasNamedTupleField(InstanceKey copy, int index, String name) {
+    IClassHierarchy cha = getClassHierarchy();
+    IField named = resolveRootField(cha, name);
+    IField numbered = resolveRootField(cha, Integer.toString(index));
+    if (named == null || numbered == null) return;
+    getSystem()
+        .newConstraint(
+            getPointerKeyForInstanceField(copy, named),
+            assignOperator,
+            getPointerKeyForInstanceField(copy, numbered));
   }
 
   /**
@@ -4817,6 +5005,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(index), index));
         bindField(instance, named, argument);
         bindField(instance, numbered, argument);
+        nameNamedTupleField(instance, index, name);
       }
 
       /** Binds an argument's value to a field of the instance. */

@@ -1545,6 +1545,33 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * Whether a structure's members are its positions, as a tuple's are and a namedtuple's are
+   * besides its names (wala/ML#1210).
+   *
+   * @param type The structure's type.
+   * @return {@code true} iff it is a tuple or a namedtuple.
+   */
+  protected static boolean isPositional(TypeReference type) {
+    return type.equals(tuple)
+        || type.equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE);
+  }
+
+  /**
+   * The field at a position of a tuple or a namedtuple. A namedtuple's positions are fields of
+   * {@code Root}, as the copy of a dataset's element keys them (wala/ML#1210).
+   *
+   * @param type The structure's type.
+   * @param index The position.
+   * @return The field's reference.
+   */
+  protected static FieldReference positionField(TypeReference type, int index) {
+    return FieldReference.findOrCreate(
+        type.equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE) ? Root : type,
+        findOrCreateAsciiAtom(Integer.toString(index)),
+        Root);
+  }
+
+  /**
    * Returns the integer element index for an object-catalog key, or {@code null} when the key is
    * not an integer index. A Python list/tuple's object catalog accumulates <em>every</em> attribute
    * name accessed on the allocation, not just its integer element indices &mdash; e.g. a
@@ -7450,9 +7477,16 @@ public abstract class TensorGenerator implements Cloneable {
         if (asin == null) continue;
         TypeReference type = asin.concreteType().getReference();
         String fieldName;
-        if (selector instanceof Integer index && type.equals(PythonTypes.tuple))
-          fieldName = index.toString();
+        if (selector instanceof Integer index && isPositional(type)) fieldName = index.toString();
         else if (selector instanceof String key && type.equals(PythonTypes.dict)) fieldName = key;
+        // The members of a list or tuple whose positions are unknown, as a starred part leaves
+        // them, are held under its contents channel, which a dataset element's copy keeps as a
+        // path (wala/ML#1212).
+        else if (selector instanceof String channel
+            && (type.equals(PythonTypes.tuple) || type.equals(PythonTypes.list))
+            && (channel.equals(PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD)
+                || channel.equals(PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD)))
+          fieldName = channel;
         else continue;
         IField f =
             builder
@@ -12742,6 +12776,10 @@ public abstract class TensorGenerator implements Cloneable {
       // resolves the chain to the pre-batch element and the batch transform never applies
       // (wala/ML#759).
       return new DatasetPaddedBatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)) {
+      // The concatenation twin of the source arm: the catch-all below would follow the receiver
+      // alone, dropping the concatenated dataset's element (wala/ML#1215).
+      return new DatasetConcatenateGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
       // The map twin of the padded-batch arm above: the DATA_PACKAGE_PREFIX catch-all would
       // inherit from map.do's own receiver, typing the mapped element from the callback's INPUT

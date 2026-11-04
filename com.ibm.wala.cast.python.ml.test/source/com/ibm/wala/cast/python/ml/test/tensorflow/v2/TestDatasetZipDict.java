@@ -1,10 +1,6 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
-import static java.util.Arrays.asList;
-
 import com.ibm.wala.cast.python.ml.types.TensorType;
-import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -49,20 +45,14 @@ public class TestDatasetZipDict extends AbstractTensorTest {
     test(FILE, "named_label_sink", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64))));
   }
 
-  /** The zipped dict datasets batched, the first's key read. */
+  /**
+   * The zipped dict datasets batched, the first's key read. Both datasets have 4 elements, so the
+   * zip has 4 and every batch of 2 is full (wala/ML#1203).
+   */
   @Test
   public void testBatchedTupleOfDatasets()
       throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "batched_sink",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 3),
-                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))))));
+    test(FILE, "batched_sink", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }
 
   /**

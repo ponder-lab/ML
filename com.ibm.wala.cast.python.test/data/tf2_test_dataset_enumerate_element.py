@@ -1,5 +1,7 @@
 # Test https://github.com/wala/ML/issues/1190: the element of `Dataset.enumerate()` is a tuple of an
 # int64 scalar index and the receiver's element, whose members keep their own types.
+import random
+
 import tensorflow as tf
 
 
@@ -158,6 +160,46 @@ def consume_zipped_inner_y(y):
     pass
 
 
+def consume_mixed_index(x):
+    pass
+
+
+def consume_mixed_x(x):
+    pass
+
+
+def consume_mixed_member(x):
+    pass
+
+
+def consume_unmodeled_index(x):
+    pass
+
+
+def consume_unmodeled_x(x):
+    pass
+
+
+def consume_shuffled_mixed_x(x):
+    pass
+
+
+def consume_enumerated_map_x(x):
+    pass
+
+
+def consume_enumerated_mixed_map_x(x):
+    pass
+
+
+def consume_unmodeled_member(m):
+    pass
+
+
+def consume_either_member(m):
+    pass
+
+
 floats = tf.data.Dataset.from_tensor_slices(tf.ones([6, 4]))
 ints = tf.data.Dataset.from_tensor_slices(tf.zeros([6, 2], tf.int32))
 for i, (x, y) in tf.data.Dataset.zip((floats, ints)).enumerate():
@@ -174,6 +216,48 @@ for (i, x), y in tf.data.Dataset.zip((floats.enumerate(), ints)):
     consume_zipped_inner_index(i)
     consume_zipped_inner_x(x)
     consume_zipped_inner_y(y)
+
+# A receiver that may be either of two datasets: the element is the join of both
+# (https://github.com/wala/ML/issues/1204).
+picked = random.random() > 0.5
+threes = tf.data.Dataset.from_tensor_slices(tf.zeros([6, 3], tf.int32))
+mixed = floats if picked else threes
+for i, x in mixed.enumerate():
+    assert i.shape == () and i.dtype == tf.int64
+    assert x.shape in ((4,), (3,))
+    consume_mixed_index(i)
+    consume_mixed_x(x)
+for e in mixed.enumerate():
+    consume_mixed_member(e[1])
+
+
+def fives():
+    for _ in range(3):
+        yield tf.ones((5,))
+
+
+# One of the two datasets declares no structure, so its element is not mirrored.
+unmodeled = (
+    floats if picked else tf.data.Dataset.from_generator(fives, output_types=tf.float32)
+)
+for i, x in unmodeled.enumerate():
+    assert i.shape == () and i.dtype == tf.int64
+    assert x.shape in ((4,), (5,)) and x.dtype == tf.float32
+    consume_unmodeled_index(i)
+    consume_unmodeled_x(x)
+
+# A pass-through transformation of the receiver that may be either dataset.
+for i, x in mixed.shuffle(2).enumerate():
+    assert x.shape in ((4,), (3,))
+    consume_shuffled_mixed_x(x)
+
+# A mapped dataset is enumerated through its mapped element, alone or as one of two receivers.
+for i, x in threes.map(lambda v: v + 1).enumerate():
+    assert x.shape == (3,) and x.dtype == tf.int32
+    consume_enumerated_map_x(x)
+for i, x in (floats if picked else threes.map(lambda v: v + 1)).enumerate():
+    assert x.shape in ((4,), (3,))
+    consume_enumerated_mixed_map_x(x)
 
 
 def consume_mapped_index(i):
@@ -202,3 +286,49 @@ for i, (x, y) in pairs.map(double_first).enumerate():
     consume_mapped_index(i)
     consume_mapped_x(x)
     consume_mapped_y(y)
+
+
+def consume_tensor_or_pair_a(a):
+    pass
+
+
+def consume_object_or_pair_a(a):
+    pass
+
+
+class Rows:
+    def enumerate(self):
+        return iter([(0, (tf.ones([4]), tf.zeros([3], tf.int32)))])
+
+
+def threes_rows():
+    for _ in range(3):
+        yield tf.zeros((3,), tf.int32)
+
+
+# An element read by subscript where the receiver's element is not mirrored, from one dataset or
+# either of two of different dtypes, reads each dataset's element.
+for e in tf.data.Dataset.from_generator(fives, output_types=tf.float32).enumerate():
+    assert e[1].shape == (5,) and e[1].dtype == tf.float32
+    consume_unmodeled_member(e[1])
+either = (
+    tf.data.Dataset.from_generator(fives, output_types=tf.float32)
+    if picked
+    else tf.data.Dataset.from_generator(threes_rows, output_types=tf.int32)
+)
+for e in either.enumerate():
+    assert (e[1].shape, e[1].dtype) in (((5,), tf.float32), ((3,), tf.int32))
+    consume_either_member(e[1])
+
+
+# A member of the element where the receiver may also be a tensor, or an object of a user class,
+# neither of them a dataset.
+always = len([pairs]) == 1
+tensor_or_pair = pairs if always else tf.ones([2])
+for i, (a, b) in tensor_or_pair.enumerate():
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_tensor_or_pair_a(a)
+object_or_pair = pairs if picked else Rows()
+for i, (a, b) in object_or_pair.enumerate():
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_object_or_pair_a(a)
