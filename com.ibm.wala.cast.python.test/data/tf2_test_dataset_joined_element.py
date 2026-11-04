@@ -23,6 +23,30 @@ def consume_named(x):
     pass
 
 
+def consume_crossed_batched(x):
+    pass
+
+
+def consume_crossed_shuffled_batched(x):
+    pass
+
+
+def consume_crossed_member_batched(x):
+    pass
+
+
+def consume_crossed_padded(x):
+    pass
+
+
+def consume_paired_whole(e):
+    pass
+
+
+def consume_paired_member(x):
+    pass
+
+
 def flat_dataset():
     return tf.data.Dataset.from_tensor_slices((tf.ones([8, 6]), tf.zeros([8])))
 
@@ -73,8 +97,63 @@ def named(flag):
         consume_named(x)
 
 
+# Datasets of different dtypes, so a shape paired with the other dataset's dtype is visible
+# (https://github.com/wala/ML/issues/1207).
+def floats_dataset():
+    return tf.data.Dataset.from_tensor_slices(tf.ones([8, 4]))
+
+
+def ints_dataset():
+    return tf.data.Dataset.from_tensor_slices(tf.zeros([8, 3], tf.int32))
+
+
+def int_pair_dataset():
+    return tf.data.Dataset.from_tensor_slices(
+        (tf.zeros([8, 5], tf.int32), tf.zeros([8]))
+    )
+
+
+def crossed_batched(flag):
+    for x in (floats_dataset() if flag else ints_dataset()).batch(2):
+        assert (x.shape, x.dtype) in (((2, 4), tf.float32), ((2, 3), tf.int32))
+        consume_crossed_batched(x)
+
+
+def crossed_shuffled_batched(flag):
+    for x in (floats_dataset() if flag else ints_dataset()).shuffle(4).batch(2):
+        assert (x.shape, x.dtype) in (((2, 4), tf.float32), ((2, 3), tf.int32))
+        consume_crossed_shuffled_batched(x)
+
+
+def crossed_member_batched(flag):
+    for x, y in (flat_dataset() if flag else int_pair_dataset()).batch(2):
+        assert (x.shape, x.dtype) in (((2, 6), tf.float32), ((2, 5), tf.int32))
+        consume_crossed_member_batched(x)
+
+
+def crossed_padded(flag):
+    for x in (floats_dataset() if flag else ints_dataset()).padded_batch(2):
+        assert (x.shape, x.dtype) in (((2, 4), tf.float32), ((2, 3), tf.int32))
+        consume_crossed_padded(x)
+
+
+# A shuffle of either of two pair datasets: the whole element is a tuple, no tensor, and its
+# first member is either dataset's.
+def paired(flag):
+    for e in (flat_dataset() if flag else narrow_dataset()).shuffle(2):
+        assert isinstance(e, tuple)
+        consume_paired_whole(e)
+        assert e[0].shape in ((6,), (5,)) and e[0].dtype == tf.float32
+        consume_paired_member(e[0])
+
+
 for flag in (True, False):
     batched(flag)
     shuffled(flag)
     flats(flag)
     named(flag)
+    crossed_batched(flag)
+    crossed_shuffled_batched(flag)
+    crossed_member_batched(flag)
+    crossed_padded(flag)
+    paired(flag)

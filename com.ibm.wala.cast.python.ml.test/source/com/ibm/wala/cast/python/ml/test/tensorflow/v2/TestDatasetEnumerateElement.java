@@ -354,12 +354,8 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
 
   /**
    * The element of a pass-through transformation of a dataset that may be either of two datasets
-   * holds both datasets' types (wala/ML#1204). Each transformation of one dataset still reads its
-   * whole element through both, so each shape is also paired with the other dataset's dtype.
-   *
-   * <p>TODO: Expect {@code (4,) float32} and {@code (3,) int32} alone once a view of a
-   * transformation fixed to one receiver reads its whole element through that receiver
-   * (wala/ML#1207).
+   * holds both datasets' types (wala/ML#1204), each shape with its own dataset's dtype, since each
+   * transformation of one dataset reads its whole element through that dataset (wala/ML#1207).
    *
    * @throws Exception On analysis error.
    */
@@ -370,13 +366,7 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
         "consume_shuffled_mixed_x",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TENSOR_4_FLOAT32,
-                TENSOR_3_INT32,
-                TensorType.of(FLOAT_32, 3),
-                TensorType.of(INT_32, 4))));
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
   }
 
   /**
