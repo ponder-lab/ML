@@ -39,7 +39,7 @@ import java.util.logging.Logger;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
+public class DatasetSampleFromDatasetsGenerator extends DatasetJoinGenerator {
 
   private static final Logger LOGGER =
       Logger.getLogger(DatasetSampleFromDatasetsGenerator.class.getName());
@@ -70,6 +70,46 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
 
   public DatasetSampleFromDatasetsGenerator(CGNode node) {
     super(node);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Unless it stops at the first dataset that runs out, a sample yields every element of
+   *     each dataset it is given, so each size it may have is the sum of one size of each. The
+   *     sizes are unknown when {@code stop_on_empty_dataset} may be anything but {@code False}, or
+   *     a dataset's size is.
+   */
+  @Override
+  public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> datasets = this.joined(builder);
+    if (datasets == null) return super.getDatasetSizes(builder);
+    int stopPosition = Parameters.STOP_ON_EMPTY_DATASET.getIndex();
+    String stopName = Parameters.STOP_ON_EMPTY_DATASET.getName();
+    Boolean supplied = this.isArgumentSyntacticallySupplied(builder, stopPosition, stopName);
+    if (supplied == null) return Collections.emptySet();
+    if (supplied) {
+      Set<Boolean> stops =
+          getPossibleBooleanValues(this.getArgumentPointsToSet(builder, stopPosition, stopName));
+      if (stops == null || !stops.equals(Collections.singleton(Boolean.FALSE)))
+        return Collections.emptySet();
+    }
+    return sumOfSizes(builder, datasets);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The datasets the {@code datasets} argument holds, since the element is any one of
+   *     their elements (wala/ML#1215), or {@code null} for a view fixed to one of them.
+   */
+  @Override
+  public List<TensorGenerator> getReceiverGenerators(PropagationCallGraphBuilder builder) {
+    if (this.getFixedReceiver() != null) return null;
+    return datasetsIn(
+        builder,
+        this.getArgumentPointsToSet(
+            builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName()));
   }
 
   @Override
