@@ -202,12 +202,7 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
    */
   private Set<List<Dimension<?>>> padToLongest(
       Set<List<Dimension<?>>> elementShapes, PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> receiverPTS = this.getReceiverPTS(builder);
-    return padToLongest(
-        elementShapes,
-        receiverPTS == null || receiverPTS.isEmpty()
-            ? null
-            : this.getShapesOfValue(builder, receiverPTS));
+    return padToLongest(elementShapes, this.getReceiverElementShapes(builder));
   }
 
   /**

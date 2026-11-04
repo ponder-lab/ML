@@ -131,14 +131,25 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     return OrdinalSet.empty();
   }
 
+  /**
+   * The shapes of the receiver's element: those of the receiver a view is fixed to alone ({@link
+   * #overReceiver}, wala/ML#1207), and otherwise those of every dataset the receiver may be.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The shapes, or {@code null} when the receiver is unknown.
+   */
+  protected Set<List<Dimension<?>>> getReceiverElementShapes(PropagationCallGraphBuilder builder) {
+    TensorGenerator fixed = this.getFixedReceiver();
+    if (fixed != null) return memoizedShapeResult(builder, fixed).toLegacy();
+    OrdinalSet<InstanceKey> receiverPTS = getReceiverPTS(builder);
+    return receiverPTS == null || receiverPTS.isEmpty()
+        ? null
+        : this.getShapesOfValue(builder, receiverPTS);
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> receiverPTS = getReceiverPTS(builder);
-
-    Set<List<Dimension<?>>> inputShapes = null;
-    if (receiverPTS != null && !receiverPTS.isEmpty()) {
-      inputShapes = this.getShapesOfValue(builder, receiverPTS);
-    }
+    Set<List<Dimension<?>>> inputShapes = this.getReceiverElementShapes(builder);
 
     if (inputShapes == null || inputShapes.isEmpty()) {
       return null;
@@ -299,6 +310,12 @@ public class DatasetBatchGenerator extends DatasetGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // A view fixed to one receiver reads that receiver's element alone (wala/ML#1207).
+    TensorGenerator fixed = this.getFixedReceiver();
+    if (fixed != null) {
+      Set<DType> dTypes = memoizedDTypes(builder, fixed);
+      return dTypes == null || dTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dTypes;
+    }
     OrdinalSet<InstanceKey> receiverPTS = getReceiverPTS(builder);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       return this.getDTypesOfValue(builder, receiverPTS);
