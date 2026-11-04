@@ -1061,15 +1061,22 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     // A zip's element is the structure of datasets it is given, each replaced by its element
     // (wala/ML#164).
+    // A dataset `tfds.load` returns is no subclass of `Dataset`, but writes both fields as one
+    // does.
     builder.setElementZip(
         TensorFlowTypes.DATASET_ELEMENT_ZIP,
-        TensorFlowTypes.DATASET,
+        Set.of(TensorFlowTypes.DATASET, TensorFlowTypes.TFDS_DATASET_TYPE),
         "mirrored_element",
         "legacy_element");
 
     // A dataset built from a generator mirrors the structure it declares, and a call declaring none
     // marks its element as not mirrored (wala/ML#164).
     builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");
+
+    // A dataset `tfds.load` returns under the literal `as_supervised=True` has a pair as its
+    // element, and a call passing anything else, or nothing, marks its element as not mirrored
+    // (wala/ML#164).
+    builder.setElementSupervised(TensorFlowTypes.DATASET_ELEMENT_SUPERVISED, "legacy_element");
 
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).

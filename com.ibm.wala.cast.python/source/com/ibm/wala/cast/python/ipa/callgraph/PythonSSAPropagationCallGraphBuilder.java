@@ -621,8 +621,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private TypeReference elementZipType;
 
-  /** The class of a dataset a zip's structure holds; see {@link #elementZipType}. */
-  private TypeReference elementZipDatasetType;
+  /** The classes of a dataset a zip's structure holds; see {@link #elementZipType}. */
+  private Set<TypeReference> elementZipDatasetTypes = Collections.emptySet();
 
   /** The field of a dataset holding its mirrored element; see {@link #elementZipType}. */
   private String elementZipElementField;
@@ -699,20 +699,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   /**
    * Names the classes of zip element mirroring (wala/ML#164): a call whose callee is an instance of
    * {@code zip} mirrors its first argument's structure as {@link #setElementMirror}'s class does,
-   * except that an instance of {@code dataset} in it is replaced by the copy of that dataset's
-   * element, held in its {@code elementField}. A dataset whose element is not mirrored passes its
-   * {@code legacyField} marker to the zip's dataset, so iterating the zip still allocates the
-   * element its generator types.
+   * except that an instance of a {@code datasets} class in it is replaced by the copy of that
+   * dataset's element, held in its {@code elementField}. A dataset whose element is not mirrored
+   * passes its {@code legacyField} marker to the zip's dataset, so iterating the zip still
+   * allocates the element its generator types.
    *
    * @param zip The summary class whose call mirrors a structure of datasets.
-   * @param dataset The class of a dataset.
+   * @param datasets The classes of a dataset whose allocations write both fields.
    * @param elementField The field of a dataset holding its mirrored element.
    * @param legacyField The field of a dataset holding its marker that its element is not mirrored.
    */
   public void setElementZip(
-      TypeReference zip, TypeReference dataset, String elementField, String legacyField) {
+      TypeReference zip, Set<TypeReference> datasets, String elementField, String legacyField) {
     this.elementZipType = zip;
-    this.elementZipDatasetType = dataset;
+    this.elementZipDatasetTypes = Set.copyOf(datasets);
     this.elementZipElementField = elementField;
     this.elementZipLegacyField = legacyField;
   }
@@ -762,6 +762,54 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public void setElementDeclared(TypeReference declared, String legacyField) {
     this.elementDeclaredType = declared;
     this.elementDeclaredLegacyField = legacyField;
+  }
+
+  /**
+   * The summary class whose call makes a dataset's element a pair where its flag is the literal
+   * {@code True} (wala/ML#164), or {@code null} when no client names one; see {@link
+   * #setElementSupervised}.
+   */
+  private TypeReference elementSupervisedType;
+
+  /**
+   * The field of a dataset holding its marker that its element is not mirrored; see {@link
+   * #setElementSupervised}.
+   */
+  private String elementSupervisedLegacyField;
+
+  /**
+   * The positions of the parameters a method passes as the flag of a call of {@link
+   * #elementSupervisedType}, by method; empty for a method that makes no such call.
+   */
+  private final Map<IMethod, Set<Integer>> supervisedFlagParameters = HashMapFactory.make();
+
+  /** The nodes some call reaches passing the literal {@code True} as each flag they read. */
+  private final Set<CGNode> supervisedElementNodes = HashSetFactory.make();
+
+  /** The nodes some call reaches passing a flag other than the literal {@code True}, or none. */
+  private final Set<CGNode> unsupervisedElementNodes = HashSetFactory.make();
+
+  /** The supervised element calls started in each node, which a later call of the node decides. */
+  private final Map<CGNode, Set<SupervisedElementCallOperator>> supervisedElementCalls =
+      HashMapFactory.make();
+
+  /**
+   * Names the summary class of supervised element mirroring (wala/ML#164): a call {@code
+   * supervised(flag, dataset, marker)} whose callee is an instance of {@code supervised} returns a
+   * pair of two leaves, typed by the dataset's generator at positions 0 and 1, once a call of the
+   * summary method passes the literal {@code True} as the parameter it passes as {@code flag}. Once
+   * a call passes anything else there, a value that is no literal or no argument at all, the {@code
+   * marker} argument's keys reach the dataset's {@code legacyField}, so a dataset some call reaches
+   * both ways is not mirrored, and an iterator over it allocates the element its generator types.
+   * Both are read from the call itself, positionally or by keyword, not from the flag's points-to
+   * set, so the decision only grows as calls arrive.
+   *
+   * @param supervised The summary class whose call makes the pair.
+   * @param legacyField The field of a dataset holding its marker that its element is not mirrored.
+   */
+  public void setElementSupervised(TypeReference supervised, String legacyField) {
+    this.elementSupervisedType = supervised;
+    this.elementSupervisedLegacyField = legacyField;
   }
 
   /**
@@ -1569,6 +1617,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processElementMirror(inst);
       processMapSpread(inst);
       processElementDeclared(inst);
+      processElementSupervised(inst);
     }
 
     /**
@@ -1712,6 +1761,43 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               List.of(getPointerKeyForLocal(inst.getUse(1)), getPointerKeyForLocal(inst.getUse(3))),
               getPointerKeyForLocal(datasetVn),
               datasets,
+              markers)
+          .start();
+    }
+
+    /**
+     * Makes a dataset's element a pair where a call's callee is the supervised element class
+     * (wala/ML#164); see {@link #setElementSupervised}. The summary allocates the callee and the
+     * marker itself, so their keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processElementSupervised(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.elementSupervisedType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 4) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      InstanceKey callee = null;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.elementSupervisedType)) callee = key;
+      if (callee == null) return;
+      int markerVn = inst.getUse(3);
+      Set<InstanceKey> markers =
+          contentsAreInvariant(symtab, du, markerVn)
+                  || system.isImplicit(getPointerKeyForLocal(markerVn))
+              ? Set.of(getInvariantContents(symtab, du, node, markerVn))
+              : Set.of();
+      builder
+          .new SupervisedElementCallOperator(
+              node,
+              inst.iIndex(),
+              callee,
+              getPointerKeyForLocal(inst.getDef()),
+              getPointerKeyForLocal(inst.getUse(2)),
               markers)
           .start();
     }
@@ -2493,14 +2579,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public void visitPropertyRead(AstPropertyRead instruction) {
       // An element read over an object whose class declares the iteration protocol reads nothing:
       // such an object's elements come from `__next__`, and its properties are its attributes,
-      // not its elements (wala/ML#1010).
+      // not its elements (wala/ML#1010). Its list contents are no elements either: `tfds.load`'s
+      // result holds itself there for a subscript by a split name, and a loop over it read the
+      // dataset as its own element (wala/ML#164).
       elementRead = isLoopVariable(instruction.getDef());
       try {
         super.visitPropertyRead(instruction);
+        processListContentsRead(instruction);
       } finally {
         elementRead = false;
       }
-      processListContentsRead(instruction);
       processNegativeSubscript(instruction);
       processUnknownIndexRead(instruction);
       processElementRead(instruction);
@@ -2855,6 +2943,100 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Records a call of a method that makes its dataset's element a pair by a flag it is passed
+   * (wala/ML#164): when the call passes the literal {@code True} as each flag, the supervised
+   * element calls in the target make their pairs, and otherwise they mark their datasets as not
+   * mirrored; see {@link #setElementSupervised}.
+   *
+   * @param caller The calling node.
+   * @param call The call.
+   * @param target The node it reaches.
+   * @param args The positions of the target's parameters the call binds, positionally or by
+   *     keyword; a position a starred argument may bind is not among them.
+   */
+  private void recordSupervisedElementCall(
+      CGNode caller, PythonInvokeInstruction call, CGNode target, IntSet args) {
+    if (elementSupervisedType == null) return;
+    Set<Integer> flags = supervisedFlagParameters(target);
+    if (flags.isEmpty()) return;
+    boolean supervised = true;
+    for (int parameter : flags)
+      if (!args.contains(parameter) || !isLiteralTrue(caller, call, target, parameter))
+        supervised = false;
+    if (!(supervised ? supervisedElementNodes : unsupervisedElementNodes).add(target)) return;
+    boolean literal = supervised;
+    logger.fine(
+        () ->
+            (literal ? "A literal True flag" : "No literal True flag")
+                + " reaches "
+                + target
+                + " from "
+                + call
+                + ".");
+    Set<SupervisedElementCallOperator> started = supervisedElementCalls.get(target);
+    if (started != null)
+      for (SupervisedElementCallOperator operator : started)
+        if (supervised) operator.supervised();
+        else operator.unsupervised();
+  }
+
+  /**
+   * Whether a call passes the literal {@code True} as a parameter of its target, by keyword or
+   * positionally.
+   *
+   * @param caller The calling node.
+   * @param call The call.
+   * @param target The node it reaches.
+   * @param parameter The parameter's position, its value number less one.
+   * @return {@code true} iff the argument bound there is the constant {@code True} in the caller.
+   */
+  private static boolean isLiteralTrue(
+      CGNode caller, PythonInvokeInstruction call, CGNode target, int parameter) {
+    IR callerIR = caller.getIR();
+    IR targetIR = target.getIR();
+    if (callerIR == null || targetIR == null) return false;
+    int argument = -1;
+    String[] names = targetIR.getLocalNames(0, parameter + 1);
+    if (names != null)
+      for (String keyword : call.getKeywords())
+        for (String name : names) if (keyword.equals(name)) argument = call.getUse(keyword);
+    if (argument < 0 && parameter < call.getNumberOfPositionalParameters())
+      argument = call.getUse(parameter);
+    if (argument < 0) return false;
+    SymbolTable symtab = callerIR.getSymbolTable();
+    return symtab.isConstant(argument) && Boolean.TRUE.equals(symtab.getConstantValue(argument));
+  }
+
+  /**
+   * The positions of the parameters a method passes as the flag of a supervised element call
+   * (wala/ML#164): its calls whose callee it allocates as an instance of {@link
+   * #elementSupervisedType}, at their {@code flag} argument.
+   *
+   * @param node A node of the method; the method's calls are read from its IR.
+   * @return The positions, each a parameter's value number less one; empty for a method that is no
+   *     library summary or makes no such call.
+   */
+  private Set<Integer> supervisedFlagParameters(CGNode node) {
+    IMethod method = node.getMethod();
+    if (!(method instanceof SummarizedMethod)) return Collections.emptySet();
+    return supervisedFlagParameters.computeIfAbsent(
+        method,
+        m -> {
+          IR ir = node.getIR();
+          if (ir == null) return Collections.emptySet();
+          DefUse du = node.getDU();
+          Set<Integer> ret = HashSetFactory.make();
+          for (SSAInstruction inst : ir.getInstructions())
+            if (inst instanceof SSAAbstractInvokeInstruction invoke
+                && invoke.getNumberOfUses() >= 4
+                && du.getDef(invoke.getUse(0)) instanceof SSANewInstruction allocation
+                && allocation.getConcreteType().equals(elementSupervisedType)
+                && invoke.getUse(1) <= m.getNumberOfParameters()) ret.add(invoke.getUse(1) - 1);
+          return ret.isEmpty() ? Collections.emptySet() : Set.copyOf(ret);
+        });
+  }
+
+  /**
    * Records a call of a method that declares its dataset's element by structures it is passed
    * (wala/ML#164): when the call passes none of them, the element is not declared in the target,
    * and the declared element calls there mark their datasets as not mirrored; see {@link
@@ -3073,6 +3255,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       }
 
       recordDeclaredElementCall(call, target, args);
+      recordSupervisedElementCall(caller, call, target, args);
 
       // A synthesized constructor's summary declares the wrapped `__init__`'s parameter count,
       // although its own formals stop one short (formal i mirrors `__init__`'s parameter i + 1),
@@ -3595,6 +3778,134 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "element mirror call at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Makes a dataset's element a pair of two leaves once a call of its node passes the literal
+   * {@code True} as its flag, and marks the dataset's element as not mirrored once a call passes
+   * anything else or nothing (wala/ML#164); see {@link #setElementSupervised}. The pair is a tuple
+   * keyed by the call's callee, and each leaf is keyed by its position, so the two members are
+   * distinct objects, typed by the dataset's generator at positions 0 and 1 as any mirrored leaf is
+   * typed at its path.
+   */
+  private final class SupervisedElementCallOperator {
+    private final CGNode node;
+    private final int pc;
+    private final InstanceKey callee;
+    private final PointerKey resultKey;
+    private final PointerKey datasetKey;
+    private final Set<InstanceKey> markers;
+    private boolean made;
+    private boolean marked;
+
+    private SupervisedElementCallOperator(
+        CGNode node,
+        int pc,
+        InstanceKey callee,
+        PointerKey resultKey,
+        PointerKey datasetKey,
+        Set<InstanceKey> markers) {
+      this.node = node;
+      this.pc = pc;
+      this.callee = callee;
+      this.resultKey = resultKey;
+      this.datasetKey = datasetKey;
+      this.markers = markers;
+    }
+
+    /** Registers the call, and applies what the calls of its node already decided. */
+    private void start() {
+      supervisedElementCalls.computeIfAbsent(node, n -> HashSetFactory.make()).add(this);
+      if (supervisedElementNodes.contains(node)) supervised();
+      if (unsupervisedElementNodes.contains(node)) unsupervised();
+    }
+
+    /** Makes the pair: a call of this node passes the literal {@code True} as its flag. */
+    private void supervised() {
+      if (made) return;
+      IClassHierarchy cha = getClassHierarchy();
+      IClass tupleClass = cha.lookupClass(PythonTypes.tuple);
+      IClass leafClass = cha.lookupClass(elementLeafType);
+      if (tupleClass == null || leafClass == null) return;
+      made = true;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      ElementMirrorKey pair =
+          new ElementMirrorKey(
+              node,
+              NewSiteReference.make(pc, PythonTypes.tuple),
+              tupleClass,
+              callee,
+              datasetKey,
+              false);
+      elementMirrorPaths.computeIfAbsent(pair, k -> HashSetFactory.make()).add(List.of());
+      getSystem().newConstraint(resultKey, pair);
+      // Each leaf copies a source of its own, the value the call makes, and is keyed by its
+      // position, so the input and the label are distinct keys.
+      NewSiteReference leafSite = NewSiteReference.make(pc, elementLeafType);
+      InstanceKey source = new NormalAllocationInNode(node, leafSite, leafClass);
+      for (int position = 0; position < 2; position++) {
+        IField field = resolveRootField(cha, Integer.toString(position));
+        if (field == null) continue;
+        List<Object> path = List.of(position);
+        ElementMirrorKey leaf =
+            new ElementMirrorKey(node, leafSite, leafClass, source, datasetKey, true, path);
+        elementMirrorPaths.computeIfAbsent(leaf, k -> HashSetFactory.make()).add(path);
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForObjectCatalog(pair),
+                getInstanceKeyForConstant(
+                    PythonLanguage.Python.getConstantType(position), position));
+        getSystem().newConstraint(factory.getPointerKeyForInstanceField(pair, field), leaf);
+      }
+    }
+
+    /**
+     * Marks the dataset's element as not mirrored: a call of this node passes a flag other than the
+     * literal {@code True}, or none, so an iterator over the dataset allocates the element its
+     * generator types.
+     */
+    private void unsupervised() {
+      if (marked) return;
+      IField legacy = resolveRootField(getClassHierarchy(), elementSupervisedLegacyField);
+      if (legacy == null) return;
+      marked = true;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                @Override
+                public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+                  if (rhs.getValue() == null) return NOT_CHANGED;
+                  rhs.getValue()
+                      .foreach(
+                          i -> {
+                            InstanceKey dataset = getSystem().getInstanceKey(i);
+                            for (InstanceKey marker : markers)
+                              getSystem()
+                                  .newConstraint(
+                                      factory.getPointerKeyForInstanceField(dataset, legacy),
+                                      marker);
+                          });
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return (node.hashCode() * 31 + pc) * 31 + datasetKey.hashCode();
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "unsupervised element marker at " + pc + " in " + node;
+                }
+              },
+              datasetKey);
     }
   }
 
@@ -4345,13 +4656,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * dataset's element (wala/ML#164).
      *
      * @param type The class of a key the structure holds.
-     * @return {@code true} iff it is a dataset class.
+     * @return {@code true} iff it is one of the dataset classes.
      */
     private boolean isZippedDataset(IClass type) {
-      if (elementZipDatasetType == null) return false;
       IClassHierarchy cha = getClassHierarchy();
-      IClass dataset = cha.lookupClass(elementZipDatasetType);
-      return dataset != null && cha.isSubclassOf(type, dataset);
+      for (TypeReference datasetType : elementZipDatasetTypes) {
+        IClass dataset = cha.lookupClass(datasetType);
+        if (dataset != null && cha.isSubclassOf(type, dataset)) return true;
+      }
+      return false;
     }
 
     /**
