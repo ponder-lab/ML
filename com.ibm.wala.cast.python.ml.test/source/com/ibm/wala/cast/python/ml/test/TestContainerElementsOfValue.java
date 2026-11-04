@@ -474,8 +474,8 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A sliced dataset's element read at one position by path reads as it does by index, for every
-   * sliced dataset the script holds.
+   * A sliced dataset's element read at one position by path reads as it does by index, which reads
+   * some tensor, for every sliced dataset the script holds.
    */
   @Test
   public void testSlicesPathAtOnePosition() {
@@ -499,6 +499,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
           continue;
         }
         if (generator instanceof DatasetFromTensorSlicesGenerator slices) {
+          assertFalse(slices.getTensorTypesForIndex(b, 0).isEmpty());
           assertEquals(
               slices.getTensorTypesForIndex(b, 0), slices.getTensorTypesForPath(b, List.of(0)));
           read++;
