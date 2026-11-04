@@ -294,4 +294,88 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   public void testZippedInnerY() throws Exception {
     testLeaf("consume_zipped_inner_y", TENSOR_2_INT32);
   }
+
+  /**
+   * The index of a dataset that may be either of two datasets.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedIndex() throws Exception {
+    test(FILE, "consume_mixed_index", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
+   * The element of a dataset that may be either of two datasets is the join of both (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedX() throws Exception {
+    test(FILE, "consume_mixed_x", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
+
+  /**
+   * The element read by subscript from a dataset that may be either of two datasets is the join of
+   * both, each shape with its own dtype (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedMember() throws Exception {
+    test(FILE, "consume_mixed_member", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
+
+  /**
+   * The index of a dataset that may be one whose element is not mirrored.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnmodeledIndex() throws Exception {
+    test(FILE, "consume_unmodeled_index", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
+   * The element of a dataset that may be either a mirrored dataset or one declaring no structure
+   * keeps both datasets' types (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnmodeledX() throws Exception {
+    test(
+        FILE,
+        "consume_unmodeled_x",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The element of a pass-through transformation of a dataset that may be either of two datasets
+   * holds both datasets' types (wala/ML#1204). Each transformation of one dataset still reads its
+   * whole element through both, so each shape is also paired with the other dataset's dtype.
+   *
+   * <p>TODO: Expect {@code (4,) float32} and {@code (3,) int32} alone once a view of a
+   * transformation fixed to one receiver reads its whole element through that receiver
+   * (wala/ML#1207).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testShuffledMixedX() throws Exception {
+    test(
+        FILE,
+        "consume_shuffled_mixed_x",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_4_FLOAT32,
+                TENSOR_3_INT32,
+                TensorType.of(FLOAT_32, 3),
+                TensorType.of(INT_32, 4))));
+  }
 }
