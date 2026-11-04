@@ -111,3 +111,24 @@ pair()
 pair_element()
 batched()
 dict_element()
+
+
+def consume_generated_x(x):
+    pass
+
+
+def gen_pairs():
+    for _ in range(4):
+        yield tf.ones([3]), tf.zeros([2], tf.int32)
+
+
+generated = tf.data.Dataset.from_generator(
+    gen_pairs,
+    output_signature=(
+        tf.TensorSpec(shape=(3,), dtype=tf.float32),
+        tf.TensorSpec(shape=(2,), dtype=tf.int32),
+    ),
+)
+for i, (x, y) in generated.enumerate():
+    assert x.shape == (3,) and x.dtype == tf.float32
+    consume_generated_x(x)

@@ -222,4 +222,15 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   public void testDictSecond() throws Exception {
     testLeaf("consume_dict_b", SCALAR_TENSOR_OF_INT32);
   }
+
+  /**
+   * A member of an enumerated {@code from_generator} element, whose structure the generator's
+   * signature declares, is its own object.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testGeneratedX() throws Exception {
+    testLeaf("consume_generated_x", TensorType.of(FLOAT_32, 3));
+  }
 }
