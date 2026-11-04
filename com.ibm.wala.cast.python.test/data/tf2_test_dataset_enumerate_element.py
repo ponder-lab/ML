@@ -288,6 +288,19 @@ for i, (x, y) in pairs.map(double_first).enumerate():
     consume_mapped_y(y)
 
 
+def consume_tensor_or_pair_a(a):
+    pass
+
+
+def consume_object_or_pair_a(a):
+    pass
+
+
+class Rows:
+    def enumerate(self):
+        return iter([(0, (tf.ones([4]), tf.zeros([3], tf.int32)))])
+
+
 def threes_rows():
     for _ in range(3):
         yield tf.zeros((3,), tf.int32)
@@ -306,3 +319,16 @@ either = (
 for e in either.enumerate():
     assert (e[1].shape, e[1].dtype) in (((5,), tf.float32), ((3,), tf.int32))
     consume_either_member(e[1])
+
+
+# A member of the element where the receiver may also be a tensor, or an object of a user class,
+# neither of them a dataset.
+always = len([pairs]) == 1
+tensor_or_pair = pairs if always else tf.ones([2])
+for i, (a, b) in tensor_or_pair.enumerate():
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_tensor_or_pair_a(a)
+object_or_pair = pairs if picked else Rows()
+for i, (a, b) in object_or_pair.enumerate():
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_object_or_pair_a(a)

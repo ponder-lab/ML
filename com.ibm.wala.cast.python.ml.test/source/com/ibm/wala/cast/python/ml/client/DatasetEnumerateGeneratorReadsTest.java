@@ -77,6 +77,7 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
     boolean dict = false;
     boolean underlying = false;
     boolean declared = false;
+    boolean mixed = false;
     for (DatasetEnumerateGenerator generator : generators) {
       assertTrue(generator.yieldsTuple(builder));
       assertEquals(OptionalInt.of(2), generator.declaredArity(builder, List.of()));
@@ -112,6 +113,11 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
       assertEquals(Set.of(), generator.getShapesForPath(builder, List.of("a")));
       assertEquals(Set.of(), generator.getDTypesForPath(builder, List.of("a")));
       assertNotNull(generator.getDTypesForIndex(builder, 1));
+      // A receiver that may also be a tensor reads its member as of unknown dtype beside the
+      // dataset's.
+      if (generator
+          .getDTypesForPath(builder, List.of(1, 0))
+          .equals(EnumSet.of(DType.FLOAT32, DType.UNKNOWN))) mixed = true;
       if (generator.isStructureAt(builder, List.of(1))) {
         // A tuple element is selected by position, a dict element by key. A zip's tuple declares
         // no arity, so the position is tried first.
@@ -128,6 +134,7 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
     assertTrue("Some enumerated dataset's receiver resolves.", underlying);
     assertTrue("Some enumerated dataset's element declares a length.", declared);
     assertTrue("The fixture enumerates a dataset whose element is a dict.", dict);
+    assertTrue("Some enumerated dataset's receiver may also be no dataset.", mixed);
   }
 
   /**

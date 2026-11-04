@@ -452,4 +452,37 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, new TensorType(INT_32, null))));
   }
+
+  /**
+   * A member of the element where the receiver may also be a tensor, which is no dataset, is the
+   * dataset's member and a tensor of unknown type, not the dataset's member alone (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTensorOrPairMember() throws Exception {
+    test(
+        FILE,
+        "consume_tensor_or_pair_a",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * A member of the element where the receiver may also be an object of a user class, whose
+   * allocation has no generator, is the dataset's member and a tensor of unknown type
+   * (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testObjectOrPairMember() throws Exception {
+    test(
+        FILE,
+        "consume_object_or_pair_a",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
 }
