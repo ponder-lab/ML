@@ -100,11 +100,10 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
       assertEquals(Set.of(), generator.getDTypesForPath(builder, List.of("a")));
       assertNotNull(generator.getDTypesForIndex(builder, 1));
       if (generator.isStructureAt(builder, List.of(1))) {
-        // A tuple element is selected by position, a dict element by key.
+        // A tuple element is selected by position, a dict element by key. A zip's tuple declares
+        // no arity, so the position is tried first.
         List<Object> member =
-            generator.declaredArity(builder, List.of(1)).isPresent()
-                ? List.of(1, 0)
-                : List.of(1, "a");
+            generator.resolvesPath(builder, List.of(1, 0)) ? List.of(1, 0) : List.of(1, "a");
         if (member.get(1) instanceof Integer) tuple = true;
         else dict = true;
         assertTrue(generator.resolvesPath(builder, member));

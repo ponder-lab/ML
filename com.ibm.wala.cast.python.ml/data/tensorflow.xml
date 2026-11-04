@@ -6851,6 +6851,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that a pass-through reads the element from carries this dataset's (wala/ML#1190). -->
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_enumerate" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
@@ -6903,6 +6904,7 @@
           <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
           <!-- Each method installed here that a pass-through reads the element from carries this dataset's (wala/ML#1190). -->
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_enumerate" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>

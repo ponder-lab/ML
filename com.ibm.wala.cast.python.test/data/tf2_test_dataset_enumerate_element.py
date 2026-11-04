@@ -132,3 +132,45 @@ generated = tf.data.Dataset.from_generator(
 for i, (x, y) in generated.enumerate():
     assert x.shape == (3,) and x.dtype == tf.float32
     consume_generated_x(x)
+
+
+def consume_zipped_index(i):
+    pass
+
+
+def consume_zipped_x(x):
+    pass
+
+
+def consume_zipped_y(y):
+    pass
+
+
+def consume_zipped_inner_index(i):
+    pass
+
+
+def consume_zipped_inner_x(x):
+    pass
+
+
+def consume_zipped_inner_y(y):
+    pass
+
+
+floats = tf.data.Dataset.from_tensor_slices(tf.ones([6, 4]))
+ints = tf.data.Dataset.from_tensor_slices(tf.zeros([6, 2], tf.int32))
+for i, (x, y) in tf.data.Dataset.zip((floats, ints)).enumerate():
+    assert i.shape == () and i.dtype == tf.int64
+    assert x.shape == (4,) and x.dtype == tf.float32
+    assert y.shape == (2,) and y.dtype == tf.int32
+    consume_zipped_index(i)
+    consume_zipped_x(x)
+    consume_zipped_y(y)
+for (i, x), y in tf.data.Dataset.zip((floats.enumerate(), ints)):
+    assert i.shape == () and i.dtype == tf.int64
+    assert x.shape == (4,) and x.dtype == tf.float32
+    assert y.shape == (2,) and y.dtype == tf.int32
+    consume_zipped_inner_index(i)
+    consume_zipped_inner_x(x)
+    consume_zipped_inner_y(y)

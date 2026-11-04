@@ -233,4 +233,65 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   public void testGeneratedX() throws Exception {
     testLeaf("consume_generated_x", TensorType.of(FLOAT_32, 3));
   }
+
+  /**
+   * The index of an enumerated zip.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedIndex() throws Exception {
+    testLeaf("consume_zipped_index", SCALAR_TENSOR_OF_INT64);
+  }
+
+  /**
+   * A member of an enumerated zip's element, the element of the first zipped dataset, keeps its own
+   * type.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedX() throws Exception {
+    testLeaf("consume_zipped_x", TENSOR_4_FLOAT32);
+  }
+
+  /**
+   * Another member of an enumerated zip's element keeps its own type.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedY() throws Exception {
+    testLeaf("consume_zipped_y", TENSOR_2_INT32);
+  }
+
+  /**
+   * The index of an enumerated dataset zipped with another.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedInnerIndex() throws Exception {
+    testLeaf("consume_zipped_inner_index", SCALAR_TENSOR_OF_INT64);
+  }
+
+  /**
+   * The element of an enumerated dataset zipped with another keeps its own type.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedInnerX() throws Exception {
+    testLeaf("consume_zipped_inner_x", TENSOR_4_FLOAT32);
+  }
+
+  /**
+   * The element of the dataset zipped with an enumerated one keeps its own type.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedInnerY() throws Exception {
+    testLeaf("consume_zipped_inner_y", TENSOR_2_INT32);
+  }
 }

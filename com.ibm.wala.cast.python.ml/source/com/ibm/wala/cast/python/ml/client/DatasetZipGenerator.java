@@ -213,13 +213,15 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
   /**
    * {@inheritDoc}
    *
-   * @implNote The first selector picks zipped datasets: with no more selectors, the component is a
-   *     picked dataset's whole element, a structure when every picked dataset yields a tuple, as
-   *     {@code from_tensor_slices((x, mask))} does; otherwise the rest of the path is every picked
-   *     dataset's.
+   * @implNote With no selectors, the component is the whole element, the structure of datasets
+   *     {@code zip} is given, as an enumeration of the zip asks. The first selector picks zipped
+   *     datasets: with no more selectors, the component is a picked dataset's whole element, a
+   *     structure when every picked dataset yields a tuple, as {@code from_tensor_slices((x,
+   *     mask))} does; otherwise the rest of the path is every picked dataset's.
    */
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.isEmpty()) return this.yieldsTuple(builder);
     List<TensorGenerator> datasets = this.getDatasetsFor(builder, path.get(0));
     if (datasets.isEmpty()) return false;
     List<Object> rest = path.subList(1, path.size());
