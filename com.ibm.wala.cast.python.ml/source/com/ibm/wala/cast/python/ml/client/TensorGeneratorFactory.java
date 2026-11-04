@@ -52,6 +52,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CACHE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CARDINALITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CONCATENATE_TYPE;
@@ -69,7 +70,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANGE_TY
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REDUCE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REPEAT_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHARD_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SKIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WINDOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
@@ -4043,11 +4046,14 @@ public class TensorGeneratorFactory {
       return new DatasetChooseFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SAMPLE_FROM_DATASETS_TYPE))
       return new DatasetSampleFromDatasetsGenerator(source);
+    else if (isType(calledFunction, DATASET_SKIP_TYPE)) return new DatasetSkipGenerator(source);
+    else if (isType(calledFunction, DATASET_SHARD_TYPE)) return new DatasetShardGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_WINDOW_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
         || isType(calledFunction, DATASET_REPEAT_TYPE)
         || isType(calledFunction, DATASET_PREFETCH_TYPE)
+        || isType(calledFunction, DATASET_CACHE_TYPE)
         || isType(calledFunction, DATASET_TAKE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
         || isType(calledFunction, DATASET_CONCATENATE_TYPE)

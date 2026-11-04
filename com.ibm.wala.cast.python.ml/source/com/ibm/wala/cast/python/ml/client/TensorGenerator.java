@@ -12772,6 +12772,10 @@ public abstract class TensorGenerator implements Cloneable {
       // neither allocation is a tensor, and a key the function reads is seeded on the `dict`'s
       // field instead (wala/ML#1088).
       return null;
+    } else if (type.equals(TensorFlowTypes.DATASET_SKIP_TYPE)) {
+      return new DatasetSkipGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_SHARD_TYPE)) {
+      return new DatasetShardGenerator(node);
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

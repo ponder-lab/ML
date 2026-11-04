@@ -380,6 +380,33 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_PREFETCH_SIGNATURE = "tf.data.Dataset.prefetch()";
 
+  /**
+   * The summary class of {@code tf.data.Dataset.skip}, a pass-through of its receiver's element
+   * (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_SKIP_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/skip"));
+
+  public static final String DATASET_SKIP_SIGNATURE = "tf.data.Dataset.skip()";
+
+  /**
+   * The summary class of {@code tf.data.Dataset.shard}, a pass-through of its receiver's element
+   * (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_SHARD_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/shard"));
+
+  public static final String DATASET_SHARD_SIGNATURE = "tf.data.Dataset.shard()";
+
+  /**
+   * The summary class of {@code tf.data.Dataset.cache}, a pass-through of its receiver's element
+   * (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_CACHE_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/cache"));
+
+  public static final String DATASET_CACHE_SIGNATURE = "tf.data.Dataset.cache()";
+
   public static final TypeReference DATASET_WINDOW_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/window"));
 
@@ -3092,6 +3119,9 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_MAP_TYPE, DATASET_MAP_SIGNATURE),
           Map.entry(DATASET_REPEAT_TYPE, DATASET_REPEAT_SIGNATURE),
           Map.entry(DATASET_PREFETCH_TYPE, DATASET_PREFETCH_SIGNATURE),
+          Map.entry(DATASET_SKIP_TYPE, DATASET_SKIP_SIGNATURE),
+          Map.entry(DATASET_SHARD_TYPE, DATASET_SHARD_SIGNATURE),
+          Map.entry(DATASET_CACHE_TYPE, DATASET_CACHE_SIGNATURE),
           Map.entry(DATASET_WINDOW_TYPE, DATASET_WINDOW_SIGNATURE),
           Map.entry(DATASET_TAKE_TYPE, DATASET_TAKE_SIGNATURE),
           Map.entry(DATASET_WITH_OPTIONS_TYPE, DATASET_WITH_OPTIONS_SIGNATURE),
