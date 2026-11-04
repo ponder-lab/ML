@@ -1125,8 +1125,10 @@ public class TestModelCall extends AbstractTensorTest {
    * dataset_fn} never gets traced. After this PR's `tensorflow.xml` fix (synthetic-method body on
    * {@code tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub
    * {@code InputContext} and invokes {@code dataset_fn(ctx)}), the callback enters the call graph
-   * and the helper finds it. {@code input_context} is non-tensor, hence 0 tensor parameters; the 6
-   * tensor variables in the body come from the chained {@code tf.data.Dataset} calls.
+   * and the helper finds it. {@code input_context} is non-tensor, hence 0 tensor parameters; the 11
+   * tensor variables in the body come from the chained {@code tf.data.Dataset} calls, the {@code
+   * shard} call's dataset and the {@code batch} and {@code prefetch} after it among them, since
+   * {@code shard} hands on its receiver's element (wala/ML#1214).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1136,7 +1138,7 @@ public class TestModelCall extends AbstractTensorTest {
   @Test
   public void testCallbacks3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_callbacks3.py", "dataset_fn", 0, 6, Map.of());
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 11, Map.of());
   }
 
   /**
