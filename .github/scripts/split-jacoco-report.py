@@ -9,10 +9,14 @@ directory at a time, to a report named <module>/<source directory>, which makes 
 file's path in the repository. Package and class names are left as they are, since Codecov keys
 method complexity by class name. The aggregate report is replaced by the split reports.
 
-Usage: split-jacoco-report.py <jacoco.xml> [<repository root>]
+Usage: split-jacoco-report.py [<jacoco.xml> [<repository root>]]
+
+With no report given, the one aggregate report under the repository root, at
+<module>/target/site/jacoco-aggregate/jacoco.xml, is split.
 """
 
 import copy
+import glob
 import os
 import sys
 import xml.etree.ElementTree as ET
@@ -34,9 +38,19 @@ def source_root(root, module, path):
     return hits[0]
 
 
+def find_aggregate(root):
+    """Return the one aggregate report under root, or exit if there is not one."""
+    hits = glob.glob(
+        os.path.join(root, "*", "target", "site", "jacoco-aggregate", "jacoco.xml")
+    )
+    if len(hits) != 1:
+        sys.exit(f"{hits or 'No'} aggregate JaCoCo report under {root}, expected one")
+    return hits[0]
+
+
 def main():
-    aggregate = sys.argv[1]
     root = sys.argv[2] if len(sys.argv) > 2 else "."
+    aggregate = sys.argv[1] if len(sys.argv) > 1 else find_aggregate(root)
     # ElementTree drops the report's DOCTYPE, which Codecov does not read.
     report = ET.parse(aggregate).getroot()
     sessions = report.findall("sessioninfo")
