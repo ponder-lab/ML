@@ -170,3 +170,29 @@ for _ in records.map(cast_record):
 for e in records:
     assert e["ids"].shape == (3,) and e["ids"].dtype == tf.int32
     consume_untouched(e["ids"])
+
+
+def consume_fifth(e):
+    pass
+
+
+fives = tf.data.Dataset.from_tensor_slices(
+    (
+        tf.ones([8, 2]),
+        tf.ones([8, 2]),
+        tf.ones([8, 2]),
+        tf.ones([8, 2]),
+        tf.ones([8, 6]),
+    )
+)
+
+
+def fifth_or_default(a, b, c, d, e=tf.zeros([7], tf.int32)):
+    return e
+
+
+# A tuple element longer than the analysis spreads is passed whole to no call, so the mapped
+# element is unknown rather than the default.
+for e in fives.map(fifth_or_default):
+    assert e.shape == (6,) and e.dtype == tf.float32
+    consume_fifth(e)

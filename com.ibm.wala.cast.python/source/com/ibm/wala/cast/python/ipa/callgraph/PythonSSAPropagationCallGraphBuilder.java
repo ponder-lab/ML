@@ -569,6 +569,26 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private String elementMapReturnField;
 
+  /** The field of a mapped dataset holding its marker that its element is not mirrored. */
+  private static final String ELEMENT_MAP_LEGACY_FIELD = "legacy_element";
+
+  /**
+   * The mapped datasets whose receiver's element is a tuple longer than {@code map}'s calls spread
+   * into, so their element is unknown (wala/ML#164).
+   */
+  private final Set<InstanceKey> mapOverflowDatasets = HashSetFactory.make();
+
+  /**
+   * Whether a mapped dataset's element is unknown because its receiver's element is a tuple longer
+   * than {@code map}'s calls spread into (wala/ML#164).
+   *
+   * @param dataset The mapped dataset's key.
+   * @return {@code true} iff its element is unknown for that reason.
+   */
+  public boolean isMapOverflow(InstanceKey dataset) {
+    return mapOverflowDatasets.contains(dataset);
+  }
+
   /**
    * The field of the holder {@link #elementMapSpreadType}'s call fills that holds positional
    * argument {@code i} of the call of arity {@code n}.
@@ -623,10 +643,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * spreads each key of {@code element} as {@code tf.data} does. An exact tuple of {@code n}
    * members fills the holder's {@link #mapArgumentField fields} for arity {@code n}, one per
    * member, and any other key fills the single argument of arity 1 whole. Once arity {@code n}
-   * occurs, the return {@code r_n} is mirrored into the call's result and stored on {@code
-   * dataset}'s {@code returnField}, a top-level list as a tuple. A receiver whose element is not
-   * mirrored, which {@code legacy} marks, passes {@code argument} to arity 1 and stores {@code r_1}
-   * unmirrored.
+   * occurs, the return {@code r_n} becomes the call's result and is stored on {@code dataset}'s
+   * {@code returnField}. A receiver whose element is not mirrored, which {@code legacy} marks,
+   * passes {@code argument} to arity 1 and stores {@code r_1} unmirrored.
    *
    * @param spread The summary class whose call spreads.
    * @param maxArity The most positional arguments a tuple is spread into.
@@ -3427,6 +3446,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final Set<InstanceKey> spread = HashSetFactory.make();
     private boolean started;
     private boolean legacy;
+    private boolean overflowed;
 
     private MapSpreadOperator(
         CGNode node,
@@ -3478,8 +3498,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         PointerKey copy = factory.getPointerKeyForInstanceField(holder, received);
         getSystem()
             .newSideEffect(
-                new ElementMirrorOperator(
-                    node, pc, datasetKey, copy, List.of(), Set.of(), false, true),
+                new ElementMirrorOperator(node, pc, datasetKey, copy, List.of(), Set.of(), true),
                 elementKey);
         spreadFrom(copy);
       }
@@ -3579,13 +3598,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                             if (getSystem().getInstanceKey(c) instanceof ConstantKey<?> name
                                 && name.getValue() instanceof Number number
                                 && number.longValue() >= 0
-                                && number.longValue() < elementMapMaxArity)
+                                && number.longValue() <= Integer.MAX_VALUE)
                               positions.add(number.intValue());
                           });
-                  // The tuple's length is its positions so far; an arity beyond the summary's calls
-                  // spreads nowhere.
+                  // The tuple's length is its positions so far, so a copy whose catalog fills over
+                  // several rounds may first activate a lower arity, which only over-approximates.
+                  // A
+                  // tuple longer than the summary's calls spread into makes the mapped element
+                  // unknown,
+                  // since no call binds its members as the function receives them.
                   int n = positions.size();
-                  if (n < 1 || n > elementMapMaxArity) return NOT_CHANGED;
+                  if (n < 1) return NOT_CHANGED;
+                  if (n > elementMapMaxArity) {
+                    overflow();
+                    return NOT_CHANGED;
+                  }
                   for (int i = 0; i < n; i++) {
                     IField position = resolveRootField(cha, Integer.toString(i));
                     if (position == null) continue;
@@ -3610,6 +3637,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 }
               },
               factory.getPointerKeyForObjectCatalog(key));
+    }
+
+    /**
+     * Makes the mapped dataset's element unknown, for a tuple element longer than the summary's
+     * calls spread into: the dataset is marked as not mirrored, so an iterator over it allocates
+     * the element its generator types, and the generator reads it as unknown ({@link
+     * #isMapOverflow}).
+     */
+    private void overflow() {
+      if (overflowed) return;
+      overflowed = true;
+      IField legacyField = resolveRootField(getClassHierarchy(), ELEMENT_MAP_LEGACY_FIELD);
+      if (legacyField == null) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      for (InstanceKey dataset : datasets) {
+        mapOverflowDatasets.add(dataset);
+        // Any key marks the field non-empty; the holder is one this call already allocated.
+        for (InstanceKey holder : holders)
+          getSystem()
+              .newConstraint(factory.getPointerKeyForInstanceField(dataset, legacyField), holder);
+      }
     }
 
     /**
@@ -3674,9 +3722,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * Mirrors the return of the call of arity {@code n} into the mapped dataset's element once that
-     * arity occurs, a top-level list as a tuple as {@code tf.data} packs it, and stores the return
-     * on the mapped dataset for its generator.
+     * Takes the return of the call of arity {@code n} as the mapped dataset's element once that
+     * arity occurs, and stores it on the mapped dataset for its generator.
      *
      * @param n The arity.
      */
@@ -3820,12 +3867,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final Set<InstanceKey> ancestors;
 
     /**
-     * Whether a list at the root is copied as structure, as {@code tf.data} packs a list a {@code
-     * map} function returns into a tuple (wala/ML#164).
-     */
-    private final boolean rootListAsStructure;
-
-    /**
      * Whether a leaf is shared rather than copied, so only the containers are fresh, as {@code map}
      * hands its function a fresh structure of the same tensors (wala/ML#164).
      */
@@ -3840,7 +3881,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         PointerKey target,
         List<Object> path,
         Set<InstanceKey> ancestors) {
-      this(node, pc, datasetKey, target, path, ancestors, false, false);
+      this(node, pc, datasetKey, target, path, ancestors, false);
     }
 
     private ElementMirrorOperator(
@@ -3850,7 +3891,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         PointerKey target,
         List<Object> path,
         Set<InstanceKey> ancestors,
-        boolean rootListAsStructure,
         boolean shareLeaves) {
       this.node = node;
       this.pc = pc;
@@ -3858,7 +3898,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       this.target = target;
       this.path = path;
       this.ancestors = ancestors;
-      this.rootListAsStructure = rootListAsStructure;
       this.shareLeaves = shareLeaves;
     }
 
@@ -3877,12 +3916,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       // Past the recorded length, or where the path returns to a structure it already copies, the
       // copy stops: the key is a leaf standing for the unknown rest.
       boolean beyond = path.size() > MAX_PATH || ancestors.contains(original);
-      boolean structure =
-          !beyond
-              && (isStructure(source.concreteType())
-                  || (rootListAsStructure
-                      && path.isEmpty()
-                      && source.concreteType().equals(cha.lookupClass(PythonTypes.list))));
+      boolean structure = !beyond && isStructure(source.concreteType());
       if (!structure && shareLeaves) {
         getSystem().newConstraint(target, source);
         return;
@@ -3947,7 +3981,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                         factory.getPointerKeyForInstanceField(mirror, f),
                                         List.copyOf(next),
                                         Set.copyOf(above),
-                                        false,
                                         shareLeaves),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
@@ -4013,7 +4046,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && target.equals(other.target)
           && path.equals(other.path)
           && ancestors.equals(other.ancestors)
-          && rootListAsStructure == other.rootListAsStructure
           && shareLeaves == other.shareLeaves;
     }
 

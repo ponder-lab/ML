@@ -203,4 +203,17 @@ public class TestDatasetMapElement extends AbstractTensorTest {
   public void testUntouched() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_untouched", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
   }
+
+  /**
+   * A tuple element longer than the four positions the analysis spreads makes the mapped element
+   * unknown, never the default the function returns when it is called with fewer.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testFifth() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_fifth", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
 }

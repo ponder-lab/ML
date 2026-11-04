@@ -11,6 +11,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
@@ -110,6 +111,22 @@ public class DatasetMapGenerator extends DatasetGenerator {
   }
 
   /**
+   * Whether this dataset's element is unknown because its receiver's element is a tuple longer than
+   * {@code map}'s calls spread into (wala/ML#164): no call bound its members as the function
+   * receives them, so its returns say nothing about the element.
+   *
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff an instance of this dataset is such a one.
+   */
+  private boolean overflows(PropagationCallGraphBuilder builder) {
+    if (!(builder instanceof PythonSSAPropagationCallGraphBuilder python)) return false;
+    OrdinalSet<InstanceKey> self = selfInstances(builder);
+    if (self == null) return false;
+    for (InstanceKey ik : self) if (python.isMapOverflow(ik)) return true;
+    return false;
+  }
+
+  /**
    * Returns the points-to set of the {@code element} field of the mapped dataset, i.e. of {@code
    * map_func}'s return value that {@code map.do()} stored there.
    *
@@ -176,6 +193,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    if (overflows(builder)) return null;
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
     if (elementPTS != null && !elementPTS.isEmpty()) {
       // A tuple element is a bundle of independent per-index tensors, not a tensor whose leading
@@ -220,6 +238,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    if (overflows(builder)) return EnumSet.of(DType.UNKNOWN);
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
     if (elementPTS != null && !elementPTS.isEmpty()) {
       // The dtype counterpart of the tuple-element union in getDefaultShapes (wala/ML#847): the
@@ -340,6 +359,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    if (overflows(builder)) return null;
     int returned = this.returnedComponent(builder);
     if (returned >= 0) return super.getShapesForPath(builder, List.of(returned, index));
     OrdinalSet<InstanceKey> componentPTS = getMappedElementComponentPointsToSet(builder, index);
@@ -367,6 +387,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
 
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    if (overflows(builder)) return EnumSet.of(DType.UNKNOWN);
     int returned = this.returnedComponent(builder);
     if (returned >= 0) return super.getDTypesForPath(builder, List.of(returned, index));
     OrdinalSet<InstanceKey> componentPTS = getMappedElementComponentPointsToSet(builder, index);
@@ -589,6 +610,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
+    if (overflows(builder)) return null;
     int returned = this.returnedComponent(builder);
     if (returned >= 0) return super.getShapesForPath(builder, withinComponent(returned, path));
     if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
@@ -618,6 +640,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   @Override
   public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (overflows(builder)) return EnumSet.of(DType.UNKNOWN);
     int returned = this.returnedComponent(builder);
     if (returned >= 0) return super.getDTypesForPath(builder, withinComponent(returned, path));
     if (!this.knowsMappedElement(builder) || this.returnsInputUnchanged(builder))
