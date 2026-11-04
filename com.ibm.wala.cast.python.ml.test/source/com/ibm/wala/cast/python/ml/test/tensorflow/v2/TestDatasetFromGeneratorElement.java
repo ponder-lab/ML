@@ -39,8 +39,28 @@ public class TestDatasetFromGeneratorElement extends AbstractTensorTest {
 
   /** Releases the builder. */
   @AfterClass
-  public static void releaseBuilder() {
+  public static synchronized void releaseBuilder() {
     builder = null;
+  }
+
+  /**
+   * The class's builder, built by the first test method that asks for it. The test methods run in
+   * parallel, so the builder is published only once its call graph is complete.
+   *
+   * @return The builder.
+   */
+  private static synchronized PythonSSAPropagationCallGraphBuilder builder() {
+    if (builder == null)
+      try {
+        PythonTensorAnalysisEngine engine =
+            new TestDatasetFromGeneratorElement().makeEngine(Collections.<File>emptyList(), FILE);
+        PythonSSAPropagationCallGraphBuilder b = engine.defaultCallGraphBuilder();
+        b.makeCallGraph(b.getOptions());
+        builder = b;
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
+    return builder;
   }
 
   /**
@@ -51,11 +71,7 @@ public class TestDatasetFromGeneratorElement extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   private Set<InstanceKey> parameterKeys(String sink) throws Exception {
-    if (builder == null) {
-      PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FILE);
-      builder = engine.defaultCallGraphBuilder();
-      builder.makeCallGraph(builder.getOptions());
-    }
+    PythonSSAPropagationCallGraphBuilder builder = builder();
     Set<InstanceKey> ret = null;
     for (CGNode node : builder.getCallGraph()) {
       if (!node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + sink)) continue;
@@ -83,7 +99,7 @@ public class TestDatasetFromGeneratorElement extends AbstractTensorTest {
     for (InstanceKey key : keys)
       assertTrue(
           sink + "'s parameter points to a leaf of the element's copy, not " + key + ".",
-          builder.isElementMirrorLeaf(key));
+          builder().isElementMirrorLeaf(key));
   }
 
   /**
@@ -268,6 +284,6 @@ public class TestDatasetFromGeneratorElement extends AbstractTensorTest {
     for (InstanceKey key : keys)
       assertFalse(
           "consume_undeclared_x's parameter points to the generic element, not " + key + ".",
-          builder.isElementMirrorLeaf(key));
+          builder().isElementMirrorLeaf(key));
   }
 }
