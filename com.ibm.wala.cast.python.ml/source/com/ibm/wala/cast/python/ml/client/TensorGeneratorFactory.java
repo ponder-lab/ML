@@ -1722,15 +1722,16 @@ public class TensorGeneratorFactory {
         if (!seen.add(structure)
             || structure.concreteType() == null
             || !TupleElementProvider.isElementStructure(cha, structure.concreteType())) continue;
-        boolean keyed = structure.concreteType().getReference().equals(PythonTypes.dict);
         for (InstanceKey name :
             builder
                 .getPointerAnalysis()
                 .getPointsToSet(factory.getPointerKeyForObjectCatalog(structure))) {
           if (!(name instanceof ConstantKey<?> constant)) continue;
           Object value = constant.getValue();
-          // A tuple's or a list's positions are its integer indices; a dict's are its keys.
-          if (keyed ? !(value instanceof String) : !(value instanceof Integer)) continue;
+          // A position is named by an index or a key, an integer or a string, whatever the
+          // structure's class, as the copy reads it; a name that is no position, such as an
+          // attribute, can only send the dataset to its generator, which reads it as unknown.
+          if (!(value instanceof String) && !(value instanceof Number)) continue;
           IField field =
               cha.resolveField(
                   FieldReference.findOrCreate(

@@ -291,4 +291,16 @@ public class TestDatasetMapElement extends AbstractTensorTest {
   public void testNoneMapped() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_none_mapped", 0, 0);
   }
+
+  /**
+   * As {@link #testRawSecond()}, for a member of a dict a function returns keyed by integers.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRawIntKey() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_raw_int_key", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
 }

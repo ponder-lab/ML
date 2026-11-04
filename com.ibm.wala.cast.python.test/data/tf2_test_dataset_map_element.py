@@ -259,3 +259,19 @@ for e in (
 ):
     assert e[1] is None
     consume_none_mapped(e[1])
+
+
+def consume_raw_int_key(t):
+    pass
+
+
+def int_keyed_with_raw(a, b):
+    return {0: a, 1: tf.raw_ops.Abs(x=b)}
+
+
+# The same for a member of a dict keyed by integers.
+for e in tf.data.Dataset.from_tensor_slices((tf.ones([8, 4]), tf.ones([8, 3]))).map(
+    int_keyed_with_raw
+):
+    assert e[1].shape == (3,) and e[1].dtype == tf.float32
+    consume_raw_int_key(e[1])
