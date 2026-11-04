@@ -40,4 +40,47 @@ public class TestFitTFRecordMap extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 2, 4),
                 new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
   }
+
+  /**
+   * A map whose function returns {@code (x, y)} on one call and {@code x} alone on another, which
+   * is the dataset {@code fit} is given: the inputs are the batched {@code x}, without the {@code
+   * y} of the call whose dataset {@code fit} is not given.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testMaybeLabelledInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_fit_map_maybe_labelled.py",
+        "consume_fit_inputs",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * The first input of a model fed a zip whose first dataset is a map over a {@code
+   * TFRecordDataset} returning a pair: {@code call} unpacks its inputs {@code (a, b)}, and {@code
+   * a} is the batched first member of the pair.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNestedFirstInput() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_fit_uncopied_nested.py",
+        "consume_first_input",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
+  }
 }
