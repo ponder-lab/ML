@@ -649,9 +649,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   /**
    * The field names of each namedtuple instance by position (wala/ML#1210), as its type's names
    * arrive: an instance's catalog names its positions alone, so a copy of the instance learns its
-   * names here.
+   * names here. A position may have several names, where one site constructs either of two
+   * namedtuple types.
    */
-  private final Map<InstanceKey, Map<Integer, String>> namedTupleFieldNames = HashMapFactory.make();
+  private final Map<InstanceKey, Map<Integer, Set<String>>> namedTupleFieldNames =
+      HashMapFactory.make();
 
   /** The copies of each namedtuple instance in a dataset's element, keyed by the instance. */
   private final Map<InstanceKey, Set<InstanceKey>> namedTupleCopies = HashMapFactory.make();
@@ -4371,9 +4373,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * @param name The field's name.
    */
   private void nameNamedTupleField(InstanceKey instance, int index, String name) {
-    String known =
-        namedTupleFieldNames.computeIfAbsent(instance, k -> HashMapFactory.make()).put(index, name);
-    if (name.equals(known)) return;
+    if (!namedTupleFieldNames
+        .computeIfAbsent(instance, k -> HashMapFactory.make())
+        .computeIfAbsent(index, k -> HashSetFactory.make())
+        .add(name)) return;
     for (InstanceKey copy : namedTupleCopies.getOrDefault(instance, Set.of()))
       aliasNamedTupleField(copy, index, name);
   }
@@ -4388,9 +4391,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private void copyNamedTupleNames(InstanceKey instance, InstanceKey copy) {
     if (!namedTupleCopies.computeIfAbsent(instance, k -> HashSetFactory.make()).add(copy)) return;
-    for (Map.Entry<Integer, String> name :
+    for (Map.Entry<Integer, Set<String>> names :
         List.copyOf(namedTupleFieldNames.getOrDefault(instance, Map.of()).entrySet()))
-      aliasNamedTupleField(copy, name.getKey(), name.getValue());
+      for (String name : List.copyOf(names.getValue()))
+        aliasNamedTupleField(copy, names.getKey(), name);
   }
 
   /**
