@@ -98,7 +98,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: coverage-build
-        path: com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco-*.xml
+        path: "**/jacoco-aggregate/jacoco-*.xml"
         if-no-files-found: error
   # The suite's long pole (the whole-project corpus analyses) runs beside the rest of the suite
   # instead of after it, sharded per subject so each leg stays short enough to serve as a required
@@ -170,7 +170,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: coverage-${{ matrix.shard }}
-        path: com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco-*.xml
+        path: "**/jacoco-aggregate/jacoco-*.xml"
         if-no-files-found: error
   # Codecov posts its statuses after each upload it receives, so an upload per job posted them
   # from the shards' partial reports while `build` still ran. One upload of every job's reports,
