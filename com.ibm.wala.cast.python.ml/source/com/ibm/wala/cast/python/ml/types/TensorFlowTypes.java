@@ -304,6 +304,19 @@ public class TensorFlowTypes extends PythonTypes {
           PythonTypes.dict,
           PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE);
 
+  /**
+   * The summary class whose call spreads a dataset's element into the arguments of {@code map}'s
+   * function (wala/ML#164).
+   */
+  public static final TypeReference DATASET_MAP_SPREAD =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "map_spread"));
+
+  /** The holder of {@code map}'s function's arguments (wala/ML#164). */
+  public static final TypeReference DATASET_MAP_ARGUMENTS =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "map_arguments"));
+
   /** The class of a leaf of a dataset's mirrored element, a tensor (wala/ML#1190). */
   public static final TypeReference DATASET_ELEMENT_LEAF =
       TypeReference.findOrCreate(

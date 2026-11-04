@@ -104,23 +104,17 @@ public class TestDatasetElementStructure extends AbstractTensorTest {
   }
 
   /**
-   * A tuple component of an element mapped by user code and then batched is no tensor.
-   *
-   * <p>TODO: The element of a {@code map} is not mirrored yet, so a {@code batch} over it keeps the
-   * element allocated for it, typed as one tensor (https://github.com/wala/ML/issues/1190).
+   * A tuple component of an element mapped by user code and then batched is no tensor: the mapped
+   * element is the function's return, which the batch copies
+   * (https://github.com/wala/ML/issues/164).
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testMappedInputs() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_mapped_inputs", 0, 0, Map.of());
   }
 
-  /**
-   * A member of the mapped and batched element's tuple component.
-   *
-   * <p>TODO: As {@link #testMappedInputs()}, the member reads as unknown until the element of a
-   * {@code map} is mirrored (https://github.com/wala/ML/issues/1190).
-   */
-  @Test(expected = AssertionError.class)
+  /** A member of the mapped and batched element's tuple component. */
+  @Test
   public void testMappedB() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_mapped_b", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }

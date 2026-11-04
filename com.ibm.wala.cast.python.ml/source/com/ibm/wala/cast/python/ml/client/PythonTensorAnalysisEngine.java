@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
@@ -249,6 +250,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private List<File> sidecarSearchPath;
 
   /**
+   * Whether a key is the holder of {@code map}'s function's arguments (wala/ML#164), whose fields
+   * hold a mirrored element's keys and are seeded as a mirrored structure's are.
+   *
+   * @param key The key.
+   * @return {@code true} iff the key is such a holder.
+   */
+  private static boolean isMapArguments(InstanceKey key) {
+    return key.concreteType().getReference().equals(TensorFlowTypes.DATASET_MAP_ARGUMENTS);
+  }
+
+  /**
    * Seeds each field a mirrored dataset element's leaf is stored in (wala/ML#1190): a field of a
    * mirrored structure, or the {@code mirrored_element} field of a dataset whose element is itself
    * a leaf. A leaf is typed by the generator of the dataset the mirror built it for, at each path
@@ -272,15 +284,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!(var.getPointerKey() instanceof InstanceFieldKey fieldKey)) continue;
       if (!(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
           && !(fieldKey.getField().getName().toString().equals("mirrored_element")
-              && isDataset(builder, fieldKey.getInstanceKey()))) continue;
+              && isDataset(builder, fieldKey.getInstanceKey()))
+          && !isMapArguments(fieldKey.getInstanceKey())) continue;
       Set<TensorType> types = null;
-      for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(fieldKey)) {
+      OrdinalSet<InstanceKey> values = builder.getPointerAnalysis().getPointsToSet(fieldKey);
+      for (InstanceKey value : values) {
         if (!(value instanceof ElementMirrorKey leaf) || !leaf.isLeaf()) continue;
         Set<TensorType> leafTyped =
             leafTypes.computeIfAbsent(leaf, k -> typesOfMirroredLeaf(python, leaf));
         if (types == null) types = HashSetFactory.make();
         types.addAll(leafTyped);
       }
+      // A position of a mirrored structure that holds nothing copies a member the analysis has not
+      // modeled, as one an operation without a summary makes: it is a tensor of unknown type, not
+      // an absent one.
+      if (types == null
+          && values.isEmpty()
+          && fieldKey.getInstanceKey() instanceof ElementMirrorKey structure
+          && !structure.isLeaf()
+          && isCataloguedPosition(builder, structure, fieldKey.getField()))
+        types = HashSetFactory.make(Set.of(new TensorType(DType.UNKNOWN, null)));
       if (types == null) continue;
       final Set<TensorType> seeded = types;
       LOGGER.fine(() -> "Seeding mirrored element field " + fieldKey + " with " + seeded + ".");
@@ -302,6 +325,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             return joined;
           });
     }
+  }
+
+  /**
+   * Whether a field of a structure names one of its catalogued positions.
+   *
+   * @param builder The propagation call graph builder.
+   * @param structure The structure.
+   * @param field The field.
+   * @return {@code true} iff the structure's catalog holds a constant naming the field.
+   */
+  private static boolean isCataloguedPosition(
+      PropagationCallGraphBuilder builder, InstanceKey structure, IField field) {
+    String name = field.getName().toString();
+    for (InstanceKey key :
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(structure)))
+      if (key instanceof ConstantKey<?> constant
+          && String.valueOf(constant.getValue()).equals(name)) return true;
+    return false;
   }
 
   /**
@@ -1003,6 +1048,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
         TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
 
+    // `map` calls its function with an exact tuple element's members as positional arguments and
+    // any other element whole, up to four positions, one call per arity (wala/ML#164).
+    builder.setElementMap(TensorFlowTypes.DATASET_MAP_SPREAD, 4, "element");
+    // Those calls pass exactly the element's members, so a variadic function's pack has their
+    // count.
+    builder.setExactArityCallers(Set.of(TensorFlowTypes.DATASET_MAP_TYPE));
+
     // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
     // element (wala/ML#1190).
     builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
@@ -1039,6 +1091,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     binaryOpResults.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE);
     binaryOpResults.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE);
     binaryOpResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    // A leaf of a dataset's mirrored element is a tensor, so arithmetic on it, as a `map` function
+    // does on its arguments, allocates one (wala/ML#164).
+    binaryOpResults.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.TENSOR_TYPE);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       binaryOpResults.put(array, NumpyTypes.NDARRAY_TYPE);
     builder.setFreshBinaryOpResultTypes(binaryOpResults);
@@ -1048,6 +1103,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // their operands where before every value downstream of the element was empty.
     Map<TypeReference, TypeReference> elementTypes = new HashMap<>();
     elementTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    // A leaf of a dataset's mirrored element is a tensor, so its element is one too, as a `map`
+    // function's return that is a leaf on one path and a tuple on another is read (wala/ML#164).
+    elementTypes.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.TENSOR_TYPE);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       elementTypes.put(array, NumpyTypes.NDARRAY_TYPE);
     // A static shape's element, `t.shape[k]`, is a Python int (wala/ML#1104), so arithmetic over
@@ -2129,8 +2187,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IClass concreteType = asin.concreteType();
         TypeReference reference = concreteType.getReference();
 
+        // The holder of a `map` function's arguments is a summary object, no dataset (wala/ML#164).
         if ((reference.equals(DATASET)
                 || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
+            && !reference.equals(TensorFlowTypes.DATASET_MAP_ARGUMENTS)
             && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
           LOGGER.fine("Added dataflow source from tensor dataset: " + describe(src) + ".");

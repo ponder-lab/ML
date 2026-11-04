@@ -329,12 +329,24 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
 
   /**
    * A key of a dict the map function writes into its input and returns, which neither a dict the
-   * map function returns nor a {@code padded_shapes} entry names: the key's type is unknown, not
-   * the union of every key's.
+   * map function returns nor a {@code padded_shapes} entry names: the key's own type, batched, as
+   * the function's input is a copy of the element's dict holding its tensors (wala/ML#164), not the
+   * union of every key's.
    */
   @Test
   public void testUnresolvedKey() throws ClassHierarchyException, CancelException, IOException {
-    test(LOAD_MAP_FILE, "rewritten_sink", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+    test(
+        LOAD_MAP_FILE,
+        "rewritten_sink",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4, 2),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new NumericDim(4), new NumericDim(2))))));
   }
 
   /**
@@ -608,6 +620,20 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
   }
 
   /**
+   * Whether a field holds a leaf of a mirrored dataset element.
+   *
+   * @param builder The builder.
+   * @param field The field.
+   * @return {@code true} iff some key the field points to is such a leaf.
+   */
+  private static boolean holdsMirroredLeaf(
+      PythonSSAPropagationCallGraphBuilder builder, InstanceFieldKey field) {
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(field))
+      if (builder.isElementMirrorLeaf(key)) return true;
+    return false;
+  }
+
+  /**
    * The {@code dict}s the first parameter of a function points to in any of its nodes, and the
    * tensor types on their fields by field name, empty for a field holding no tensor.
    *
@@ -651,9 +677,13 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
 
     Map<String, Set<TensorType>> ret = HashMapFactory.make();
     // Every field the pointer analysis has for the dicts, so a field that exists but holds no
-    // tensor reads as an empty set rather than as absent.
+    // tensor reads as an empty set rather than as absent. A field holding a leaf of a mirrored
+    // element holds a tensor, which is typed where the function reads it, so a key the function
+    // never reads is left out rather than read as holding none (wala/ML#164).
     for (PointerKey key : builder.getPointerAnalysis().getPointerKeys())
-      if (key instanceof InstanceFieldKey fieldKey && dicts.contains(fieldKey.getInstanceKey()))
+      if (key instanceof InstanceFieldKey fieldKey
+          && dicts.contains(fieldKey.getInstanceKey())
+          && !holdsMirroredLeaf(builder, fieldKey))
         ret.computeIfAbsent(fieldKey.getField().getName().toString(), k -> HashSetFactory.make());
     for (Pair<PointerKey, TensorVariable> pair : analysis) {
       if (!(pair.fst instanceof InstanceFieldKey fieldKey)) continue;

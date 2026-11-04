@@ -30,19 +30,8 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'recursive'
-    - name: Set up JDK 25
-      uses: actions/setup-java@v6
-      with:
-        java-version: '25'
-        distribution: 'temurin'
-        cache: maven
-    - name: Install Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
+    - name: Set up the build
+      uses: ./.github/actions/setup
     - name: Check formatting with Spotless
       run: mvn spotless:check -B
     - name: Check formatting with Black
@@ -52,21 +41,6 @@ jobs:
     # nowhere, tag pushes included. Fail on such a test, and on a list entry that selects none.
     - name: Check that the whole-project shards select every test in their category
       run: python3 .github/scripts/check-shard-coverage.py
-    - name: Install Jython3
-      run: |
-        pushd jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
-        popd
-      shell: bash
-    - name: Install IDE
-      run: |
-        pushd IDE/com.ibm.wala.cast.lsp
-        mvn package -B -q -DskipTests
-        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
     # The whole-project fixture analyses (the `WholeProjectFixtures` category) run in the parallel
     # `whole-project-fixtures` job, pulling the wall clock back to the pre-context-broadening band
     # (wala/ML#755), on every run, tag pushes included: the `deploy` job waits for both, so nothing
@@ -92,14 +66,14 @@ jobs:
     # by package alone, so Codecov cannot place either copy. Splitting the report by module source
     # directory, each part named for that directory, makes Codecov's lookup the repository path.
     - name: Split the coverage report by module
-      run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v7
+      run: python3 .github/scripts/split-jacoco-report.py
+    # The `coverage` job uploads every job's reports to Codecov at once.
+    - name: Save the coverage reports
+      uses: actions/upload-artifact@v7
       with:
-        token: $CODECOV_TOKEN
-        slug: ponder-lab/ML
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        name: coverage-build
+        path: "**/jacoco-aggregate/jacoco-*.xml"
+        if-no-files-found: error
   # The suite's long pole (the whole-project corpus analyses) runs beside the rest of the suite
   # instead of after it, sharded per subject so each leg stays short enough to serve as a required
   # check without restoring the old queue latency (wala/ML#755; measured: the corpus class alone is
@@ -127,34 +101,8 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'recursive'
-    - name: Set up JDK 25
-      uses: actions/setup-java@v6
-      with:
-        java-version: '25'
-        distribution: 'temurin'
-        cache: maven
-    - name: Install Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
-    - name: Install Jython3
-      run: |
-        pushd jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
-        popd
-      shell: bash
-    - name: Install IDE
-      run: |
-        pushd IDE/com.ibm.wala.cast.lsp
-        mvn package -B -q -DskipTests
-        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
+    - name: Set up the build
+      uses: ./.github/actions/setup
     # `-Dtest` with an explicit list is the shard filter; the `WholeProjectFixtures` category is
     # what keeps these same tests OUT of the `build` job, so the two mechanisms partition rather
     # than overlap. The no-test guards keep the upstream reactor modules green with zero matches.
@@ -164,14 +112,35 @@ jobs:
     # by package alone, so Codecov cannot place either copy. Splitting the report by module source
     # directory, each part named for that directory, makes Codecov's lookup the repository path.
     - name: Split the coverage report by module
-      run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
+      run: python3 .github/scripts/split-jacoco-report.py
+    # The `coverage` job uploads every job's reports to Codecov at once.
+    - name: Save the coverage reports
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-${{ matrix.shard }}
+        path: "**/jacoco-aggregate/jacoco-*.xml"
+        if-no-files-found: error
+  # Codecov posts its statuses after each upload it receives, so an upload per job posted them
+  # from the shards' partial reports while `build` still ran. One upload of every job's reports,
+  # once all have finished, makes Codecov's first status its last; a new shard needs no count.
+  # Only one run per head uploads: a branch push also runs on `pull_request`.
+  coverage:
+    needs: [build, whole-project-fixtures]
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out wala/ML sources
+      uses: actions/checkout@v7
+    - name: Collect the coverage reports
+      uses: actions/download-artifact@v8
+      with:
+        pattern: coverage-*
+        path: coverage
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v7
       with:
-        token: $CODECOV_TOKEN
-        slug: ponder-lab/ML
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ secrets.CODECOV_TOKEN }}
+        directory: coverage
   # Deploy after every test has passed: `needs` waits for `build` and every leg of
   # `whole-project-fixtures`, and the default `success()` condition requires all of them. The
   # deploy rebuilds without tests rather than taking artifacts from `build`, so the deployed
@@ -188,34 +157,8 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'recursive'
-    - name: Set up JDK 25
-      uses: actions/setup-java@v6
-      with:
-        java-version: '25'
-        distribution: 'temurin'
-        cache: maven
-    - name: Install Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
-    - name: Install Jython3
-      run: |
-        pushd jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
-        popd
-      shell: bash
-    - name: Install IDE
-      run: |
-        pushd IDE/com.ibm.wala.cast.lsp
-        mvn package -B -q -DskipTests
-        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
+    - name: Set up the build
+      uses: ./.github/actions/setup
     # Gate the deploy: only a semver-shaped tag that's an ancestor of master, so a feature-branch
     # tag can't trigger a release deploy (wala/ML#421). The non-semver early-exit also keeps the
     # `merge-base` call from erroring on legacy tags. `--depth=50` (not the checkout's shallow
