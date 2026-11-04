@@ -296,6 +296,106 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   }
 
   /**
+   * The index of a dataset that may be either of two datasets.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedIndex() throws Exception {
+    test(FILE, "consume_mixed_index", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
+   * The element of a dataset that may be either of two datasets is the join of both (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedX() throws Exception {
+    test(FILE, "consume_mixed_x", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
+
+  /**
+   * The element read by subscript from a dataset that may be either of two datasets is the join of
+   * both, each shape with its own dtype (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMixedMember() throws Exception {
+    test(FILE, "consume_mixed_member", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
+
+  /**
+   * The index of a dataset that may be one whose element is not mirrored.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnmodeledIndex() throws Exception {
+    test(FILE, "consume_unmodeled_index", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
+   * The element of a dataset that may be either a mirrored dataset or one declaring no structure
+   * keeps both datasets' types (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnmodeledX() throws Exception {
+    test(
+        FILE,
+        "consume_unmodeled_x",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The element of a pass-through transformation of a dataset that may be either of two datasets
+   * holds both datasets' types (wala/ML#1204), each shape with its own dataset's dtype, since each
+   * transformation of one dataset reads its whole element through that dataset (wala/ML#1207).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testShuffledMixedX() throws Exception {
+    test(
+        FILE,
+        "consume_shuffled_mixed_x",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
+
+  /**
+   * The element of an enumerated mapped dataset is the mapped element (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testEnumeratedMapX() throws Exception {
+    test(FILE, "consume_enumerated_map_x", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * The element of a dataset that may be either a dataset or a mapped one is the join of both
+   * elements, the mapped one included (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testEnumeratedMixedMapX() throws Exception {
+    test(
+        FILE,
+        "consume_enumerated_mixed_map_x",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  }
+
+  /**
    * The index of an enumerated {@code map}.
    *
    * @throws Exception On analysis error.
@@ -324,5 +424,66 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   @Test
   public void testMappedY() throws Exception {
     testLeaf("consume_mapped_y", TENSOR_2_INT32);
+  }
+
+  /**
+   * The element of a dataset whose element is not mirrored, read by subscript, is the dataset's
+   * element (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnmodeledMember() throws Exception {
+    test(FILE, "consume_unmodeled_member", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The element read by subscript from either of two datasets whose elements are not mirrored is
+   * the join of both datasets' elements, each with its own dtype (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testEitherMember() throws Exception {
+    test(
+        FILE,
+        "consume_either_member",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, new TensorType(INT_32, null))));
+  }
+
+  /**
+   * A member of the element where the receiver may also be a tensor, which is no dataset, is the
+   * dataset's member and a tensor of unknown type, not the dataset's member alone (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testTensorOrPairMember() throws Exception {
+    test(
+        FILE,
+        "consume_tensor_or_pair_a",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * A member of the element where the receiver may also be an object of a user class, whose
+   * allocation has no generator, reads as the dataset's member and a tensor of unknown type
+   * (wala/ML#1204). The user class's member is not known here: at run time it is also {@code (4,)
+   * float32}, so the unknown type is imprecision, and a change that types it narrows this pin.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testObjectOrPairMember() throws Exception {
+    test(
+        FILE,
+        "consume_object_or_pair_a",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 }
