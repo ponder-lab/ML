@@ -5509,6 +5509,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_enumerate" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>

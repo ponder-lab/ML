@@ -47,6 +47,14 @@ def consume_zipped_pair(p):
     pass
 
 
+def consume_enumerated_index(i):
+    pass
+
+
+def consume_enumerated_x(x):
+    pass
+
+
 def consume_zipped_x(x):
     pass
 
@@ -105,3 +113,10 @@ for p, z in zipped:
     consume_zipped_x(x)
     assert z.shape == (4,) and z.dtype == tf.float32
     consume_zipped_z(z)
+
+# An enumeration of the supervised dataset pairs an index with the pair.
+for i, (x, y) in tfds.load("mnist", split="train", as_supervised=True).enumerate():
+    assert i.shape == () and i.dtype == tf.int64
+    consume_enumerated_index(i)
+    assert x.shape == (28, 28, 1) and x.dtype == tf.uint8
+    consume_enumerated_x(x)

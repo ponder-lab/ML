@@ -267,4 +267,26 @@ public class TestDatasetTfdsElement extends AbstractTensorTest {
   public void testZippedZ() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_zipped_z", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
+
+  /**
+   * The index of an enumerated supervised dataset is an int64 scalar.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testEnumeratedIndex() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_enumerated_index", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
+   * The input of an enumerated supervised dataset's pair is a leaf of its own.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testEnumeratedX() throws Exception {
+    testLeaf("consume_enumerated_x");
+  }
 }
