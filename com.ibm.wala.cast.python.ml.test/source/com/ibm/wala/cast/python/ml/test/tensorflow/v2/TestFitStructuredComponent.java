@@ -1,11 +1,21 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static org.junit.Assert.assertTrue;
+
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
+import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,6 +41,32 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
    */
   private static TensorType unbatched(int width) {
     return new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(width)));
+  }
+
+  /**
+   * Checks that the named sink's parameter points to a tuple object as well as to its tensor, so a
+   * component that is a tensor on one arm and a tuple on another is not read as a tensor alone.
+   *
+   * @param file The fixture.
+   * @param sink The sink's name.
+   * @throws Exception On analysis error.
+   */
+  private void assertMayBeTuple(String file, String sink) throws Exception {
+    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), file);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    boolean reached = false;
+    boolean tuple = false;
+    for (CGNode node : builder.getCallGraph()) {
+      if (!node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + sink)) continue;
+      reached = true;
+      PointerKey parameter =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2);
+      for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(parameter))
+        tuple |= key.concreteType().getReference().equals(PythonTypes.tuple);
+    }
+    assertTrue(sink + " has a node.", reached);
+    assertTrue(sink + "'s parameter points to a tuple.", tuple);
   }
 
   /** A tuple of inputs is no tensor. */
@@ -202,17 +238,18 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   /**
    * A dataset chosen by a branch between a tuple component and a flat one, in one frame where the
    * choice is either, is either at run time: the flat dataset's tensor, {@code (2, 6)}, or the
-   * tuple, which is no tensor. The read keeps the tensor and adds a wholly unknown member, so no
-   * reader takes {@code (2, 6)} for every value the component has.
+   * tuple, which is no tensor. The read keeps the tensor, and the component points to the tuple
+   * object as well, so no reader takes {@code (2, 6)} for every value the component has.
    */
   @Test
-  public void testBranchMixedInputs() throws ClassHierarchyException, CancelException, IOException {
+  public void testBranchMixedInputs() throws Exception {
     test(
         FILE,
         "consume_branch_mixed_inputs",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+    assertMayBeTuple(FILE, "consume_branch_mixed_inputs");
   }
 
   /**
@@ -318,54 +355,40 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   /**
    * A {@code train_step} override's {@code x} unpacked from the step's data, where the dataset is
    * chosen by a branch between a tuple component and a flat one in one frame, is that component
-   * read through the unpack: the flat dataset's tensor, {@code (2, 6)}, beside a wholly unknown
-   * member, as {@link #testBranchMixedInputs()} reads it in {@code call}.
+   * read through the unpack: the flat dataset's tensor, {@code (2, 6)}, with the tuple object
+   * beside it, as {@link #testBranchMixedInputs()} reads it in {@code call}.
    */
   @Test
-  public void testUnpackMixed() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_unpack_mixed",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+  public void testUnpackMixed() throws Exception {
+    test(FILE, "consume_unpack_mixed", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+    assertMayBeTuple(FILE, "consume_unpack_mixed");
   }
 
   /**
-   * An elementwise product of the {@code x} of {@link #testUnpackMixed()} reads its operand's dtype
-   * as a partial union, {@code float32} beside the {@code UNKNOWN} marker, since the component may
-   * be a structure, and not as a certain {@code float32}. Its shape is the resolvable subset,
-   * {@code (2, 6)}.
+   * An elementwise product of the {@code x} of {@link #testUnpackMixed()}, reached only where the
+   * flat dataset was chosen, reads the flat dataset's tensor, {@code (2, 6)} {@code float32}. That
+   * {@code x} may be a tuple is carried by the tuple object it points to, not by an unknown type.
    */
   @Test
   public void testUnpackScaled() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_unpack_scaled",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 6),
-                new TensorType(UNKNOWN, List.of(new NumericDim(2), new NumericDim(6))))));
+    test(FILE, "consume_unpack_scaled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
   }
 
   /**
    * As {@link #testBranchMixedInputs()}, with the batch applied after the branch, {@code (a if flag
    * else b).batch(2)}: the batch's receiver is either dataset, so the component is the flat
-   * dataset's tensor, batched, {@code (2, 6)}, beside a wholly unknown member for the tuple, and
-   * not the tensor of whichever receiver is read first.
+   * dataset's tensor, batched, {@code (2, 6)}, and the component points to the tuple as well, and
+   * it is not the tensor of whichever receiver is read first.
    */
   @Test
-  public void testBatchedMixedInputs()
-      throws ClassHierarchyException, CancelException, IOException {
+  public void testBatchedMixedInputs() throws Exception {
     test(
         BATCHED_FILE,
         "consume_mixed_batched",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+    assertMayBeTuple(BATCHED_FILE, "consume_mixed_batched");
   }
 
   /**
@@ -397,14 +420,14 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
    * b).shuffle(4).batch(2)}: the batch's receiver is one shuffle, whose receiver is either dataset.
    */
   @Test
-  public void testShuffledMixedInputs()
-      throws ClassHierarchyException, CancelException, IOException {
+  public void testShuffledMixedInputs() throws Exception {
     test(
         BATCHED_FILE,
         "consume_mixed_shuffled",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+    assertMayBeTuple(BATCHED_FILE, "consume_mixed_shuffled");
   }
 
   /**
@@ -422,14 +445,14 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
    * reading does not depend on which receiver comes first.
    */
   @Test
-  public void testShuffledFlatOrPairInputs()
-      throws ClassHierarchyException, CancelException, IOException {
+  public void testShuffledFlatOrPairInputs() throws Exception {
     test(
         BATCHED_FILE,
         "consume_flat_or_pair_shuffled",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), new TensorType(UNKNOWN, null))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+    assertMayBeTuple(BATCHED_FILE, "consume_flat_or_pair_shuffled");
   }
 
   /**
