@@ -184,11 +184,11 @@ def consume_shuffled_mixed_x(x):
     pass
 
 
-def consume_mapped_x(x):
+def consume_enumerated_map_x(x):
     pass
 
 
-def consume_mixed_mapped_x(x):
+def consume_enumerated_mixed_map_x(x):
     pass
 
 
@@ -246,7 +246,7 @@ for i, x in mixed.shuffle(2).enumerate():
 # A mapped dataset is enumerated through its mapped element, alone or as one of two receivers.
 for i, x in threes.map(lambda v: v + 1).enumerate():
     assert x.shape == (3,) and x.dtype == tf.int32
-    consume_mapped_x(x)
+    consume_enumerated_map_x(x)
 for i, x in (floats if picked else threes.map(lambda v: v + 1)).enumerate():
     assert x.shape in ((4,), (3,))
-    consume_mixed_mapped_x(x)
+    consume_enumerated_mixed_map_x(x)

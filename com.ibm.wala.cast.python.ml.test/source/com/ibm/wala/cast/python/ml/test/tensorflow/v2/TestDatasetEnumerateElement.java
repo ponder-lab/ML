@@ -385,8 +385,8 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   @Test
-  public void testMappedX() throws Exception {
-    test(FILE, "consume_mapped_x", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  public void testEnumeratedMapX() throws Exception {
+    test(FILE, "consume_enumerated_map_x", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
   }
 
   /**
@@ -396,7 +396,12 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
    * @throws Exception On analysis error.
    */
   @Test
-  public void testMixedMappedX() throws Exception {
-    test(FILE, "consume_mixed_mapped_x", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
+  public void testEnumeratedMixedMapX() throws Exception {
+    test(
+        FILE,
+        "consume_enumerated_mixed_map_x",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_3_INT32)));
   }
 }
