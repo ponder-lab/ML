@@ -9,7 +9,10 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.client.ContainerElements;
+import com.ibm.wala.cast.python.ml.client.DatasetFromTensorSlicesGenerator;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.TensorGenerator;
+import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -17,6 +20,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ssa.IR;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -467,5 +471,40 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(
         Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),
         typesOf("consume_starred_member"));
+  }
+
+  /**
+   * A sliced dataset's element read at one position by path reads as it does by index, for every
+   * sliced dataset the script holds.
+   */
+  @Test
+  public void testSlicesPathAtOnePosition() {
+    PythonSSAPropagationCallGraphBuilder b = builder();
+    int read = 0;
+    for (CGNode node : b.getCallGraph()) {
+      IR ir = node.getIR();
+      if (ir == null
+          || !node.getMethod().getDeclaringClass().getName().toString().startsWith("Lscript "))
+        continue;
+      for (int vn = 1; vn <= ir.getSymbolTable().getMaxValueNumber(); vn++) {
+        PointerKey value = b.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+        if (b.getPropagationSystem().isImplicit(value)) continue;
+        TensorGenerator generator;
+        try {
+          generator =
+              TensorGeneratorFactory.getGenerator(
+                  b.getPropagationSystem().findOrCreatePointsToSet(value), b);
+        } catch (IllegalArgumentException e) {
+          // A value with no generator is not a sliced dataset.
+          continue;
+        }
+        if (generator instanceof DatasetFromTensorSlicesGenerator slices) {
+          assertEquals(
+              slices.getTensorTypesForIndex(b, 0), slices.getTensorTypesForPath(b, List.of(0)));
+          read++;
+        }
+      }
+    }
+    assertTrue("The script holds a sliced dataset.", read > 0);
   }
 }
