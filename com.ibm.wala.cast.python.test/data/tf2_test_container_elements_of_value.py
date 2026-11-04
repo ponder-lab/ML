@@ -520,3 +520,21 @@ fit(
     .map(lambda x, y: ((x, x * 2.0), y))
     .batch(2),
 )
+
+
+def consume_starred_element(e):
+    # A dataset's element built from a tuple with a starred part: three tensors.
+    assert isinstance(e, tuple) and len(e) == 3
+    assert e[0].shape == (4,) and e[0].dtype == tf.float32
+    assert e[1].shape == (3,) and e[1].dtype == tf.int32
+    assert e[2].shape == () and e[2].dtype == tf.float32
+
+
+def consume_starred_member(m):
+    assert m.shape == () and m.dtype == tf.float32
+
+
+starred_parts = [tf.ones([8, 4]), tf.zeros([8, 3], tf.int32)]
+for e in tf.data.Dataset.from_tensor_slices((*starred_parts, tf.ones([8]))):
+    consume_starred_element(e)
+    consume_starred_member(e[2])

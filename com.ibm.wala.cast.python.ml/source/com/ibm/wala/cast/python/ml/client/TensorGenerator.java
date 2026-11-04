@@ -7453,6 +7453,14 @@ public abstract class TensorGenerator implements Cloneable {
         if (selector instanceof Integer index && type.equals(PythonTypes.tuple))
           fieldName = index.toString();
         else if (selector instanceof String key && type.equals(PythonTypes.dict)) fieldName = key;
+        // The members of a list or tuple whose positions are unknown, as a starred part leaves
+        // them, are held under its contents channel, which a dataset element's copy keeps as a
+        // path (wala/ML#1212).
+        else if (selector instanceof String channel
+            && (type.equals(PythonTypes.tuple) || type.equals(PythonTypes.list))
+            && (channel.equals(PythonSSAPropagationCallGraphBuilder.LIST_OPERATION_CONTENTS_FIELD)
+                || channel.equals(PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD)))
+          fieldName = channel;
         else continue;
         IField f =
             builder
