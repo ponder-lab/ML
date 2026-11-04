@@ -47,7 +47,9 @@ public class TestShapeArgumentCycle extends AbstractTensorTest {
   /**
    * The same cycle through a dict-structured shape: {@code padded_shapes} rebuilt as {@code {"h":
    * shapes}} in a loop, whose value is the dict itself. On the previous engine this overflows the
-   * stack through the dict arm.
+   * stack through the dict arm. The member is a padded batch of {@code tf.ones(3)}, so its dtype is
+   * {@code float32}, read from the element of {@code from_tensors} (wala/ML#1211); its shape,
+   * padded to the cycle, is unknown.
    */
   @Test
   public void testSelfContainingDictCompletes()
@@ -57,6 +59,6 @@ public class TestShapeArgumentCycle extends AbstractTensorTest {
         "consume_dict",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
   }
 }
