@@ -12742,6 +12742,10 @@ public abstract class TensorGenerator implements Cloneable {
       // resolves the chain to the pre-batch element and the batch transform never applies
       // (wala/ML#759).
       return new DatasetPaddedBatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)) {
+      // The concatenation twin of the source arm: the catch-all below would follow the receiver
+      // alone, dropping the concatenated dataset's element (wala/ML#1215).
+      return new DatasetConcatenateGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
       // The map twin of the padded-batch arm above: the DATA_PACKAGE_PREFIX catch-all would
       // inherit from map.do's own receiver, typing the mapped element from the callback's INPUT

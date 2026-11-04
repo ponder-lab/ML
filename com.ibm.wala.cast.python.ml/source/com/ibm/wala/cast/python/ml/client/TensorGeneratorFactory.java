@@ -4043,6 +4043,9 @@ public class TensorGeneratorFactory {
       return new DatasetChooseFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SAMPLE_FROM_DATASETS_TYPE))
       return new DatasetSampleFromDatasetsGenerator(source);
+    // A concatenation's element is either dataset's, so it follows both (wala/ML#1215).
+    else if (isType(calledFunction, DATASET_CONCATENATE_TYPE))
+      return new DatasetConcatenateGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_WINDOW_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
@@ -4050,7 +4053,6 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET_PREFETCH_TYPE)
         || isType(calledFunction, DATASET_TAKE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
-        || isType(calledFunction, DATASET_CONCATENATE_TYPE)
         || isType(calledFunction, DATASET_REDUCE_TYPE)
         || isType(calledFunction, DATASET_FILTER_TYPE)
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);
