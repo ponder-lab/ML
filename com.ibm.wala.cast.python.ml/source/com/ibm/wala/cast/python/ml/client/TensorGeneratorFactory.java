@@ -1378,6 +1378,42 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The generator of a field read whose every member is an element a dataset iterator allocates or
+   * one of the element's components (wala/ML#997): the join of the allocations' own generators,
+   * each typing its member as a loop variable bound to it is. An element of a dataset whose element
+   * is a tuple, or a component of one whose element is not, contributes nothing; an element
+   * allocated for a dataset whose element is mirrored stands for nothing either (wala/ML#1190).
+   *
+   * @param source The value.
+   * @param builder The builder.
+   * @return The generator, or {@code null} when the value is no field read, holds any other member,
+   *     or no member has a generator.
+   */
+  private static TensorGenerator datasetElementFieldRead(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey lpk)
+        || !(lpk.getNode().getDU().getDef(lpk.getValueNumber()) instanceof SSAGetInstruction))
+      return null;
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(lpk))) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      if (asin == null) return null;
+      TypeReference type = asin.concreteType().getReference();
+      if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+          && TensorFlowTypes.datasetElementComponentIndex(type) < 0) return null;
+      TensorGenerator part = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
+      if (part != null) parts.add(part);
+    }
+    if (parts.isEmpty()) return null;
+    return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
    * The parts reading the mirrored dataset element leaves a value holds (wala/ML#1190).
    *
    * @param parts One generator per leaf, path and dataset, or per cutoff leaf.
@@ -3063,6 +3099,11 @@ public class TensorGeneratorFactory {
           packRead.object(),
           new FitDataGenerator(packRead.data().getNode(), packRead.data()),
           packRead.index());
+    // A summary's field read of the element a dataset iterator allocates, or of its components,
+    // as the inputs a Keras step unpacks from the element of the dataset `fit` iterates
+    // (wala/ML#997), is typed as a loop variable bound to those allocations is.
+    TensorGenerator elementRead = datasetElementFieldRead(source, builder);
+    if (elementRead != null) return elementRead;
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
       CGNode node = lpk.getNode();

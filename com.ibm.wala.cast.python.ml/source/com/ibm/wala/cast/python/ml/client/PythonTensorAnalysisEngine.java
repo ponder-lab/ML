@@ -1072,6 +1072,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
                   "legacy_element", TensorFlowTypes.DATASET_ELEMENT_TYPE)));
     builder.setConditionalAllocations(conditionalAllocations);
+    // A Keras `fit`, `evaluate` or `predict` packs `x` for the step only when it is not a dataset:
+    // the step receives a dataset's element, which the summary iterates `x` for (wala/ML#997).
+    // The classes are those whose summaries define `__iter__`. The step then takes its data
+    // itself as its inputs only when the data is no tuple, list or pack, whose first member it
+    // takes instead.
+    builder.setExcludingStores(
+        Map.of(
+            TensorFlowTypes.FIT_DATA_TYPE,
+            Map.of(
+                "0",
+                Set.of(
+                    TensorFlowTypes.DATASET,
+                    TensorFlowTypes.TEXT_LINE_DATASET_TYPE,
+                    TensorFlowTypes.TFRECORD_DATASET_TYPE,
+                    TensorFlowTypes.TFDS_DATASET_TYPE)),
+            TensorFlowTypes.STEP_INPUTS_TYPE,
+            Map.of(
+                "whole",
+                Set.of(
+                    PythonTypes.tuple,
+                    PythonTypes.list,
+                    PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE,
+                    TensorFlowTypes.FIT_DATA_TYPE))));
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     // A tensor's `shape` attribute reads its static shape, whose `as_list()` is a list of Python
@@ -1417,6 +1440,56 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 + pruned.size());
   }
 
+  /**
+   * Whether a value may hold an element a dataset iterator allocates, or one of the element's
+   * components (wala/ML#1010).
+   *
+   * @param value The value.
+   * @param builder The builder whose pointer analysis holds the value's set.
+   * @return {@code true} iff the value's set holds such an allocation.
+   */
+  private static boolean readsDatasetElement(
+      PointsToSetVariable value, PropagationCallGraphBuilder builder) {
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey())) {
+      TypeReference type = key.concreteType().getReference();
+      if (type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+          || TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES.contains(type)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Removes from the dataflow graph each edge of a field store that leaves out every value its
+   * source holds (wala/ML#997); see {@link
+   * PythonSSAPropagationCallGraphBuilder#setExcludingStores}. The store puts none of those values
+   * into the field, but the flow graph lists it as an edge like an assignment, so the field would
+   * take the source's tensor types: a Keras {@code fit} given a dataset would type its pack's slot
+   * with the dataset's whole element, and the step's read of the slot with it. A source that also
+   * holds a value the store keeps keeps its edge, which then carries the excluded values' types
+   * too, an over-approximation.
+   *
+   * @param builder The builder whose propagation system holds the statements.
+   * @param dataflow The duplicated flow graph to prune.
+   */
+  private static void pruneExcludedStores(
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
+    PropagationSystem system = builder.getPropagationSystem();
+    List<Pair<PointsToSetVariable, PointsToSetVariable>> pruned = new ArrayList<>();
+    for (PointsToSetVariable v : dataflow) {
+      Iterator<?> defs = system.getStatementsThatDef(v);
+      while (defs.hasNext())
+        if (defs.next() instanceof UnaryStatement<?> statement
+            && statement.getOperator()
+                instanceof PythonSSAPropagationCallGraphBuilder.ExcludingAssignOperator operator
+            && statement.getRightHandSide() instanceof PointsToSetVariable from
+            && operator.excludesAll(from)
+            && dataflow.hasEdge(from, v)) pruned.add(Pair.make(from, v));
+    }
+    for (Pair<PointsToSetVariable, PointsToSetVariable> edge : pruned)
+      dataflow.removeEdge(edge.fst, edge.snd);
+    LOGGER.fine(() -> "wala/ML#997 excluded store edges pruned from the dataflow graph: " + pruned);
+  }
+
   /** How many φs {@link #addCondition} follows from a condition toward its comparisons. */
   private static final int CONDITION_PHI_HOPS = 4;
 
@@ -1633,6 +1706,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // the component it selects is pinned below, as a user step's `x, y = data` is.
           sources.add(src);
           LOGGER.fine("Added dataflow source from a step's data read: " + describe(src) + ".");
+        } else if (inst instanceof SSAGetInstruction && readsDatasetElement(src, builder)) {
+          // A Keras step's inputs read from the element of the dataset it iterates (wala/ML#997)
+          // are a source, as a loop variable bound to the element is.
+          sources.add(src);
+          LOGGER.fine(() -> "Added dataflow source from a dataset element read: " + describe(src));
         } else if (UnaryOperation.isTensorUnaryOperator(inst)) {
           // Unary `-` and `~` on tensors are sources too; the factory declines non-tensor operands.
           sources.add(src);
@@ -4066,6 +4144,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           SlowSparseNumberedGraph.duplicate(
               builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
       pruneListOperationOnlyNodes(builder, dataflow);
+      pruneExcludedStores(builder, dataflow);
       addConditionOnlyComparisons(builder, dataflow);
 
       Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
