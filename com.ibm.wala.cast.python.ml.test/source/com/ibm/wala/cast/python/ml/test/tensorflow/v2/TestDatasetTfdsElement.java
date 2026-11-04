@@ -233,4 +233,38 @@ public class TestDatasetTfdsElement extends AbstractTensorTest {
   public void testJoinedPairX() throws ClassHierarchyException, CancelException, IOException {
     test(0, FILE, "consume_pair_x", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
+
+  /**
+   * The supervised pair zipped with another dataset is a tuple, no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testZippedPair() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_zipped_pair", 0, 0);
+  }
+
+  /**
+   * The input of the supervised pair zipped with another dataset is a leaf of its own.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testZippedX() throws Exception {
+    testLeaf("consume_zipped_x");
+  }
+
+  /**
+   * The element of the dataset zipped with the supervised one keeps its own type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testZippedZ() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_zipped_z", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
 }

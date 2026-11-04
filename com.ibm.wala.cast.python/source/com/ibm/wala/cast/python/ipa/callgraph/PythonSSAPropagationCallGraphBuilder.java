@@ -543,8 +543,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private TypeReference elementZipType;
 
-  /** The class of a dataset a zip's structure holds; see {@link #elementZipType}. */
-  private TypeReference elementZipDatasetType;
+  /** The classes of a dataset a zip's structure holds; see {@link #elementZipType}. */
+  private Set<TypeReference> elementZipDatasetTypes = Collections.emptySet();
 
   /** The field of a dataset holding its mirrored element; see {@link #elementZipType}. */
   private String elementZipElementField;
@@ -588,20 +588,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   /**
    * Names the classes of zip element mirroring (wala/ML#164): a call whose callee is an instance of
    * {@code zip} mirrors its first argument's structure as {@link #setElementMirror}'s class does,
-   * except that an instance of {@code dataset} in it is replaced by the copy of that dataset's
-   * element, held in its {@code elementField}. A dataset whose element is not mirrored passes its
-   * {@code legacyField} marker to the zip's dataset, so iterating the zip still allocates the
-   * element its generator types.
+   * except that an instance of a {@code datasets} class in it is replaced by the copy of that
+   * dataset's element, held in its {@code elementField}. A dataset whose element is not mirrored
+   * passes its {@code legacyField} marker to the zip's dataset, so iterating the zip still
+   * allocates the element its generator types.
    *
    * @param zip The summary class whose call mirrors a structure of datasets.
-   * @param dataset The class of a dataset.
+   * @param datasets The classes of a dataset whose allocations write both fields.
    * @param elementField The field of a dataset holding its mirrored element.
    * @param legacyField The field of a dataset holding its marker that its element is not mirrored.
    */
   public void setElementZip(
-      TypeReference zip, TypeReference dataset, String elementField, String legacyField) {
+      TypeReference zip, Set<TypeReference> datasets, String elementField, String legacyField) {
     this.elementZipType = zip;
-    this.elementZipDatasetType = dataset;
+    this.elementZipDatasetTypes = Set.copyOf(datasets);
     this.elementZipElementField = elementField;
     this.elementZipLegacyField = legacyField;
   }
@@ -3942,13 +3942,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * dataset's element (wala/ML#164).
      *
      * @param type The class of a key the structure holds.
-     * @return {@code true} iff it is a dataset class.
+     * @return {@code true} iff it is one of the dataset classes.
      */
     private boolean isZippedDataset(IClass type) {
-      if (elementZipDatasetType == null) return false;
       IClassHierarchy cha = getClassHierarchy();
-      IClass dataset = cha.lookupClass(elementZipDatasetType);
-      return dataset != null && cha.isSubclassOf(type, dataset);
+      for (TypeReference datasetType : elementZipDatasetTypes) {
+        IClass dataset = cha.lookupClass(datasetType);
+        if (dataset != null && cha.isSubclassOf(type, dataset)) return true;
+      }
+      return false;
     }
 
     /**

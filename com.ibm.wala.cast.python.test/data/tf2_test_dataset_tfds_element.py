@@ -43,6 +43,18 @@ def consume_conditional(e):
     pass
 
 
+def consume_zipped_pair(p):
+    pass
+
+
+def consume_zipped_x(x):
+    pass
+
+
+def consume_zipped_z(z):
+    pass
+
+
 supervised = tfds.load("mnist", split="train", as_supervised=True)
 
 for p in supervised:
@@ -77,3 +89,19 @@ for e in tfds.load("mnist", split="train", as_supervised=len(sys.argv) > 1000):
     assert isinstance(e, dict)
     assert e["image"].shape == (28, 28, 1) and e["image"].dtype == tf.uint8
     consume_conditional(e)
+
+# A zip of the supervised dataset with another keeps the pair as the zip's first member.
+zipped = tf.data.Dataset.zip(
+    (
+        tfds.load("mnist", split="train", as_supervised=True),
+        tf.data.Dataset.from_tensor_slices(tf.ones([60000, 4])),
+    )
+)
+for p, z in zipped:
+    assert isinstance(p, tuple) and len(p) == 2
+    consume_zipped_pair(p)
+    x, y = p
+    assert x.shape == (28, 28, 1) and x.dtype == tf.uint8
+    consume_zipped_x(x)
+    assert z.shape == (4,) and z.dtype == tf.float32
+    consume_zipped_z(z)

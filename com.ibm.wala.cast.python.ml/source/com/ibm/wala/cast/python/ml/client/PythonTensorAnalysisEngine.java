@@ -1005,9 +1005,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     // A zip's element is the structure of datasets it is given, each replaced by its element
     // (wala/ML#164).
+    // A dataset `tfds.load` returns is no subclass of `Dataset`, but writes both fields as one
+    // does.
     builder.setElementZip(
         TensorFlowTypes.DATASET_ELEMENT_ZIP,
-        TensorFlowTypes.DATASET,
+        Set.of(TensorFlowTypes.DATASET, TensorFlowTypes.TFDS_DATASET_TYPE),
         "mirrored_element",
         "legacy_element");
 
