@@ -1471,9 +1471,11 @@ public class TensorGeneratorFactory {
       if (python.isElementMirrorCutoff(leaf)) parts.add(new DatasetElementGenerator(source, null));
       List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
       if (datasets.isEmpty()) continue;
-      DatasetIteratorElementGenerator element =
-          new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
       List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
+      // The whole element is read over the spread datasets too, so a transformation of a receiver
+      // that may be several datasets reads each one's element on its own (wala/ML#1207).
+      DatasetIteratorElementGenerator element =
+          new DatasetIteratorElementGenerator(leaf.getNode(), spread);
       for (List<Object> path : python.getElementMirrorPaths(leaf)) {
         if (path.isEmpty()) {
           parts.add(element);
@@ -1505,9 +1507,10 @@ public class TensorGeneratorFactory {
     if (python.isElementMirrorCutoff(leaf)) ret.add(new TensorType(DType.UNKNOWN, null));
     List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
     if (datasets.isEmpty()) return ret;
-    DatasetIteratorElementGenerator element =
-        new DatasetIteratorElementGenerator(leaf.getNode(), datasets);
     List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
+    // The whole element is read over the spread datasets, as in mirroredLeaves (wala/ML#1207).
+    DatasetIteratorElementGenerator element =
+        new DatasetIteratorElementGenerator(leaf.getNode(), spread);
     for (List<Object> path : python.getElementMirrorPaths(leaf)) {
       if (path.isEmpty()) {
         ret.addAll(element.getTensorTypes(builder));

@@ -176,4 +176,113 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   public void testMappedB() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_mapped_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
   }
+
+  /**
+   * A zip of a nested tuple of datasets nests their elements: the first dataset of the inner tuple.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testGroupedA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_grouped_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * The second dataset of the inner tuple.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testGroupedB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_grouped_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * The dataset beside the inner tuple.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testGroupedC() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_grouped_c", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * The inner tuple's second dataset after {@code batch(2)}, with the partial batch of unknown size
+   * every zip's batch reads.
+   *
+   * <p>TODO: wala/ML#1203: expect the full batch alone.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testGroupedBatchedB() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_grouped_batched_b",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(INT_32, 2, 3),
+                new TensorType(INT_32, List.of(new SymbolicDim("?"), new NumericDim(3))))));
+  }
+
+  /**
+   * An entry of a dict of datasets nested in the zipped tuple.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testGroupedKeyedB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_grouped_keyed_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A zip of a namedtuple of datasets nested in the zipped tuple: the namedtuple's first member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNamedA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * The namedtuple's second member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNamedB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * The namedtuple's second member read by its name, which the element's copy holds as it holds the
+   * member's position (https://github.com/wala/ML/issues/1210).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNamedFieldB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named_field_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
 }
