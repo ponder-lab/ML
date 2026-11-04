@@ -75,4 +75,16 @@ public class TestDatasetNamedTupleElement extends AbstractTensorTest {
   public void testKeywordM() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_keyword_m", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
+
+  /**
+   * A member read by name off the element of {@code from_tensors} of a namedtuple.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testWholeM() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_whole_m", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
 }

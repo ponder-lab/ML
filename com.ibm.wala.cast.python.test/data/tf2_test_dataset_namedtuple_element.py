@@ -27,6 +27,10 @@ def consume_keyword_m(m):
     pass
 
 
+def consume_whole_m(m):
+    pass
+
+
 pairs = tf.data.Dataset.from_tensor_slices(P(tf.ones([8, 2]), tf.zeros([8], tf.int32)))
 for p in pairs:
     assert p.x.shape == (2,) and p.x.dtype == tf.float32
@@ -47,3 +51,8 @@ keyed = tf.data.Dataset.from_tensor_slices(
 for p in keyed:
     assert p.m.shape == () and p.m.dtype == tf.int32
     consume_keyword_m(p.m)
+
+# A dataset of one element that is a namedtuple, read by name.
+for p in tf.data.Dataset.from_tensors(P(tf.ones([2]), tf.zeros([], tf.int32))):
+    assert p.m.shape == () and p.m.dtype == tf.int32
+    consume_whole_m(p.m)
