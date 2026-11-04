@@ -5,8 +5,6 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
-import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -16,7 +14,6 @@ import com.ibm.wala.util.CancelException;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -34,14 +31,6 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
 
   /** Datasets chosen by a branch and then transformed. */
   private static final String BATCHED_FILE = "tf2_test_fit_structured_component_batched.py";
-
-  /**
-   * A {@code float32} batch of rows of the given width whose batch extent is the reshape-style
-   * placeholder, as a zipped dataset's batch reads its remainder.
-   */
-  private static TensorType unbatched(int width) {
-    return new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(width)));
-  }
 
   /**
    * Checks that the named sink's parameter points to a tuple object as well as to its tensor, so a
@@ -194,37 +183,21 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
 
   /**
    * A member of the tuple component {@code zip} builds from a nested tuple of datasets: the batched
-   * rows of the dataset at its position in the inner tuple, with the partial batch of unknown size
-   * every zip's batch reads.
-   *
-   * <p>TODO: wala/ML#1203: expect the full batch alone.
+   * rows of the dataset at its position in the inner tuple, every batch of which is full, since the
+   * zip has as many elements as its datasets, 8, which 2 divides (wala/ML#1203).
    */
   @Test
   public void testZipTupleMember() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_zip_pair_m",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 3),
-                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(3))))));
+    test(FILE, "consume_zip_pair_m", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }
 
   /**
-   * A flat component of a zip of datasets stays a tensor, with the zip batch's remainder read as a
-   * placeholder extent beside the full batch.
+   * A flat component of a zip of datasets stays a tensor, batched in full, since the zip has as
+   * many elements as its datasets, 8, which 2 divides (wala/ML#1203).
    */
   @Test
   public void testZipFlatInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_zip_flat_inputs",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), unbatched(4))));
+    test(FILE, "consume_zip_flat_inputs", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
 
   /**
@@ -303,17 +276,12 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   }
 
   /**
-   * A member of the zipped dataset's tuple element: a tensor, with the zip batch's remainder extent
-   * beside the full batch, as {@link #testZipFlatInputs()} reads it.
+   * A member of the zipped dataset's tuple element: a tensor, batched in full, as {@link
+   * #testZipFlatInputs()} reads it.
    */
   @Test
   public void testZipElementMember() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_zip_element_m",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), unbatched(3))));
+    test(FILE, "consume_zip_element_m", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }
 
   /** A zipped dataset's element {@code ((x, m), z)} is a tuple component. */
@@ -329,17 +297,12 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   }
 
   /**
-   * The second member of that component is a tensor, with the zip batch's remainder extent beside
-   * the full batch.
+   * The second member of that component is a tensor, batched in full, since the zip has as many
+   * elements as its datasets, 8, which 2 divides (wala/ML#1203).
    */
   @Test
   public void testZipDeepMember() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_zip_deep_z",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5), unbatched(5))));
+    test(FILE, "consume_zip_deep_z", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5))));
   }
 
   /**

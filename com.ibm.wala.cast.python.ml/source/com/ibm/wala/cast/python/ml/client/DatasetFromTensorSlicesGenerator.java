@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.dict;
-import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -193,7 +192,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           return true;
         }
       }
@@ -211,7 +210,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
                   builder
@@ -224,10 +223,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
             if (fieldIndex != null && fieldIndex == index) {
               FieldReference subscript =
-                  FieldReference.findOrCreate(
-                      asin.concreteType().getReference(),
-                      findOrCreateAsciiAtom(fieldIndex.toString()),
-                      Root);
+                  positionField(asin.concreteType().getReference(), fieldIndex);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
@@ -317,7 +313,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       Set<DType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
                   builder
@@ -330,10 +326,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
             if (fieldIndex != null && fieldIndex == index) {
               FieldReference subscript =
-                  FieldReference.findOrCreate(
-                      asin.concreteType().getReference(),
-                      findOrCreateAsciiAtom(fieldIndex.toString()),
-                      Root);
+                  positionField(asin.concreteType().getReference(), fieldIndex);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
@@ -627,7 +620,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         }
         continue;
       }
-      if (!asin.concreteType().getReference().equals(tuple)) {
+      if (!isPositional(asin.concreteType().getReference())) {
         continue;
       }
       sawTuple = true;
@@ -843,7 +836,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         }
         continue;
       }
-      if (!asin.concreteType().getReference().equals(tuple)) {
+      if (!isPositional(asin.concreteType().getReference())) {
         continue;
       }
       sawTuple = true;

@@ -57,10 +57,8 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   }
 
   /**
-   * A batch of the zip batches each member: the first. A partial batch of unknown size is read
-   * beside the full one, though every batch is full.
-   *
-   * <p>TODO: wala/ML#1203: expect the full batch alone.
+   * A batch of the zip batches each member: the first. Every batch is full, since the zip has as
+   * many elements as its shortest dataset, 8, which 2 divides (wala/ML#1203).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -68,23 +66,11 @@ public class TestDatasetZipElement extends AbstractTensorTest {
    */
   @Test
   public void testBatchedA() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_batched_a",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 4),
-                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(4))))));
+    test(FILE, "consume_batched_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
 
   /**
-   * The second batched member. A partial batch of unknown size is read beside the full one, though
-   * every batch is full.
-   *
-   * <p>TODO: wala/ML#1203: expect the full batch alone.
+   * The second batched member, every batch of which is full (wala/ML#1203).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -92,16 +78,7 @@ public class TestDatasetZipElement extends AbstractTensorTest {
    */
   @Test
   public void testBatchedB() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_batched_b",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(INT_32, 2, 3),
-                new TensorType(INT_32, List.of(new SymbolicDim("?"), new NumericDim(3))))));
+    test(FILE, "consume_batched_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2, 3))));
   }
 
   /**
@@ -214,10 +191,8 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   }
 
   /**
-   * The inner tuple's second dataset after {@code batch(2)}, with the partial batch of unknown size
-   * every zip's batch reads.
-   *
-   * <p>TODO: wala/ML#1203: expect the full batch alone.
+   * The inner tuple's second dataset after {@code batch(2)}, every batch of which is full, since
+   * the zip has as many elements as its datasets, 8 (wala/ML#1203).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -225,16 +200,7 @@ public class TestDatasetZipElement extends AbstractTensorTest {
    */
   @Test
   public void testGroupedBatchedB() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_grouped_batched_b",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(INT_32, 2, 3),
-                new TensorType(INT_32, List.of(new SymbolicDim("?"), new NumericDim(3))))));
+    test(FILE, "consume_grouped_batched_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2, 3))));
   }
 
   /**
@@ -274,17 +240,81 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   }
 
   /**
-   * The namedtuple's second member read by its name.
-   *
-   * <p>TODO: The element's copy keys a namedtuple's members by position alone, so a read by name
-   * finds nothing (https://github.com/wala/ML/issues/1210).
+   * The namedtuple's second member read by its name, which the element's copy holds as it holds the
+   * member's position (https://github.com/wala/ML/issues/1210).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testNamedFieldB() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_named_field_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A batch of a zip of datasets of different sizes: the zip has as many elements as the shorter,
+   * 5, so its batches of 2 end with one of 1 (wala/ML#1203).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSizedUnevenA() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_sized_uneven_a",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(FLOAT_32, 1, 4))));
+  }
+
+  /**
+   * A member of a batch of a zip of a dict of datasets, every batch of which is full
+   * (wala/ML#1203).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSizedKeyedA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_sized_keyed_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A batch of a zip with a dataset of no known size: the zip's size is unknown too, so a partial
+   * batch of unknown size is read beside the full one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSizedUnknownA() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_sized_unknown_a",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 3, 4),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(4))))));
+  }
+
+  /**
+   * A batch of a zip of a namedtuple of datasets with another: every batch is full, since a
+   * namedtuple's datasets are zipped as a tuple's are (wala/ML#1203).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSizedNamedA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_sized_named_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
 }
