@@ -269,6 +269,14 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_mirror"));
 
   /**
+   * The summary class whose call mirrors a structure of datasets into a zip's element, each dataset
+   * replaced by its own element (wala/ML#164).
+   */
+  public static final TypeReference DATASET_ELEMENT_ZIP =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_zip"));
+
+  /**
    * The summary class whose call mirrors the structure a dataset declares, its {@code
    * output_signature} or else its {@code output_types}, into its element (wala/ML#164).
    */
