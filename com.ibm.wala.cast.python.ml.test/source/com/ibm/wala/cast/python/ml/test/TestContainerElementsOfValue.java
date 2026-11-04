@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -15,6 +16,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -80,6 +82,19 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
         ret.add(builder().getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
     assertEquals("Expecting one node for " + sink + ".", 1, ret.size());
     return ret.get(0);
+  }
+
+  /**
+   * The tensor types the analysis gives a sink's parameter.
+   *
+   * @param sink The sink's name.
+   * @return The types, empty when it gives none.
+   */
+  private static Set<TensorType> typesOf(String sink) {
+    PointsToSetVariable variable =
+        builder().getPropagationSystem().findOrCreatePointsToSet(parameter(sink));
+    Set<TensorType> state = analysis.getOutState(variable);
+    return state == null ? Set.of() : state;
   }
 
   /**
@@ -426,5 +441,31 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 4))),
         elements.positionTypes(analysis));
+  }
+
+  /**
+   * A dataset's element built from a tuple with a starred part, {@code (*parts, c)}, whose
+   * positions the analysis does not know: it has no length, and its element types are every
+   * member's, each shape with its own dtype, so a client reads it as a container of those tensors
+   * rather than of none (wala/ML#1212).
+   */
+  @Test
+  public void testStarredElement() {
+    ContainerElements elements = ofValue("consume_starred_element");
+    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(
+        Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),
+        elements.elementTypes(analysis));
+  }
+
+  /**
+   * A member of that element, read by position: any member's type, since the position of each is
+   * not known (wala/ML#1212).
+   */
+  @Test
+  public void testStarredMember() {
+    assertEquals(
+        Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),
+        typesOf("consume_starred_member"));
   }
 }
