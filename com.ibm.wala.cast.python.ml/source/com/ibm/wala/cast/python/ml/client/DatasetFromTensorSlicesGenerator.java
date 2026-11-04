@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -439,6 +440,70 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     if (component == null || component.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     Set<DType> dtypes = this.getDTypesOfTensorsArgument(builder, component);
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A component that may be any of several tensors, as the members a starred part leaves
+   *     in a tuple's contents channel are (wala/ML#1212), is typed one tensor at a time, so each
+   *     shape stays paired with its own tensor's dtype. A component that may be a structure is read
+   *     as the shapes and dtypes at the path, crossed.
+   */
+  @Override
+  public Set<TensorType> getTensorTypesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    if (path.size() == 1 && path.get(0) instanceof Integer index)
+      return this.getTensorTypesForIndex(builder, index);
+    OrdinalSet<InstanceKey> component = this.componentPointsToSet(builder, path);
+    Set<TensorType> ret = HashSetFactory.make();
+    if (component == null || component.size() < 2 || holdsAnyStructure(component)) {
+      Set<List<Dimension<?>>> shapes = this.getShapesForPath(builder, path);
+      for (DType dtype : this.getDTypesForPath(builder, path)) {
+        String cell = dtype.name().toLowerCase(Locale.ROOT);
+        if (shapes == null) ret.add(new TensorType(cell, null));
+        else for (List<Dimension<?>> shape : shapes) ret.add(new TensorType(cell, shape));
+      }
+      return ret;
+    }
+    for (InstanceKey member : component) {
+      OrdinalSet<InstanceKey> one =
+          OrdinalSet.toOrdinalSet(
+              Collections.singleton(member), builder.getPointerAnalysis().getInstanceKeyMapping());
+      Set<List<Dimension<?>>> shapes = this.getShapesOfTensorsArgument(builder, one);
+      Set<DType> dtypes = this.getDTypesOfTensorsArgument(builder, one);
+      if (dtypes == null || dtypes.isEmpty()) dtypes = EnumSet.of(DType.UNKNOWN);
+      for (DType dtype : dtypes) {
+        String cell = dtype.name().toLowerCase(Locale.ROOT);
+        if (shapes == null || shapes.isEmpty()) ret.add(new TensorType(cell, null));
+        else
+          // The dataset slices the member along its first axis.
+          for (List<Dimension<?>> shape : shapes)
+            ret.add(
+                new TensorType(
+                    cell,
+                    shape.isEmpty()
+                        ? Collections.emptyList()
+                        : new ArrayList<>(shape.subList(1, shape.size()))));
+      }
+    }
+    return ret;
+  }
+
+  /**
+   * Whether a component may be a tuple, a dict or a namedtuple of tensors rather than a tensor.
+   *
+   * @param component The component's points-to set.
+   * @return {@code true} iff some member is such a structure.
+   */
+  private static boolean holdsAnyStructure(OrdinalSet<InstanceKey> component) {
+    for (InstanceKey member : component) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(member);
+      if (asin != null
+          && TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES.contains(
+              asin.concreteType().getReference())) return true;
+    }
+    return false;
   }
 
   @Override
