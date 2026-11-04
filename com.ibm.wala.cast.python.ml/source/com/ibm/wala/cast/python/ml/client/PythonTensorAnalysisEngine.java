@@ -1003,6 +1003,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
         TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
 
+    // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
+    // element (wala/ML#1190).
+    builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
+
     // A zip's element is the structure of datasets it is given, each replaced by its element
     // (wala/ML#164).
     // A dataset `tfds.load` returns is no subclass of `Dataset`, but writes both fields as one
