@@ -30,19 +30,8 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'recursive'
-    - name: Set up JDK 25
-      uses: actions/setup-java@v6
-      with:
-        java-version: '25'
-        distribution: 'temurin'
-        cache: maven
-    - name: Install Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
+    - name: Set up the build
+      uses: ./.github/actions/setup
     - name: Check formatting with Spotless
       run: mvn spotless:check -B
     - name: Check formatting with Black
@@ -52,21 +41,6 @@ jobs:
     # nowhere, tag pushes included. Fail on such a test, and on a list entry that selects none.
     - name: Check that the whole-project shards select every test in their category
       run: python3 .github/scripts/check-shard-coverage.py
-    - name: Install Jython3
-      run: |
-        pushd jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
-        popd
-      shell: bash
-    - name: Install IDE
-      run: |
-        pushd IDE/com.ibm.wala.cast.lsp
-        mvn package -B -q -DskipTests
-        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
     # The whole-project fixture analyses (the `WholeProjectFixtures` category) run in the parallel
     # `whole-project-fixtures` job, pulling the wall clock back to the pre-context-broadening band
     # (wala/ML#755), on every run, tag pushes included: the `deploy` job waits for both, so nothing
@@ -127,34 +101,8 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'recursive'
-    - name: Set up JDK 25
-      uses: actions/setup-java@v6
-      with:
-        java-version: '25'
-        distribution: 'temurin'
-        cache: maven
-    - name: Install Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
-    - name: Install Jython3
-      run: |
-        pushd jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
-        popd
-      shell: bash
-    - name: Install IDE
-      run: |
-        pushd IDE/com.ibm.wala.cast.lsp
-        mvn package -B -q -DskipTests
-        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
+    - name: Set up the build
+      uses: ./.github/actions/setup
     # `-Dtest` with an explicit list is the shard filter; the `WholeProjectFixtures` category is
     # what keeps these same tests OUT of the `build` job, so the two mechanisms partition rather
     # than overlap. The no-test guards keep the upstream reactor modules green with zero matches.
@@ -188,34 +136,8 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'recursive'
-    - name: Set up JDK 25
-      uses: actions/setup-java@v6
-      with:
-        java-version: '25'
-        distribution: 'temurin'
-        cache: maven
-    - name: Install Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-    - name: Install Python dependencies
-      run: pip install -r requirements.txt
-    - name: Install Jython3
-      run: |
-        pushd jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
-        popd
-      shell: bash
-    - name: Install IDE
-      run: |
-        pushd IDE/com.ibm.wala.cast.lsp
-        mvn package -B -q -DskipTests
-        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
-        popd
+    - name: Set up the build
+      uses: ./.github/actions/setup
     # Gate the deploy: only a semver-shaped tag that's an ancestor of master, so a feature-branch
     # tag can't trigger a release deploy (wala/ML#421). The non-semver early-exit also keeps the
     # `merge-base` call from erroring on legacy tags. `--depth=50` (not the checkout's shallow
