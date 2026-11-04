@@ -1629,6 +1629,26 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether an iterated value holds datasets only, each of whose element is mirrored ({@link
+   * #isElementMirrored}), so iterating it yields the element's objects (wala/ML#164).
+   *
+   * @param builder The propagation call graph builder.
+   * @param iterated The iterated value.
+   * @return {@code true} iff the value holds at least one dataset and only mirrored ones.
+   */
+  private static boolean iteratesMirroredDatasetsOnly(
+      PropagationCallGraphBuilder builder, PointsToSetVariable iterated) {
+    if (iterated == null || iterated.getPointerKey() == null) return false;
+    boolean any = false;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(iterated.getPointerKey())) {
+      AllocationSiteInNode asin = findAllocationSiteInNode(ik);
+      if (asin == null || !isElementMirrored(asin, builder)) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /**
    * Whether a dataset's element is mirrored (wala/ML#1190): its {@code mirrored_element} field
    * holds its element's objects, a mirror's copy of the structure the dataset was built from or
    * what a {@code map} function returns (wala/ML#164), and its {@code legacy_element} field holds
@@ -3391,6 +3411,11 @@ public class TensorGeneratorFactory {
               TensorGenerator stored = storedElement(builder, source);
               if (stored != null) return stored;
             }
+            // A dataset whose element is modeled yields its element's own objects, which the
+            // dataflow types; an element of its generator would peel an axis off them
+            // (wala/ML#164).
+            if (iteratedGenerator instanceof DatasetGenerator
+                && iteratesMirroredDatasetsOnly(builder, iterated)) return null;
             // Otherwise an element of the iterated value, over its own generator where it has
             // one, as the element read built it.
             if (iteratedGenerator != null)

@@ -1039,6 +1039,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     binaryOpResults.put(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE);
     binaryOpResults.put(TensorFlowTypes.VARIABLES_VARIABLE, TensorFlowTypes.TENSOR_TYPE);
     binaryOpResults.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    // A leaf of a dataset's mirrored element is a tensor, so arithmetic on it, as a `map` function
+    // does on its arguments, allocates one (wala/ML#164).
+    binaryOpResults.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.TENSOR_TYPE);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       binaryOpResults.put(array, NumpyTypes.NDARRAY_TYPE);
     builder.setFreshBinaryOpResultTypes(binaryOpResults);
@@ -1048,6 +1051,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // their operands where before every value downstream of the element was empty.
     Map<TypeReference, TypeReference> elementTypes = new HashMap<>();
     elementTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.NDARRAY_TYPE);
+    // A leaf of a dataset's mirrored element is a tensor, so its element is one too, as a `map`
+    // function's return that is a leaf on one path and a tuple on another is read (wala/ML#164).
+    elementTypes.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.TENSOR_TYPE);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       elementTypes.put(array, NumpyTypes.NDARRAY_TYPE);
     // A static shape's element, `t.shape[k]`, is a Python int (wala/ML#1104), so arithmetic over
@@ -2129,8 +2135,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IClass concreteType = asin.concreteType();
         TypeReference reference = concreteType.getReference();
 
+        // The holder of a `map` function's arguments is a summary object, no dataset (wala/ML#164).
         if ((reference.equals(DATASET)
                 || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
+            && !reference.equals(TensorFlowTypes.DATASET_MAP_ARGUMENTS)
             && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
           LOGGER.fine("Added dataflow source from tensor dataset: " + describe(src) + ".");
