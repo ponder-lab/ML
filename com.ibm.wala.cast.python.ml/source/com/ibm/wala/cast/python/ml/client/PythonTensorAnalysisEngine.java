@@ -1542,6 +1542,94 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether a store that leaves out tuples, as a Keras step's unpacking of its data does, leaves
+   * out every value a variable holds once a dataset's generic element is taken for the tuple its
+   * generator says it is (wala/ML#997): the step takes such an element's first member, which its
+   * read at position 0 supplies, not the element whole. A generic element of a dataset whose
+   * element is not known to be a tuple passes, since the step may take it whole.
+   *
+   * @param operator The store's assignment.
+   * @param from The variable stored.
+   * @param builder The builder whose pointer analysis holds the variable's set.
+   * @return {@code true} iff each value is left out or is such an element.
+   */
+  private static boolean excludesAsUnpacked(
+      PythonSSAPropagationCallGraphBuilder.ExcludingAssignOperator operator,
+      PointsToSetVariable from,
+      PropagationCallGraphBuilder builder) {
+    if (!operator.excludesClass(PythonTypes.tuple)) return false;
+    OrdinalSet<InstanceKey> values =
+        builder.getPointerAnalysis().getPointsToSet(from.getPointerKey());
+    if (values.isEmpty()) return false;
+    boolean element = false;
+    for (InstanceKey key : values) {
+      if (operator.excludes(key)) continue;
+      if (!isTupleElement(key, builder)) return false;
+      element = true;
+    }
+    return element;
+  }
+
+  /**
+   * Whether a value is a dataset's generic element whose datasets' generators all say it is a tuple
+   * (wala/ML#997).
+   *
+   * @param key The value.
+   * @param builder The builder.
+   * @return {@code true} iff it is such an element.
+   */
+  private static boolean isTupleElement(InstanceKey key, PropagationCallGraphBuilder builder) {
+    if (!key.concreteType().getReference().equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+        || !(key instanceof AllocationSiteInNode allocation)) return false;
+    List<TensorGenerator> datasets =
+        DatasetIteratorElementGenerator.datasetsOf(List.of(allocation), builder);
+    if (datasets.isEmpty()) return false;
+    for (TensorGenerator dataset : datasets)
+      if (!(dataset instanceof TupleElementProvider tep) || !tep.yieldsTuple(builder)) return false;
+    return true;
+  }
+
+  /**
+   * Whether a read of a Keras step's unpacked inputs holds generic dataset elements that are all
+   * tuples (wala/ML#997): the step takes such an element's first member, which flows into the
+   * inputs from the data's read at position 0, so the read is no source of the whole element, which
+   * would join the label's types into the inputs.
+   *
+   * @param get The read.
+   * @param node The node holding it.
+   * @param value The read's value.
+   * @param builder The builder.
+   * @return {@code true} iff the read is of the step's inputs and every generic element it holds is
+   *     a tuple.
+   */
+  private static boolean readsUnpackedTupleElement(
+      SSAGetInstruction get,
+      CGNode node,
+      PointsToSetVariable value,
+      PropagationCallGraphBuilder builder) {
+    if (get.isStatic()) return false;
+    OrdinalSet<InstanceKey> holders =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(node, get.getRef()));
+    if (holders.isEmpty()) return false;
+    for (InstanceKey holder : holders)
+      if (!holder.concreteType().getReference().equals(TensorFlowTypes.STEP_INPUTS_TYPE))
+        return false;
+    boolean element = false;
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey())) {
+      if (!key.concreteType().getReference().equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)) continue;
+      if (!isTupleElement(key, builder)) return false;
+      element = true;
+    }
+    return element;
+  }
+
+  /**
    * Removes from the dataflow graph each edge of a field store that leaves out every value its
    * source holds (wala/ML#997); see {@link
    * PythonSSAPropagationCallGraphBuilder#setExcludingStores}. The store puts none of those values
@@ -1565,7 +1653,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             && statement.getOperator()
                 instanceof PythonSSAPropagationCallGraphBuilder.ExcludingAssignOperator operator
             && statement.getRightHandSide() instanceof PointsToSetVariable from
-            && operator.excludesAll(from)
+            && (operator.excludesAll(from) || excludesAsUnpacked(operator, from, builder))
             && dataflow.hasEdge(from, v)) pruned.add(Pair.make(from, v));
     }
     for (Pair<PointsToSetVariable, PointsToSetVariable> edge : pruned)
@@ -1789,7 +1877,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // the component it selects is pinned below, as a user step's `x, y = data` is.
           sources.add(src);
           LOGGER.fine("Added dataflow source from a step's data read: " + describe(src) + ".");
-        } else if (inst instanceof SSAGetInstruction && readsDatasetElement(src, builder)) {
+        } else if (inst instanceof SSAGetInstruction get
+            && readsDatasetElement(src, builder)
+            && !readsUnpackedTupleElement(get, localPointerKeyNode, src, builder)) {
           // A Keras step's inputs read from the element of the dataset it iterates (wala/ML#997)
           // are a source, as a loop variable bound to the element is.
           sources.add(src);

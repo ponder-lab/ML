@@ -7131,6 +7131,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return true;
     }
 
+    /**
+     * Whether this assignment leaves out a value.
+     *
+     * @param key The value.
+     * @return {@code true} iff it is an instance of one of the classes left out.
+     */
+    public boolean excludes(InstanceKey key) {
+      return isInstanceOf(key, excluded);
+    }
+
+    /**
+     * Whether this assignment leaves out the instances of a class.
+     *
+     * @param type The class.
+     * @return {@code true} iff the class is one of those left out.
+     */
+    public boolean excludesClass(TypeReference type) {
+      IClass c = getClassHierarchy().lookupClass(type);
+      return c != null && excluded.contains(c);
+    }
+
     @Override
     public int hashCode() {
       return excluded.hashCode();
