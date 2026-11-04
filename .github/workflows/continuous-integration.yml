@@ -92,7 +92,7 @@ jobs:
     # by package alone, so Codecov cannot place either copy. Splitting the report by module source
     # directory, each part named for that directory, makes Codecov's lookup the repository path.
     - name: Split the coverage report by module
-      run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
+      run: python3 .github/scripts/split-jacoco-report.py
     # The `coverage` job uploads every job's reports to Codecov at once.
     - name: Save the coverage reports
       uses: actions/upload-artifact@v7
@@ -164,7 +164,7 @@ jobs:
     # by package alone, so Codecov cannot place either copy. Splitting the report by module source
     # directory, each part named for that directory, makes Codecov's lookup the repository path.
     - name: Split the coverage report by module
-      run: python3 .github/scripts/split-jacoco-report.py com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
+      run: python3 .github/scripts/split-jacoco-report.py
     # The `coverage` job uploads every job's reports to Codecov at once.
     - name: Save the coverage reports
       uses: actions/upload-artifact@v7
