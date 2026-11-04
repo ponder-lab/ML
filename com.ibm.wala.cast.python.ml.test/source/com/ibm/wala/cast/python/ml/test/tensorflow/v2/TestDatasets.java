@@ -156,16 +156,9 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset10()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_dataset10.py",
-        "add",
-        2,
-        3,
-        Map.of(
-            2,
-            Set.of(SCALAR_TENSOR_OF_INT32, TENSOR_2_NONE_INT32),
-            3,
-            Set.of(SCALAR_TENSOR_OF_INT32, TENSOR_2_NONE_INT32)));
+    // The element its `output_signature` declares is a tuple, no tensor, so `add` concatenates two
+    // tuples (https://github.com/wala/ML/issues/164). Its members are typed in `testDataset10a`.
+    test("tf2_test_dataset10.py", "add", 0, 0);
   }
 
   @Test
