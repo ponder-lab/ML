@@ -1,11 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
-import static com.ibm.wala.cast.python.types.PythonTypes.Root;
-import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
-import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -86,7 +83,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           return true;
         }
       }
@@ -128,7 +125,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<TensorType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
                   builder
@@ -181,7 +178,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
                   builder
@@ -194,10 +191,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
             if (fieldIndex != null && fieldIndex == index) {
               FieldReference subscript =
-                  FieldReference.findOrCreate(
-                      asin.concreteType().getReference(),
-                      findOrCreateAsciiAtom(fieldIndex.toString()),
-                      Root);
+                  positionField(asin.concreteType().getReference(), fieldIndex);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
@@ -239,7 +233,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<DType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
                   builder
@@ -252,10 +246,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
             if (fieldIndex != null && fieldIndex == index) {
               FieldReference subscript =
-                  FieldReference.findOrCreate(
-                      asin.concreteType().getReference(),
-                      findOrCreateAsciiAtom(fieldIndex.toString()),
-                      Root);
+                  positionField(asin.concreteType().getReference(), fieldIndex);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
@@ -321,7 +312,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           // It's a structured element. We return the union of all possible shapes of its members.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
@@ -335,10 +326,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
             if (fieldIndex != null) {
               FieldReference subscript =
-                  FieldReference.findOrCreate(
-                      asin.concreteType().getReference(),
-                      findOrCreateAsciiAtom(fieldIndex.toString()),
-                      Root);
+                  positionField(asin.concreteType().getReference(), fieldIndex);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
@@ -392,7 +380,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         LOGGER.fine(
             DatasetFromTensorsGenerator.class.getName() + ": processing ik=" + describe(ik));
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.concreteType().getReference().equals(tuple)) {
+        if (asin != null && isPositional(asin.concreteType().getReference())) {
           // It's a structured element. We return the union of all possible dtypes of its members.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               withoutClientOnlyKeys(
@@ -406,10 +394,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
             Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
             if (fieldIndex != null) {
               FieldReference subscript =
-                  FieldReference.findOrCreate(
-                      asin.concreteType().getReference(),
-                      findOrCreateAsciiAtom(fieldIndex.toString()),
-                      Root);
+                  positionField(asin.concreteType().getReference(), fieldIndex);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
