@@ -20,6 +20,11 @@
         <method name="do" descriptor="()LRoot;" numArgs="15" paramNames="self name split data_dir batch_size shuffle_files download as_supervised decoders read_config with_info builder_kwargs download_and_prepare_kwargs as_dataset_kwargs try_gcs">
           <new def="dataset" class="Ltensorflow/data/TfdsDataset"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="dataset" arg1="as_supervised" numArgs="2" def="res"/>
+          <!-- Under the literal `as_supervised=True`, an element is an `(input, label)` pair, each member a leaf typed by `TfdsDatasetGenerator` at its position. A call passing anything else, or nothing, yields a dict of features the analysis cannot know, so the builder passes the marker to the dataset, and an iterator over it allocates the element (wala/ML#164). -->
+          <new def="marker" class="Ltensorflow/data/element"/>
+          <new def="supervised_fn" class="Ltensorflow/data/element_supervised"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="supervised_fn" arg1="as_supervised" arg2="res" arg3="marker" numArgs="4" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="res" value="element"/>
           <putfield class="LRoot" field="train" fieldType="LRoot" ref="res" value="res"/>
           <putfield class="LRoot" field="test" fieldType="LRoot" ref="res" value="res"/>
           <putfield class="LRoot" field="validation" fieldType="LRoot" ref="res" value="res"/>

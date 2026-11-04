@@ -1656,7 +1656,8 @@ public class TensorGeneratorFactory {
    * Whether a dataset's element is mirrored (wala/ML#1190): its {@code mirrored_element} field
    * holds its element's objects, a mirror's copy of the structure the dataset was built from or
    * what a {@code map} function returns (wala/ML#164), and its {@code legacy_element} field holds
-   * no marker that part of it is not, as a zip of a dataset whose element is not mirrored carries.
+   * no marker that it, or part of it, is not, as a dataset that one call makes with a pair and
+   * another without carries, or a zip of a dataset whose element is not mirrored.
    *
    * @param dataset The dataset's allocation.
    * @param builder The propagation call graph builder.

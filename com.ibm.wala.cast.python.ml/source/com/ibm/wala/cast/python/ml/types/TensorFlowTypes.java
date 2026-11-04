@@ -293,6 +293,15 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_declared"));
 
   /**
+   * The summary class whose call makes a dataset's element an {@code (input, label)} pair where the
+   * call of {@code tfds.load} passes the literal {@code True} as {@code as_supervised}
+   * (wala/ML#164).
+   */
+  public static final TypeReference DATASET_ELEMENT_SUPERVISED =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_supervised"));
+
+  /**
    * The classes a dataset's element is built from as structure: tuples, dicts and namedtuples, each
    * of whose members {@code tf.data} reads as a component, where a list is converted to a tensor.
    * The element's mirror copies these as structure (wala/ML#1190), and a reader of the element
