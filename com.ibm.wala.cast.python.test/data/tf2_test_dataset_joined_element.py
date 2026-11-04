@@ -39,6 +39,14 @@ def consume_crossed_padded(x):
     pass
 
 
+def consume_paired_whole(e):
+    pass
+
+
+def consume_paired_member(x):
+    pass
+
+
 def flat_dataset():
     return tf.data.Dataset.from_tensor_slices((tf.ones([8, 6]), tf.zeros([8])))
 
@@ -129,6 +137,16 @@ def crossed_padded(flag):
         consume_crossed_padded(x)
 
 
+# A shuffle of either of two pair datasets: the whole element is a tuple, no tensor, and its
+# first member is either dataset's.
+def paired(flag):
+    for e in (flat_dataset() if flag else narrow_dataset()).shuffle(2):
+        assert isinstance(e, tuple)
+        consume_paired_whole(e)
+        assert e[0].shape in ((6,), (5,)) and e[0].dtype == tf.float32
+        consume_paired_member(e[0])
+
+
 for flag in (True, False):
     batched(flag)
     shuffled(flag)
@@ -138,3 +156,4 @@ for flag in (True, False):
     crossed_shuffled_batched(flag)
     crossed_member_batched(flag)
     crossed_padded(flag)
+    paired(flag)
