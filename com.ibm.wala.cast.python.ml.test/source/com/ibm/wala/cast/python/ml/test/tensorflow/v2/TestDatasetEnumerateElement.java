@@ -471,8 +471,9 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
 
   /**
    * A member of the element where the receiver may also be an object of a user class, whose
-   * allocation has no generator, is the dataset's member and a tensor of unknown type
-   * (wala/ML#1204).
+   * allocation has no generator, reads as the dataset's member and a tensor of unknown type
+   * (wala/ML#1204). The user class's member is not known here: at run time it is also {@code (4,)
+   * float32}, so the unknown type is imprecision, and a change that types it narrows this pin.
    *
    * @throws Exception On analysis error.
    */
