@@ -167,17 +167,19 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A zipped dataset's whole element, the pair {@code from_tensors} is given: two positions, which
-   * {@code fit}'s data reads as wholly unknown, so they may be anything.
+   * A zipped dataset's whole element, the pair {@code from_tensors} is given: two positions, each
+   * the tensor at its position of the pair, so the element is complete and holds no {@code None}
+   * (wala/ML#1211).
    */
   @Test
   public void testZippedTensors() {
     ContainerElements elements = ofValue("consume_zipped_tensors");
     assertEquals(OptionalInt.of(2), elements.arity());
-    TensorType top = new TensorType("unknown", null);
-    assertEquals(List.of(Set.of(top), Set.of(top)), elements.positionTypes(analysis));
-    assertFalse(elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+    assertEquals(
+        List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
+        elements.positionTypes(analysis));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
   }
 
   /**
