@@ -1,0 +1,38 @@
+name: Set up the build
+description: >-
+  Installs the JDK, Python and its dependencies, and the Jython3 and IDE jars the build resolves
+  from the local Maven repository. Every job that builds uses this, so each version is stated
+  once. The caller checks out the sources, with their submodules, first.
+runs:
+  using: composite
+  steps:
+  - name: Set up JDK 25
+    uses: actions/setup-java@v6
+    with:
+      java-version: '25'
+      distribution: 'temurin'
+      cache: maven
+  - name: Install Python
+    uses: actions/setup-python@v7
+    with:
+      python-version: '3.10'
+      cache: 'pip'
+  - name: Install Python dependencies
+    run: pip install -r requirements.txt
+    shell: bash
+  - name: Install Jython3
+    run: |
+      pushd jython3
+      ant
+      pushd dist
+      mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
+      popd
+      popd
+    shell: bash
+  - name: Install IDE
+    run: |
+      pushd IDE/com.ibm.wala.cast.lsp
+      mvn package -B -q -DskipTests
+      mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
+      popd
+    shell: bash
