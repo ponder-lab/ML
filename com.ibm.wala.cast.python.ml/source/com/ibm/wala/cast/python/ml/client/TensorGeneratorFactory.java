@@ -1630,7 +1630,9 @@ public class TensorGeneratorFactory {
 
   /**
    * Whether a dataset's element is mirrored (wala/ML#1190): its {@code mirrored_element} field
-   * holds a mirror's copy of the structure the dataset was built from.
+   * holds a mirror's copy of the structure the dataset was built from, and its {@code
+   * legacy_element} field holds no marker that it is not, as a dataset that one call makes with a
+   * pair and another without carries (wala/ML#164).
    *
    * @param dataset The dataset's allocation.
    * @param builder The propagation call graph builder.
@@ -1649,6 +1651,19 @@ public class TensorGeneratorFactory {
                     Atom.findOrCreateUnicodeAtom("mirrored_element"),
                     PythonTypes.Root));
     if (element == null) return false;
+    IField legacy =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    Atom.findOrCreateUnicodeAtom("legacy_element"),
+                    PythonTypes.Root));
+    if (legacy != null
+        && !builder
+            .getPointerAnalysis()
+            .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, legacy))
+            .isEmpty()) return false;
     for (InstanceKey ik :
         builder
             .getPointerAnalysis()
