@@ -191,11 +191,8 @@ jobs:
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v7
       with:
-        token: $CODECOV_TOKEN
-        slug: ponder-lab/ML
+        token: ${{ secrets.CODECOV_TOKEN }}
         directory: coverage
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   # Deploy after every test has passed: `needs` waits for `build` and every leg of
   # `whole-project-fixtures`, and the default `success()` condition requires all of them. The
   # deploy rebuilds without tests rather than taking artifacts from `build`, so the deployed
