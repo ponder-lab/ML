@@ -9,6 +9,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -39,7 +40,7 @@ import java.util.logging.Logger;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
+public class DatasetSampleFromDatasetsGenerator extends DatasetJoinGenerator {
 
   private static final Logger LOGGER =
       Logger.getLogger(DatasetSampleFromDatasetsGenerator.class.getName());
@@ -70,6 +71,72 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
 
   public DatasetSampleFromDatasetsGenerator(CGNode node) {
     super(node);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Unless it stops at the first dataset that runs out, or a weight may leave a dataset
+   *     unsampled, a sample yields every element of each dataset it is given: each size it may have
+   *     is the sum over the list's positions of one size each, a position's sizes the union over
+   *     the datasets it may hold, so a dataset given twice counts twice. The sizes are unknown when
+   *     {@code stop_on_empty_dataset} may be anything but {@code False}, {@code weights} may be
+   *     supplied, the list is not built in place by constant positions alone (as one appended to
+   *     is), or a dataset's size is.
+   */
+  @Override
+  public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
+    int stopPosition = Parameters.STOP_ON_EMPTY_DATASET.getIndex();
+    String stopName = Parameters.STOP_ON_EMPTY_DATASET.getName();
+    Boolean supplied = this.isArgumentSyntacticallySupplied(builder, stopPosition, stopName);
+    if (supplied == null) return Collections.emptySet();
+    if (supplied) {
+      Set<Boolean> stops =
+          getPossibleBooleanValues(this.getArgumentPointsToSet(builder, stopPosition, stopName));
+      if (stops == null || !stops.equals(Collections.singleton(Boolean.FALSE)))
+        return Collections.emptySet();
+    }
+    // A weight of 0 leaves its dataset unsampled.
+    if (!Boolean.FALSE.equals(
+        this.isArgumentSyntacticallySupplied(
+            builder, Parameters.WEIGHTS.getIndex(), Parameters.WEIGHTS.getName())))
+      return Collections.emptySet();
+    OrdinalSet<InstanceKey> sequences =
+        this.getArgumentPointsToSet(
+            builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());
+    if (sequences == null || sequences.isEmpty()) return Collections.emptySet();
+    Set<Long> ret = HashSetFactory.make();
+    for (InstanceKey sequence : sequences) {
+      List<List<TensorGenerator>> positions =
+          positionsOf(builder, sequence, TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE);
+      if (positions == null) return Collections.emptySet();
+      Set<Long> sizes = null;
+      for (List<TensorGenerator> position : positions) {
+        Set<Long> at = sizesOfAny(builder, position);
+        sizes = sizes == null ? at : sums(sizes, at);
+        if (sizes.isEmpty()) return sizes;
+      }
+      if (sizes == null) return Collections.emptySet();
+      ret.addAll(sizes);
+    }
+    return ret;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The datasets the {@code datasets} argument holds, since the element is any one of
+   *     their elements (wala/ML#1215), or {@code null} for a view fixed to one of them. The
+   *     whole-element reads are this generator's own, over every dataset the list holds, so a view
+   *     reads the union of the datasets there, not its own alone: sound, if imprecise.
+   */
+  @Override
+  public List<TensorGenerator> getReceiverGenerators(PropagationCallGraphBuilder builder) {
+    if (this.getFixedReceiver() != null) return null;
+    return datasetsIn(
+        builder,
+        this.getArgumentPointsToSet(
+            builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName()));
   }
 
   @Override

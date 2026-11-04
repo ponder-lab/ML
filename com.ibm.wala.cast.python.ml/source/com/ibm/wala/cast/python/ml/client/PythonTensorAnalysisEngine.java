@@ -1069,6 +1069,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         "mirrored_element",
         "legacy_element");
 
+    // The element of `sample_from_datasets` and `choose_from_datasets` is any one of the elements
+    // of the datasets they are given (wala/ML#1215).
+    builder.setElementJoin(TensorFlowTypes.DATASET_ELEMENT_JOIN);
+
     // A dataset built from a generator mirrors the structure it declares, and a call declaring none
     // marks its element as not mirrored (wala/ML#164).
     builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");

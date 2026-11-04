@@ -285,6 +285,14 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_zip"));
 
   /**
+   * The summary class whose call joins the elements of a sequence of datasets into one dataset's
+   * element, any one of theirs (wala/ML#1215).
+   */
+  public static final TypeReference DATASET_ELEMENT_JOIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_join"));
+
+  /**
    * The summary class whose call mirrors the structure a dataset declares, its {@code
    * output_signature} or else its {@code output_types}, into its element (wala/ML#164).
    */
