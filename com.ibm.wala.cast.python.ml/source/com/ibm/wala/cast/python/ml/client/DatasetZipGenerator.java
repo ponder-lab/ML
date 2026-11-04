@@ -9,6 +9,8 @@ import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -138,17 +140,18 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
   }
 
   /**
-   * Whether a key the zipped structure holds is itself a structure of datasets, a tuple, list or
-   * dict, rather than a dataset.
+   * Whether a key the zipped structure holds is itself a structure of datasets rather than a
+   * dataset: one of the classes the element's copy takes for a structure, a tuple, a dict or a
+   * namedtuple ({@link TensorFlowTypes#DATASET_ELEMENT_STRUCTURE_TYPES}), or a list.
    *
    * @param key The key.
-   * @return {@code true} iff the key is a tuple, a list or a dict.
+   * @return {@code true} iff the key is such a structure.
    */
   private static boolean isStructureOfDatasets(InstanceKey key) {
     AllocationSiteInNode asin = getAllocationSiteInNode(key);
     if (asin == null) return false;
     TypeReference type = asin.concreteType().getReference();
-    return type.equals(tuple) || type.equals(list) || type.equals(dict);
+    return type.equals(list) || TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES.contains(type);
   }
 
   /**
@@ -170,6 +173,10 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
       field = FieldReference.findOrCreate(type, findOrCreateAsciiAtom(index.toString()), Root);
     else if (selector instanceof String key && type.equals(dict))
       field = FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(key), Root);
+    // A namedtuple's members are its positions, as the element's copy keys them.
+    else if (selector instanceof Integer index
+        && type.equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE))
+      field = FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(index.toString()), Root);
     else return null;
     IField f = builder.getClassHierarchy().resolveField(field);
     if (f == null) return null;

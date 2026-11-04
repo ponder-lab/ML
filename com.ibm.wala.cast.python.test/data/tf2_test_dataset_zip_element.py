@@ -1,5 +1,7 @@
 # Test https://github.com/wala/ML/issues/164: `zip` yields the structure it is given with each
 # dataset replaced by that dataset's element, so each member keeps its own type.
+import collections
+
 import tensorflow as tf
 
 
@@ -67,6 +69,18 @@ def consume_grouped_keyed_b(b):
     pass
 
 
+def consume_named_a(a):
+    pass
+
+
+def consume_named_b(b):
+    pass
+
+
+def consume_named_field_b(b):
+    pass
+
+
 floats = tf.data.Dataset.from_tensor_slices(tf.ones([8, 4]))
 ints = tf.data.Dataset.from_tensor_slices(tf.zeros([8, 3], tf.int32))
 
@@ -126,3 +140,15 @@ for e, c in tf.data.Dataset.zip(({"a": floats, "b": ints}, labels)):
     b = e["b"]
     assert b.shape == (3,) and b.dtype == tf.int32
     consume_grouped_keyed_b(b)
+
+# A namedtuple of datasets nests its members' elements as a tuple does.
+Grouped = collections.namedtuple("Grouped", ["a", "b"])
+for (a, b), c in tf.data.Dataset.zip((Grouped(floats, ints), labels)):
+    assert a.shape == (4,) and a.dtype == tf.float32
+    consume_named_a(a)
+    assert b.shape == (3,) and b.dtype == tf.int32
+    consume_named_b(b)
+
+for g, c in tf.data.Dataset.zip((Grouped(floats, ints), labels)):
+    assert g.b.shape == (3,) and g.b.dtype == tf.int32
+    consume_named_field_b(g.b)

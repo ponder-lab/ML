@@ -248,4 +248,43 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   public void testGroupedKeyedB() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_grouped_keyed_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
   }
+
+  /**
+   * A zip of a namedtuple of datasets nested in the zipped tuple: the namedtuple's first member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNamedA() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named_a", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * The namedtuple's second member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNamedB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * The namedtuple's second member read by its name.
+   *
+   * <p>TODO: The element's copy keys a namedtuple's members by position alone, so a read by name
+   * finds nothing (https://github.com/wala/ML/issues/1210).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNamedFieldB() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named_field_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
 }
