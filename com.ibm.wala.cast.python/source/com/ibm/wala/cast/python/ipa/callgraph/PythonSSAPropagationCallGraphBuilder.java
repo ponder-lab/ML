@@ -654,6 +654,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private final Set<InstanceKey> elementMirrorCutoffs = HashSetFactory.make();
 
   /**
+   * The field names of each namedtuple instance by position (wala/ML#1210), as its type's names
+   * arrive: an instance's catalog names its positions alone, so a copy of the instance learns its
+   * names here. A position may have several names, where one site constructs either of two
+   * namedtuple types.
+   */
+  private final Map<InstanceKey, Map<Integer, Set<String>>> namedTupleFieldNames =
+      HashMapFactory.make();
+
+  /** The copies of each namedtuple instance in a dataset's element, keyed by the instance. */
+  private final Map<InstanceKey, Set<InstanceKey>> namedTupleCopies = HashMapFactory.make();
+
+  /**
    * Names the classes of dataset element mirroring (wala/ML#1190): a call whose callee is an
    * instance of {@code mirror} returns a copy of its first argument's structure, with the second
    * argument as the dataset whose element it is.
@@ -4559,6 +4571,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       else elementMirrorPaths.computeIfAbsent(mirror, k -> HashSetFactory.make()).add(path);
       getSystem().newConstraint(target, mirror);
       if (!structure) return;
+      if (type.getReference().equals(NAMED_TUPLE_INSTANCE)) copyNamedTupleNames(root, mirror);
       AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
       getSystem()
           .newSideEffect(
@@ -4788,6 +4801,58 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Records a namedtuple instance's field name at a position, and makes the field readable by that
+   * name on each copy of the instance in a dataset's element (wala/ML#1210).
+   *
+   * @param instance The namedtuple instance.
+   * @param index The position.
+   * @param name The field's name.
+   */
+  private void nameNamedTupleField(InstanceKey instance, int index, String name) {
+    if (!namedTupleFieldNames
+        .computeIfAbsent(instance, k -> HashMapFactory.make())
+        .computeIfAbsent(index, k -> HashSetFactory.make())
+        .add(name)) return;
+    for (InstanceKey copy : namedTupleCopies.getOrDefault(instance, Set.of()))
+      aliasNamedTupleField(copy, index, name);
+  }
+
+  /**
+   * Makes a copy of a namedtuple instance in a dataset's element readable by the instance's field
+   * names, as its positions are (wala/ML#1210): the copy walks the instance's catalog, which names
+   * its positions alone. Names that arrive later are added as they do.
+   *
+   * @param instance The namedtuple instance the copy copies.
+   * @param copy The copy.
+   */
+  private void copyNamedTupleNames(InstanceKey instance, InstanceKey copy) {
+    if (!namedTupleCopies.computeIfAbsent(instance, k -> HashSetFactory.make()).add(copy)) return;
+    for (Map.Entry<Integer, Set<String>> names :
+        List.copyOf(namedTupleFieldNames.getOrDefault(instance, Map.of()).entrySet()))
+      for (String name : List.copyOf(names.getValue()))
+        aliasNamedTupleField(copy, names.getKey(), name);
+  }
+
+  /**
+   * Makes a namedtuple copy's field named {@code name} hold what its position {@code index} does.
+   *
+   * @param copy The copy.
+   * @param index The position.
+   * @param name The field's name.
+   */
+  private void aliasNamedTupleField(InstanceKey copy, int index, String name) {
+    IClassHierarchy cha = getClassHierarchy();
+    IField named = resolveRootField(cha, name);
+    IField numbered = resolveRootField(cha, Integer.toString(index));
+    if (named == null || numbered == null) return;
+    getSystem()
+        .newConstraint(
+            getPointerKeyForInstanceField(copy, named),
+            assignOperator,
+            getPointerKeyForInstanceField(copy, numbered));
+  }
+
+  /**
    * Constructs a {@code collections.namedtuple} instance (<a
    * href="https://github.com/wala/ML/issues/1031">wala/ML#1031</a>) at a call whose callee is a
    * namedtuple type: an instance allocated at the call, each positional argument bound to the field
@@ -4940,6 +5005,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(index), index));
         bindField(instance, named, argument);
         bindField(instance, numbered, argument);
+        nameNamedTupleField(instance, index, name);
       }
 
       /** Binds an argument's value to a field of the instance. */

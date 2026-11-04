@@ -274,16 +274,14 @@ public class TestDatasetZipElement extends AbstractTensorTest {
   }
 
   /**
-   * The namedtuple's second member read by its name.
-   *
-   * <p>TODO: The element's copy keys a namedtuple's members by position alone, so a read by name
-   * finds nothing (https://github.com/wala/ML/issues/1210).
+   * The namedtuple's second member read by its name, which the element's copy holds as it holds the
+   * member's position (https://github.com/wala/ML/issues/1210).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testNamedFieldB() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_named_field_b", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
   }
