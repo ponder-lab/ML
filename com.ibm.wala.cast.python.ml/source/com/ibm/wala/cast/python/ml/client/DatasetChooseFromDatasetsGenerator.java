@@ -40,7 +40,7 @@ import java.util.logging.Logger;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
+public class DatasetChooseFromDatasetsGenerator extends DatasetJoinGenerator {
 
   private static final Logger LOGGER =
       Logger.getLogger(DatasetChooseFromDatasetsGenerator.class.getName());
@@ -69,6 +69,23 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
 
   public DatasetChooseFromDatasetsGenerator(CGNode node) {
     super(node);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The datasets the {@code datasets} argument holds, since the element is any one of
+   *     their elements (wala/ML#1215), or {@code null} for a view fixed to one of them. The
+   *     whole-element reads are this generator's own, over every dataset the list holds, so a view
+   *     reads the union of the datasets there, not its own alone: sound, if imprecise.
+   */
+  @Override
+  public List<TensorGenerator> getReceiverGenerators(PropagationCallGraphBuilder builder) {
+    if (this.getFixedReceiver() != null) return null;
+    return datasetsIn(
+        builder,
+        this.getArgumentPointsToSet(
+            builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName()));
   }
 
   @Override
