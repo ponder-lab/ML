@@ -294,4 +294,35 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   public void testZippedInnerY() throws Exception {
     testLeaf("consume_zipped_inner_y", TENSOR_2_INT32);
   }
+
+  /**
+   * The index of an enumerated {@code map}.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMappedIndex() throws Exception {
+    testLeaf("consume_mapped_index", SCALAR_TENSOR_OF_INT64);
+  }
+
+  /**
+   * A member of an enumerated {@code map}'s element, a value its function returns, keeps its own
+   * type.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMappedX() throws Exception {
+    testLeaf("consume_mapped_x", TENSOR_4_FLOAT32);
+  }
+
+  /**
+   * Another member of an enumerated {@code map}'s element keeps its own type.
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testMappedY() throws Exception {
+    testLeaf("consume_mapped_y", TENSOR_2_INT32);
+  }
 }

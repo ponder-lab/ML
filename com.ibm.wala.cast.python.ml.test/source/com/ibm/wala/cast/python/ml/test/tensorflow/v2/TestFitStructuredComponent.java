@@ -133,34 +133,21 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   }
 
   /**
-   * A member of the tuple component {@code map} builds: a tensor, of unknown type since the members
-   * of a mapped element's component are not resolved here; that is unchanged by the structure
-   * reading.
+   * A member of the tuple component {@code map} builds: the receiver's second member, batched, as
+   * the function's return is a structure of its parameters' tensors (wala/ML#164).
    */
   @Test
   public void testMapTupleMember() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_map_pair_b", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+    test(FILE, "consume_map_pair_b", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3))));
   }
 
   /**
    * A flat component {@code map} returns stays a tensor: the {@code false} arm of the mapped
-   * structure test. Its type is the join of the receiver's element members, {@code (2, 3)} and
-   * {@code (2)} beside the runtime {@code (2, 4)}, an imprecision of the mapped component reading
-   * that the structure reading leaves as it is.
+   * structure test. Its type is the receiver's first member, batched, as at run time.
    */
   @Test
   public void testMapFlatInputs() throws ClassHierarchyException, CancelException, IOException {
-    test(
-        FILE,
-        "consume_map_flat_inputs",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 4),
-                TensorType.of(FLOAT_32, 2, 3),
-                TensorType.of(FLOAT_32, 2))));
+    test(FILE, "consume_map_flat_inputs", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
 
   /** A tuple component {@code zip} builds from a tuple of datasets is no tensor. */
