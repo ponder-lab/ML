@@ -76,6 +76,11 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // A view fixed to one receiver reads that receiver's element alone (wala/ML#1207).
+    if (this.receiver != null) {
+      Set<List<Dimension<?>>> shapes = memoizedShapeResult(builder, this.receiver).toLegacy();
+      return shapes == null || shapes.isEmpty() ? null : shapes;
+    }
     // For dataset transformations, default to shapes of the input dataset (the receiver).
     // The receiver is 'self' (arg0 in IR).
     OrdinalSet<InstanceKey> receiverPTS =
@@ -117,6 +122,11 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // A view fixed to one receiver reads that receiver's element alone (wala/ML#1207).
+    if (this.receiver != null) {
+      Set<DType> dTypes = memoizedDTypes(builder, this.receiver);
+      return dTypes == null || dTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dTypes;
+    }
     // For dataset transformations, default to dtypes of the input dataset (the receiver).
     OrdinalSet<InstanceKey> receiverPTS =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
@@ -356,6 +366,15 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     DatasetGenerator ret = (DatasetGenerator) this.copy();
     ret.receiver = receiver;
     return ret;
+  }
+
+  /**
+   * The receiver this view is fixed to ({@link #overReceiver}).
+   *
+   * @return The receiver's generator, or {@code null} when this is no view.
+   */
+  protected TensorGenerator getFixedReceiver() {
+    return this.receiver;
   }
 
   /**
