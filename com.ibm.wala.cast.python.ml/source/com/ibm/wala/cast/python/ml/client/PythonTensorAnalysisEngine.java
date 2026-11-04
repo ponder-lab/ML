@@ -1007,6 +1007,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // element (wala/ML#1190).
     builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
 
+    // A zip's element is the structure of datasets it is given, each replaced by its element
+    // (wala/ML#164).
+    builder.setElementZip(
+        TensorFlowTypes.DATASET_ELEMENT_ZIP,
+        TensorFlowTypes.DATASET,
+        "mirrored_element",
+        "legacy_element");
+
     // A dataset built from a generator mirrors the structure it declares, and a call declaring none
     // marks its element as not mirrored (wala/ML#164).
     builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");
