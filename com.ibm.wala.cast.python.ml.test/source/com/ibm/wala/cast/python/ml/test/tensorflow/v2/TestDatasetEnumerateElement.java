@@ -425,4 +425,31 @@ public class TestDatasetEnumerateElement extends AbstractTensorTest {
   public void testMappedY() throws Exception {
     testLeaf("consume_mapped_y", TENSOR_2_INT32);
   }
+
+  /**
+   * The element of a dataset whose element is not mirrored, read by subscript, is the dataset's
+   * element (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testUnmodeledMember() throws Exception {
+    test(FILE, "consume_unmodeled_member", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The element read by subscript from either of two datasets whose elements are not mirrored is
+   * the join of both datasets' elements, each with its own dtype (wala/ML#1204).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testEitherMember() throws Exception {
+    test(
+        FILE,
+        "consume_either_member",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, new TensorType(INT_32, null))));
+  }
 }

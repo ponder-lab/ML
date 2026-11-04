@@ -75,6 +75,8 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
     assertFalse("The fixture enumerates datasets.", generators.isEmpty());
     boolean tuple = false;
     boolean dict = false;
+    boolean underlying = false;
+    boolean declared = false;
     for (DatasetEnumerateGenerator generator : generators) {
       assertTrue(generator.yieldsTuple(builder));
       assertEquals(OptionalInt.of(2), generator.declaredArity(builder, List.of()));
@@ -95,6 +97,17 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
           generator.getShapesForIndex(builder, 0), generator.getShapesForPath(builder, List.of(0)));
       assertEquals(
           generator.getDTypesForIndex(builder, 0), generator.getDTypesForPath(builder, List.of(0)));
+      assertEquals(
+          generator.getTensorTypesForIndex(builder, 0),
+          generator.getTensorTypesForPath(builder, List.of(0)));
+      if (generator.getUnderlyingGenerator(builder) != null) underlying = true;
+      // A literal tuple the receiver's element is built from declares its length below position 1,
+      // and each position below it resolves.
+      OptionalInt arity = generator.declaredArity(builder, List.of(1));
+      if (arity.isPresent()) {
+        declared = true;
+        assertTrue(generator.resolvesPath(builder, List.of(1, arity.getAsInt() - 1)));
+      }
       assertFalse(generator.resolvesPath(builder, List.of("a")));
       assertEquals(Set.of(), generator.getShapesForPath(builder, List.of("a")));
       assertEquals(Set.of(), generator.getDTypesForPath(builder, List.of("a")));
@@ -112,6 +125,8 @@ public class DatasetEnumerateGeneratorReadsTest extends TestPythonMLCallGraphSha
       }
     }
     assertTrue("The fixture enumerates a dataset whose element is a tuple.", tuple);
+    assertTrue("Some enumerated dataset's receiver resolves.", underlying);
+    assertTrue("Some enumerated dataset's element declares a length.", declared);
     assertTrue("The fixture enumerates a dataset whose element is a dict.", dict);
   }
 

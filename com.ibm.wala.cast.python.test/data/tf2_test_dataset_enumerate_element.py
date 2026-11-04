@@ -192,6 +192,14 @@ def consume_enumerated_mixed_map_x(x):
     pass
 
 
+def consume_unmodeled_member(m):
+    pass
+
+
+def consume_either_member(m):
+    pass
+
+
 floats = tf.data.Dataset.from_tensor_slices(tf.ones([6, 4]))
 ints = tf.data.Dataset.from_tensor_slices(tf.zeros([6, 2], tf.int32))
 for i, (x, y) in tf.data.Dataset.zip((floats, ints)).enumerate():
@@ -278,3 +286,23 @@ for i, (x, y) in pairs.map(double_first).enumerate():
     consume_mapped_index(i)
     consume_mapped_x(x)
     consume_mapped_y(y)
+
+
+def threes_rows():
+    for _ in range(3):
+        yield tf.zeros((3,), tf.int32)
+
+
+# An element read by subscript where the receiver's element is not mirrored, from one dataset or
+# either of two of different dtypes, reads each dataset's element.
+for e in tf.data.Dataset.from_generator(fives, output_types=tf.float32).enumerate():
+    assert e[1].shape == (5,) and e[1].dtype == tf.float32
+    consume_unmodeled_member(e[1])
+either = (
+    tf.data.Dataset.from_generator(fives, output_types=tf.float32)
+    if picked
+    else tf.data.Dataset.from_generator(threes_rows, output_types=tf.int32)
+)
+for e in either.enumerate():
+    assert (e[1].shape, e[1].dtype) in (((5,), tf.float32), ((3,), tf.int32))
+    consume_either_member(e[1])
