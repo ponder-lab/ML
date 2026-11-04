@@ -58,4 +58,18 @@ public class TestDatasetJoinedElement extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6), TensorType.of(FLOAT_32, 2, 5))));
   }
+
+  /**
+   * A batch of a shuffle over a flat dataset or one whose first component is a namedtuple: the flat
+   * dataset's tensor alone, since a namedtuple is a structure, as a tuple is (<a
+   * href="https://github.com/wala/ML/issues/1200">wala/ML#1200</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNamed() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_named", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
 }

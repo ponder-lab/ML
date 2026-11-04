@@ -1001,10 +1001,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     builder.setElementMirror(
         TensorFlowTypes.DATASET_ELEMENT_MIRROR,
         TensorFlowTypes.DATASET_ELEMENT_LEAF,
-        Set.of(
-            PythonTypes.tuple,
-            PythonTypes.dict,
-            PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE));
+        TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES);
+
     // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
     // element (wala/ML#1190).
     builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
