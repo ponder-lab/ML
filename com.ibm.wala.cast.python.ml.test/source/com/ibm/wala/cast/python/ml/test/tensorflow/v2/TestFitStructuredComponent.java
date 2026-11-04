@@ -170,10 +170,11 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
   }
 
   /**
-   * A member of the tuple component {@code zip} builds from a tuple of datasets: a tensor, typed as
-   * the targets' rows, a misreading of the nested tuple of datasets that the structure reading
-   * leaves as it is. The component itself is no tensor with or without the structure reading, since
-   * the zip types no tensor at its first selector.
+   * A member of the tuple component {@code zip} builds from a nested tuple of datasets: the batched
+   * rows of the dataset at its position in the inner tuple, with the partial batch of unknown size
+   * every zip's batch reads.
+   *
+   * <p>TODO: wala/ML#1203: expect the full batch alone.
    */
   @Test
   public void testZipTupleMember() throws ClassHierarchyException, CancelException, IOException {
@@ -185,8 +186,8 @@ public class TestFitStructuredComponent extends AbstractTensorTest {
         Map.of(
             2,
             Set.of(
-                TensorType.of(FLOAT_32, 2),
-                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"))))));
+                TensorType.of(FLOAT_32, 2, 3),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(3))))));
   }
 
   /**
