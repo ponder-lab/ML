@@ -1,6 +1,10 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import static java.util.Arrays.asList;
+
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -150,5 +154,67 @@ public class TestDatasetSampleElement extends AbstractTensorTest {
   @Test
   public void testFitX() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_fit_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A sample of a dataset of one element, given twice, has two, so its batch of 2 is full.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSampledSelfBatched()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_sampled_self_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A dataset given a weight of 0 yields no element, so a sample given weights has an unknown size,
+   * and its batches of 2 may be partial.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testWeightedBatched() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_weighted_batched",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
+  }
+
+  /**
+   * A list of datasets built by appending has no positions whose sizes add up, so the sample's size
+   * is unknown, and its batches of 2 may be partial.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testAppendedBatched() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_appended_batched",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
   }
 }

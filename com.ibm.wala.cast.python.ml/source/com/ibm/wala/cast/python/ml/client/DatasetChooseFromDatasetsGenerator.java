@@ -75,7 +75,9 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetJoinGenerator {
    * {@inheritDoc}
    *
    * @implNote The datasets the {@code datasets} argument holds, since the element is any one of
-   *     their elements (wala/ML#1215), or {@code null} for a view fixed to one of them.
+   *     their elements (wala/ML#1215), or {@code null} for a view fixed to one of them. The
+   *     whole-element reads are this generator's own, over every dataset the list holds, so a view
+   *     reads the union of the datasets there, not its own alone: sound, if imprecise.
    */
   @Override
   public List<TensorGenerator> getReceiverGenerators(PropagationCallGraphBuilder builder) {

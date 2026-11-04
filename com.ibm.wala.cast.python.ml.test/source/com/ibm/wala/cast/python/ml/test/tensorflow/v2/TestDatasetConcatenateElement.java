@@ -157,4 +157,35 @@ public class TestDatasetConcatenateElement extends AbstractTensorTest {
   public void testFitX() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_fit_x", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
   }
+
+  /**
+   * A dataset of one element concatenated with itself has two, so its batch of 2 is full.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSelfBatched() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_self_batched", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A receiver that may be a dataset of one element or of two, concatenated with one of one, has 2
+   * or 3: its batches of 2 are full, and of 3 the last is not. The sizes are summed per dataset
+   * given, not over every dataset the receiver may be.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testPickedBatched() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_picked_batched",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(FLOAT_32, 1, 4))));
+  }
 }

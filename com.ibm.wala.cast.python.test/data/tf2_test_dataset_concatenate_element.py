@@ -107,3 +107,25 @@ base = tf.data.Dataset.from_tensor_slices(
 model = Net()
 model.compile(optimizer="sgd", loss="mse")
 model.fit(base.concatenate(base).batch(2), epochs=1, verbose=0)
+
+
+def consume_self_batched(x):
+    pass
+
+
+def consume_picked_batched(x):
+    pass
+
+
+# Sizes: a dataset concatenated with itself has twice its elements, and a receiver that may be
+# either of two datasets has one's size or the other's, not both.
+one = tf.data.Dataset.from_tensor_slices(tf.ones([1, 4]))
+two = tf.data.Dataset.from_tensor_slices(tf.ones([2, 4]))
+last = tf.data.Dataset.from_tensor_slices(tf.ones([1, 4]))
+for x in one.concatenate(one).batch(2):
+    assert x.shape == (2, 4)
+    consume_self_batched(x)
+for picked in (True, False):
+    for x in (one if picked else two).concatenate(last).batch(2):
+        assert x.shape in ((2, 4), (1, 4))
+        consume_picked_batched(x)
