@@ -260,6 +260,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
@@ -1629,10 +1630,30 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether an iterated value holds datasets only, each of whose element is mirrored ({@link
+   * #isElementMirrored}), so iterating it yields the element's objects (wala/ML#164).
+   *
+   * @param builder The propagation call graph builder.
+   * @param iterated The iterated value.
+   * @return {@code true} iff the value holds at least one dataset and only mirrored ones.
+   */
+  private static boolean iteratesMirroredDatasetsOnly(
+      PropagationCallGraphBuilder builder, PointsToSetVariable iterated) {
+    if (iterated == null || iterated.getPointerKey() == null) return false;
+    boolean any = false;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(iterated.getPointerKey())) {
+      AllocationSiteInNode asin = findAllocationSiteInNode(ik);
+      if (asin == null || !isElementMirrored(asin, builder)) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /**
    * Whether a dataset's element is mirrored (wala/ML#1190): its {@code mirrored_element} field
-   * holds a mirror's copy of the structure the dataset was built from, and its {@code
-   * legacy_element} field holds no marker that part of it is not, as a zip of a dataset whose
-   * element is not mirrored carries (wala/ML#164).
+   * holds its element's objects, a mirror's copy of the structure the dataset was built from or
+   * what a {@code map} function returns (wala/ML#164), and its {@code legacy_element} field holds
+   * no marker that part of it is not, as a zip of a dataset whose element is not mirrored carries.
    *
    * @param dataset The dataset's allocation.
    * @param builder The propagation call graph builder.
@@ -1664,11 +1685,70 @@ public class TensorGeneratorFactory {
             .getPointerAnalysis()
             .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, legacy))
             .isEmpty()) return false;
-    for (InstanceKey ik :
+    OrdinalSet<InstanceKey> mirrored =
         builder
             .getPointerAnalysis()
-            .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, element)))
-      if (ik instanceof ElementMirrorKey) return true;
+            .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, element));
+    return !mirrored.isEmpty() && !hasEmptyPosition(builder, mirrored);
+  }
+
+  /**
+   * The most structure levels {@link #hasEmptyPosition} descends, as the mirror copies no deeper.
+   */
+  private static final int MIRRORED_STRUCTURE_DEPTH = 8;
+
+  /**
+   * Whether a mirrored element's structure has a position holding nothing: a member of a tuple,
+   * list or dict whose field points to no key, as a member an operation without a summary makes
+   * does. Such a member is a value the analysis has not modeled, not one that is absent, so the
+   * element read through the mirror alone would read it as no tensor; the dataset is read through
+   * its generator instead, which reads it as unknown.
+   *
+   * @param builder The propagation call graph builder.
+   * @param roots The keys of the element.
+   * @return {@code true} iff some position of the structure, within {@link
+   *     #MIRRORED_STRUCTURE_DEPTH} levels, holds nothing.
+   */
+  private static boolean hasEmptyPosition(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> roots) {
+    IClassHierarchy cha = builder.getClassHierarchy();
+    AstPointerKeyFactory factory = (AstPointerKeyFactory) builder.getPointerKeyFactory();
+    Set<InstanceKey> seen = HashSetFactory.make();
+    List<InstanceKey> level = new ArrayList<>();
+    for (InstanceKey root : roots) level.add(root);
+    for (int depth = 0; depth < MIRRORED_STRUCTURE_DEPTH && !level.isEmpty(); depth++) {
+      List<InstanceKey> next = new ArrayList<>();
+      for (InstanceKey structure : level) {
+        if (!seen.add(structure)
+            || structure.concreteType() == null
+            || !TupleElementProvider.isElementStructure(cha, structure.concreteType())) continue;
+        for (InstanceKey name :
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(factory.getPointerKeyForObjectCatalog(structure))) {
+          if (!(name instanceof ConstantKey<?> constant)) continue;
+          Object value = constant.getValue();
+          // A position is named by an index or a key, an integer or a string, whatever the
+          // structure's class, as the copy reads it; a name that is no position, such as an
+          // attribute, can only send the dataset to its generator, which reads it as unknown.
+          if (!(value instanceof String) && !(value instanceof Number)) continue;
+          IField field =
+              cha.resolveField(
+                  FieldReference.findOrCreate(
+                      PythonTypes.Root,
+                      Atom.findOrCreateUnicodeAtom(String.valueOf(value)),
+                      PythonTypes.Root));
+          if (field == null) continue;
+          OrdinalSet<InstanceKey> member =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(builder.getPointerKeyForInstanceField(structure, field));
+          if (member.isEmpty()) return true;
+          for (InstanceKey key : member) next.add(key);
+        }
+      }
+      level = next;
+    }
     return false;
   }
 
@@ -3025,6 +3105,21 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether a value may be a leaf of a dataset's mirrored element (wala/ML#1190), a tensor.
+   *
+   * @param builder The propagation call graph builder.
+   * @param value The value, possibly {@code null}.
+   * @return {@code true} iff its points-to set holds a mirrored leaf.
+   */
+  private static boolean holdsMirroredLeaf(
+      PropagationCallGraphBuilder builder, PointsToSetVariable value) {
+    if (value == null || value.getPointerKey() == null) return false;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey()))
+      if (ik instanceof ElementMirrorKey mirror && mirror.isLeaf()) return true;
+    return false;
+  }
+
+  /**
    * Whether a value is the result of a call in its node.
    *
    * @param source The value.
@@ -3393,6 +3488,11 @@ public class TensorGeneratorFactory {
               TensorGenerator stored = storedElement(builder, source);
               if (stored != null) return stored;
             }
+            // A dataset whose element is modeled yields its element's own objects, which the
+            // dataflow types; an element of its generator would peel an axis off them
+            // (wala/ML#164).
+            if (iteratedGenerator instanceof DatasetGenerator
+                && iteratesMirroredDatasetsOnly(builder, iterated)) return null;
             // Otherwise an element of the iterated value, over its own generator where it has
             // one, as the element read built it.
             if (iteratedGenerator != null)
@@ -3609,6 +3709,13 @@ public class TensorGeneratorFactory {
             LOGGER.fine(() -> "Found a dataset element component at path " + path + ".");
             return new DatasetTupleElementGenerator(objSrc, tep, path);
           }
+          // A component already selected that is a mirrored leaf, a tensor, is subscripted as a
+          // tensor: an index reads a row of it, not the element's own position (wala/ML#164).
+          if (!basePath.isEmpty()
+              && propertyIndex != null
+              && holdsMirroredLeaf(builder, objSrc)
+              && !tep.isStructureAt(builder, basePath))
+            return new TensorElementGenerator(source, containerGenerator);
         }
 
         // A component already selected from an enumerated dataset's element, at a path the

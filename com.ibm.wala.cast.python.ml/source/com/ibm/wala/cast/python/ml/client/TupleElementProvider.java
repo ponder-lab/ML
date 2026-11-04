@@ -166,7 +166,7 @@ public interface TupleElementProvider {
    * @param type The class.
    * @return {@code true} iff it is.
    */
-  private static boolean isElementStructure(IClassHierarchy cha, IClass type) {
+  static boolean isElementStructure(IClassHierarchy cha, IClass type) {
     for (TypeReference structure : TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES) {
       IClass c = cha.lookupClass(structure);
       if (c != null && cha.isSubclassOf(type, c)) return true;
