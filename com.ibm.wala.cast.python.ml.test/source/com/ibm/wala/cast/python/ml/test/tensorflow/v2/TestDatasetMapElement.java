@@ -216,4 +216,79 @@ public class TestDatasetMapElement extends AbstractTensorTest {
   public void testFifth() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_fifth", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
   }
+
+  /**
+   * A member a function makes by an operation the analysis does not model holds nothing in the
+   * analysis, which is not the same as being absent: it is a tensor of unknown type, not no tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRawSecond() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_raw_second", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * As {@link #testRawSecond()}, batched.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRawBatchedSecond() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE, "consume_raw_batched_second", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * The modeled member beside it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRawFirst() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_raw_first", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * As {@link #testRawSecond()}, for a member of the structure a dataset is built from.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRawSliceSecond() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_raw_slice_second", 1, 1, Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
+   * A {@code None} member of the structure a dataset is built from is no tensor: its position holds
+   * the {@code None} constant, not nothing, so it is not read as an unmodeled member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNoneAux() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_none_aux", 0, 0);
+  }
+
+  /**
+   * As {@link #testNoneAux()}, for a {@code None} member a function returns, batched.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNoneMapped() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_none_mapped", 0, 0);
+  }
 }

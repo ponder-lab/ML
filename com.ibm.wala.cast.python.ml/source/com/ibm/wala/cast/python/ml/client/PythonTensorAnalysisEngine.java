@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstAssertInstruction;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
@@ -286,13 +287,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               && isDataset(builder, fieldKey.getInstanceKey()))
           && !isMapArguments(fieldKey.getInstanceKey())) continue;
       Set<TensorType> types = null;
-      for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(fieldKey)) {
+      OrdinalSet<InstanceKey> values = builder.getPointerAnalysis().getPointsToSet(fieldKey);
+      for (InstanceKey value : values) {
         if (!(value instanceof ElementMirrorKey leaf) || !leaf.isLeaf()) continue;
         Set<TensorType> leafTyped =
             leafTypes.computeIfAbsent(leaf, k -> typesOfMirroredLeaf(python, leaf));
         if (types == null) types = HashSetFactory.make();
         types.addAll(leafTyped);
       }
+      // A position of a mirrored structure that holds nothing copies a member the analysis has not
+      // modeled, as one an operation without a summary makes: it is a tensor of unknown type, not
+      // an absent one.
+      if (types == null
+          && values.isEmpty()
+          && fieldKey.getInstanceKey() instanceof ElementMirrorKey structure
+          && !structure.isLeaf()
+          && isCataloguedPosition(builder, structure, fieldKey.getField()))
+        types = HashSetFactory.make(Set.of(new TensorType(DType.UNKNOWN, null)));
       if (types == null) continue;
       final Set<TensorType> seeded = types;
       LOGGER.fine(() -> "Seeding mirrored element field " + fieldKey + " with " + seeded + ".");
@@ -314,6 +325,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             return joined;
           });
     }
+  }
+
+  /**
+   * Whether a field of a structure names one of its catalogued positions.
+   *
+   * @param builder The propagation call graph builder.
+   * @param structure The structure.
+   * @param field The field.
+   * @return {@code true} iff the structure's catalog holds a constant naming the field.
+   */
+  private static boolean isCataloguedPosition(
+      PropagationCallGraphBuilder builder, InstanceKey structure, IField field) {
+    String name = field.getName().toString();
+    for (InstanceKey key :
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(structure)))
+      if (key instanceof ConstantKey<?> constant
+          && String.valueOf(constant.getValue()).equals(name)) return true;
+    return false;
   }
 
   /**

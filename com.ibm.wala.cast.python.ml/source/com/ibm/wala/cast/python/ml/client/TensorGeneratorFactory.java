@@ -260,6 +260,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
@@ -1684,10 +1685,70 @@ public class TensorGeneratorFactory {
             .getPointerAnalysis()
             .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, legacy))
             .isEmpty()) return false;
-    return !builder
-        .getPointerAnalysis()
-        .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, element))
-        .isEmpty();
+    OrdinalSet<InstanceKey> mirrored =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(builder.getPointerKeyForInstanceField(dataset, element));
+    return !mirrored.isEmpty() && !hasEmptyPosition(builder, mirrored);
+  }
+
+  /**
+   * The most structure levels {@link #hasEmptyPosition} descends, as the mirror copies no deeper.
+   */
+  private static final int MIRRORED_STRUCTURE_DEPTH = 8;
+
+  /**
+   * Whether a mirrored element's structure has a position holding nothing: a member of a tuple,
+   * list or dict whose field points to no key, as a member an operation without a summary makes
+   * does. Such a member is a value the analysis has not modeled, not one that is absent, so the
+   * element read through the mirror alone would read it as no tensor; the dataset is read through
+   * its generator instead, which reads it as unknown.
+   *
+   * @param builder The propagation call graph builder.
+   * @param roots The keys of the element.
+   * @return {@code true} iff some position of the structure, within {@link
+   *     #MIRRORED_STRUCTURE_DEPTH} levels, holds nothing.
+   */
+  private static boolean hasEmptyPosition(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> roots) {
+    IClassHierarchy cha = builder.getClassHierarchy();
+    AstPointerKeyFactory factory = (AstPointerKeyFactory) builder.getPointerKeyFactory();
+    Set<InstanceKey> seen = HashSetFactory.make();
+    List<InstanceKey> level = new ArrayList<>();
+    for (InstanceKey root : roots) level.add(root);
+    for (int depth = 0; depth < MIRRORED_STRUCTURE_DEPTH && !level.isEmpty(); depth++) {
+      List<InstanceKey> next = new ArrayList<>();
+      for (InstanceKey structure : level) {
+        if (!seen.add(structure)
+            || structure.concreteType() == null
+            || !TupleElementProvider.isElementStructure(cha, structure.concreteType())) continue;
+        boolean keyed = structure.concreteType().getReference().equals(PythonTypes.dict);
+        for (InstanceKey name :
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(factory.getPointerKeyForObjectCatalog(structure))) {
+          if (!(name instanceof ConstantKey<?> constant)) continue;
+          Object value = constant.getValue();
+          // A tuple's or a list's positions are its integer indices; a dict's are its keys.
+          if (keyed ? !(value instanceof String) : !(value instanceof Integer)) continue;
+          IField field =
+              cha.resolveField(
+                  FieldReference.findOrCreate(
+                      PythonTypes.Root,
+                      Atom.findOrCreateUnicodeAtom(String.valueOf(value)),
+                      PythonTypes.Root));
+          if (field == null) continue;
+          OrdinalSet<InstanceKey> member =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(builder.getPointerKeyForInstanceField(structure, field));
+          if (member.isEmpty()) return true;
+          for (InstanceKey key : member) next.add(key);
+        }
+      }
+      level = next;
+    }
+    return false;
   }
 
   /**

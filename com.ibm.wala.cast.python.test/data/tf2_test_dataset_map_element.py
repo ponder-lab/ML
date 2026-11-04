@@ -196,3 +196,66 @@ def fifth_or_default(a, b, c, d, e=tf.zeros([7], tf.int32)):
 for e in fives.map(fifth_or_default):
     assert e.shape == (6,) and e.dtype == tf.float32
     consume_fifth(e)
+
+
+def consume_raw_second(t):
+    pass
+
+
+def consume_raw_batched_second(t):
+    pass
+
+
+def consume_raw_first(t):
+    pass
+
+
+def pair_with_raw(a, b):
+    return a, tf.raw_ops.Abs(x=b)
+
+
+# A member made by an operation the analysis does not model is unknown, not absent.
+raws = tf.data.Dataset.from_tensor_slices((tf.ones([8, 4]), tf.ones([8, 3]))).map(
+    pair_with_raw
+)
+for e in raws:
+    assert e[1].shape == (3,) and e[1].dtype == tf.float32
+    consume_raw_second(e[1])
+    assert e[0].shape == (4,) and e[0].dtype == tf.float32
+    consume_raw_first(e[0])
+for e in raws.batch(2):
+    assert e[1].shape == (2, 3) and e[1].dtype == tf.float32
+    consume_raw_batched_second(e[1])
+
+
+def consume_raw_slice_second(t):
+    pass
+
+
+# The same for a member of a structure the dataset is built from.
+for e in tf.data.Dataset.from_tensor_slices(
+    (tf.ones([8, 4]), tf.raw_ops.Abs(x=tf.ones([8, 3])))
+):
+    assert e[1].shape == (3,) and e[1].dtype == tf.float32
+    consume_raw_slice_second(e[1])
+
+
+def consume_none_aux(t):
+    pass
+
+
+def consume_none_mapped(t):
+    pass
+
+
+# A None member is no tensor, whether the dataset is built with it or a function returns it.
+for e in tf.data.Dataset.from_tensor_slices({"x": tf.ones([4, 2]), "aux": None}):
+    assert e["aux"] is None
+    consume_none_aux(e["aux"])
+for e in (
+    tf.data.Dataset.from_tensor_slices(tf.ones([4, 2]))
+    .map(lambda x: (x, None))
+    .batch(2)
+):
+    assert e[1] is None
+    consume_none_mapped(e[1])

@@ -3683,10 +3683,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                           });
                   // The tuple's length is its positions so far, so a copy whose catalog fills over
                   // several rounds may first activate a lower arity, which only over-approximates.
-                  // A
-                  // tuple longer than the summary's calls spread into makes the mapped element
-                  // unknown,
-                  // since no call binds its members as the function receives them.
+                  // A tuple longer than the summary's calls spread into makes the mapped element
+                  // unknown, since no call binds its members as the function receives them.
                   int n = positions.size();
                   if (n < 1) return NOT_CHANGED;
                   if (n > elementMapMaxArity) {
@@ -4009,6 +4007,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     private void copy(InstanceKey source) {
       if (!copied.add(source)) return;
+      // A None member is no tensor and has no members, so the element holds it as it is.
+      if (isNoneConstant(source)) {
+        getSystem().newConstraint(target, source);
+        return;
+      }
       IClassHierarchy cha = getClassHierarchy();
       InstanceKey original = source;
       while (original instanceof ElementMirrorKey copy) original = copy.getSource();
