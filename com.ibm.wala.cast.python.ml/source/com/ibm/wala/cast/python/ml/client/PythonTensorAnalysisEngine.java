@@ -1007,6 +1007,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // element (wala/ML#1190).
     builder.setElementEnumerate(TensorFlowTypes.DATASET_ELEMENT_ENUMERATE);
 
+    // A dataset built from a generator mirrors the structure it declares, and a call declaring none
+    // marks its element as not mirrored (wala/ML#164).
+    builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");
+
     // A subscript adding an axis is an array of its receiver's kind, as a slice is, and an array a
     // Keras dataset loader returns is a NumPy array, so `x_train[..., None]` is one (wala/ML#400).
     // A slice of the loader's array keeps aliasing the array, as before, and so does a subscript

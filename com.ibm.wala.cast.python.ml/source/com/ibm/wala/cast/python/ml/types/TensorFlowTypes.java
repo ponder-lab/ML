@@ -277,6 +277,14 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_enumerate"));
 
   /**
+   * The summary class whose call mirrors the structure a dataset declares, its {@code
+   * output_signature} or else its {@code output_types}, into its element (wala/ML#164).
+   */
+  public static final TypeReference DATASET_ELEMENT_DECLARED =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_declared"));
+
+  /**
    * The classes a dataset's element is built from as structure: tuples, dicts and namedtuples, each
    * of whose members {@code tf.data} reads as a component, where a list is converted to a tensor.
    * The element's mirror copies these as structure (wala/ML#1190), and a reader of the element
