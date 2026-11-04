@@ -53,9 +53,11 @@ public class TestDatasetElementHandOffs {
 
   /**
    * Each method object a summary method installs on an object receives, for every field the method
-   * object reads from itself, the value the summary method gives that field: the object's own,
-   * written or read in the summary method, or else the one value the summary method hands that
-   * field to every installed method object reading it.
+   * object reads from itself, exactly the values the summary method gives that field: the object's
+   * own, written or read in the summary method, or else every value the summary method hands that
+   * field to any installed method object reading it. A field takes several values where the summary
+   * method writes it more than once, as {@code from_generator} hands each method both structures
+   * its element may be declared by.
    *
    * @throws Exception On failure to read a summary.
    */
@@ -78,87 +80,114 @@ public class TestDatasetElementHandOffs {
     }
     Map<String, Set<String>> readers = new TreeMap<>();
     for (Element type : classes)
-      for (Element statement : statements(type, "getfield"))
-        if ("self".equals(statement.getAttribute("ref")))
-          readers
-              .computeIfAbsent(statement.getAttribute("field"), k -> new TreeSet<>())
-              .add(types.get(type));
+      for (Element method : children(type, "method"))
+        for (Element statement : children(method, "getfield"))
+          if ("self".equals(statement.getAttribute("ref")))
+            readers
+                .computeIfAbsent(statement.getAttribute("field"), k -> new TreeSet<>())
+                .add(types.get(type));
     for (String field : DATASET_FIELDS)
       assertTrue("No method reads " + field + " from itself.", readers.containsKey(field));
 
     List<String> missing = new ArrayList<>();
     Map<String, Integer> checked = new TreeMap<>();
-    for (Element type : classes) {
-      NodeList methods = type.getElementsByTagName("method");
-      for (int m = 0; m < methods.getLength(); m++) {
-        Element method = (Element) methods.item(m);
+    for (Element type : classes)
+      for (Element method : children(type, "method")) {
         String where = type.getAttribute("name") + "." + method.getAttribute("name");
         Map<String, String> allocated = new HashMap<>();
-        Map<String, Map<String, String>> fields = new HashMap<>();
-        Map<String, Map<String, String>> installs = new LinkedHashMap<>();
-        for (Node n = method.getFirstChild(); n != null; n = n.getNextSibling()) {
-          if (!(n instanceof Element statement)) continue;
+        Map<String, Map<String, Set<String>>> fields = new HashMap<>();
+        for (Element statement : children(method, null)) {
           String ref = statement.getAttribute("ref");
           switch (statement.getTagName()) {
             case "new" ->
                 allocated.put(statement.getAttribute("def"), statement.getAttribute("class"));
-            case "putfield" ->
-                fields
-                    .computeIfAbsent(ref, k -> new HashMap<>())
-                    .put(statement.getAttribute("field"), statement.getAttribute("value"));
+            case "putfield" -> value(fields, ref, statement).add(statement.getAttribute("value"));
             // An object's field read here holds what the object was given elsewhere, as a dataset's
             // element written by the summary that loads it.
             case "getfield" -> {
               if (!"self".equals(ref))
-                fields
-                    .computeIfAbsent(ref, k -> new HashMap<>())
-                    .put(statement.getAttribute("field"), statement.getAttribute("def"));
+                value(fields, ref, statement).add(statement.getAttribute("def"));
             }
             default -> {}
           }
         }
-        for (Element put : statements(method, "putfield"))
+        Map<String, Map<String, String>> installs = new LinkedHashMap<>();
+        for (Element put : children(method, "putfield"))
           if (allocated.containsKey(put.getAttribute("value")))
             installs
                 .computeIfAbsent(put.getAttribute("ref"), k -> new LinkedHashMap<>())
                 .put(put.getAttribute("value"), put.getAttribute("field"));
         for (Map.Entry<String, Map<String, String>> object : installs.entrySet()) {
-          Map<String, String> own = fields.getOrDefault(object.getKey(), Map.of());
+          Map<String, Set<String>> own = fields.getOrDefault(object.getKey(), Map.of());
           for (Map.Entry<String, Set<String>> field : readers.entrySet()) {
             List<String> installed = new ArrayList<>();
             for (String value : object.getValue().keySet())
               if (field.getValue().contains(allocated.get(value))) installed.add(value);
-            if (installed.isEmpty()) continue;
-            Set<String> expected = new TreeSet<>();
-            if (own.containsKey(field.getKey())) expected.add(own.get(field.getKey()));
-            else
-              for (String value : installed) {
-                String handed = fields.getOrDefault(value, Map.of()).get(field.getKey());
-                if (handed != null) expected.add(handed);
-              }
+            Set<String> expected = new TreeSet<>(own.getOrDefault(field.getKey(), Set.of()));
+            if (expected.isEmpty())
+              for (String reader : installed)
+                expected.addAll(handed(fields, reader, field.getKey()));
             if (expected.isEmpty()) continue;
-            if (expected.size() > 1) {
-              missing.add(where + " hands " + field.getKey() + " as each of " + expected);
-              continue;
-            }
-            String value = expected.iterator().next();
             for (String reader : installed) {
               checked.merge(field.getKey(), 1, Integer::sum);
-              if (!value.equals(fields.getOrDefault(reader, Map.of()).get(field.getKey())))
+              Set<String> absent = new TreeSet<>(expected);
+              absent.removeAll(handed(fields, reader, field.getKey()));
+              Set<String> extra = new TreeSet<>(handed(fields, reader, field.getKey()));
+              extra.removeAll(expected);
+              if (!absent.isEmpty())
                 missing.add(
                     where
                         + " installs "
                         + object.getValue().get(reader)
                         + " without its "
-                        + field.getKey());
+                        + field.getKey()
+                        + " "
+                        + absent);
+              if (!extra.isEmpty())
+                missing.add(
+                    where
+                        + " installs "
+                        + object.getValue().get(reader)
+                        + " with "
+                        + field.getKey()
+                        + " "
+                        + extra
+                        + " the object does not hold");
             }
           }
         }
       }
-    }
     for (String field : DATASET_FIELDS)
       assertTrue("No hand-off of " + field + " is checked.", checked.containsKey(field));
     assertEquals("Installed methods missing a field they read.", List.of(), missing);
+  }
+
+  /**
+   * The values a summary method gives an object's field.
+   *
+   * @param fields Each object's fields' values.
+   * @param object The object.
+   * @param field The field.
+   * @return The values, empty when none is given.
+   */
+  private static Set<String> handed(
+      Map<String, Map<String, Set<String>>> fields, String object, String field) {
+    return fields.getOrDefault(object, Map.of()).getOrDefault(field, Set.of());
+  }
+
+  /**
+   * The values, to be added to, of the field a statement writes or reads on an object.
+   *
+   * @param fields Each object's fields' values.
+   * @param object The object.
+   * @param statement The statement.
+   * @return The field's values.
+   */
+  private static Set<String> value(
+      Map<String, Map<String, Set<String>>> fields, String object, Element statement) {
+    return fields
+        .computeIfAbsent(object, k -> new HashMap<>())
+        .computeIfAbsent(statement.getAttribute("field"), k -> new TreeSet<>());
   }
 
   /**
@@ -175,16 +204,17 @@ public class TestDatasetElementHandOffs {
   }
 
   /**
-   * The statements of a tag within an element.
+   * The child elements of an element, as a method's statements or a class's methods.
    *
    * @param element A class or a method.
-   * @param tag The statement's tag.
-   * @return The statements, in document order.
+   * @param tag The children's tag, or {@code null} for every child.
+   * @return The children, in document order.
    */
-  private static List<Element> statements(Element element, String tag) {
+  private static List<Element> children(Element element, String tag) {
     List<Element> ret = new ArrayList<>();
-    NodeList list = element.getElementsByTagName(tag);
-    for (int i = 0; i < list.getLength(); i++) ret.add((Element) list.item(i));
+    for (Node n = element.getFirstChild(); n != null; n = n.getNextSibling())
+      if (n instanceof Element child && (tag == null || tag.equals(child.getTagName())))
+        ret.add(child);
     return ret;
   }
 }
