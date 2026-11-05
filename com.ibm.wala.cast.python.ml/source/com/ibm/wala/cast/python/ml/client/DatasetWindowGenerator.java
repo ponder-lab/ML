@@ -27,7 +27,7 @@ import java.util.Set;
  * components. A window may hold fewer elements than its size, so its size is unknown. Each window
  * is allocated and returned by its own maker, whose node it is anchored on, and the maker's {@code
  * source} carries the receiver; a window of a component is made by {@code make_window_component},
- * whose {@code index} gives the component's position (wala/ML#1221).
+ * and its position is the field {@code window} read the component from (wala/ML#1221).
  */
 public class DatasetWindowGenerator extends DatasetGenerator {
 
@@ -48,9 +48,9 @@ public class DatasetWindowGenerator extends DatasetGenerator {
 
   /**
    * The part of the receiver's element this window holds: {@link
-   * TensorFlowTypes#DATASET_WINDOW_WHOLE} for the whole, {@link
-   * TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT} for a component its maker's {@code index} gives,
-   * or a component's position.
+   * TensorFlowTypes#DATASET_WINDOW_WHOLE} for the whole, or {@link
+   * TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT} for a component, whose position {@link #position}
+   * reads.
    */
   private final int component;
 
@@ -69,8 +69,8 @@ public class DatasetWindowGenerator extends DatasetGenerator {
    *
    * @param node The {@code window} node.
    * @param component The part of the receiver's element the window holds: {@link
-   *     TensorFlowTypes#DATASET_WINDOW_WHOLE}, {@link TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT},
-   *     or a component's position.
+   *     TensorFlowTypes#DATASET_WINDOW_WHOLE} or {@link
+   *     TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT}.
    */
   public DatasetWindowGenerator(CGNode node, int component) {
     super(node);
@@ -130,15 +130,14 @@ public class DatasetWindowGenerator extends DatasetGenerator {
   }
 
   /**
-   * The position of the component this window holds: its own, or the field {@code window} read the
-   * component from, which it passes its maker as {@code element} (wala/ML#1221).
+   * The position of the component this window holds: the field {@code window} read the component
+   * from, which it passes its maker as {@code element} (wala/ML#1221).
    *
    * @param builder The propagation call graph builder used for analysis.
    * @return The position, or {@code null} when the calls do not pass a component read at one
    *     position.
    */
   private Integer position(PropagationCallGraphBuilder builder) {
-    if (this.component >= 0) return this.component;
     CallGraph cg = builder.getCallGraph();
     CGNode node = this.getNode();
     Set<Integer> positions = HashSetFactory.make();
