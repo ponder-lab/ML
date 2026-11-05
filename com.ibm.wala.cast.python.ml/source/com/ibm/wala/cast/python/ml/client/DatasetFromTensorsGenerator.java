@@ -217,7 +217,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
           Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, singletonPTS);
           // An unknown shape (null, wala/ML#978) is one type of unknown rank, not a dereference.
           if (shapes == null) shapes = Collections.singleton(null);
-          Set<DType> dTypes = this.getDTypesOfValue(builder, singletonPTS);
+          Set<DType> dTypes = dTypesOrTop(this.getDTypesOfValue(builder, singletonPTS));
           for (List<Dimension<?>> shape : shapes) {
             for (DType dtype : dTypes) {
               ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), shape));
@@ -321,9 +321,11 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 ret.addAll(
-                    this.getDTypesOfValue(
-                        builder,
-                        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
+                    dTypesOrTop(
+                        this.getDTypesOfValue(
+                            builder,
+                            withoutClientOnlyKeys(
+                                builder.getPointerAnalysis().getPointsToSet(pk)))));
               }
             }
           }
@@ -469,19 +471,22 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 ret.addAll(
-                    this.getDTypesOfValue(
-                        builder,
-                        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk))));
+                    dTypesOrTop(
+                        this.getDTypesOfValue(
+                            builder,
+                            withoutClientOnlyKeys(
+                                builder.getPointerAnalysis().getPointsToSet(pk)))));
               }
             }
           }
         } else {
           ret.addAll(
-              this.getDTypesOfValue(
-                  builder,
-                  OrdinalSet.toOrdinalSet(
-                      Collections.singleton(ik),
-                      builder.getPointerAnalysis().getInstanceKeyMapping())));
+              dTypesOrTop(
+                  this.getDTypesOfValue(
+                      builder,
+                      OrdinalSet.toOrdinalSet(
+                          Collections.singleton(ik),
+                          builder.getPointerAnalysis().getInstanceKeyMapping()))));
         }
       }
       if (!ret.isEmpty()) {
@@ -499,5 +504,17 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
   @Override
   public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
     return Collections.singleton(1L);
+  }
+
+  /**
+   * A value's dtypes, or unknown (⊤) where they do not resolve ({@code null}), as {@link
+   * #getDTypesForPath} reads a component's, so a value whose dtypes do not resolve is a tensor of
+   * unknown dtype rather than a dereference.
+   *
+   * @param dtypes The value's dtypes, or {@code null}.
+   * @return The dtypes, or {@link DType#UNKNOWN} alone.
+   */
+  private static Set<DType> dTypesOrTop(Set<DType> dtypes) {
+    return dtypes == null ? EnumSet.of(DType.UNKNOWN) : dtypes;
   }
 }

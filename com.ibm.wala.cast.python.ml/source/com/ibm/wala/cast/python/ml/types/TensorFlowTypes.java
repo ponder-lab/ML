@@ -378,6 +378,25 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_MAP_SIGNATURE = "tf.data.Dataset.map()";
 
+  /**
+   * The summary class of {@code tf.data.Dataset.flat_map}, whose element is any element of the
+   * datasets its function returns (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_FLAT_MAP_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/flat_map"));
+
+  public static final String DATASET_FLAT_MAP_SIGNATURE = "tf.data.Dataset.flat_map()";
+
+  /**
+   * The summary class of {@code tf.data.Dataset.interleave}, whose element is any element of the
+   * datasets its function returns, as {@code flat_map}'s is (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_INTERLEAVE_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/interleave"));
+
+  public static final String DATASET_INTERLEAVE_SIGNATURE = "tf.data.Dataset.interleave()";
+
   public static final TypeReference DATASET_REPEAT_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/repeat"));
 
@@ -3133,6 +3152,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_PADDED_BATCH_TYPE, DATASET_PADDED_BATCH_SIGNATURE),
           Map.entry(DATASET_SHUFFLE_TYPE, DATASET_SHUFFLE_SIGNATURE),
           Map.entry(DATASET_MAP_TYPE, DATASET_MAP_SIGNATURE),
+          Map.entry(DATASET_FLAT_MAP_TYPE, DATASET_FLAT_MAP_SIGNATURE),
+          Map.entry(DATASET_INTERLEAVE_TYPE, DATASET_INTERLEAVE_SIGNATURE),
           Map.entry(DATASET_REPEAT_TYPE, DATASET_REPEAT_SIGNATURE),
           Map.entry(DATASET_PREFETCH_TYPE, DATASET_PREFETCH_SIGNATURE),
           Map.entry(DATASET_SKIP_TYPE, DATASET_SKIP_SIGNATURE),
