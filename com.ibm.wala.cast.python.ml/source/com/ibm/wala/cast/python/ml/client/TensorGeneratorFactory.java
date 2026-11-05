@@ -1481,6 +1481,7 @@ public class TensorGeneratorFactory {
             .getHeapModel()
             .getPointerKeyForLocal(node, read.getObjectRef());
     List<TensorGenerator> parts = new ArrayList<>();
+    List<TensorGenerator> tensorDatasets = new ArrayList<>();
     for (InstanceKey ik :
         withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
       AllocationSiteInNode asin;
@@ -1506,6 +1507,11 @@ public class TensorGeneratorFactory {
         dataset = element;
         path = List.of();
       } else continue;
+      // An element that may be a tensor, on another path of a map or as another dataset's, is
+      // subscripted there, which no other reader reads once this one answers.
+      if (path.isEmpty() && held instanceof DatasetIteratorElementGenerator element)
+        for (TensorGenerator tensor : tensorDatasets(element.getDatasets(), builder))
+          if (!tensorDatasets.contains(tensor)) tensorDatasets.add(tensor);
       boolean structure =
           path.isEmpty() ? dataset.yieldsTuple(builder) : dataset.isStructureAt(builder, path);
       if (!structure) continue;
@@ -1518,6 +1524,14 @@ public class TensorGeneratorFactory {
       TensorGenerator part = new DatasetTupleElementGenerator(source, dataset, below);
       if (!parts.contains(part)) parts.add(part);
     }
+    // Keep this one row read over every such dataset: a DatasetIteratorElementGenerator has no
+    // discriminator, so one per dataset anchored on the read would share a memo key and replay the
+    // first one's result for the others. A read with no tuple part is a tensor subscript alone,
+    // which the other readers read.
+    if (!parts.isEmpty() && !tensorDatasets.isEmpty())
+      parts.add(
+          new TensorElementGenerator(
+              source, new DatasetIteratorElementGenerator(source, tensorDatasets), true));
     if (parts.isEmpty()) return null;
     return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
   }
@@ -1547,6 +1561,30 @@ public class TensorGeneratorFactory {
       if (!holder.concreteType().getReference().equals(TensorFlowTypes.STEP_INPUTS_TYPE))
         return false;
     return true;
+  }
+
+  /**
+   * The datasets among those an element may come from whose element may be a tensor rather than a
+   * tuple (wala/ML#997): each spread over its receivers, a {@code map} that may return either
+   * viewed over the tensors it returns ({@link #overTensorReturns(List,
+   * PropagationCallGraphBuilder)}), and a dataset that yields no tuple taken whole. A dataset that
+   * yields only tuples, or one that may yield a tuple but holds no such {@code map}, is left out,
+   * as no tensor stands at its root.
+   *
+   * @param datasets The datasets.
+   * @param builder The propagation call graph builder.
+   * @return The datasets, or their views, whose element may be a tensor.
+   */
+  private static List<TensorGenerator> tensorDatasets(
+      List<TensorGenerator> datasets, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator dataset : spreadOverReceivers(datasets, builder)) {
+      TensorGenerator view = overTensorReturns(dataset, builder, DatasetGenerator.SPREAD_DEPTH);
+      if (view != dataset) ret.add(view);
+      else if (!(dataset instanceof TupleElementProvider tep && tep.yieldsTuple(builder)))
+        ret.add(dataset);
+    }
+    return ret;
   }
 
   /**

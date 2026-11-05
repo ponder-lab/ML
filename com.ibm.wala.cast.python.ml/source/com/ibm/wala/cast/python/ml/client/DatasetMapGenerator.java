@@ -179,6 +179,23 @@ public class DatasetMapGenerator extends DatasetGenerator {
   }
 
   /**
+   * The allocations {@code map_func} returns that are no element structure, beside a structure it
+   * returns on another path (wala/ML#997): the element is that tensor where the function returns
+   * it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param elementPTS The mapped element's points-to set.
+   * @return The allocations, empty when the function returns none.
+   */
+  private OrdinalSet<InstanceKey> getTensorReturns(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> elementPTS) {
+    List<InstanceKey> tensors = new ArrayList<>();
+    for (InstanceKey ik : elementPTS)
+      if (getAllocationSiteInNode(ik) != null && !isStructure(builder, ik)) tensors.add(ik);
+    return OrdinalSet.toOrdinalSet(tensors, builder.getPointerAnalysis().getInstanceKeyMapping());
+  }
+
+  /**
    * Whether a value {@code map_func} returns is an element structure.
    *
    * @param builder The propagation call graph builder.
@@ -302,6 +319,13 @@ public class DatasetMapGenerator extends DatasetGenerator {
           if (componentShapes == null || componentShapes.isEmpty()) return null;
           union.addAll(componentShapes);
         }
+        // A tensor the function returns on another path is the element there (wala/ML#997).
+        OrdinalSet<InstanceKey> tensors = this.getTensorReturns(builder, elementPTS);
+        if (!tensors.isEmpty()) {
+          Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, tensors);
+          if (shapes == null) return null;
+          union.addAll(shapes);
+        }
         return union;
       }
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, elementPTS);
@@ -344,6 +368,12 @@ public class DatasetMapGenerator extends DatasetGenerator {
               || componentDTypes.isEmpty()
               || componentDTypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
           union.addAll(componentDTypes);
+        }
+        OrdinalSet<InstanceKey> tensors = this.getTensorReturns(builder, elementPTS);
+        if (!tensors.isEmpty()) {
+          Set<DType> dtypes = this.getDTypesOfValue(builder, tensors);
+          if (dtypes == null || dtypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+          union.addAll(dtypes);
         }
         return union;
       }
