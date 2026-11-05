@@ -341,11 +341,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * Which part of its receiver's element a window holds (wala/ML#1201).
+   * Which part of its receiver's element a window holds (wala/ML#1201, wala/ML#1221).
    *
    * @param key A key.
-   * @return {@code -1} for a window of the whole element, the component's index for a window of a
-   *     component, or {@code null} when the key is no window.
+   * @return {@link TensorFlowTypes#DATASET_WINDOW_WHOLE} for a window of the whole element, {@link
+   *     TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT} for a window of a component, whose generator
+   *     reads its position, or {@code null} when the key is no window.
    */
   private static Integer windowOf(InstanceKey key) {
     return TensorFlowTypes.datasetWindowComponent(key.concreteType().getReference());
