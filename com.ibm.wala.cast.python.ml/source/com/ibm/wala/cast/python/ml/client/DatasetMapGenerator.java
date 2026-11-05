@@ -182,7 +182,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    *
    * @param builder The propagation call graph builder.
    * @param value The value.
-   * @return {@code true} iff it is a tuple, list, dict or namedtuple.
+   * @return {@code true} iff it is a tuple, dict or namedtuple, which the mirror copies as a
+   *     structure; a list it copies as a leaf.
    */
   private static boolean isStructure(PropagationCallGraphBuilder builder, InstanceKey value) {
     return TupleElementProvider.holdsOnlyStructures(
