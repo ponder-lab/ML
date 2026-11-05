@@ -494,6 +494,46 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_CACHE_SIGNATURE = "tf.data.Dataset.cache()";
 
+  /**
+   * The summary class of {@code tf.data.Dataset.unbatch}, whose element is a row of its receiver's
+   * (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_UNBATCH_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/unbatch"));
+
+  public static final String DATASET_UNBATCH_SIGNATURE = "tf.data.Dataset.unbatch()";
+
+  /**
+   * The summary class of {@code tf.data.Dataset.apply}, which returns what its function returns for
+   * the dataset (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_APPLY_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/apply"));
+
+  public static final String DATASET_APPLY_SIGNATURE = "tf.data.Dataset.apply()";
+
+  /**
+   * The summary class of {@code tf.data.Dataset.rejection_resample}, whose element pairs an int32
+   * class with its receiver's element (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_REJECTION_RESAMPLE_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/rejection_resample"));
+
+  public static final String DATASET_REJECTION_RESAMPLE_SIGNATURE =
+      "tf.data.Dataset.rejection_resample()";
+
+  /**
+   * The summary class of {@code tf.data.Dataset.bucket_by_sequence_length}, whose element is a
+   * padded batch of its receiver's (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/bucket_by_sequence_length"));
+
+  public static final String DATASET_BUCKET_BY_SEQUENCE_LENGTH_SIGNATURE =
+      "tf.data.Dataset.bucket_by_sequence_length()";
+
   public static final TypeReference DATASET_WINDOW_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/window"));
 
@@ -3219,6 +3259,11 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_SKIP_TYPE, DATASET_SKIP_SIGNATURE),
           Map.entry(DATASET_SHARD_TYPE, DATASET_SHARD_SIGNATURE),
           Map.entry(DATASET_CACHE_TYPE, DATASET_CACHE_SIGNATURE),
+          Map.entry(DATASET_UNBATCH_TYPE, DATASET_UNBATCH_SIGNATURE),
+          Map.entry(DATASET_APPLY_TYPE, DATASET_APPLY_SIGNATURE),
+          Map.entry(DATASET_REJECTION_RESAMPLE_TYPE, DATASET_REJECTION_RESAMPLE_SIGNATURE),
+          Map.entry(
+              DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE, DATASET_BUCKET_BY_SEQUENCE_LENGTH_SIGNATURE),
           Map.entry(DATASET_WINDOW_TYPE, DATASET_WINDOW_SIGNATURE),
           Map.entry(DATASET_TAKE_TYPE, DATASET_TAKE_SIGNATURE),
           Map.entry(DATASET_WITH_OPTIONS_TYPE, DATASET_WITH_OPTIONS_SIGNATURE),

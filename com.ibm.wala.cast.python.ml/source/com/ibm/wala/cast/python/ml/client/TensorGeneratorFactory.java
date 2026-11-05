@@ -52,6 +52,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CACHE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CARDINALITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
@@ -70,12 +71,14 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PREFETCH
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANDOM_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANGE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REDUCE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REJECTION_RESAMPLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REPEAT_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHARD_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SKIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_UNBATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WINDOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
@@ -804,6 +807,11 @@ public class TensorGeneratorFactory {
     // DatasetGenerator (the wala/ML#759 mis-dispatch class).
     if (isType(type, DATASET_ENUMERATE_TYPE))
       return anchor.makeGenerator(DatasetEnumerateGenerator::new, DatasetEnumerateGenerator::new);
+    // A resampled element pairs a class with the receiver's element as an enumerated one pairs an
+    // index with it (wala/ML#1214).
+    if (isType(type, DATASET_REJECTION_RESAMPLE_TYPE))
+      return anchor.makeGenerator(
+          DatasetRejectionResampleGenerator::new, DatasetRejectionResampleGenerator::new);
 
     if (isType(type, ACOSH.getDeclaringClass()))
       return anchor.makeGenerator(Acosh::new, Acosh::new);
@@ -4013,7 +4021,7 @@ public class TensorGeneratorFactory {
           LOGGER.fine(
               "isFirstElement: " + isFirstElement + ", isSecondElement: " + isSecondElement);
           if (isFirstElement) {
-            return new EnumerateIndexGenerator(objSrc);
+            return enumGen.getIndexGenerator(objSrc);
           } else if (isSecondElement) {
             // A receiver that may be several datasets reads an element of each, so each element's
             // shape stays paired with its own dataset's dtype (wala/ML#1204).
@@ -4387,6 +4395,12 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_FLAT_MAP_TYPE)
         || isType(calledFunction, DATASET_INTERLEAVE_TYPE))
       return new DatasetFlatMapGenerator(source);
+    // A row of the receiver's element, so it takes the batch family's per-path reads
+    // (wala/ML#1214).
+    else if (isType(calledFunction, DATASET_UNBATCH_TYPE))
+      return new DatasetUnbatchGenerator(source);
+    else if (isType(calledFunction, DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE))
+      return new DatasetBucketBySequenceLengthGenerator(source);
     // A concatenation's element is either dataset's, so it follows both (wala/ML#1215).
     else if (isType(calledFunction, DATASET_CONCATENATE_TYPE))
       return new DatasetConcatenateGenerator(source);

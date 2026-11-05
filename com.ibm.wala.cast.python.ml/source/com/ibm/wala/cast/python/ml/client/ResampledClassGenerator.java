@@ -1,0 +1,23 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.Collections;
+import java.util.Set;
+
+/**
+ * A generator for the class tensor of an element of {@code tf.data.Dataset.rejection_resample}, an
+ * int32 scalar (wala/ML#1214).
+ */
+public class ResampledClassGenerator extends EnumerateIndexGenerator {
+
+  public ResampledClassGenerator(PointsToSetVariable source) {
+    super(source);
+  }
+
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return Collections.singleton(DType.INT32);
+  }
+}
