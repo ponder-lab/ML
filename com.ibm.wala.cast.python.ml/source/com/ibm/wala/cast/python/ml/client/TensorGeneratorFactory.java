@@ -1542,9 +1542,10 @@ public class TensorGeneratorFactory {
       if (datasets.isEmpty()) continue;
       List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
       // The whole element is read over the spread datasets too, so a transformation of a receiver
-      // that may be several datasets reads each one's element on its own (wala/ML#1207).
+      // that may be several datasets reads each one's element on its own (wala/ML#1207), and
+      // where each one's element is a tensor, which a leaf at the root is (wala/ML#997).
       DatasetIteratorElementGenerator element =
-          new DatasetIteratorElementGenerator(leaf.getNode(), spread);
+          new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
       for (List<Object> path : python.getElementMirrorPaths(leaf)) {
         if (path.isEmpty()) {
           parts.add(element);
@@ -1577,9 +1578,10 @@ public class TensorGeneratorFactory {
     List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
     if (datasets.isEmpty()) return ret;
     List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
-    // The whole element is read over the spread datasets, as in mirroredLeaves (wala/ML#1207).
+    // The whole element is read over the spread datasets, where each one's element is a tensor,
+    // as in mirroredLeaves (wala/ML#1207, wala/ML#997).
     DatasetIteratorElementGenerator element =
-        new DatasetIteratorElementGenerator(leaf.getNode(), spread);
+        new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
     for (List<Object> path : python.getElementMirrorPaths(leaf)) {
       if (path.isEmpty()) {
         ret.addAll(element.getTensorTypes(builder));
@@ -1592,6 +1594,51 @@ public class TensorGeneratorFactory {
       else if (at.resolvesPath(builder, path)) ret.addAll(at.getTensorTypesForPath(builder, path));
     }
     return ret;
+  }
+
+  /**
+   * Datasets whose element is read where it is a tensor, as a mirrored leaf at the element's root
+   * is (wala/ML#997): each {@code map} whose function may return both a structure and a tensor, as
+   * {@code (x, y)} on one path and {@code x} on another, is read over the tensors it returns,
+   * through the transformations whose element follows it. A leaf there is no member of the
+   * structure, so the whole element, which joins the structure's members, would type it with the
+   * label {@code y}.
+   *
+   * @param datasets The datasets, spread over their receivers ({@link #spreadOverReceivers}).
+   * @param builder The propagation call graph builder.
+   * @return The datasets, each viewed over its map's tensor returns where it has such a map.
+   */
+  private static List<TensorGenerator> overTensorReturns(
+      List<TensorGenerator> datasets, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator dataset : datasets)
+      ret.add(overTensorReturns(dataset, builder, DatasetGenerator.SPREAD_DEPTH));
+    return ret;
+  }
+
+  /**
+   * A dataset whose element is read where it is a tensor ({@link #overTensorReturns(List,
+   * PropagationCallGraphBuilder)}).
+   *
+   * @param dataset The dataset.
+   * @param builder The propagation call graph builder.
+   * @param depth How many more transformations to follow.
+   * @return The view, or the dataset itself when no {@code map} it follows returns both.
+   */
+  private static TensorGenerator overTensorReturns(
+      TensorGenerator dataset, PropagationCallGraphBuilder builder, int depth) {
+    if (dataset instanceof DatasetMapGenerator map && map.returnsStructureAndTensor(builder))
+      return map.overTensorReturns();
+    if (depth <= 0 || !(dataset instanceof DatasetGenerator dg && dg.elementFollowsReceiver()))
+      return dataset;
+    // A receiver that may be several datasets the spread could not separate stays whole, since a
+    // view fixed to one of them would leave the others out.
+    List<TensorGenerator> receivers = dg.getReceiverGenerators(builder);
+    if (receivers != null && receivers.size() > 1) return dataset;
+    TensorGenerator receiver = dg.getReceiverGenerator(builder);
+    if (receiver == null) return dataset;
+    TensorGenerator view = overTensorReturns(receiver, builder, depth - 1);
+    return view == receiver ? dataset : dg.overReceiver(view);
   }
 
   /**

@@ -65,6 +65,23 @@ public class DatasetMapGenerator extends DatasetGenerator {
    */
   private final AllocationSiteInNode mapResultInstance;
 
+  /**
+   * Whether this view takes only the values {@code map_func} returns that are no element structure
+   * ({@link #overTensorReturns}).
+   */
+  private boolean tensorReturnsOnly;
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>A shallow copy suffices: {@link #mapResultInstance} is shared, as an allocation is, and
+   * {@link #tensorReturnsOnly} is a primitive.
+   */
+  @Override
+  protected DatasetMapGenerator clone() throws CloneNotSupportedException {
+    return (DatasetMapGenerator) super.clone();
+  }
+
   public DatasetMapGenerator(PointsToSetVariable source) {
     super(source);
     this.mapResultInstance = null;
@@ -154,7 +171,79 @@ public class DatasetMapGenerator extends DatasetGenerator {
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
       if (fieldPTS != null) ret = OrdinalSet.unify(ret, fieldPTS);
     }
+    if (!this.tensorReturnsOnly) return ret;
+    List<InstanceKey> tensors = new ArrayList<>();
+    for (InstanceKey ik : ret) if (!isStructure(builder, ik)) tensors.add(ik);
+    return OrdinalSet.toOrdinalSet(tensors, pa.getInstanceKeyMapping());
+  }
+
+  /**
+   * Whether a value {@code map_func} returns is an element structure.
+   *
+   * @param builder The propagation call graph builder.
+   * @param value The value.
+   * @return {@code true} iff it is a tuple, list, dict or namedtuple.
+   */
+  private static boolean isStructure(PropagationCallGraphBuilder builder, InstanceKey value) {
+    return TupleElementProvider.holdsOnlyStructures(
+        builder,
+        OrdinalSet.toOrdinalSet(
+            Collections.singleton(value), builder.getPointerAnalysis().getInstanceKeyMapping()));
+  }
+
+  /**
+   * Whether {@code map_func} may return both an element structure and a value that is none, as a
+   * function returning {@code (x, y)} on one path and {@code x} on another does.
+   *
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the mapped element holds both.
+   */
+  boolean returnsStructureAndTensor(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
+    if (elementPTS == null) return false;
+    boolean structure = false;
+    boolean tensor = false;
+    for (InstanceKey ik : elementPTS)
+      if (isStructure(builder, ik)) structure = true;
+      else tensor = true;
+    return structure && tensor;
+  }
+
+  /**
+   * This dataset with only the values {@code map_func} returns that are no element structure for
+   * its element, the element a mirrored leaf at the element's root comes from (wala/ML#997): the
+   * leaf is the element where it is a tensor, so a member of a tuple the function returns on
+   * another path is no part of it.
+   *
+   * @return The view.
+   */
+  DatasetMapGenerator overTensorReturns() {
+    DatasetMapGenerator ret = (DatasetMapGenerator) this.copy();
+    ret.tensorReturnsOnly = true;
     return ret;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return super.equals(obj)
+        && this.tensorReturnsOnly == ((DatasetMapGenerator) obj).tensorReturnsOnly;
+  }
+
+  @Override
+  public int hashCode() {
+    return 31 * super.hashCode() + Boolean.hashCode(this.tensorReturnsOnly);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A view of the tensor returns ({@link #overTensorReturns}) is keyed apart from the
+   *     whole dataset, whose element also holds the structures the view leaves out.
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    Object discriminator = super.operationDiscriminator();
+    return this.tensorReturnsOnly ? Pair.make(discriminator, "tensor returns") : discriminator;
   }
 
   /**

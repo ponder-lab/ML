@@ -62,6 +62,28 @@ public class TestFitTFRecordMap extends AbstractTensorTest {
   }
 
   /**
+   * A map whose function returns {@code (x, y)} on one call and a tensor of another shape on
+   * another, which is the dataset {@code fit} is given: the inputs are that tensor batched, which
+   * reading the element where it is a tensor, rather than as the pair's members, gives, and not the
+   * pair's label. The batched {@code x} is imprecision: the analysis cannot tell which call returns
+   * the pair, so the step may take the pair's first member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testMaybeUnlabelledOtherInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_fit_map_maybe_unlabelled_other.py",
+        "consume_fit_inputs",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
    * The first input of a model fed a zip whose first dataset is a map over a {@code
    * TFRecordDataset} returning a pair: {@code call} unpacks its inputs {@code (a, b)}, and {@code
    * a} is the batched first member of the pair.
