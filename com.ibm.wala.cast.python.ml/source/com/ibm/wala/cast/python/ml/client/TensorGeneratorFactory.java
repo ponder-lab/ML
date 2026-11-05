@@ -74,6 +74,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REDUCE_T
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REJECTION_RESAMPLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REPEAT_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SCAN_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHARD_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SKIP_TYPE;
@@ -4320,6 +4321,7 @@ public class TensorGeneratorFactory {
       return new DatasetFromTensorsGenerator(source);
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
     else if (isType(calledFunction, DATASET_MAP_TYPE)) return new DatasetMapGenerator(source);
+    else if (isType(calledFunction, DATASET_SCAN_TYPE)) return new DatasetScanGenerator(source);
     else if (isType(calledFunction, DATASET_PADDED_BATCH_TYPE))
       // `padded_batch` prepends a batch dimension like `batch`; the padded generator additionally
       // reads the declared `padded_shapes` element structure (wala/ML#673). The padded inner
