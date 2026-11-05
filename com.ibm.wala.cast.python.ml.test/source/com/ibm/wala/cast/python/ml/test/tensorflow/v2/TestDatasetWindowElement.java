@@ -1,26 +1,27 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
 
 /**
  * {@code window} yields datasets whose own iteration yields the source elements, and for a tuple
- * element a tuple of datasets, one per component. Each test pins today's reading, which is wrong
- * (<a href="https://github.com/wala/ML/issues/1201">wala/ML#1201</a>).
+ * element a tuple of datasets, one per component (<a
+ * href="https://github.com/wala/ML/issues/1201">wala/ML#1201</a>).
  */
 public class TestDatasetWindowElement extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_dataset_window_element.py";
 
   /**
-   * A window is a dataset, no tensor, but reads as the source element's tensor.
-   *
-   * <p>TODO: wala/ML#1201: expect no tensor, {@code test(FILE, "consume_window", 0, 0)}.
+   * A window is a dataset, which, as any dataset value, reads as a tensor of its element's type.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -32,9 +33,7 @@ public class TestDatasetWindowElement extends AbstractTensorTest {
   }
 
   /**
-   * An element of a window is a source element, but reads as a scalar.
-   *
-   * <p>TODO: wala/ML#1201: expect the source element's {@code (4,)} float32.
+   * An element of a window is a source element.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -42,14 +41,12 @@ public class TestDatasetWindowElement extends AbstractTensorTest {
    */
   @Test
   public void testRow() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_row", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+    test(FILE, "consume_row", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
   }
 
   /**
-   * The first of a pair's windows is a dataset, no tensor, but reads as the first component's
-   * tensor.
-   *
-   * <p>TODO: wala/ML#1201: expect no tensor, {@code test(FILE, "consume_first_window", 0, 0)}.
+   * The first of a pair's windows is a dataset of the pair's first members, which reads as a tensor
+   * of their type.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -61,9 +58,7 @@ public class TestDatasetWindowElement extends AbstractTensorTest {
   }
 
   /**
-   * An element of the first window is the pair's first component, but reads as a scalar.
-   *
-   * <p>TODO: wala/ML#1201: expect the first component's {@code (4,)} float32.
+   * An element of the first window is the pair's first component.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -71,13 +66,11 @@ public class TestDatasetWindowElement extends AbstractTensorTest {
    */
   @Test
   public void testFirstRow() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_first_row", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
+    test(FILE, "consume_first_row", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
   }
 
   /**
-   * An element of the second window is the pair's second component, but reads as a scalar.
-   *
-   * <p>TODO: wala/ML#1201: expect the second component's {@code (3,)} int32.
+   * An element of the second window is the pair's second component.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -85,6 +78,51 @@ public class TestDatasetWindowElement extends AbstractTensorTest {
    */
   @Test
   public void testSecondRow() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_second_row", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32))));
+    test(FILE, "consume_second_row", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * A window has the dataset methods, and its size is not the receiver's: a window may hold fewer
+   * elements than its size, so a batch of it may be short.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testWindowBatch() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_window_batch",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(4))))));
+  }
+
+  /**
+   * A row of a window of a dataset whose element is not mirrored, a batch of a {@code
+   * TextLineDataset}'s lines, is read through the window's own generator, which reads the
+   * receiver's element: a batch of the lines, full or short, not a row of one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testLines() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_lines",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(STRING, List.of(new NumericDim(2))),
+                new TensorType(STRING, List.of(new SymbolicDim("?"))))));
   }
 }

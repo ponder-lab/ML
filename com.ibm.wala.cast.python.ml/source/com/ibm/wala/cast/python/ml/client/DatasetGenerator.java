@@ -83,8 +83,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     }
     // For dataset transformations, default to shapes of the input dataset (the receiver).
     // The receiver is 'self' (arg0 in IR).
-    OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    OrdinalSet<InstanceKey> receiverPTS = this.receiverPointsToSet(builder);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, receiverPTS);
       // An API-produced dataset receiver's elements are tensors by construction, so an empty
@@ -128,8 +127,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
       return dTypes == null || dTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dTypes;
     }
     // For dataset transformations, default to dtypes of the input dataset (the receiver).
-    OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    OrdinalSet<InstanceKey> receiverPTS = this.receiverPointsToSet(builder);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       Set<DType> dTypes = this.getDTypesOfValue(builder, receiverPTS);
       // The dtype counterpart of the shape floor above: ⊥ on one axis must pair with ⊥ on the
@@ -296,8 +294,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    */
   public TensorGenerator getReceiverGenerator(PropagationCallGraphBuilder builder) {
     if (this.receiver != null) return this.receiver;
-    OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    OrdinalSet<InstanceKey> receiverPTS = this.receiverPointsToSet(builder);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       for (InstanceKey valueIK : receiverPTS) {
         TensorGenerator generator = receiverGenerator(builder, valueIK);
@@ -318,8 +315,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    */
   public List<TensorGenerator> getReceiverGenerators(PropagationCallGraphBuilder builder) {
     if (this.receiver != null) return null;
-    OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    OrdinalSet<InstanceKey> receiverPTS = this.receiverPointsToSet(builder);
     if (receiverPTS == null || receiverPTS.isEmpty()) return null;
     List<TensorGenerator> ret = new ArrayList<>();
     for (InstanceKey valueIK : receiverPTS) {
@@ -439,6 +435,17 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     return createManualGenerator(asin.getNode(), builder);
   }
 
+  /**
+   * The points-to set of the dataset this one is derived from: the receiver of the summary that
+   * made it.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The receiver's points-to set, or {@code null} when it does not resolve.
+   */
+  protected OrdinalSet<InstanceKey> receiverPointsToSet(PropagationCallGraphBuilder builder) {
+    return this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+  }
+
   @Override
   public boolean equals(Object obj) {
     return super.equals(obj) && this.receiver == ((DatasetGenerator) obj).receiver;
@@ -490,8 +497,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    * @return A set of possible dataset sizes, or an empty set if unknown.
    */
   public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    OrdinalSet<InstanceKey> receiverPTS = this.receiverPointsToSet(builder);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       Set<Long> ret = HashSetFactory.make();
       for (InstanceKey valueIK : receiverPTS) {
