@@ -1451,6 +1451,78 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The generator of a program's read of a constant position of a value that holds the element a
+   * dataset iterator allocates or one of its components (wala/ML#997): the dataset's element at the
+   * position below the one the value stands for. A generic component holds no fields, so the
+   * pointer analysis has nothing at the read, as at a model's {@code a, b = inputs} of the inputs a
+   * Keras step unpacks from a nested element that is not copied. A value that is the element where
+   * it is a tensor, rather than a tuple, is a tensor subscript, which this leaves to other readers,
+   * and a position that is itself a structure contributes no tensor.
+   *
+   * @param source The read's value.
+   * @param builder The propagation call graph builder.
+   * @return The generator, or {@code null} when the read is no such read.
+   */
+  private static TensorGenerator datasetElementMemberRead(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey lpk)
+        || !(lpk.getNode().getDU().getDef(lpk.getValueNumber()) instanceof PythonPropertyRead read))
+      return null;
+    CGNode node = lpk.getNode();
+    SymbolTable symbols = node.getIR().getSymbolTable();
+    if (!symbols.isConstant(read.getMemberRef())
+        || !(symbols.getConstantValue(read.getMemberRef()) instanceof Number number)
+        || number.doubleValue() != number.intValue()
+        || number.intValue() < 0) return null;
+    int index = number.intValue();
+    PointerKey objectKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, read.getObjectRef());
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (InstanceKey ik :
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        continue;
+      }
+      if (asin == null) continue;
+      TypeReference type = asin.concreteType().getReference();
+      if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+          && TensorFlowTypes.datasetElementComponentIndex(type) < 0) continue;
+      TensorGenerator held = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
+      // The value's path into its dataset's element: the root for the element, and a component's
+      // position for a component.
+      TupleElementProvider dataset;
+      List<Object> path;
+      if (held instanceof DatasetTupleElementGenerator component
+          && component.getUnderlying() instanceof TupleElementProvider underlying) {
+        dataset = underlying;
+        path = component.getPath();
+      } else if (held instanceof TupleElementProvider element) {
+        dataset = element;
+        path = List.of();
+      } else continue;
+      boolean structure =
+          path.isEmpty() ? dataset.yieldsTuple(builder) : dataset.isStructureAt(builder, path);
+      if (!structure) continue;
+      List<Object> below = new ArrayList<>(path);
+      below.add(index);
+      // A position that is itself a structure, as the pair of a `((x, z), y)` element at [0], is
+      // no tensor: its members are read at the longer paths, and a read of the whole would join
+      // them into one tensor of their shapes.
+      if (dataset.isStructureAt(builder, below)) continue;
+      TensorGenerator part = new DatasetTupleElementGenerator(source, dataset, below);
+      if (!parts.contains(part)) parts.add(part);
+    }
+    if (parts.isEmpty()) return null;
+    return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
    * The generator of a field read whose every member is an element a dataset iterator allocates or
    * one of the element's components (wala/ML#997): the join of the allocations' own generators,
    * each typing its member as a loop variable bound to it is. An element of a dataset whose element
@@ -1480,6 +1552,11 @@ public class TensorGeneratorFactory {
       if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
           && TensorFlowTypes.datasetElementComponentIndex(type) < 0) return null;
       TensorGenerator part = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
+      // A component that is itself a structure, as the pair of a `((x, z), y)` element at [0], is
+      // no tensor: its members are read at the longer paths (wala/ML#997).
+      if (part instanceof DatasetTupleElementGenerator component
+          && component.getUnderlying() instanceof TupleElementProvider underlying
+          && underlying.isStructureAt(builder, component.getPath())) continue;
       if (part != null) parts.add(part);
     }
     if (parts.isEmpty()) return null;
@@ -3376,6 +3453,10 @@ public class TensorGeneratorFactory {
     // (wala/ML#997), is typed as a loop variable bound to those allocations is.
     TensorGenerator elementRead = datasetElementFieldRead(source, builder);
     if (elementRead != null) return elementRead;
+    // A program's read of a position of such an element or component, as a model's `a, b =
+    // inputs` of the inputs a Keras step unpacks (wala/ML#997), reads the position below it.
+    TensorGenerator memberRead = datasetElementMemberRead(source, builder);
+    if (memberRead != null) return memberRead;
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
       CGNode node = lpk.getNode();

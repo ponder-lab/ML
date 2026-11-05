@@ -430,6 +430,34 @@ public class DatasetMapGenerator extends DatasetGenerator {
     return ret;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Where every value {@code map_func} returns is a tuple or a namedtuple allocation. A
+   *     function returning a component of its argument, or anything else on some path, is not known
+   *     to.
+   */
+  @Override
+  public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
+    if (this.returnedComponent(builder) >= 0) return false;
+    OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
+    if (elementPTS == null || elementPTS.isEmpty()) return false;
+    for (InstanceKey ik : elementPTS) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
+      if (asin == null) return false;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(tuple)
+          && !reference.equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE))
+        return false;
+    }
+    return true;
+  }
+
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
     // A mapped element that is a component of the receiver's is a tuple where that component is.

@@ -285,6 +285,34 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
     return false;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Where the path reaches a structure in the element of every dataset the element may
+   *     come from, so a reader skipping the position as no tensor skips no dataset's tensor
+   *     (wala/ML#997).
+   */
+  @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    List<TupleElementProvider> providers = providers();
+    if (providers.isEmpty() || providers.size() != this.datasets.size()) return false;
+    for (TupleElementProvider tep : providers) if (!tep.isStructureAt(builder, path)) return false;
+    return true;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Where every dataset the element may come from yields only tuples.
+   */
+  @Override
+  public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
+    List<TupleElementProvider> providers = providers();
+    if (providers.isEmpty() || providers.size() != this.datasets.size()) return false;
+    for (TupleElementProvider tep : providers) if (!tep.yieldsOnlyTuples(builder)) return false;
+    return true;
+  }
+
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<TensorType> ret = HashSetFactory.make();

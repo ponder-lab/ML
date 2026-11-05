@@ -1572,7 +1572,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /**
    * Whether a value is a dataset's generic element whose datasets' generators all say it is a tuple
-   * (wala/ML#997).
+   * on every path ({@link TupleElementProvider#yieldsOnlyTuples}), not only on some (wala/ML#997).
    *
    * @param key The value.
    * @param builder The builder.
@@ -1585,7 +1585,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         DatasetIteratorElementGenerator.datasetsOf(List.of(allocation), builder);
     if (datasets.isEmpty()) return false;
     for (TensorGenerator dataset : datasets)
-      if (!(dataset instanceof TupleElementProvider tep) || !tep.yieldsTuple(builder)) return false;
+      if (!(dataset instanceof TupleElementProvider tep) || !tep.yieldsOnlyTuples(builder))
+        return false;
     return true;
   }
 
