@@ -383,7 +383,7 @@ public class TensorFlowTypes extends PythonTypes {
 
   /**
    * The class of a window of a component of a dataset's tuple element (wala/ML#1221): a dataset of
-   * that component's values, whose position its maker's {@code index} gives.
+   * that component's values. Its position is the field {@code window} read the component from.
    */
   public static final TypeReference DATASET_WINDOW_COMPONENT =
       TypeReference.findOrCreate(
@@ -393,8 +393,8 @@ public class TensorFlowTypes extends PythonTypes {
   public static final int DATASET_WINDOW_WHOLE = -1;
 
   /**
-   * {@link #datasetWindowComponent}'s reading of a window of a component, whose position its maker
-   * gives.
+   * {@link #datasetWindowComponent}'s reading of a window of a component, whose position is the
+   * field {@code window} read the component from.
    */
   public static final int DATASET_WINDOW_OF_COMPONENT = -2;
 
