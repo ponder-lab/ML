@@ -71,6 +71,10 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import org.antlr.runtime.ANTLRStringStream;
+import org.antlr.runtime.CommonToken;
+import org.antlr.runtime.Token;
+import org.python.antlr.PythonLexer;
 import org.python.antlr.PythonTree;
 import org.python.antlr.ast.AnnAssign;
 import org.python.antlr.ast.Assert;
@@ -151,6 +155,7 @@ import org.python.antlr.base.expr;
 import org.python.antlr.base.slice;
 import org.python.antlr.base.stmt;
 import org.python.core.PyObject;
+import org.python.core.stringlib.Encoding;
 
 public abstract class PythonParser<T> extends AbstractParser implements TranslatorToCAst {
 
@@ -673,6 +678,52 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       }
     }
     return null;
+  }
+
+  /**
+   * Whether a string literal token is an f-string: its prefix includes {@code f}.
+   *
+   * @param token The token.
+   * @return {@code true} iff the token's prefix includes {@code f} or {@code F}.
+   */
+  private static boolean isFormatted(Token token) {
+    String literal = token.getText();
+    for (int i = 0; i < literal.length() && Character.isLetter(literal.charAt(i)); i++)
+      if (Character.toLowerCase(literal.charAt(i)) == 'f') return true;
+    return false;
+  }
+
+  /**
+   * Whether a {@code =} in a replacement field's expression, outside any brackets, is the
+   * self-documenting {@code =} specifier rather than part of an operator such as {@code ==} or
+   * {@code <=}: nothing but space separates it from the field's end, its conversion or its format
+   * specification.
+   *
+   * @param text The source text.
+   * @param at The index of the {@code =}.
+   * @param to The index just past the f-string's body.
+   * @return {@code true} iff the {@code =} is the specifier.
+   */
+  private static boolean isSelfDocumenting(String text, int at, int to) {
+    if ("=!<>".indexOf(text.charAt(at - 1)) >= 0 || at + 1 < to && text.charAt(at + 1) == '=')
+      return false;
+    int i = at + 1;
+    while (i < to && Character.isWhitespace(text.charAt(i))) i++;
+    return i < to && "}!:".indexOf(text.charAt(i)) >= 0;
+  }
+
+  /**
+   * The value of a string literal's text, its escapes decoded unless it is raw, as the parser
+   * decodes a string literal's.
+   *
+   * @param literal The text.
+   * @param raw Whether the literal is raw.
+   * @return The value.
+   */
+  private static String decode(String literal, boolean raw) {
+    return raw
+        ? literal
+        : Encoding.decode_UnicodeEscape(literal, 0, literal.length(), "strict", true);
   }
 
   public class CAstVisitor extends AbstractParser.CAstVisitor implements VisitorIF<CAstNode> {
@@ -2919,7 +2970,281 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitStr(Str arg0) throws Exception {
+      if (!literalPieces.contains(arg0)) {
+        CAstNode formatted = this.translateFormattedString(arg0);
+        if (formatted != null) return formatted;
+      }
       return notePosition(Ast.makeConstant(arg0.getInternalS().toString()), arg0);
+    }
+
+    /**
+     * The strings {@link #translateFormattedString} makes for an f-string's literal text, which
+     * {@link #visitStr} reads as the constants they are.
+     */
+    private final java.util.Set<Str> literalPieces =
+        Collections.newSetFromMap(new IdentityHashMap<>());
+
+    /**
+     * Translates a string that is, or is joined from, f-strings (wala/ML#1231). The parser reads an
+     * f-string as a plain string whose value is its own source text, opening quote included, and
+     * evaluates none of its replacement fields: its grammar accepts the {@code f} prefix but never
+     * strips it, and it makes no {@link JoinedStr}. The string's tokens are therefore read here
+     * from the source text, together with the tokens of the string literals the parser joins to it.
+     *
+     * <p>A string with a replacement field is one the program computes. It is translated as a call
+     * of the builtin {@code str} on the concatenation of its literal text and of {@code str} of
+     * each field's value, so that it is a string of unknown content and every expression in its
+     * fields, a format specification's included, is evaluated where the string is, in order. The
+     * exact text, which a conversion or a format specification would change, is not modeled. A
+     * string with no field is the constant it denotes.
+     *
+     * <p>TODO: The name {@code str} is resolved where the string is, so a program binding {@code
+     * str} to something else there calls that instead.
+     *
+     * @param string The string the parser made.
+     * @return The translation, or {@code null} if no token of the string is an f-string, or if the
+     *     source text does not read as one, in which case the string is the parser's constant.
+     */
+    private CAstNode translateFormattedString(Str string) throws Exception {
+      java.util.List<CommonToken> run = parser.getStringRun(string.getCharStartIndex());
+      // A string in a replacement field's expression was parsed from a copy of that expression,
+      // whose tokens the parser does not hold; its own token is the whole string.
+      if (run.isEmpty()
+          && string.getToken() instanceof CommonToken token
+          && token.getType() == PythonLexer.STRING) run = java.util.List.of(token);
+      if (run.stream().noneMatch(PythonParser::isFormatted)) return null;
+      String text = parser.getOriginalText();
+      java.util.List<Object> parts = new ArrayList<>();
+      for (CommonToken token : run)
+        if (!this.addParts(token, text, parts)) {
+          LOGGER.fine(
+              () ->
+                  "Reading the f-string at "
+                      + string.getLine()
+                      + ":"
+                      + string.getCharPositionInLine()
+                      + " as the parser's constant, since its source text does not read as one"
+                      + " (wala/ML#1231).");
+          return null;
+        }
+      if (parts.stream().allMatch(String.class::isInstance)) {
+        StringBuilder value = new StringBuilder();
+        parts.forEach(value::append);
+        return notePosition(Ast.makeConstant(value.toString()), string);
+      }
+      expr joined = null;
+      for (Object part : parts) {
+        expr piece;
+        if (part instanceof String literal) {
+          Str str = new Str(string, literal);
+          literalPieces.add(str);
+          piece = str;
+        } else piece = stringOf(string, (expr) part);
+        joined = joined == null ? piece : new BinOp(string, joined, operatorType.Add, piece);
+      }
+      return stringOf(string, joined).accept(this);
+    }
+
+    /**
+     * A call of the builtin {@code str} on a value, at a string's position.
+     *
+     * @param at The string whose position the call takes.
+     * @param value The value.
+     * @return The call.
+     */
+    private expr stringOf(Str at, expr value) {
+      java.util.List<expr> arguments = new ArrayList<>();
+      arguments.add(value);
+      // A name is read from its token's text, so the name gets a copy of the string's token, with
+      // the string's position and the name's text.
+      CommonToken name = new CommonToken(at.getToken());
+      name.setText("str");
+      return new Call(
+          at, new Name(name, "str", expr_contextType.Load), arguments, new ArrayList<keyword>());
+    }
+
+    /**
+     * Adds what a string literal token contributes to its string: its text, or for an f-string the
+     * text between its replacement fields and the value of each field, in order.
+     *
+     * @param token The token.
+     * @param text The source text, which the token's character indices index.
+     * @param parts The parts so far: a {@link String} for literal text, an {@link expr} for a
+     *     value.
+     * @return {@code false} if the token does not read as a string literal, or as an f-string.
+     */
+    private boolean addParts(CommonToken token, String text, java.util.List<Object> parts) {
+      String literal = token.getText();
+      int prefixLength = 0;
+      while (prefixLength < literal.length() && Character.isLetter(literal.charAt(prefixLength)))
+        prefixLength++;
+      String prefix = literal.substring(0, prefixLength).toLowerCase();
+      // A bytes literal is no part of a string.
+      if (prefix.contains("b")) return false;
+      int quoteLength =
+          literal.startsWith("\"\"\"", prefixLength) || literal.startsWith("'''", prefixLength)
+              ? 3
+              : 1;
+      int start = token.getStartIndex() + prefixLength + quoteLength;
+      int end = token.getStopIndex() + 1 - quoteLength;
+      if (start > end
+          || end > text.length()
+          || !text.regionMatches(start, literal, prefixLength + quoteLength, end - start))
+        return false;
+      boolean raw = prefix.contains("r");
+      if (!prefix.contains("f")) {
+        parts.add(decode(text.substring(start, end), raw));
+        return true;
+      }
+      return this.addFormattedParts(text, start, end, raw, parts, true) == end;
+    }
+
+    /**
+     * Adds the parts of an f-string's body, or of a replacement field's format specification, which
+     * ends at the brace closing its field.
+     *
+     * @param text The source text.
+     * @param from The index of the body's first character.
+     * @param to The index just past the body's last character.
+     * @param raw Whether the f-string is raw, so that a backslash is no escape.
+     * @param parts The parts so far.
+     * @param body Whether this is the f-string's body, whose literal text is part of the string,
+     *     rather than a format specification, whose text is not.
+     * @return The index the body or the specification ends at, or -1 if it does not read as one.
+     */
+    private int addFormattedParts(
+        String text, int from, int to, boolean raw, java.util.List<Object> parts, boolean body) {
+      StringBuilder literal = new StringBuilder();
+      int i = from;
+      while (i < to) {
+        char c = text.charAt(i);
+        if (c == '{') {
+          if (body && i + 1 < to && text.charAt(i + 1) == '{') {
+            literal.append('{');
+            i += 2;
+            continue;
+          }
+          if (body && literal.length() > 0) parts.add(decode(literal.toString(), raw));
+          literal.setLength(0);
+          i = this.addField(text, i + 1, to, raw, parts, body);
+          if (i < 0) return -1;
+        } else if (c == '}') {
+          if (!body) break;
+          if (i + 1 < to && text.charAt(i + 1) == '}') {
+            literal.append('}');
+            i += 2;
+          } else return -1;
+        } else if (c == '\\' && !raw && i + 1 < to) {
+          char next = text.charAt(i + 1);
+          if (next == 'N' && i + 2 < to && text.charAt(i + 2) == '{') {
+            // A named Unicode escape, whose braces open no field.
+            int close = text.indexOf('}', i + 3);
+            if (close < 0 || close >= to) return -1;
+            literal.append(text, i, close + 1);
+            i = close + 1;
+          } else if (next == '{' || next == '}') {
+            // A backslash escapes no brace: it is itself, and the brace is read as one.
+            literal.append(c);
+            i++;
+          } else {
+            literal.append(c).append(next);
+            i += 2;
+          }
+        } else {
+          literal.append(c);
+          i++;
+        }
+      }
+      if (body && literal.length() > 0) parts.add(decode(literal.toString(), raw));
+      return i;
+    }
+
+    /**
+     * Adds the parts of a replacement field: its expression's value, the text a {@code =} specifier
+     * adds before it, and the values of the fields in its format specification.
+     *
+     * @param text The source text.
+     * @param from The index just past the field's opening brace.
+     * @param to The index just past the f-string's body.
+     * @param raw Whether the f-string is raw.
+     * @param parts The parts so far.
+     * @param body Whether the field is in the f-string's body, rather than in a format
+     *     specification, whose text is not part of the string.
+     * @return The index just past the field's closing brace, or -1 if it does not read as a field.
+     */
+    private int addField(
+        String text, int from, int to, boolean raw, java.util.List<Object> parts, boolean body) {
+      int i = from;
+      int depth = 0;
+      for (; i < to; i++) {
+        char c = text.charAt(i);
+        if (c == '\'' || c == '"') {
+          String quote =
+              text.startsWith(String.valueOf(c).repeat(3), i)
+                  ? String.valueOf(c).repeat(3)
+                  : String.valueOf(c);
+          int close = text.indexOf(quote, i + quote.length());
+          if (close < 0 || close >= to) return -1;
+          i = close + quote.length() - 1;
+        } else if (c == '(' || c == '[' || c == '{') depth++;
+        else if (depth > 0 && (c == ')' || c == ']' || c == '}')) depth--;
+        else if (depth == 0
+            && (c == '}'
+                || c == ':'
+                || c == '!' && (i + 1 >= to || text.charAt(i + 1) != '=')
+                || c == '=' && isSelfDocumenting(text, i, to))) break;
+      }
+      if (i >= to) return -1;
+      expr value = this.parseExpression(text, from, i);
+      if (value == null) return -1;
+      if (text.charAt(i) == '=') {
+        // A `=` specifier: the expression's text, the sign and the space after it come first.
+        i++;
+        while (i < to && Character.isWhitespace(text.charAt(i))) i++;
+        if (body) parts.add(text.substring(from, i));
+      }
+      parts.add(value);
+      if (i < to && text.charAt(i) == '!') i += 2;
+      if (i < to && text.charAt(i) == ':') {
+        i = this.addFormattedParts(text, i + 1, to, raw, parts, false);
+        if (i < 0) return -1;
+      }
+      if (i >= to || text.charAt(i) != '}') return -1;
+      return i + 1;
+    }
+
+    /**
+     * Parses a replacement field's expression. The expression is parsed from a copy of the source
+     * text in which every character before it, line breaks aside, is blanked and the first one
+     * opens a parenthesis, so that its nodes have the positions they have in the source text and
+     * any line break in it is inside brackets.
+     *
+     * @param text The source text.
+     * @param from The index of the expression's first character.
+     * @param to The index just past its last character.
+     * @return The expression, or {@code null} if it does not parse as one.
+     */
+    private expr parseExpression(String text, int from, int to) {
+      int open = 0;
+      while (open < from && (text.charAt(open) == '\n' || text.charAt(open) == '\r')) open++;
+      StringBuilder copy = new StringBuilder(to + 3);
+      for (int k = 0; k < from; k++) {
+        char c = text.charAt(k);
+        copy.append(k == open ? '(' : c == '\n' || c == '\r' ? c : ' ');
+      }
+      copy.append(text, from, to).append("\n)\n");
+      try {
+        WalaPythonParser expressionParser =
+            new WalaPythonParser(new ANTLRStringStream(copy.toString()), "<f-string>", "UTF-8");
+        if (expressionParser.parseModule() instanceof Module module
+            && expressionParser.getErrors().isEmpty()
+            && module.getInternalBody().size() == 1
+            && module.getInternalBody().get(0) instanceof Expr statement)
+          return statement.getInternalValue();
+      } catch (RuntimeException e) {
+        LOGGER.log(Level.FINE, e, () -> "Can't parse an f-string field (wala/ML#1231).");
+      }
+      return null;
     }
 
     @Override

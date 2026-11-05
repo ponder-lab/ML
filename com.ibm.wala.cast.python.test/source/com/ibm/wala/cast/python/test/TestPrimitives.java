@@ -4,7 +4,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.ArrayContentsKey;
@@ -252,5 +254,92 @@ public class TestPrimitives extends TestJythonCallGraphShape {
       pointees.put(callee, kinds);
     }
     assertEquals(Map.of("f", Set.of("Llist"), "g", Set.of("0.1")), pointees);
+  }
+
+  /**
+   * An f-string with a replacement field is a string the program computes: it points to a string of
+   * unknown content, the one the builtin {@code str} makes, not to a constant, and every expression
+   * in its fields is evaluated where the program writes it, so a function called only there is
+   * reached, at its own line and column. That holds for a field in a format specification, one with
+   * a conversion or a {@code =} specifier, one in an f-string joined to a plain string beside it,
+   * one on a later line of a triple-quoted f-string, and one under a {@code try}. An f-string with
+   * no field is the constant it denotes, its doubled braces read as single ones (<a
+   * href="https://github.com/wala/ML/issues/1231">wala/ML#1231</a>). Each {@code sink_*} function
+   * in {@code fstring1.py} is read for what its parameter points to.
+   */
+  @Test
+  public void testFStrings()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("fstring1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (String callee :
+        List.of(
+            "side",
+            "side_concatenated",
+            "width",
+            "shown",
+            "debugged",
+            "side_multiline",
+            "side_guarded",
+            "table"))
+      assertFalse(callee + " is unreached", getNodes(CG, "script fstring1.py/" + callee).isEmpty());
+    // A call in a field is where the program writes it: past the plain string an f-string is
+    // joined to, and on the later line of a triple-quoted one.
+    CGNode script = getNodes(CG, "script fstring1.py").iterator().next();
+    Map<String, String> positions = new TreeMap<>();
+    for (String callee : List.of("side_concatenated", "side_multiline"))
+      for (CGNode target : getNodes(CG, "script fstring1.py/" + callee))
+        CG.getPossibleSites(script, target)
+            .forEachRemaining(
+                site -> {
+                  for (SSAAbstractInvokeInstruction call : script.getIR().getCalls(site)) {
+                    Position at = ((AstMethod) script.getMethod()).getSourcePosition(call.iIndex());
+                    positions.put(callee, at.getFirstLine() + ":" + at.getFirstCol());
+                  }
+                });
+    assertEquals(Map.of("side_concatenated", "103:25", "side_multiline", "120:1"), positions);
+    Map<String, Set<String>> pointees = new TreeMap<>();
+    for (String sink :
+        List.of(
+            "fstring",
+            "plain",
+            "literal",
+            "escaped",
+            "call",
+            "concatenated",
+            "spec",
+            "conversion",
+            "debug",
+            "multiline",
+            "guarded",
+            "subscript")) {
+      Set<String> kinds = new TreeSet<>();
+      Collection<CGNode> nodes = getNodes(CG, "script fstring1.py/sink_" + sink);
+      assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
+      for (CGNode node : nodes)
+        for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, 2)))
+          kinds.add(
+              ik instanceof ConstantKey<?> c
+                  ? "constant " + c.getValue()
+                  : ik.concreteType().getName().toString());
+      pointees.put(sink, kinds);
+    }
+    Map<String, Set<String>> expected = new TreeMap<>();
+    expected.put("fstring", Set.of("Lstring"));
+    expected.put("plain", Set.of("constant plain"));
+    expected.put("literal", Set.of("constant h"));
+    expected.put("escaped", Set.of("constant {h}"));
+    expected.put("call", Set.of("Lstring"));
+    expected.put("concatenated", Set.of("Lstring"));
+    expected.put("spec", Set.of("Lstring"));
+    expected.put("conversion", Set.of("Lstring"));
+    expected.put("debug", Set.of("Lstring"));
+    expected.put("multiline", Set.of("Lstring"));
+    expected.put("guarded", Set.of("Lstring"));
+    expected.put("subscript", Set.of("Lstring"));
+    assertEquals(expected, pointees);
   }
 }
