@@ -102,35 +102,32 @@ public class TestDatasetConcatenateElement extends AbstractTensorTest {
   }
 
   /**
-   * The member of a dataset whose element is not copied, iterated on its own.
-   *
-   * <p>TODO: The member is no tensor until <a
-   * href="https://github.com/wala/ML/issues/1217">wala/ML#1217</a> is fixed.
+   * The member of a {@code from_generator} dataset's tuple element, declared by {@code
+   * output_types} alone, iterated on its own (<a
+   * href="https://github.com/wala/ML/issues/1217">wala/ML#1217</a>): the declared dtype, and the
+   * shape the generator yields.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testGeneratedA() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_generated_a", 1, 1);
+    test(FILE, "consume_generated_a", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
   /**
-   * A concatenation with a dataset whose element is not copied keeps the element its generator
-   * types: a member is a tensor.
-   *
-   * <p>TODO: The member is no tensor until <a
-   * href="https://github.com/wala/ML/issues/1217">wala/ML#1217</a> is fixed, as on its own ({@link
-   * #testGeneratedA}).
+   * A concatenation with a {@code from_generator} dataset keeps the element that dataset's
+   * generator types: a member is a tensor (<a
+   * href="https://github.com/wala/ML/issues/1217">wala/ML#1217</a>).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testUnmodeledA() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_unmodeled_a", 1, 1);
+    test(FILE, "consume_unmodeled_a", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
   /**
