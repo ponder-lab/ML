@@ -373,6 +373,59 @@ public class TensorFlowTypes extends PythonTypes {
     }
   }
 
+  /**
+   * The class of a window of a dataset, which {@code window} yields: a dataset of its receiver's
+   * elements (wala/ML#1201).
+   */
+  public static final TypeReference DATASET_WINDOW_DATASET =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "window_dataset"));
+
+  /**
+   * Which part of its receiver's element a window holds, by its allocation type (wala/ML#1201):
+   * {@code -1} for a window of the whole element, the component's index for a window of one of a
+   * tuple element's components, one class per index as for the element's components, and {@code
+   * null} for any type that is no window.
+   *
+   * @param type An allocation type.
+   * @return The component, {@code -1}, or {@code null}.
+   */
+  public static Integer datasetWindowComponent(TypeReference type) {
+    if (type.equals(DATASET_WINDOW_DATASET)) return -1;
+    String name = type.getName().toString();
+    String prefix = DATA_PACKAGE_PREFIX + "window_";
+    if (!name.startsWith(prefix)) return null;
+    try {
+      int index = Integer.parseInt(name.substring(prefix.length()));
+      return index >= 0 && index < DATASET_ELEMENT_COMPONENTS ? index : null;
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Which part of its receiver's element the window a summary class makes holds (wala/ML#1201):
+   * {@code window} calls {@code make_window} for the window of the whole element and {@code
+   * make_window_k} for the window of component {@code k} of a tuple element, each allocating and
+   * returning its window, so a window's node allocates no other dataset.
+   *
+   * @param type A summary class.
+   * @return {@code -1} for {@code make_window}, {@code k} for {@code make_window_k}, or {@code
+   *     null} for any other class.
+   */
+  public static Integer datasetWindowMakerComponent(TypeReference type) {
+    String name = type.getName().toString();
+    String maker = DATA_PACKAGE_PREFIX + "make_window";
+    if (name.equals(maker)) return -1;
+    if (!name.startsWith(maker + "_")) return null;
+    try {
+      int index = Integer.parseInt(name.substring(maker.length() + 1));
+      return index >= 0 && index < DATASET_ELEMENT_COMPONENTS ? index : null;
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
