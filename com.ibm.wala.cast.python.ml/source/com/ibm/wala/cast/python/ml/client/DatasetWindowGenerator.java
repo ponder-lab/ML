@@ -136,13 +136,13 @@ public class DatasetWindowGenerator extends DatasetGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     if (this.component < 0) return super.getDefaultShapes(builder);
-    return this.getShapesForPath(builder, List.of());
+    return this.componentShapes(builder, List.of());
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     if (this.component < 0) return super.getDefaultDTypes(builder);
-    return this.getDTypesForPath(builder, List.of());
+    return this.componentDTypes(builder, List.of());
   }
 
   @Override
@@ -157,16 +157,30 @@ public class DatasetWindowGenerator extends DatasetGenerator {
     return this.getDTypesForPath(builder, List.of(index));
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * @implNote For a window of a component, the union over the receivers of their shapes at the
-   *     component's path, unknown where any is, and no tensor where no receiver resolves.
-   */
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
     if (this.component < 0) return super.getShapesForPath(builder, path);
+    return this.componentShapes(builder, path);
+  }
+
+  @Override
+  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (this.component < 0) return super.getDTypesForPath(builder, path);
+    return this.componentDTypes(builder, path);
+  }
+
+  /**
+   * The shapes of a window of a component, at a path within its element: the union over the
+   * receivers of their shapes at the component's path, unknown where any is, and no tensor where no
+   * receiver resolves. A receiver that reads no tensor there adds nothing.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @param path The path within the window's element, empty for the whole element.
+   * @return The shapes.
+   */
+  private Set<List<Dimension<?>>> componentShapes(
+      PropagationCallGraphBuilder builder, List<Object> path) {
     List<TupleElementProvider> receivers = this.componentReceivers(builder);
     if (receivers.isEmpty()) return Collections.emptySet();
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -179,21 +193,20 @@ public class DatasetWindowGenerator extends DatasetGenerator {
   }
 
   /**
-   * {@inheritDoc}
+   * The dtypes of a window of a component, at a path within its element, read as {@link
+   * #componentShapes} reads the shapes: a receiver that reads no tensor there adds nothing.
    *
-   * @implNote For a window of a component, the union over the receivers of their dtypes at the
-   *     component's path, unknown where any is, and no tensor where no receiver resolves.
+   * @param builder The propagation call graph builder used for analysis.
+   * @param path The path within the window's element, empty for the whole element.
+   * @return The dtypes.
    */
-  @Override
-  public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (this.component < 0) return super.getDTypesForPath(builder, path);
+  private Set<DType> componentDTypes(PropagationCallGraphBuilder builder, List<Object> path) {
     List<TupleElementProvider> receivers = this.componentReceivers(builder);
     if (receivers.isEmpty()) return Collections.emptySet();
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (TupleElementProvider receiver : receivers) {
       Set<DType> dtypes = receiver.getDTypesForPath(builder, this.inReceiver(path));
-      if (dtypes == null || dtypes.isEmpty() || dtypes.contains(DType.UNKNOWN))
-        return EnumSet.of(DType.UNKNOWN);
+      if (dtypes == null || dtypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
       ret.addAll(dtypes);
     }
     return ret;

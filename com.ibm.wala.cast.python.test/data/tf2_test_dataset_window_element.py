@@ -1,4 +1,4 @@
-# Test https://github.com/wala/ML/issues/164: `window` yields datasets whose own iteration yields
+# Test https://github.com/wala/ML/issues/1201: `window` yields datasets whose own iteration yields
 # the source elements, and for a tuple element a tuple of datasets, one per component.
 import os
 import tempfile
