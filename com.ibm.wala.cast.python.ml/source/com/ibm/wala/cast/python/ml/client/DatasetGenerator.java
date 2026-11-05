@@ -151,7 +151,14 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   @Override
   public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
     if (!this.elementFollowsReceiver()) return false;
-    List<TensorGenerator> receivers = this.receivers(builder);
+    // Every dataset the receiver may be, or the one a view is fixed to: the first that resolves,
+    // which `receivers` falls back to, says nothing of the others.
+    List<TensorGenerator> receivers = this.getReceiverGenerators(builder);
+    if (receivers == null) {
+      TensorGenerator fixed = this.getFixedReceiver();
+      if (fixed == null) return false;
+      receivers = List.of(fixed);
+    }
     if (receivers.isEmpty()) return false;
     for (TensorGenerator receiver : receivers)
       if (!(receiver instanceof TupleElementProvider tep && tep.yieldsOnlyTuples(builder)))

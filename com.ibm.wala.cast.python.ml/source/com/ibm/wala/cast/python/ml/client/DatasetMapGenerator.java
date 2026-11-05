@@ -20,6 +20,7 @@ import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.IR;
@@ -442,6 +443,17 @@ public class DatasetMapGenerator extends DatasetGenerator {
     if (this.returnedComponent(builder) >= 0) return false;
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
     if (elementPTS == null || elementPTS.isEmpty()) return false;
+    // A return the function computes without an allocation, which this generator still types
+    // from the callback's own dataflow (wala/ML#803), may be a tensor the allocations do not show.
+    for (Pair<CGNode, Integer> returnValue : getCallbackReturnValueNumbers(builder)) {
+      PointerKey returned =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(returnValue.fst, returnValue.snd);
+      if (withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(returned)).isEmpty())
+        return false;
+    }
     for (InstanceKey ik : elementPTS) {
       AllocationSiteInNode asin;
       try {

@@ -105,4 +105,32 @@ public class TestFitTFRecordMap extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 2, 4),
                 new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
   }
+
+  /**
+   * A map over a {@code TFRecordDataset} whose function returns {@code (x, y)} on one call and a
+   * computed tensor alone on another, the call whose dataset {@code fit} is given: the inputs keep
+   * no {@code y}. They read the batched computed tensor, {@code (2, 3)} at run time, beside the
+   * batched {@code x} of the other call's pair, which the analysis cannot rule out. The record
+   * count is not read, so each batch may also be partial.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTFRecordMaybeLabelledInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_fit_tfrecord_map_maybe_labelled.py",
+        "consume_fit_inputs",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))),
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
+  }
 }

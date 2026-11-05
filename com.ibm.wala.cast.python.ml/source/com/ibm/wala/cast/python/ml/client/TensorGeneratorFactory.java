@@ -1523,6 +1523,33 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether a field read is of the inputs a Keras step unpacks from its data (wala/ML#997): its
+   * object is a step-inputs holder alone.
+   *
+   * @param read The read's value.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff every key the read's object holds is a step-inputs holder.
+   */
+  private static boolean readsStepInputs(
+      LocalPointerKey read, PropagationCallGraphBuilder builder) {
+    if (!(read.getNode().getDU().getDef(read.getValueNumber()) instanceof SSAGetInstruction get)
+        || get.isStatic()) return false;
+    OrdinalSet<InstanceKey> holders =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(read.getNode(), get.getRef()));
+    if (holders.isEmpty()) return false;
+    for (InstanceKey holder : holders)
+      if (!holder.concreteType().getReference().equals(TensorFlowTypes.STEP_INPUTS_TYPE))
+        return false;
+    return true;
+  }
+
+  /**
    * The generator of a field read whose every member is an element a dataset iterator allocates or
    * one of the element's components (wala/ML#997): the join of the allocations' own generators,
    * each typing its member as a loop variable bound to it is. An element of a dataset whose element
@@ -1539,6 +1566,7 @@ public class TensorGeneratorFactory {
     if (!(source.getPointerKey() instanceof LocalPointerKey lpk)
         || !(lpk.getNode().getDU().getDef(lpk.getValueNumber()) instanceof SSAGetInstruction))
       return null;
+    boolean inputs = readsStepInputs(lpk, builder);
     List<TensorGenerator> parts = new ArrayList<>();
     for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(lpk))) {
       AllocationSiteInNode asin;
@@ -1552,6 +1580,15 @@ public class TensorGeneratorFactory {
       if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
           && TensorFlowTypes.datasetElementComponentIndex(type) < 0) return null;
       TensorGenerator part = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
+      // A Keras step takes its data whole only where it is no tuple, so a read of its inputs that
+      // holds the element whole reads it where it is a tensor: over the tensors a `map` returns
+      // that may also return a structure, as the element's mirrored leaf at the root is read
+      // (wala/ML#997).
+      if (inputs && part instanceof DatasetIteratorElementGenerator element)
+        part =
+            new DatasetIteratorElementGenerator(
+                asin.getNode(),
+                overTensorReturns(spreadOverReceivers(element.getDatasets(), builder), builder));
       // A component that is itself a structure, as the pair of a `((x, z), y)` element at [0], is
       // no tensor: its members are read at the longer paths (wala/ML#997).
       if (part instanceof DatasetTupleElementGenerator component

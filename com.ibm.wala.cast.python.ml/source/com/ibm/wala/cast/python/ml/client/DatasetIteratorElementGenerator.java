@@ -78,6 +78,15 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   /**
+   * The generators of the datasets the element may come from.
+   *
+   * @return The generators.
+   */
+  List<TensorGenerator> getDatasets() {
+    return this.datasets;
+  }
+
+  /**
    * The element allocations among a value's points-to set.
    *
    * @param source The value's points-to set variable.
