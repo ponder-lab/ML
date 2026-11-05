@@ -364,32 +364,38 @@ public class TestPrimitives extends TestJythonCallGraphShape {
   @Test
   public void testFStringAfterBlankLines()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    Path source = Files.createTempDirectory("fstring").resolve("fstring_blank_start.py");
-    Files.writeString(
-        source,
-        """
+    Path directory = Files.createTempDirectory("fstring");
+    Path source = directory.resolve("fstring_blank_start.py");
+    try {
+      Files.writeString(
+          source,
+          """
 
 
 
-        def side():
-            return "s"
+          def side():
+              return "s"
 
 
-        sink = f"x{side()}"
-        assert sink == "xs"
-        """);
-    CallGraph CG = process(source.toString());
-    CGNode script = getNodes(CG, "script fstring_blank_start.py").iterator().next();
-    Set<String> positions = new TreeSet<>();
-    for (CGNode target : getNodes(CG, "script fstring_blank_start.py/side"))
-      CG.getPossibleSites(script, target)
-          .forEachRemaining(
-              site -> {
-                for (SSAAbstractInvokeInstruction call : script.getIR().getCalls(site)) {
-                  Position at = ((AstMethod) script.getMethod()).getSourcePosition(call.iIndex());
-                  positions.add(at.getFirstLine() + ":" + at.getFirstCol());
-                }
-              });
-    assertEquals(Set.of("8:11"), positions);
+          sink = f"x{side()}"
+          assert sink == "xs"
+          """);
+      CallGraph CG = process(source.toString());
+      CGNode script = getNodes(CG, "script fstring_blank_start.py").iterator().next();
+      Set<String> positions = new TreeSet<>();
+      for (CGNode target : getNodes(CG, "script fstring_blank_start.py/side"))
+        CG.getPossibleSites(script, target)
+            .forEachRemaining(
+                site -> {
+                  for (SSAAbstractInvokeInstruction call : script.getIR().getCalls(site)) {
+                    Position at = ((AstMethod) script.getMethod()).getSourcePosition(call.iIndex());
+                    positions.add(at.getFirstLine() + ":" + at.getFirstCol());
+                  }
+                });
+      assertEquals(Set.of("8:11"), positions);
+    } finally {
+      Files.deleteIfExists(source);
+      Files.deleteIfExists(directory);
+    }
   }
 }
