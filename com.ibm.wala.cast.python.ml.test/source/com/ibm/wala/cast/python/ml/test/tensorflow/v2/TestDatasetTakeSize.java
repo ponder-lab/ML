@@ -113,4 +113,43 @@ public class TestDatasetTakeSize extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_repeated_taken_batched", 1, 1, Map.of(2, BATCHES_OF_2_OR_1));
   }
+
+  /**
+   * A take of a dataset a {@code repeat} with a count repeats has an unknown size, so a batch of it
+   * may be short. Three repeats of 8 elements, of which the take keeps 10, batch by 4 into two full
+   * batches and one of 2; the size a {@code repeat} reads is its receiver's, not the repeated
+   * count, so the take cannot count it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testCountedRepeatTakenBatched()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_counted_repeat_taken_batched",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4, 4),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(4))))));
+  }
+
+  /**
+   * A {@code repeat} whose count is {@code None} never ends, as one without a count does, so a take
+   * of it has exactly its count.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testNoneRepeatTakenBatched()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_none_repeat_taken_batched", 1, 1, Map.of(2, BATCHES_OF_2_OR_1));
+  }
 }

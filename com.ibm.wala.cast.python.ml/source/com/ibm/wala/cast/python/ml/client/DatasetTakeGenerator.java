@@ -10,7 +10,7 @@ import java.util.Set;
 /**
  * A generator for datasets created by {@code tf.data.Dataset.take} (wala/ML#1216). The element is
  * the receiver's; the dataset has the least of {@code count} and the receiver's size, every element
- * when {@code count} is {@code -1}, and {@code count} of an infinite receiver's.
+ * when {@code count} is {@code -1}, and {@code count} of a receiver that repeats without end.
  */
 public class DatasetTakeGenerator extends DatasetGenerator {
 
@@ -39,8 +39,9 @@ public class DatasetTakeGenerator extends DatasetGenerator {
    *
    * @implNote The least of each count the argument may be and each receiver size, the receiver's
    *     sizes for a count of {@code -1}, and the counts themselves where the receiver repeats
-   *     without end. The sizes are unknown when the count does not resolve, and when the receiver's
-   *     do not and it is not known to be infinite.
+   *     without end. The sizes are unknown when the count does not resolve, when the receiver's do
+   *     not, and when a {@code repeat} with a count is above the receiver, whose size a {@code
+   *     repeat} does not count: it reads as its own receiver's.
    */
   @Override
   public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
@@ -48,8 +49,10 @@ public class DatasetTakeGenerator extends DatasetGenerator {
         getPossibleLongValues(
             this.getArgumentPointsToSet(builder, COUNT_PARAMETER_POSITION, COUNT_PARAMETER_NAME));
     if (counts == null || counts.isEmpty()) return Collections.emptySet();
-    Set<Long> sizes = super.getDatasetSizes(builder);
-    boolean infinite = sizes.isEmpty() && this.upstreamIsInfinite(builder);
+    UpstreamRepeat repeat = this.upstreamRepeat(builder);
+    if (repeat == UpstreamRepeat.COUNTED) return Collections.emptySet();
+    boolean infinite = repeat == UpstreamRepeat.ENDLESS;
+    Set<Long> sizes = infinite ? Collections.emptySet() : super.getDatasetSizes(builder);
     if (sizes.isEmpty() && !infinite) return Collections.emptySet();
     Set<Long> ret = HashSetFactory.make();
     for (Long count : counts) {

@@ -29,6 +29,14 @@ def consume_repeated_taken_batched(x):
     pass
 
 
+def consume_counted_repeat_taken_batched(x):
+    pass
+
+
+def consume_none_repeat_taken_batched(x):
+    pass
+
+
 flat = tf.data.Dataset.from_tensor_slices(tf.ones([8, 4]))
 pairs = tf.data.Dataset.from_tensor_slices(
     (tf.ones([8, 4]), tf.zeros([8, 3], tf.int32))
@@ -62,3 +70,14 @@ for x, y in pairs.take(3).batch(2):
 for x in flat.repeat().take(5).batch(2):
     assert x.shape in ((2, 4), (1, 4)) and x.dtype == tf.float32
     consume_repeated_taken_batched(x)
+
+# A repeat with a count ends: 3 repeats of 8 elements, of which a take keeps 10, batch by 4 into two
+# full batches and one of 2.
+for x in flat.repeat(3).take(10).batch(4):
+    assert x.shape in ((4, 4), (2, 4)) and x.dtype == tf.float32
+    consume_counted_repeat_taken_batched(x)
+
+# A repeat whose count is None never ends, as one without a count: 5 elements batch by 2.
+for x in flat.repeat(None).take(5).batch(2):
+    assert x.shape in ((2, 4), (1, 4)) and x.dtype == tf.float32
+    consume_none_repeat_taken_batched(x)
