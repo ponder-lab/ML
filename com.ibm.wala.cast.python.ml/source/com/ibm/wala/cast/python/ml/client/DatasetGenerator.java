@@ -11,6 +11,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -575,6 +576,65 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
       up = dg.getReceiverGenerator(builder);
     }
     return false;
+  }
+
+  /** How the nearest {@code repeat} above a dataset repeats; see {@link #upstreamRepeat}. */
+  enum UpstreamRepeat {
+    /** No {@code repeat} is above the dataset, through plain pass-throughs. */
+    NONE,
+    /** A {@code repeat} whose count is omitted, {@code None} or {@code -1}: it never ends. */
+    ENDLESS,
+    /** A {@code repeat} with any other count, or one that does not resolve. */
+    COUNTED
+  }
+
+  /** The position of {@code repeat}'s {@code count} argument, excluding the receiver. */
+  private static final int REPEAT_COUNT_PARAMETER_POSITION = 0;
+
+  /** The keyword name of {@code repeat}'s {@code count} argument. */
+  private static final String REPEAT_COUNT_PARAMETER_NAME = "count";
+
+  /**
+   * The nearest {@code repeat} above this dataset, walking the plain pass-throughs as {@link
+   * #upstreamIsInfinite} does, and whether it repeats without end (wala/ML#1216). Unlike that walk,
+   * this one reads the {@code repeat}'s count, since a {@code repeat} with a count ends.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return {@link UpstreamRepeat#NONE} when the walk meets no {@code repeat}, else how it repeats.
+   */
+  UpstreamRepeat upstreamRepeat(PropagationCallGraphBuilder builder) {
+    TensorGenerator up = this.getReceiverGenerator(builder);
+    while (up != null && up.getClass() == DatasetGenerator.class) {
+      DatasetGenerator dg = (DatasetGenerator) up;
+      TypeReference declaring = upstreamOpClass(dg, builder);
+      if (declaring != null && declaring.equals(TensorFlowTypes.DATASET_REPEAT_TYPE))
+        return dg.repeatsWithoutEnd(builder) ? UpstreamRepeat.ENDLESS : UpstreamRepeat.COUNTED;
+      up = dg.getReceiverGenerator(builder);
+    }
+    return UpstreamRepeat.NONE;
+  }
+
+  /**
+   * Whether this {@code repeat} repeats without end: its count is omitted, or every value it may be
+   * is {@code None} or {@code -1}.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return {@code true} iff so; {@code false} for any other count, or one that does not resolve.
+   */
+  private boolean repeatsWithoutEnd(PropagationCallGraphBuilder builder) {
+    if (Boolean.FALSE.equals(
+        this.isArgumentSyntacticallySupplied(
+            builder, REPEAT_COUNT_PARAMETER_POSITION, REPEAT_COUNT_PARAMETER_NAME))) return true;
+    OrdinalSet<InstanceKey> counts =
+        this.getArgumentPointsToSet(
+            builder, REPEAT_COUNT_PARAMETER_POSITION, REPEAT_COUNT_PARAMETER_NAME);
+    if (counts == null || counts.isEmpty()) return false;
+    for (InstanceKey count : counts) {
+      if (!(count instanceof ConstantKey<?> constant)) return false;
+      Object value = constant.getValue();
+      if (value != null && !(value instanceof Number n && n.longValue() == -1)) return false;
+    }
+    return true;
   }
 
   /**

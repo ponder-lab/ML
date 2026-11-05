@@ -12776,6 +12776,11 @@ public abstract class TensorGenerator implements Cloneable {
       // resolves the chain to the pre-batch element and the batch transform never applies
       // (wala/ML#759).
       return new DatasetPaddedBatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_FLAT_MAP_TYPE)
+        || type.equals(TensorFlowTypes.DATASET_INTERLEAVE_TYPE)) {
+      // The twin of the source arm: the catch-all below would follow the receiver, whose element
+      // is the function's argument, not this dataset's (wala/ML#1214).
+      return new DatasetFlatMapGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)) {
       // The concatenation twin of the source arm: the catch-all below would follow the receiver
       // alone, dropping the concatenated dataset's element (wala/ML#1215).
@@ -12818,6 +12823,8 @@ public abstract class TensorGenerator implements Cloneable {
       return new DatasetSkipGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_SHARD_TYPE)) {
       return new DatasetShardGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_TAKE_TYPE)) {
+      return new DatasetTakeGenerator(node);
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

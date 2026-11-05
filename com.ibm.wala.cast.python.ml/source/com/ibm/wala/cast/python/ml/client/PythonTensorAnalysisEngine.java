@@ -381,7 +381,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @param instance The instance.
    * @return {@code true} iff the instance's class is the dataset class or one of its subclasses.
    */
-  private static boolean isDataset(PropagationCallGraphBuilder builder, InstanceKey instance) {
+  static boolean isDataset(PropagationCallGraphBuilder builder, InstanceKey instance) {
     IClass dataset = builder.getClassHierarchy().lookupClass(TensorFlowTypes.DATASET);
     return dataset != null
         && builder.getClassHierarchy().isSubclassOf(instance.concreteType(), dataset);
@@ -1077,8 +1077,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // any other element whole, up to four positions, one call per arity (wala/ML#164).
     builder.setElementMap(TensorFlowTypes.DATASET_MAP_SPREAD, 4, "element");
     // Those calls pass exactly the element's members, so a variadic function's pack has their
-    // count.
-    builder.setExactArityCallers(Set.of(TensorFlowTypes.DATASET_MAP_TYPE));
+    // count. `flat_map` and `interleave` call their functions the same way (wala/ML#1214).
+    builder.setExactArityCallers(
+        Set.of(
+            TensorFlowTypes.DATASET_MAP_TYPE,
+            TensorFlowTypes.DATASET_FLAT_MAP_TYPE,
+            TensorFlowTypes.DATASET_INTERLEAVE_TYPE));
 
     // The element of an enumerated dataset is a tuple of its index and a copy of its receiver's
     // element (wala/ML#1190).
