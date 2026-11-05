@@ -266,7 +266,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * a leaf. A leaf is typed by the generator of the dataset the mirror built it for, at each path
    * the mirror reached it by, so the element's members are typed where they are stored and reach
    * their readers through the fields, as any container's members do. A mirrored structure itself is
-   * seeded nowhere: it is no tensor.
+   * seeded nowhere: it is no tensor. A window of a dataset stored as a dataset's element, or as a
+   * component's window in a window's field, is a dataset, typed as any dataset value is, by its
+   * element (wala/ML#1201).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param dataflow The analysis's dataflow graph.
@@ -285,10 +287,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
           && !(fieldKey.getField().getName().toString().equals("mirrored_element")
               && isDataset(builder, fieldKey.getInstanceKey()))
-          && !isMapArguments(fieldKey.getInstanceKey())) continue;
+          && !isMapArguments(fieldKey.getInstanceKey())
+          && windowOf(fieldKey.getInstanceKey()) == null) continue;
       Set<TensorType> types = null;
       OrdinalSet<InstanceKey> values = builder.getPointerAnalysis().getPointsToSet(fieldKey);
       for (InstanceKey value : values) {
+        Integer window = windowOf(value);
+        if (window != null && value instanceof AllocationSiteInNode site) {
+          Set<TensorType> windowTyped =
+              leafTypes.computeIfAbsent(
+                  value,
+                  k -> new DatasetWindowGenerator(site.getNode(), window).getTensorTypes(builder));
+          if (types == null) types = HashSetFactory.make();
+          types.addAll(windowTyped);
+          continue;
+        }
         if (!(value instanceof ElementMirrorKey leaf) || !leaf.isLeaf()) continue;
         Set<TensorType> leafTyped =
             leafTypes.computeIfAbsent(leaf, k -> typesOfMirroredLeaf(python, leaf));
@@ -325,6 +338,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             return joined;
           });
     }
+  }
+
+  /**
+   * Which part of its receiver's element a window holds (wala/ML#1201).
+   *
+   * @param key A key.
+   * @return {@code -1} for a window of the whole element, the component's index for a window of a
+   *     component, or {@code null} when the key is no window.
+   */
+  private static Integer windowOf(InstanceKey key) {
+    return TensorFlowTypes.datasetWindowComponent(key.concreteType().getReference());
   }
 
   /**
