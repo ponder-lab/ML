@@ -4378,6 +4378,8 @@ public class TensorGeneratorFactory {
       return new DatasetSampleFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SKIP_TYPE)) return new DatasetSkipGenerator(source);
     else if (isType(calledFunction, DATASET_SHARD_TYPE)) return new DatasetShardGenerator(source);
+    // A take counts the elements it keeps (wala/ML#1216).
+    else if (isType(calledFunction, DATASET_TAKE_TYPE)) return new DatasetTakeGenerator(source);
     // A concatenation's element is either dataset's, so it follows both (wala/ML#1215).
     else if (isType(calledFunction, DATASET_CONCATENATE_TYPE))
       return new DatasetConcatenateGenerator(source);
@@ -4387,7 +4389,6 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET_REPEAT_TYPE)
         || isType(calledFunction, DATASET_PREFETCH_TYPE)
         || isType(calledFunction, DATASET_CACHE_TYPE)
-        || isType(calledFunction, DATASET_TAKE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
         || isType(calledFunction, DATASET_REDUCE_TYPE)
         || isType(calledFunction, DATASET_FILTER_TYPE)
