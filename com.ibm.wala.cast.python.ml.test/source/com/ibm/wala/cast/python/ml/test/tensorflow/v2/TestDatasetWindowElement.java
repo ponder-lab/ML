@@ -125,4 +125,44 @@ public class TestDatasetWindowElement extends AbstractTensorTest {
                 new TensorType(STRING, List.of(new NumericDim(2))),
                 new TensorType(STRING, List.of(new SymbolicDim("?"))))));
   }
+
+  /**
+   * The rows of the window of the fifth component of a five-component element, turned into arrays
+   * and concatenated, keep the declared dtype (<a
+   * href="https://github.com/wala/ML/issues/1221">wala/ML#1221</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testFifthRows() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_fifth_rows", 1, 1, Map.of(2, Set.of(new TensorType(INT_32, null))));
+  }
+
+  /**
+   * A row of the window of position 15, the last position the analysis makes a window of, has its
+   * component's type.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSixteenthRow() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_sixteenth_row", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 16))));
+  }
+
+  /**
+   * Position 16 has no window in the analysis, so it reads as no tensor: the first position past
+   * the bound (<a href="https://github.com/wala/ML/issues/1221">wala/ML#1221</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSeventeenthWindow() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_seventeenth_window", 0, 0);
+  }
 }

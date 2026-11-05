@@ -1,11 +1,18 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Iterator2Iterable;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -19,7 +26,8 @@ import java.util.Set;
  * (wala/ML#1201): a dataset of its receiver's elements, or, for a tuple element, of one of their
  * components. A window may hold fewer elements than its size, so its size is unknown. Each window
  * is allocated and returned by its own maker, whose node it is anchored on, and the maker's {@code
- * source} carries the receiver.
+ * source} carries the receiver; a window of a component is made by {@code make_window_component},
+ * and its position is the field {@code window} read the component from (wala/ML#1221).
  */
 public class DatasetWindowGenerator extends DatasetGenerator {
 
@@ -32,7 +40,18 @@ public class DatasetWindowGenerator extends DatasetGenerator {
   /** The name of a window maker's {@code source} parameter. */
   private static final String SOURCE_PARAMETER_NAME = "source";
 
-  /** The component of the receiver's element this window holds, or {@code -1} for the whole. */
+  /**
+   * The use of a call of a window maker that passes its {@code element}, the component: after the
+   * maker itself and {@code source}.
+   */
+  private static final int ELEMENT_USE = 2;
+
+  /**
+   * The part of the receiver's element this window holds: {@link
+   * TensorFlowTypes#DATASET_WINDOW_WHOLE} for the whole, or {@link
+   * TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT} for a component, whose position {@link #position}
+   * reads.
+   */
   private final int component;
 
   /**
@@ -49,8 +68,9 @@ public class DatasetWindowGenerator extends DatasetGenerator {
    * Constructs a generator for a window that the summary of {@code window} allocates.
    *
    * @param node The {@code window} node.
-   * @param component The component of the receiver's element the window holds, or {@code -1} for
-   *     the whole element.
+   * @param component The part of the receiver's element the window holds: {@link
+   *     TensorFlowTypes#DATASET_WINDOW_WHOLE} or {@link
+   *     TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT}.
    */
   public DatasetWindowGenerator(CGNode node, int component) {
     super(node);
@@ -97,19 +117,64 @@ public class DatasetWindowGenerator extends DatasetGenerator {
    */
   @Override
   public boolean elementFollowsReceiver() {
-    return this.component < 0;
+    return this.isWhole();
+  }
+
+  /**
+   * Whether this window holds the receiver's whole element.
+   *
+   * @return {@code true} iff so.
+   */
+  private boolean isWhole() {
+    return this.component == TensorFlowTypes.DATASET_WINDOW_WHOLE;
+  }
+
+  /**
+   * The position of the component this window holds: the field {@code window} read the component
+   * from, which it passes its maker as {@code element} (wala/ML#1221).
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The position, or {@code null} when the calls do not pass a component read at one
+   *     position.
+   */
+  private Integer position(PropagationCallGraphBuilder builder) {
+    CallGraph cg = builder.getCallGraph();
+    CGNode node = this.getNode();
+    Set<Integer> positions = HashSetFactory.make();
+    for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(node))) {
+      IR ir = caller.getIR();
+      if (ir == null || caller.getDU() == null) return null;
+      for (CallSiteReference site : Iterator2Iterable.make(cg.getPossibleSites(caller, node)))
+        for (SSAAbstractInvokeInstruction call : ir.getCalls(site)) {
+          if (ELEMENT_USE >= call.getNumberOfUses()) return null;
+          if (!(caller.getDU().getDef(call.getUse(ELEMENT_USE)) instanceof SSAGetInstruction get))
+            return null;
+          try {
+            positions.add(Integer.parseInt(get.getDeclaredField().getName().toString()));
+          } catch (NumberFormatException e) {
+            return null;
+          }
+        }
+    }
+    if (positions.size() != 1) return null;
+    int position = positions.iterator().next();
+    return position >= 0 ? position : null;
   }
 
   /**
    * The path of a component of this window's element within the receiver's element.
    *
+   * @param builder The propagation call graph builder used for analysis.
    * @param path The path within this window's element.
-   * @return The path within the receiver's element.
+   * @return The path within the receiver's element, or {@code null} when the component's position
+   *     does not resolve.
    */
-  private List<Object> inReceiver(List<Object> path) {
-    if (this.component < 0) return path;
+  private List<Object> inReceiver(PropagationCallGraphBuilder builder, List<Object> path) {
+    if (this.isWhole()) return path;
+    Integer position = this.position(builder);
+    if (position == null) return null;
     List<Object> ret = new ArrayList<>(path.size() + 1);
-    ret.add(this.component);
+    ret.add(position);
     ret.addAll(path);
     return ret;
   }
@@ -135,38 +200,38 @@ public class DatasetWindowGenerator extends DatasetGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    if (this.component < 0) return super.getDefaultShapes(builder);
+    if (this.isWhole()) return super.getDefaultShapes(builder);
     return this.componentShapes(builder, List.of());
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    if (this.component < 0) return super.getDefaultDTypes(builder);
+    if (this.isWhole()) return super.getDefaultDTypes(builder);
     return this.componentDTypes(builder, List.of());
   }
 
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
-    if (this.component < 0) return super.getShapesForIndex(builder, index);
+    if (this.isWhole()) return super.getShapesForIndex(builder, index);
     return this.getShapesForPath(builder, List.of(index));
   }
 
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    if (this.component < 0) return super.getDTypesForIndex(builder, index);
+    if (this.isWhole()) return super.getDTypesForIndex(builder, index);
     return this.getDTypesForPath(builder, List.of(index));
   }
 
   @Override
   public Set<List<Dimension<?>>> getShapesForPath(
       PropagationCallGraphBuilder builder, List<Object> path) {
-    if (this.component < 0) return super.getShapesForPath(builder, path);
+    if (this.isWhole()) return super.getShapesForPath(builder, path);
     return this.componentShapes(builder, path);
   }
 
   @Override
   public Set<DType> getDTypesForPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (this.component < 0) return super.getDTypesForPath(builder, path);
+    if (this.isWhole()) return super.getDTypesForPath(builder, path);
     return this.componentDTypes(builder, path);
   }
 
@@ -183,9 +248,11 @@ public class DatasetWindowGenerator extends DatasetGenerator {
       PropagationCallGraphBuilder builder, List<Object> path) {
     List<TupleElementProvider> receivers = this.componentReceivers(builder);
     if (receivers.isEmpty()) return Collections.emptySet();
+    List<Object> at = this.inReceiver(builder, path);
+    if (at == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (TupleElementProvider receiver : receivers) {
-      Set<List<Dimension<?>>> shapes = receiver.getShapesForPath(builder, this.inReceiver(path));
+      Set<List<Dimension<?>>> shapes = receiver.getShapesForPath(builder, at);
       if (shapes == null) return null;
       ret.addAll(shapes);
     }
@@ -203,9 +270,11 @@ public class DatasetWindowGenerator extends DatasetGenerator {
   private Set<DType> componentDTypes(PropagationCallGraphBuilder builder, List<Object> path) {
     List<TupleElementProvider> receivers = this.componentReceivers(builder);
     if (receivers.isEmpty()) return Collections.emptySet();
+    List<Object> at = this.inReceiver(builder, path);
+    if (at == null) return EnumSet.of(DType.UNKNOWN);
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (TupleElementProvider receiver : receivers) {
-      Set<DType> dtypes = receiver.getDTypesForPath(builder, this.inReceiver(path));
+      Set<DType> dtypes = receiver.getDTypesForPath(builder, at);
       if (dtypes == null || dtypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
       ret.addAll(dtypes);
     }
@@ -214,30 +283,33 @@ public class DatasetWindowGenerator extends DatasetGenerator {
 
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
-    if (this.component < 0) return super.yieldsTuple(builder);
+    if (this.isWhole()) return super.yieldsTuple(builder);
     return this.isStructureAt(builder, List.of());
   }
 
   @Override
   public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
-    return this.component < 0 && super.yieldsOnlyTuples(builder);
+    return this.isWhole() && super.yieldsOnlyTuples(builder);
   }
 
   @Override
   public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (this.component < 0) return super.isStructureAt(builder, path);
+    if (this.isWhole()) return super.isStructureAt(builder, path);
     List<TupleElementProvider> receivers = this.componentReceivers(builder);
-    if (receivers.isEmpty()) return false;
+    List<Object> at = this.inReceiver(builder, path);
+    if (receivers.isEmpty() || at == null) return false;
     for (TupleElementProvider receiver : receivers)
-      if (!receiver.isStructureAt(builder, this.inReceiver(path))) return false;
+      if (!receiver.isStructureAt(builder, at)) return false;
     return true;
   }
 
   @Override
   public boolean resolvesPath(PropagationCallGraphBuilder builder, List<Object> path) {
-    if (this.component < 0) return super.resolvesPath(builder, path);
+    if (this.isWhole()) return super.resolvesPath(builder, path);
+    List<Object> at = this.inReceiver(builder, path);
+    if (at == null) return false;
     for (TupleElementProvider receiver : this.componentReceivers(builder))
-      if (receiver.resolvesPath(builder, this.inReceiver(path))) return true;
+      if (receiver.resolvesPath(builder, at)) return true;
     return false;
   }
 
