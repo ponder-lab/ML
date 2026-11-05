@@ -19,7 +19,6 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,6 +36,9 @@ public class DatasetFlatMapGenerator extends DatasetJoinGenerator {
 
   /** The field the summary stores the datasets the function returns into. */
   private static final String RETURNED_FIELD = "element";
+
+  /** A method every summary dataset carries on a field of its own. */
+  private static final String METHOD_FIELD = "batch";
 
   public DatasetFlatMapGenerator(PointsToSetVariable source) {
     super(source);
@@ -135,9 +137,10 @@ public class DatasetFlatMapGenerator extends DatasetJoinGenerator {
   }
 
   /**
-   * Whether a key is a dataset: of the dataset class or a subclass of it, or of a {@code tf.data}
-   * summary class that is not a dataset element, a component of one or a mirrored element's leaf,
-   * since a summary dataset such as {@code TextLineDataset} has a class of its own.
+   * Whether a key is a dataset: of the dataset class or a subclass of it, or one a summary makes,
+   * which, as every summary dataset does, carries its methods on its own fields, so its {@code
+   * batch} field is not empty. A summary dataset such as {@code TextLineDataset} has a class of its
+   * own, and a tensor, a method object or a summary's helper carries no {@code batch}.
    *
    * @param builder The propagation call graph builder used for analysis.
    * @param key The key.
@@ -145,11 +148,24 @@ public class DatasetFlatMapGenerator extends DatasetJoinGenerator {
    */
   private static boolean isDataset(PropagationCallGraphBuilder builder, InstanceKey key) {
     if (PythonTensorAnalysisEngine.isDataset(builder, key)) return true;
-    TypeReference type = key.concreteType().getReference();
-    return type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)
-        && !type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
-        && TensorFlowTypes.datasetElementComponentIndex(type) < 0
-        && !type.equals(TensorFlowTypes.DATASET_ELEMENT_LEAF);
+    AllocationSiteInNode asin;
+    try {
+      asin = getAllocationSiteInNode(key);
+    } catch (IllegalArgumentException e) {
+      // A key that is not an allocation, such as a client-only constant, is no dataset.
+      return false;
+    }
+    if (asin == null) return false;
+    IField batch =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(METHOD_FIELD), Root));
+    return batch != null
+        && !builder
+            .getPointerAnalysis()
+            .getPointsToSet(builder.getPointerKeyForInstanceField(asin, batch))
+            .isEmpty();
   }
 
   /**
