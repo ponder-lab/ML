@@ -324,6 +324,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -1348,6 +1349,9 @@ public class TensorGeneratorFactory {
     AllocationSiteInNode data = null;
     for (InstanceKey ik :
         withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
+      // The element a summary iterates the pack's dataset for is the same data, which the pack
+      // reads through its dataset slot (wala/ML#1213).
+      if (ik instanceof ElementMirrorKey mirror && !mirror.isLeaf()) continue;
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
         return null;
@@ -1357,6 +1361,36 @@ public class TensorGeneratorFactory {
     if (data == null) return null;
     PointsToSetVariable object = getPointsToSetVariable(objectKey, builder);
     return object == null ? null : new PackComponentRead(object, data, index);
+  }
+
+  /**
+   * The generator of a Keras step's data that a summary joins from its pack and the element of the
+   * pack's dataset (wala/ML#1213): the pack's, when every key the value holds is the pack or a
+   * structure of the element's copy.
+   *
+   * @param source The value.
+   * @param builder The builder.
+   * @return The pack's generator, or {@code null} when the value is no such join.
+   */
+  private static TensorGenerator stepDataGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (source == null || !(source.getPointerKey() instanceof LocalPointerKey lpk)) return null;
+    SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+    if (def != null && !(def instanceof SSANewInstruction)) return null;
+    AllocationSiteInNode data = null;
+    boolean copy = false;
+    for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(lpk))) {
+      if (ik instanceof ElementMirrorKey mirror && !mirror.isLeaf()) {
+        copy = true;
+        continue;
+      }
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null || !FitDataGenerator.describes(asin.concreteType().getReference()))
+        return null;
+      if (data == null) data = asin;
+      else if (!data.equals(asin)) return null;
+    }
+    return copy && data != null ? new FitDataGenerator(data.getNode(), data) : null;
   }
 
   /**
@@ -1421,6 +1455,225 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The generator of a program's read of a constant position of a value that holds the element a
+   * dataset iterator allocates or one of its components (wala/ML#997): the dataset's element at the
+   * position below the one the value stands for. A generic component holds no fields, so the
+   * pointer analysis has nothing at the read, as at a model's {@code a, b = inputs} of the inputs a
+   * Keras step unpacks from a nested element that is not copied. A value that is the element where
+   * it is a tensor, rather than a tuple, is a tensor subscript, which this leaves to other readers,
+   * and a position that is itself a structure contributes no tensor.
+   *
+   * @param source The read's value.
+   * @param builder The propagation call graph builder.
+   * @return The generator, or {@code null} when the read is no such read.
+   */
+  private static TensorGenerator datasetElementMemberRead(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey lpk)
+        || !(lpk.getNode().getDU().getDef(lpk.getValueNumber()) instanceof PythonPropertyRead read))
+      return null;
+    CGNode node = lpk.getNode();
+    SymbolTable symbols = node.getIR().getSymbolTable();
+    if (!symbols.isConstant(read.getMemberRef())
+        || !(symbols.getConstantValue(read.getMemberRef()) instanceof Number number)
+        || number.doubleValue() != number.intValue()
+        || number.intValue() < 0) return null;
+    int index = number.intValue();
+    PointerKey objectKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, read.getObjectRef());
+    Map<List<Object>, List<TensorGenerator>> byPath = new LinkedHashMap<>();
+    List<TensorGenerator> tensorDatasets = new ArrayList<>();
+    for (InstanceKey ik :
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        continue;
+      }
+      if (asin == null) continue;
+      TypeReference type = asin.concreteType().getReference();
+      if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+          && TensorFlowTypes.datasetElementComponentIndex(type) < 0) continue;
+      TensorGenerator held = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
+      // The value's path into its dataset's element: the root for the element, and a component's
+      // position for a component.
+      TupleElementProvider dataset;
+      List<Object> path;
+      if (held instanceof DatasetTupleElementGenerator component
+          && component.getUnderlying() instanceof TupleElementProvider underlying) {
+        dataset = underlying;
+        path = component.getPath();
+      } else if (held instanceof TupleElementProvider element) {
+        dataset = element;
+        path = List.of();
+      } else continue;
+      // An element that may be a tensor, on another path of a map or as another dataset's, is
+      // subscripted there, which no other reader reads once this one answers.
+      if (path.isEmpty() && held instanceof DatasetIteratorElementGenerator element)
+        for (TensorGenerator tensor : tensorDatasets(element.getDatasets(), builder))
+          if (!tensorDatasets.contains(tensor)) tensorDatasets.add(tensor);
+      boolean structure =
+          path.isEmpty() ? dataset.yieldsTuple(builder) : dataset.isStructureAt(builder, path);
+      if (!structure) continue;
+      List<Object> below = new ArrayList<>(path);
+      below.add(index);
+      // A position that is itself a structure, as the pair of a `((x, z), y)` element at [0], is
+      // no tensor: its members are read at the longer paths, and a read of the whole would join
+      // them into one tensor of their shapes.
+      if (dataset.isStructureAt(builder, below)) continue;
+      List<TensorGenerator> at = byPath.computeIfAbsent(below, k -> new ArrayList<>());
+      if (!at.contains((TensorGenerator) dataset)) at.add((TensorGenerator) dataset);
+    }
+    // One read per path over every element or dataset reaching it: a tuple element's generator is
+    // keyed on its path, so one per element anchored on this read would replay the first one's
+    // result for the others.
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (Map.Entry<List<Object>, List<TensorGenerator>> entry : byPath.entrySet()) {
+      List<TensorGenerator> at = entry.getValue();
+      TupleElementProvider underlying =
+          at.size() == 1
+              ? (TupleElementProvider) at.get(0)
+              : new DatasetIteratorElementGenerator(node, at);
+      parts.add(new DatasetTupleElementGenerator(source, underlying, entry.getKey()));
+    }
+    // One row read over every dataset whose element may be a tensor. Its container is keyed on
+    // those datasets, as every DatasetIteratorElementGenerator is, so it shares no memoized result
+    // with another element read anchored on the read. A read with no tuple part is a tensor
+    // subscript alone, which the other readers read.
+    if (!parts.isEmpty() && !tensorDatasets.isEmpty())
+      parts.add(
+          new TensorElementGenerator(
+              source, new DatasetIteratorElementGenerator(source, tensorDatasets), true));
+    if (parts.isEmpty()) return null;
+    return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
+   * Whether a field read is of the inputs a Keras step unpacks from its data (wala/ML#997): its
+   * object is a step-inputs holder alone.
+   *
+   * @param read The read's value.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff every key the read's object holds is a step-inputs holder.
+   */
+  private static boolean readsStepInputs(
+      LocalPointerKey read, PropagationCallGraphBuilder builder) {
+    if (!(read.getNode().getDU().getDef(read.getValueNumber()) instanceof SSAGetInstruction get)
+        || get.isStatic()) return false;
+    OrdinalSet<InstanceKey> holders =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(read.getNode(), get.getRef()));
+    if (holders.isEmpty()) return false;
+    for (InstanceKey holder : holders)
+      if (!holder.concreteType().getReference().equals(TensorFlowTypes.STEP_INPUTS_TYPE))
+        return false;
+    return true;
+  }
+
+  /**
+   * The datasets among those an element may come from whose element may be a tensor rather than a
+   * tuple (wala/ML#997): each spread over its receivers, a {@code map} that may return either
+   * viewed over the tensors it returns ({@link #overTensorReturns(List,
+   * PropagationCallGraphBuilder)}), and a dataset that yields no tuple taken whole. A dataset that
+   * yields only tuples, or one that may yield a tuple but holds no such {@code map}, is left out,
+   * as no tensor stands at its root.
+   *
+   * @param datasets The datasets.
+   * @param builder The propagation call graph builder.
+   * @return The datasets, or their views, whose element may be a tensor.
+   */
+  private static List<TensorGenerator> tensorDatasets(
+      List<TensorGenerator> datasets, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator dataset : spreadOverReceivers(datasets, builder)) {
+      TensorGenerator view = overTensorReturns(dataset, builder, DatasetGenerator.SPREAD_DEPTH);
+      if (view != dataset) ret.add(view);
+      else if (!(dataset instanceof TupleElementProvider tep && tep.yieldsTuple(builder)))
+        ret.add(dataset);
+    }
+    return ret;
+  }
+
+  /**
+   * The generator of a field read whose every member is an element a dataset iterator allocates or
+   * one of the element's components (wala/ML#997): the join of the allocations' own generators,
+   * each typing its member as a loop variable bound to it is. An element of a dataset whose element
+   * is a tuple, or a component of one whose element is not, contributes nothing; an element
+   * allocated for a dataset whose element is mirrored stands for nothing either (wala/ML#1190).
+   *
+   * @param source The value.
+   * @param builder The builder.
+   * @return The generator, or {@code null} when the value is no field read, holds any other member,
+   *     or no member has a generator.
+   */
+  private static TensorGenerator datasetElementFieldRead(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey lpk)
+        || !(lpk.getNode().getDU().getDef(lpk.getValueNumber()) instanceof SSAGetInstruction))
+      return null;
+    boolean inputs = readsStepInputs(lpk, builder);
+    List<TensorGenerator> parts = new ArrayList<>();
+    List<TensorGenerator> tupleDatasets = new ArrayList<>();
+    for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(lpk))) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      if (asin == null) return null;
+      TypeReference type = asin.concreteType().getReference();
+      if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+          && TensorFlowTypes.datasetElementComponentIndex(type) < 0) return null;
+      TensorGenerator part = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
+      // A Keras step takes its data whole where it is no tuple and its first member where it is
+      // one, so a read of its inputs that holds the element whole reads it that way (wala/ML#997):
+      // whole over the datasets whose element may be a tensor, a `map` that may also return a
+      // structure viewed over the tensors it returns, as the element's mirrored leaf at the root
+      // is read, and at position 0 over those that may yield a tuple, the `map` included, rather
+      // than through the step's read of position 0, which a receiver that does not resolve leaves
+      // with nothing.
+      if (inputs && part instanceof DatasetIteratorElementGenerator element) {
+        List<TensorGenerator> tensors = tensorDatasets(element.getDatasets(), builder);
+        if (!tensors.isEmpty())
+          parts.add(new DatasetIteratorElementGenerator(asin.getNode(), tensors));
+        for (TensorGenerator dataset : spreadOverReceivers(element.getDatasets(), builder))
+          if (dataset instanceof TupleElementProvider tep
+              && tep.yieldsTuple(builder)
+              && !tep.isStructureAt(builder, List.of(0))
+              && !tupleDatasets.contains(dataset)) tupleDatasets.add(dataset);
+        continue;
+      }
+      // A component that is itself a structure, as the pair of a `((x, z), y)` element at [0], is
+      // no tensor: its members are read at the longer paths (wala/ML#997).
+      if (part instanceof DatasetTupleElementGenerator component
+          && component.getUnderlying() instanceof TupleElementProvider underlying
+          && underlying.isStructureAt(builder, component.getPath())) continue;
+      if (part != null) parts.add(part);
+    }
+    // One read at position 0 over every dataset that may yield a tuple: a tuple element's generator
+    // is keyed on its path, so one per dataset anchored on this read would replay the first one's
+    // result for the others.
+    if (!tupleDatasets.isEmpty())
+      parts.add(
+          new DatasetTupleElementGenerator(
+              source,
+              new DatasetIteratorElementGenerator(lpk.getNode(), tupleDatasets),
+              List.of(0)));
+    if (parts.isEmpty()) return null;
+    return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
+  }
+
+  /**
    * The parts reading the mirrored dataset element leaves a value holds (wala/ML#1190).
    *
    * @param parts One generator per leaf, path and dataset, or per cutoff leaf.
@@ -1476,9 +1729,10 @@ public class TensorGeneratorFactory {
       if (datasets.isEmpty()) continue;
       List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
       // The whole element is read over the spread datasets too, so a transformation of a receiver
-      // that may be several datasets reads each one's element on its own (wala/ML#1207).
+      // that may be several datasets reads each one's element on its own (wala/ML#1207), and
+      // where each one's element is a tensor, which a leaf at the root is (wala/ML#997).
       DatasetIteratorElementGenerator element =
-          new DatasetIteratorElementGenerator(leaf.getNode(), spread);
+          new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
       for (List<Object> path : python.getElementMirrorPaths(leaf)) {
         if (path.isEmpty()) {
           parts.add(element);
@@ -1511,9 +1765,10 @@ public class TensorGeneratorFactory {
     List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
     if (datasets.isEmpty()) return ret;
     List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
-    // The whole element is read over the spread datasets, as in mirroredLeaves (wala/ML#1207).
+    // The whole element is read over the spread datasets, where each one's element is a tensor,
+    // as in mirroredLeaves (wala/ML#1207, wala/ML#997).
     DatasetIteratorElementGenerator element =
-        new DatasetIteratorElementGenerator(leaf.getNode(), spread);
+        new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
     for (List<Object> path : python.getElementMirrorPaths(leaf)) {
       if (path.isEmpty()) {
         ret.addAll(element.getTensorTypes(builder));
@@ -1526,6 +1781,51 @@ public class TensorGeneratorFactory {
       else if (at.resolvesPath(builder, path)) ret.addAll(at.getTensorTypesForPath(builder, path));
     }
     return ret;
+  }
+
+  /**
+   * Datasets whose element is read where it is a tensor, as a mirrored leaf at the element's root
+   * is (wala/ML#997): each {@code map} whose function may return both a structure and a tensor, as
+   * {@code (x, y)} on one path and {@code x} on another, is read over the tensors it returns,
+   * through the transformations whose element follows it. A leaf there is no member of the
+   * structure, so the whole element, which joins the structure's members, would type it with the
+   * label {@code y}.
+   *
+   * @param datasets The datasets, spread over their receivers ({@link #spreadOverReceivers}).
+   * @param builder The propagation call graph builder.
+   * @return The datasets, each viewed over its map's tensor returns where it has such a map.
+   */
+  private static List<TensorGenerator> overTensorReturns(
+      List<TensorGenerator> datasets, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator dataset : datasets)
+      ret.add(overTensorReturns(dataset, builder, DatasetGenerator.SPREAD_DEPTH));
+    return ret;
+  }
+
+  /**
+   * A dataset whose element is read where it is a tensor ({@link #overTensorReturns(List,
+   * PropagationCallGraphBuilder)}).
+   *
+   * @param dataset The dataset.
+   * @param builder The propagation call graph builder.
+   * @param depth How many more transformations to follow.
+   * @return The view, or the dataset itself when no {@code map} it follows returns both.
+   */
+  private static TensorGenerator overTensorReturns(
+      TensorGenerator dataset, PropagationCallGraphBuilder builder, int depth) {
+    if (dataset instanceof DatasetMapGenerator map && map.returnsStructureAndTensor(builder))
+      return map.overTensorReturns();
+    if (depth <= 0 || !(dataset instanceof DatasetGenerator dg && dg.elementFollowsReceiver()))
+      return dataset;
+    // A receiver that may be several datasets the spread could not separate stays whole, since a
+    // view fixed to one of them would leave the others out.
+    List<TensorGenerator> receivers = dg.getReceiverGenerators(builder);
+    if (receivers != null && receivers.size() > 1) return dataset;
+    TensorGenerator receiver = dg.getReceiverGenerator(builder);
+    if (receiver == null) return dataset;
+    TensorGenerator view = overTensorReturns(receiver, builder, depth - 1);
+    return view == receiver ? dataset : dg.overReceiver(view);
   }
 
   /**
@@ -3164,6 +3464,11 @@ public class TensorGeneratorFactory {
           return new DictComprehensionComponent(source, comprehensionRead);
       }
     }
+    // The data a Keras step is handed is the pack its summary makes or the element of the dataset
+    // the pack holds, joined (wala/ML#1213), so its creator is no one allocation; read it as the
+    // pack, whose dataset slot reads that element, before the creator walk picks one of the two.
+    TensorGenerator stepData = stepDataGenerator(source, builder);
+    if (stepData != null) return stepData;
     source = findCreator(source, builder);
     // `findCreator` can return null (an unresolvable points-to variable, e.g. a null source or a
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
@@ -3234,6 +3539,9 @@ public class TensorGeneratorFactory {
         boolean allData = true;
         for (InstanceKey ik :
             withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(k))) {
+          // The element a summary iterates the pack's dataset for is the same data, which the pack
+          // reads through its dataset slot (wala/ML#1213).
+          if (ik instanceof ElementMirrorKey mirror && !mirror.isLeaf()) continue;
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
           if (asin != null && FitDataGenerator.describes(asin.concreteType().getReference())) {
             if (data == null) data = asin;
@@ -3250,6 +3558,15 @@ public class TensorGeneratorFactory {
           packRead.object(),
           new FitDataGenerator(packRead.data().getNode(), packRead.data()),
           packRead.index());
+    // A summary's field read of the element a dataset iterator allocates, or of its components,
+    // as the inputs a Keras step unpacks from the element of the dataset `fit` iterates
+    // (wala/ML#997), is typed as a loop variable bound to those allocations is.
+    TensorGenerator elementRead = datasetElementFieldRead(source, builder);
+    if (elementRead != null) return elementRead;
+    // A program's read of a position of such an element or component, as a model's `a, b =
+    // inputs` of the inputs a Keras step unpacks (wala/ML#997), reads the position below it.
+    TensorGenerator memberRead = datasetElementMemberRead(source, builder);
+    if (memberRead != null) return memberRead;
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
       CGNode node = lpk.getNode();
@@ -3600,11 +3917,15 @@ public class TensorGeneratorFactory {
         // the receiver is typed by the join of its creators' generators, not by the first creator
         // the walk reaches (wala/ML#1009). Other reads keep the single-creator dispatch, so the
         // ubiquitous `self.attr` read never pays the walk.
+        // A Keras step's data is read as its pack, whatever its callers' creators (wala/ML#1213).
+        TensorGenerator stepData = stepDataGenerator(objSrc, builder);
         TensorGenerator containerGenerator =
-            node.getDU().getDef(objRef) == null
-                    && readsIntegerIndex(node, propRead.getMemberRef(), builder)
-                ? parameterGenerator(objSrc, builder, visited)
-                : tryGetGenerator(objSrc, builder, visited);
+            stepData != null
+                ? stepData
+                : node.getDU().getDef(objRef) == null
+                        && readsIntegerIndex(node, propRead.getMemberRef(), builder)
+                    ? parameterGenerator(objSrc, builder, visited)
+                    : tryGetGenerator(objSrc, builder, visited);
 
         TensorGenerator effectiveGenerator = containerGenerator;
         boolean changed = true;

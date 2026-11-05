@@ -78,6 +78,27 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   /**
+   * The generators of the datasets the element may come from.
+   *
+   * @return The generators.
+   */
+  List<TensorGenerator> getDatasets() {
+    return this.datasets;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The datasets, so elements read over different datasets off one anchor, as a step's
+   *     inputs read where the element is a tensor and the element read whole, neither share a
+   *     memoized result nor cut each other as a self-recursion (wala/ML#997).
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    return this.datasets;
+  }
+
+  /**
    * The element allocations among a value's points-to set.
    *
    * @param source The value's points-to set variable.
@@ -283,6 +304,34 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
     for (TupleElementProvider tep : providers()) if (tep.yieldsTuple(builder)) return true;
     return false;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Where the path reaches a structure in the element of every dataset the element may
+   *     come from, so a reader skipping the position as no tensor skips no dataset's tensor
+   *     (wala/ML#997).
+   */
+  @Override
+  public boolean isStructureAt(PropagationCallGraphBuilder builder, List<Object> path) {
+    List<TupleElementProvider> providers = providers();
+    if (providers.isEmpty() || providers.size() != this.datasets.size()) return false;
+    for (TupleElementProvider tep : providers) if (!tep.isStructureAt(builder, path)) return false;
+    return true;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Where every dataset the element may come from yields only tuples.
+   */
+  @Override
+  public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
+    List<TupleElementProvider> providers = providers();
+    if (providers.isEmpty() || providers.size() != this.datasets.size()) return false;
+    for (TupleElementProvider tep : providers) if (!tep.yieldsOnlyTuples(builder)) return false;
+    return true;
   }
 
   @Override

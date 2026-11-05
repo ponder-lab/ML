@@ -1155,6 +1155,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               new PythonSSAPropagationCallGraphBuilder.ConditionalAllocation(
                   "legacy_element", TensorFlowTypes.DATASET_ELEMENT_TYPE)));
     builder.setConditionalAllocations(conditionalAllocations);
+    // A Keras `fit`, `evaluate` or `predict` packs `x` for the step only when it is not a dataset:
+    // the step receives a dataset's element, which the summary iterates `x` for (wala/ML#997).
+    // The classes are those whose summaries define `__iter__`. The step then takes its data
+    // itself as its inputs only when the data is no tuple, list or pack, whose first member it
+    // takes instead.
+    builder.setExcludingStores(
+        Map.of(
+            TensorFlowTypes.FIT_DATA_TYPE,
+            Map.of(
+                "0",
+                Set.of(
+                    TensorFlowTypes.DATASET,
+                    TensorFlowTypes.TEXT_LINE_DATASET_TYPE,
+                    TensorFlowTypes.TFRECORD_DATASET_TYPE,
+                    TensorFlowTypes.TFDS_DATASET_TYPE)),
+            TensorFlowTypes.STEP_INPUTS_TYPE,
+            Map.of(
+                "whole",
+                Set.of(
+                    PythonTypes.tuple,
+                    PythonTypes.list,
+                    PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE,
+                    TensorFlowTypes.FIT_DATA_TYPE))));
     // A fresh array the builder allocates gets the methods the NumPy summaries attach to every
     // array they allocate (wala/ML#1009); wala/ML#551 moves them to the class.
     // A tensor's `shape` attribute reads its static shape, whose `as_list()` is a list of Python
@@ -1500,6 +1523,145 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 + pruned.size());
   }
 
+  /**
+   * Whether a value may hold an element a dataset iterator allocates, or one of the element's
+   * components (wala/ML#1010).
+   *
+   * @param value The value.
+   * @param builder The builder whose pointer analysis holds the value's set.
+   * @return {@code true} iff the value's set holds such an allocation.
+   */
+  private static boolean readsDatasetElement(
+      PointsToSetVariable value, PropagationCallGraphBuilder builder) {
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey())) {
+      TypeReference type = key.concreteType().getReference();
+      if (type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+          || TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES.contains(type)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Whether a store that leaves out tuples, as a Keras step's unpacking of its data does, leaves
+   * out every value a variable holds once a dataset's generic element is taken for the tuple its
+   * generator says it is (wala/ML#997): the step takes such an element's first member, which its
+   * read at position 0 supplies, not the element whole. A generic element of a dataset whose
+   * element is not known to be a tuple passes, since the step may take it whole.
+   *
+   * @param operator The store's assignment.
+   * @param from The variable stored.
+   * @param builder The builder whose pointer analysis holds the variable's set.
+   * @return {@code true} iff each value is left out or is such an element.
+   */
+  private static boolean excludesAsUnpacked(
+      PythonSSAPropagationCallGraphBuilder.ExcludingAssignOperator operator,
+      PointsToSetVariable from,
+      PropagationCallGraphBuilder builder) {
+    if (!operator.excludesClass(PythonTypes.tuple)) return false;
+    OrdinalSet<InstanceKey> values =
+        builder.getPointerAnalysis().getPointsToSet(from.getPointerKey());
+    if (values.isEmpty()) return false;
+    boolean element = false;
+    for (InstanceKey key : values) {
+      if (operator.excludes(key)) continue;
+      if (!isTupleElement(key, builder)) return false;
+      element = true;
+    }
+    return element;
+  }
+
+  /**
+   * Whether a value is a dataset's generic element whose datasets' generators all say it is a tuple
+   * on every path ({@link TupleElementProvider#yieldsOnlyTuples}), not only on some (wala/ML#997).
+   *
+   * @param key The value.
+   * @param builder The builder.
+   * @return {@code true} iff it is such an element.
+   */
+  private static boolean isTupleElement(InstanceKey key, PropagationCallGraphBuilder builder) {
+    if (!key.concreteType().getReference().equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
+        || !(key instanceof AllocationSiteInNode allocation)) return false;
+    List<TensorGenerator> datasets =
+        DatasetIteratorElementGenerator.datasetsOf(List.of(allocation), builder);
+    if (datasets.isEmpty()) return false;
+    for (TensorGenerator dataset : datasets)
+      if (!(dataset instanceof TupleElementProvider tep) || !tep.yieldsOnlyTuples(builder))
+        return false;
+    return true;
+  }
+
+  /**
+   * Whether a read of a Keras step's unpacked inputs holds generic dataset elements that are all
+   * tuples (wala/ML#997): the step takes such an element's first member, which flows into the
+   * inputs from the data's read at position 0, so the read is no source of the whole element, which
+   * would join the label's types into the inputs.
+   *
+   * @param get The read.
+   * @param node The node holding it.
+   * @param value The read's value.
+   * @param builder The builder.
+   * @return {@code true} iff the read is of the step's inputs and every generic element it holds is
+   *     a tuple.
+   */
+  private static boolean readsUnpackedTupleElement(
+      SSAGetInstruction get,
+      CGNode node,
+      PointsToSetVariable value,
+      PropagationCallGraphBuilder builder) {
+    if (get.isStatic()) return false;
+    OrdinalSet<InstanceKey> holders =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(node, get.getRef()));
+    if (holders.isEmpty()) return false;
+    for (InstanceKey holder : holders)
+      if (!holder.concreteType().getReference().equals(TensorFlowTypes.STEP_INPUTS_TYPE))
+        return false;
+    boolean element = false;
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(value.getPointerKey())) {
+      if (!key.concreteType().getReference().equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)) continue;
+      if (!isTupleElement(key, builder)) return false;
+      element = true;
+    }
+    return element;
+  }
+
+  /**
+   * Removes from the dataflow graph each edge of a field store that leaves out every value its
+   * source holds (wala/ML#997); see {@link
+   * PythonSSAPropagationCallGraphBuilder#setExcludingStores}. The store puts none of those values
+   * into the field, but the flow graph lists it as an edge like an assignment, so the field would
+   * take the source's tensor types: a Keras {@code fit} given a dataset would type its pack's slot
+   * with the dataset's whole element, and the step's read of the slot with it. A source that also
+   * holds a value the store keeps keeps its edge, which then carries the excluded values' types
+   * too, an over-approximation.
+   *
+   * @param builder The builder whose propagation system holds the statements.
+   * @param dataflow The duplicated flow graph to prune.
+   */
+  private static void pruneExcludedStores(
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
+    PropagationSystem system = builder.getPropagationSystem();
+    List<Pair<PointsToSetVariable, PointsToSetVariable>> pruned = new ArrayList<>();
+    for (PointsToSetVariable v : dataflow) {
+      Iterator<?> defs = system.getStatementsThatDef(v);
+      while (defs.hasNext())
+        if (defs.next() instanceof UnaryStatement<?> statement
+            && statement.getOperator()
+                instanceof PythonSSAPropagationCallGraphBuilder.ExcludingAssignOperator operator
+            && statement.getRightHandSide() instanceof PointsToSetVariable from
+            && (operator.excludesAll(from) || excludesAsUnpacked(operator, from, builder))
+            && dataflow.hasEdge(from, v)) pruned.add(Pair.make(from, v));
+    }
+    for (Pair<PointsToSetVariable, PointsToSetVariable> edge : pruned)
+      dataflow.removeEdge(edge.fst, edge.snd);
+    LOGGER.fine(() -> "wala/ML#997 excluded store edges pruned from the dataflow graph: " + pruned);
+  }
+
   /** How many φs {@link #addCondition} follows from a condition toward its comparisons. */
   private static final int CONDITION_PHI_HOPS = 4;
 
@@ -1716,6 +1878,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // the component it selects is pinned below, as a user step's `x, y = data` is.
           sources.add(src);
           LOGGER.fine("Added dataflow source from a step's data read: " + describe(src) + ".");
+        } else if (inst instanceof SSAGetInstruction get
+            && readsDatasetElement(src, builder)
+            && !readsUnpackedTupleElement(get, localPointerKeyNode, src, builder)) {
+          // A Keras step's inputs read from the element of the dataset it iterates (wala/ML#997)
+          // are a source, as a loop variable bound to the element is.
+          sources.add(src);
+          LOGGER.fine(() -> "Added dataflow source from a dataset element read: " + describe(src));
         } else if (UnaryOperation.isTensorUnaryOperator(inst)) {
           // Unary `-` and `~` on tensors are sources too; the factory declines non-tensor operands.
           sources.add(src);
@@ -1814,7 +1983,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               try {
                 TensorGenerator generator = getGenerator(src, builder);
 
-                if (generator instanceof DatasetTupleElementGenerator) {
+                // A Keras step's read of data that joins its pack with the element of the pack's
+                // dataset is such a read too (wala/ML#1213).
+                if (generator instanceof DatasetTupleElementGenerator
+                    || isFitComponentRead(generator)) {
                   sources.add(src);
                   LOGGER.fine(
                       () ->
@@ -4151,6 +4323,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           SlowSparseNumberedGraph.duplicate(
               builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
       pruneListOperationOnlyNodes(builder, dataflow);
+      pruneExcludedStores(builder, dataflow);
       addConditionOnlyComparisons(builder, dataflow);
 
       Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
@@ -4226,11 +4399,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         initOrigins.remove(recv);
       }
 
-      // A step's component read that is no tensor, as the `(x, mask)` of a `((x, mask), y)`
-      // element is a tuple, is dropped below: the pin cannot carry an empty set, and without one
-      // the element's types would leak into the read through the pack's slot.
-      Set<PointsToSetVariable> nonTensorFitComponents = HashSetFactory.make();
-
       // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
       // predecessor types rather than unioning them — the receiver's pre-subscript shape would
       // otherwise leak in via the PA assignment graph (wala/ML#405).
@@ -4246,9 +4414,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // data, is pinned for the same reason (wala/ML#997): the pack's slot holds the user's
         // `x`, and when that is a dataset, its whole-element type would otherwise leak into the
         // component the step reads from it.
-        boolean fitComponent =
-            generator instanceof DatasetTupleElementGenerator selected
-                && selected.getUnderlying() instanceof FitDataGenerator;
+        boolean fitComponent = isFitComponentRead(generator);
         // A key read of a comprehension-built dict is pinned too (wala/ML#1071): the dict is
         // written
         // under a key the analysis does not know, so its fields join every key's value, and the
@@ -4261,7 +4427,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             && !fitComponent
             && !comprehensionRead) continue;
         Set<TensorType> types = init.get(src);
-        if (fitComponent && types != null && types.isEmpty()) nonTensorFitComponents.add(src);
         if (types == null || types.isEmpty()) continue;
         // Every member must carry dimensions. A ⊤-shape member says nothing about the subscript's
         // result, so pinning a set containing one would assert "the receiver's shape does not flow
@@ -4459,7 +4624,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // graph offers it a tensor type once a layer call in its chain is modeled (wala/ML#842).
         else if (isKerasModelObject(v, builder)) drops.add(v);
       }
-      drops.addAll(nonTensorFitComponents);
       // Semantically non-tensor iteration machinery pins to empty-and-fixed too (wala/ML#732):
       // a slice constructor over non-tensor bounds (all-constant `slice(None, None, None)` under
       // `x[:, 0]`, or a dynamic integer bound like the shape-element read under `x[:, :n, :]`,
@@ -5324,5 +5488,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   @Override
   protected Collection<String> getSummaryClassShellSummaries() {
     return List.of("tensorflow.xml");
+  }
+
+  /**
+   * Whether a generator reads a component of the data a Keras step is handed (wala/ML#997): a
+   * selection of the pack, or a join of a selection of the pack with selections of the element of
+   * the dataset it holds, as a step's data that joins the two reads (wala/ML#1213).
+   *
+   * @param generator The generator.
+   * @return {@code true} iff it selects a component of a pack, alone or beside the element's.
+   */
+  private static boolean isFitComponentRead(TensorGenerator generator) {
+    if (generator instanceof DatasetTupleElementGenerator selected)
+      return selected.getUnderlying() instanceof FitDataGenerator;
+    if (!(generator instanceof CreatorJoin join)) return false;
+    boolean pack = false;
+    for (TensorGenerator part : join.getParts()) {
+      if (!(part instanceof DatasetTupleElementGenerator selected)) return false;
+      if (selected.getUnderlying() instanceof FitDataGenerator) pack = true;
+      else if (!(selected.getUnderlying() instanceof DatasetIteratorElementGenerator)) return false;
+    }
+    return pack;
   }
 }

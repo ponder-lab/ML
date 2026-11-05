@@ -3801,19 +3801,40 @@
           <return value="none"/>
         </method>
         <method name="train_step" descriptor="()LRoot;" numArgs="3" paramNames="func self data">
-          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="x"/>
+          <!-- Keras unpacks the data as `unpack_x_y_sample_weight` does: `x` is the first member of a tuple or a list, and the data itself otherwise (wala/ML#997). The builder keeps tuples, lists and the pack out of the store into `whole`. -->
+          <new def="inputs" class="Ltensorflow/keras/StepInputs"/>
+          <putfield class="LRoot" field="whole" fieldType="LRoot" ref="inputs" value="data"/>
+          <getfield class="LRoot" field="whole" fieldType="LRoot" ref="inputs" def="whole"/>
+          <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="whole"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="first"/>
+          <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="first"/>
+          <getfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" def="x"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
           <new def="logs" class="Lobject"/>
           <return value="logs"/>
         </method>
         <method name="test_step" descriptor="()LRoot;" numArgs="3" paramNames="func self data">
-          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="x"/>
+          <!-- Keras unpacks the data as `unpack_x_y_sample_weight` does: `x` is the first member of a tuple or a list, and the data itself otherwise (wala/ML#997). The builder keeps tuples, lists and the pack out of the store into `whole`. -->
+          <new def="inputs" class="Ltensorflow/keras/StepInputs"/>
+          <putfield class="LRoot" field="whole" fieldType="LRoot" ref="inputs" value="data"/>
+          <getfield class="LRoot" field="whole" fieldType="LRoot" ref="inputs" def="whole"/>
+          <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="whole"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="first"/>
+          <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="first"/>
+          <getfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" def="x"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
           <new def="logs" class="Lobject"/>
           <return value="logs"/>
         </method>
         <method name="predict_step" descriptor="()LRoot;" numArgs="3" paramNames="func self data">
-          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="x"/>
+          <!-- Keras unpacks the data as `unpack_x_y_sample_weight` does: `x` is the first member of a tuple or a list, and the data itself otherwise (wala/ML#997). The builder keeps tuples, lists and the pack out of the store into `whole`. -->
+          <new def="inputs" class="Ltensorflow/keras/StepInputs"/>
+          <putfield class="LRoot" field="whole" fieldType="LRoot" ref="inputs" value="data"/>
+          <getfield class="LRoot" field="whole" fieldType="LRoot" ref="inputs" def="whole"/>
+          <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="whole"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="first"/>
+          <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="first"/>
+          <getfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" def="x"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
           <return value="pred"/>
         </method>
@@ -3822,8 +3843,17 @@
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="data" value="x"/>
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="data" value="y"/>
           <!-- The step is read off the instance and called with the data alone: the method-dispatch trampoline binds the instance, as it does for `self.train_step(data)` in user code, so passing `self` here would land it in `data`. -->
+          <!-- Keras iterates a dataset it is given and calls the step on each element, so the step's data is also the element a loop over `x` binds (wala/ML#997): the element copied from the dataset's source, or the generic one for a producer not modeled that way. Only a dataset defines `__iter__`, so another `x` contributes no element. -->
+          <getfield class="LRoot" field="__iter__" fieldType="LRoot" ref="x" def="iter_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="iter_method" numArgs="1" def="it"/>
+          <getfield class="LRoot" field="__next__" fieldType="LRoot" ref="it" def="next_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="next_method" numArgs="1" def="element"/>
+          <new def="step_data" class="Ltensorflow/keras/StepData"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="data"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="element"/>
+          <getfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" def="joined_data"/>
           <getfield class="LRoot" field="train_step" fieldType="LRoot" ref="self" def="step"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="data" numArgs="2" def="logs"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="joined_data" numArgs="2" def="logs"/>
           <new def="history" class="Ltensorflow/keras/callbacks/History"/>
           <return value="history"/>
         </method>
@@ -3831,15 +3861,33 @@
           <new def="data" class="Ltensorflow/keras/FitData"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="data" value="x"/>
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="data" value="y"/>
+          <!-- Keras iterates a dataset it is given and calls the step on each element, so the step's data is also the element a loop over `x` binds (wala/ML#997): the element copied from the dataset's source, or the generic one for a producer not modeled that way. Only a dataset defines `__iter__`, so another `x` contributes no element. -->
+          <getfield class="LRoot" field="__iter__" fieldType="LRoot" ref="x" def="iter_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="iter_method" numArgs="1" def="it"/>
+          <getfield class="LRoot" field="__next__" fieldType="LRoot" ref="it" def="next_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="next_method" numArgs="1" def="element"/>
+          <new def="step_data" class="Ltensorflow/keras/StepData"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="data"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="element"/>
+          <getfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" def="joined_data"/>
           <getfield class="LRoot" field="test_step" fieldType="LRoot" ref="self" def="step"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="data" numArgs="2" def="logs"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="joined_data" numArgs="2" def="logs"/>
           <return value="logs"/>
         </method>
         <method name="predict" descriptor="()LRoot;" numArgs="10" paramNames="func self x batch_size verbose steps callbacks max_queue_size workers use_multiprocessing">
           <new def="data" class="Ltensorflow/keras/FitData"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="data" value="x"/>
+          <!-- Keras iterates a dataset it is given and calls the step on each element, so the step's data is also the element a loop over `x` binds (wala/ML#997): the element copied from the dataset's source, or the generic one for a producer not modeled that way. Only a dataset defines `__iter__`, so another `x` contributes no element. -->
+          <getfield class="LRoot" field="__iter__" fieldType="LRoot" ref="x" def="iter_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="iter_method" numArgs="1" def="it"/>
+          <getfield class="LRoot" field="__next__" fieldType="LRoot" ref="it" def="next_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="next_method" numArgs="1" def="element"/>
+          <new def="step_data" class="Ltensorflow/keras/StepData"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="data"/>
+          <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="element"/>
+          <getfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" def="joined_data"/>
           <getfield class="LRoot" field="predict_step" fieldType="LRoot" ref="self" def="step"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="data" numArgs="2" def="pred"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="joined_data" numArgs="2" def="pred"/>
           <return value="pred"/>
         </method>
       </class>
@@ -4014,6 +4062,10 @@
       <!-- The data a training, evaluation or prediction call packs for the model's step (slot 0 is `x`, slot 1 is `y`), and the result of `tf.keras.utils.unpack_x_y_sample_weight` (slot 0 is the data); `FitDataGenerator` types their components (wala/ML#997). -->
       <class name="FitData" allocatable="true"></class>
       <class name="UnpackedData" allocatable="true"></class>
+      <!-- Joins the packed data and the element of a dataset `x` for the step (wala/ML#997). -->
+      <class name="StepData" allocatable="true"></class>
+      <!-- Holds the inputs a step unpacks from its data (wala/ML#997). -->
+      <class name="StepInputs" allocatable="true"></class>
       <!-- At runtime `tf.keras.Model` and `tf.keras.models.Model` are the same class under two attribute paths. Shell lookup is exact-match on the canonicalized base name (wala/ML#118), so this empty alias shell covers subclasses written against the `tf.keras.Model`/`from tensorflow.keras import Model` spelling; positioning it at the canonical `Ltensorflow/keras/models/Model` instance type keeps one hierarchy chain, so subtype queries against the canonical type also hold for subclasses reached through this alias (wala/ML#662). -->
       <class name="Model" super="Ltensorflow/keras/models/Model"></class>
       <!-- The `tf.keras.Sequential` spelling of the class below, aliased like `Model` (wala/ML#817, wala/ML#662). -->

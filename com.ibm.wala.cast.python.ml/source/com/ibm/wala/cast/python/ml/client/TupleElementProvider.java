@@ -36,6 +36,19 @@ public interface TupleElementProvider {
   boolean yieldsTuple(PropagationCallGraphBuilder builder);
 
   /**
+   * Whether every element this provider may yield is a tuple (wala/ML#997), where {@link
+   * #yieldsTuple} says some may be: a Keras step takes a tuple's first member as its inputs and
+   * anything else whole, so it may read only the first member when the element must be a tuple.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @return {@code true} only when the element is known to be a tuple on every path; {@code false}
+   *     when it may be anything else, or is not known.
+   */
+  default boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
+    return false;
+  }
+
+  /**
    * Retrieves the tensor types for the element at the specified index within the generated tuple.
    *
    * @param builder The propagation call graph builder used for the analysis.

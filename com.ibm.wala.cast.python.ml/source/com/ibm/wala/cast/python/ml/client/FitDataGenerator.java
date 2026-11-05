@@ -50,8 +50,8 @@ import java.util.Set;
  * at index 0 otherwise, which is what {@code unpack_x_y_sample_weight} returns.
  *
  * <p>An element's component that is itself a structure, as {@code (x, mask)} in a {@code ((x,
- * mask), y)} element ({@link TupleElementProvider#isStructureAt}), is no tensor (⊥): the step hands
- * the model that tuple or dict, whose members are read at longer paths.
+ * mask), y)} element, is the tuple or dict of the element's copy (wala/ML#1190), which the step's
+ * data points to, so it is no tensor there, and its members are read at longer paths.
  */
 public class FitDataGenerator extends TensorGenerator implements TupleElementProvider {
 
@@ -133,22 +133,6 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
 
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    Set<DType> ret = this.tensorDTypesForIndex(builder, index);
-    // A component that may also be a structure has the tensors' dtypes as a partial union, which
-    // the UNKNOWN marker records (wala/ML#862), so a dtype reader takes none of them as certain.
-    if (this.mayBeStructure(builder, index)) ret.add(DType.UNKNOWN);
-    return ret;
-  }
-
-  /**
-   * The dtypes of the tensors a component read at an index may be, without the marker of a
-   * component that may also be a structure.
-   *
-   * @param builder The builder.
-   * @param index The index.
-   * @return The dtypes.
-   */
-  private Set<DType> tensorDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (Component component : this.components(builder, List.of(index))) {
       Set<DType> dtypes = component.dtypes(builder);
@@ -157,25 +141,10 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     return ret;
   }
 
-  /**
-   * Whether a component read at an index is a tensor on some of the datasets the data may come from
-   * and a structure on others.
-   *
-   * @param builder The builder.
-   * @param index The index.
-   * @return {@code true} iff the component may be either.
-   */
-  private boolean mayBeStructure(PropagationCallGraphBuilder builder, int index) {
-    List<Component> components = this.components(builder, List.of(index));
-    if (components == null) return false;
-    for (Component component : components) if (component.mayBeStructure(builder)) return true;
-    return false;
-  }
-
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
-    Set<DType> dtypes = this.tensorDTypesForIndex(builder, index);
+    Set<DType> dtypes = this.getDTypesForIndex(builder, index);
     Set<TensorType> ret = HashSetFactory.make();
     if (shapes == null) {
       for (DType dtype : dtypes)
@@ -185,11 +154,6 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     for (List<Dimension<?>> shape : shapes)
       for (DType dtype : dtypes)
         ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), shape));
-    // A component that is a structure on some of its datasets and a tensor on others is, at run
-    // time, either; a wholly unknown member beside the tensors keeps a reader from taking the
-    // tensors for all of it.
-    if (this.mayBeStructure(builder, index))
-      ret.add(new TensorType(DType.UNKNOWN.name().toLowerCase(Locale.ROOT), null));
     return ret;
   }
 
@@ -363,32 +327,7 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder builder);
 
     Set<DType> dtypes(PropagationCallGraphBuilder builder);
-
-    /**
-     * Whether the component may also be a structure, which its shapes and dtypes do not show.
-     *
-     * @param builder The builder.
-     * @return {@code true} iff the component is a tensor on some of its datasets and a structure on
-     *     others.
-     */
-    default boolean mayBeStructure(PropagationCallGraphBuilder builder) {
-      return false;
-    }
   }
-
-  /** A component that is no tensor (⊥), such as a structure of tensors read whole. */
-  private static final Component NOT_A_TENSOR =
-      new Component() {
-        @Override
-        public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
-          return Collections.emptySet();
-        }
-
-        @Override
-        public Set<DType> dtypes(PropagationCallGraphBuilder b) {
-          return EnumSet.noneOf(DType.class);
-        }
-      };
 
   /**
    * The generators of the datasets a slot is filled from.
@@ -455,17 +394,10 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
    * The union of components: unknown when one is unknown and no other contributes.
    *
    * @param components The components.
-   * @param structure Whether some of the joined datasets have a structure there and others a
-   *     tensor.
    * @return The union.
    */
-  private static Component union(List<Component> components, boolean structure) {
+  private static Component union(List<Component> components) {
     return new Component() {
-      @Override
-      public boolean mayBeStructure(PropagationCallGraphBuilder b) {
-        return structure;
-      }
-
       @Override
       public Set<List<Dimension<?>>> shapes(PropagationCallGraphBuilder b) {
         Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -502,22 +434,9 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
 
       @Override
       public Set<DType> dtypes(PropagationCallGraphBuilder b) {
-        // Another pack's tensor dtypes, without its marker of a component that may be a structure,
-        // which this component carries instead.
-        if (path.size() == 1 && provider instanceof FitDataGenerator pack)
-          return pack.tensorDTypesForIndex(b, (Integer) path.get(0));
         return path.size() == 1
             ? provider.getDTypesForIndex(b, (Integer) path.get(0))
             : provider.getDTypesForPath(b, path);
-      }
-
-      // Another pack's component, as an unpack of the step's data reads it, may be a structure
-      // where that pack's is.
-      @Override
-      public boolean mayBeStructure(PropagationCallGraphBuilder b) {
-        return path.size() == 1
-            && provider instanceof FitDataGenerator pack
-            && pack.mayBeStructure(b, (Integer) path.get(0));
       }
     };
   }
@@ -539,29 +458,12 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
     List<TensorGenerator> parts = dataset.parts();
     if (generator instanceof TupleElementProvider tep && tep.yieldsTuple(builder)) {
       if (path.size() > 1 && !tep.resolvesPath(builder, path)) return null;
-      // A component that is itself a structure, as `(x, mask)` in a `((x, mask), y)` element, is
-      // handed to the step as that tuple or dict, which is no tensor: its members are read at the
-      // longer paths, and a provider's reading of the whole would join their types into one
-      // tensor of several shapes, crossed with their dtypes.
-      if (tep.isStructureAt(builder, path)) return NOT_A_TENSOR;
-      // Each joined dataset whose component is a structure contributes no tensor, so datasets that
-      // all have a structure there make the component none. Datasets that disagree make it the
-      // tensors where it is one, and also possibly a structure, which the read marks.
+      // Several joined datasets read their component each on its own.
       if (parts != null) {
         List<Component> components = new ArrayList<>();
-        boolean structure = false;
-        boolean tensor = false;
-        for (TensorGenerator part : parts) {
-          TupleElementProvider provider = (TupleElementProvider) part;
-          if (provider.isStructureAt(builder, path)) {
-            structure = true;
-            components.add(NOT_A_TENSOR);
-          } else {
-            tensor = true;
-            components.add(this.ofProvider(provider, path));
-          }
-        }
-        return union(components, structure && tensor);
+        for (TensorGenerator part : parts)
+          components.add(this.ofProvider((TupleElementProvider) part, path));
+        return union(components);
       }
       return this.ofProvider(tep, path);
     }

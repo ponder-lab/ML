@@ -16,7 +16,11 @@ import org.junit.Test;
  */
 public class TestFitMixedSites extends AbstractTensorTest {
 
-  /** The step's inputs are the tensor path's value and the dataset path's element component. */
+  /**
+   * The step's inputs are the tensor path's value and the dataset path's element component, and not
+   * the element's {@code y} component, which the dataset the pack holds would otherwise carry into
+   * the read (wala/ML#1213).
+   */
   @Test
   public void testMixedSites() throws ClassHierarchyException, CancelException, IOException {
     test(

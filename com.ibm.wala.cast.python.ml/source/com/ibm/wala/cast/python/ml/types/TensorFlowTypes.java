@@ -1024,6 +1024,14 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String FIT_DATA_SIGNATURE = "tf.keras.Model.fit()";
 
   /**
+   * The inputs a Keras step unpacks from its data: the data's first member when it is a tuple or a
+   * list, and the data itself otherwise (wala/ML#997).
+   */
+  public static final TypeReference STEP_INPUTS_TYPE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/StepInputs"));
+
+  /**
    * The result of {@code tf.keras.utils.unpack_x_y_sample_weight(data)}: slot 0 is {@code data},
    * and index {@code i} of the result is {@code data}'s component {@code i} when {@code data} is a
    * tuple and {@code data} itself at index 0 otherwise (wala/ML#997).

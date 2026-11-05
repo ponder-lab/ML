@@ -20,6 +20,7 @@ import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.IR;
@@ -64,6 +65,23 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * null} for the source- and node-based constructions.
    */
   private final AllocationSiteInNode mapResultInstance;
+
+  /**
+   * Whether this view takes only the values {@code map_func} returns that are no element structure
+   * ({@link #overTensorReturns}).
+   */
+  private boolean tensorReturnsOnly;
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>A shallow copy suffices: {@link #mapResultInstance} is shared, as an allocation is, and
+   * {@link #tensorReturnsOnly} is a primitive.
+   */
+  @Override
+  protected DatasetMapGenerator clone() throws CloneNotSupportedException {
+    return (DatasetMapGenerator) super.clone();
+  }
 
   public DatasetMapGenerator(PointsToSetVariable source) {
     super(source);
@@ -154,7 +172,97 @@ public class DatasetMapGenerator extends DatasetGenerator {
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, field)));
       if (fieldPTS != null) ret = OrdinalSet.unify(ret, fieldPTS);
     }
+    if (!this.tensorReturnsOnly) return ret;
+    List<InstanceKey> tensors = new ArrayList<>();
+    for (InstanceKey ik : ret) if (!isStructure(builder, ik)) tensors.add(ik);
+    return OrdinalSet.toOrdinalSet(tensors, pa.getInstanceKeyMapping());
+  }
+
+  /**
+   * The allocations {@code map_func} returns that are no element structure, beside a structure it
+   * returns on another path (wala/ML#997): the element is that tensor where the function returns
+   * it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param elementPTS The mapped element's points-to set.
+   * @return The allocations, empty when the function returns none.
+   */
+  private OrdinalSet<InstanceKey> getTensorReturns(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> elementPTS) {
+    List<InstanceKey> tensors = new ArrayList<>();
+    for (InstanceKey ik : elementPTS)
+      if (getAllocationSiteInNode(ik) != null && !isStructure(builder, ik)) tensors.add(ik);
+    return OrdinalSet.toOrdinalSet(tensors, builder.getPointerAnalysis().getInstanceKeyMapping());
+  }
+
+  /**
+   * Whether a value {@code map_func} returns is an element structure.
+   *
+   * @param builder The propagation call graph builder.
+   * @param value The value.
+   * @return {@code true} iff it is a tuple, dict or namedtuple, which the mirror copies as a
+   *     structure; a list it copies as a leaf.
+   */
+  private static boolean isStructure(PropagationCallGraphBuilder builder, InstanceKey value) {
+    return TupleElementProvider.holdsOnlyStructures(
+        builder,
+        OrdinalSet.toOrdinalSet(
+            Collections.singleton(value), builder.getPointerAnalysis().getInstanceKeyMapping()));
+  }
+
+  /**
+   * Whether {@code map_func} may return both an element structure and a value that is none, as a
+   * function returning {@code (x, y)} on one path and {@code x} on another does.
+   *
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff the mapped element holds both.
+   */
+  boolean returnsStructureAndTensor(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
+    if (elementPTS == null) return false;
+    boolean structure = false;
+    boolean tensor = false;
+    for (InstanceKey ik : elementPTS)
+      if (isStructure(builder, ik)) structure = true;
+      else tensor = true;
+    return structure && tensor;
+  }
+
+  /**
+   * This dataset with only the values {@code map_func} returns that are no element structure for
+   * its element, the element a mirrored leaf at the element's root comes from (wala/ML#997): the
+   * leaf is the element where it is a tensor, so a member of a tuple the function returns on
+   * another path is no part of it.
+   *
+   * @return The view.
+   */
+  DatasetMapGenerator overTensorReturns() {
+    DatasetMapGenerator ret = (DatasetMapGenerator) this.copy();
+    ret.tensorReturnsOnly = true;
     return ret;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return super.equals(obj)
+        && this.tensorReturnsOnly == ((DatasetMapGenerator) obj).tensorReturnsOnly;
+  }
+
+  @Override
+  public int hashCode() {
+    return 31 * super.hashCode() + Boolean.hashCode(this.tensorReturnsOnly);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A view of the tensor returns ({@link #overTensorReturns}) is keyed apart from the
+   *     whole dataset, whose element also holds the structures the view leaves out.
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    Object discriminator = super.operationDiscriminator();
+    return this.tensorReturnsOnly ? Pair.make(discriminator, "tensor returns") : discriminator;
   }
 
   /**
@@ -211,6 +319,13 @@ public class DatasetMapGenerator extends DatasetGenerator {
           if (componentShapes == null || componentShapes.isEmpty()) return null;
           union.addAll(componentShapes);
         }
+        // A tensor the function returns on another path is the element there (wala/ML#997).
+        OrdinalSet<InstanceKey> tensors = this.getTensorReturns(builder, elementPTS);
+        if (!tensors.isEmpty()) {
+          Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, tensors);
+          if (shapes == null) return null;
+          union.addAll(shapes);
+        }
         return union;
       }
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, elementPTS);
@@ -253,6 +368,12 @@ public class DatasetMapGenerator extends DatasetGenerator {
               || componentDTypes.isEmpty()
               || componentDTypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
           union.addAll(componentDTypes);
+        }
+        OrdinalSet<InstanceKey> tensors = this.getTensorReturns(builder, elementPTS);
+        if (!tensors.isEmpty()) {
+          Set<DType> dtypes = this.getDTypesOfValue(builder, tensors);
+          if (dtypes == null || dtypes.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+          union.addAll(dtypes);
         }
         return union;
       }
@@ -338,6 +459,45 @@ public class DatasetMapGenerator extends DatasetGenerator {
       if (componentPTS != null) ret = OrdinalSet.unify(ret, componentPTS);
     }
     return ret;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Where every value {@code map_func} returns is a tuple or a namedtuple allocation. A
+   *     function returning a component of its argument, or anything else on some path, is not known
+   *     to.
+   */
+  @Override
+  public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
+    if (this.returnedComponent(builder) >= 0) return false;
+    OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
+    if (elementPTS == null || elementPTS.isEmpty()) return false;
+    // A return the function computes without an allocation, which this generator still types
+    // from the callback's own dataflow (wala/ML#803), may be a tensor the allocations do not show.
+    for (Pair<CGNode, Integer> returnValue : getCallbackReturnValueNumbers(builder)) {
+      PointerKey returned =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(returnValue.fst, returnValue.snd);
+      if (withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(returned)).isEmpty())
+        return false;
+    }
+    for (InstanceKey ik : elementPTS) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
+      if (asin == null) return false;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(tuple)
+          && !reference.equals(PythonSSAPropagationCallGraphBuilder.NAMED_TUPLE_INSTANCE))
+        return false;
+    }
+    return true;
   }
 
   @Override

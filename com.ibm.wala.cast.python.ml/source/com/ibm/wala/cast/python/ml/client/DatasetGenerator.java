@@ -142,6 +142,30 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     return EnumSet.of(DType.UNKNOWN);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A transformation whose element follows its receiver's yields only tuples where every
+   *     receiver does; any other transformation is not known to.
+   */
+  @Override
+  public boolean yieldsOnlyTuples(PropagationCallGraphBuilder builder) {
+    if (!this.elementFollowsReceiver()) return false;
+    // Every dataset the receiver may be, or the one a view is fixed to: the first that resolves,
+    // which `receivers` falls back to, says nothing of the others.
+    List<TensorGenerator> receivers = this.getReceiverGenerators(builder);
+    if (receivers == null) {
+      TensorGenerator fixed = this.getFixedReceiver();
+      if (fixed == null) return false;
+      receivers = List.of(fixed);
+    }
+    if (receivers.isEmpty()) return false;
+    for (TensorGenerator receiver : receivers)
+      if (!(receiver instanceof TupleElementProvider tep && tep.yieldsOnlyTuples(builder)))
+        return false;
+    return true;
+  }
+
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
     List<TensorGenerator> receivers = this.receivers(builder);

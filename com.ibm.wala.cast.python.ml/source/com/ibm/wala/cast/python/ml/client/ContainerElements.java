@@ -428,7 +428,10 @@ public final class ContainerElements {
    * @return Its elements.
    */
   public static ContainerElements ofValue(PropagationCallGraphBuilder builder, PointerKey value) {
-    DatasetComponent component = datasetComponent(builder, value);
+    // A value a dataset element's copy reaches is read through the copy's objects, which carry the
+    // component's structure themselves (wala/ML#1190).
+    DatasetComponent component =
+        holdsElementCopyStructure(builder, value) ? null : datasetComponent(builder, value);
     if (component != null) return ofComponent(builder, component);
     List<ContainerElements> parts = new ArrayList<>();
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(value))
@@ -446,6 +449,20 @@ public final class ContainerElements {
     }
     return new ContainerElements(
         arity, List.of(), allElements, complete, builder, merged(parts, arity));
+  }
+
+  /**
+   * Whether a value may be a structure of a dataset element's copy.
+   *
+   * @param builder The builder.
+   * @param value The value.
+   * @return {@code true} iff its points-to set holds a copy's tuple, dict or namedtuple.
+   */
+  private static boolean holdsElementCopyStructure(
+      PropagationCallGraphBuilder builder, PointerKey value) {
+    for (InstanceKey key : builder.getPointerAnalysis().getPointsToSet(value))
+      if (key instanceof ElementMirrorKey mirror && !mirror.isLeaf()) return true;
+    return false;
   }
 
   /**
@@ -777,9 +794,27 @@ public final class ContainerElements {
   private void addTypes(TensorTypeAnalysis analysis, PointerKey key, Set<TensorType> types) {
     PointsToSetVariable variable = this.variable(key);
     // A key the analysis's flow graph does not hold has no state, rather than an empty one.
-    if (variable == null || !analysis.getProblem().getFlowGraph().containsNode(variable)) return;
+    if (variable == null || !analysis.getProblem().getFlowGraph().containsNode(variable)) {
+      // A field of a dataset element's copy that nothing reads is outside the flow graph, so its
+      // leaves are typed as the analysis seeds them, at their paths (wala/ML#1190).
+      this.addLeafTypes(key, types);
+      return;
+    }
     Set<TensorType> state = analysis.getOutState(variable);
     if (state != null) types.addAll(state);
+  }
+
+  /**
+   * Adds the tensor types of the leaves of a dataset element's copy that a key holds, read at their
+   * paths as the analysis seeds them.
+   *
+   * @param key The key.
+   * @param types The types, which this adds to.
+   */
+  private void addLeafTypes(PointerKey key, Set<TensorType> types) {
+    for (InstanceKey member : this.builder.getPointerAnalysis().getPointsToSet(key))
+      if (member instanceof ElementMirrorKey leaf && leaf.isLeaf())
+        types.addAll(TensorGeneratorFactory.mirroredLeafTypes(leaf, this.builder));
   }
 
   /**

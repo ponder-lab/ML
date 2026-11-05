@@ -877,6 +877,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     return key instanceof ElementMirrorKey mirrored && mirrored.isLeaf();
   }
 
+  /**
+   * The field stores that leave out instances of some classes, by the class of the allocation
+   * stored into and the field's name (wala/ML#997); see {@link ExcludingAssignOperator}. Empty by
+   * default, so a client that names none sees no change.
+   */
+  private Map<TypeReference, Map<String, Set<TypeReference>>> excludingStores =
+      Collections.emptyMap();
+
+  /**
+   * Names the field stores that leave out instances of some classes (wala/ML#997): a summary that
+   * stores a value into a field of an object it allocates cannot branch on the value's type, so the
+   * builder drops the instances the field must not hold. A Keras {@code fit} packs its {@code x}
+   * for the step only when {@code x} is not a dataset, whose element the step receives instead.
+   *
+   * @param stores Each allocated class mapped to its fields' names, each mapped to the classes
+   *     whose instances, and their subclasses', the store leaves out.
+   */
+  public void setExcludingStores(Map<TypeReference, Map<String, Set<TypeReference>>> stores) {
+    this.excludingStores = stores == null ? Collections.emptyMap() : Map.copyOf(stores);
+  }
+
   /** The classes already decided by {@link #declaresIterationProtocol}. */
   private final Map<IClass, Boolean> iterationProtocolClasses = HashMapFactory.make();
 
@@ -1182,7 +1203,50 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
             () -> "Leaving out shadowed method installed by " + instruction + " in " + node + ".");
         return;
       }
+      if (putExcluding(instruction)) return;
       super.visitPut(instruction);
+    }
+
+    /**
+     * Constrains a field store that leaves out instances of a class (wala/ML#997), when the store's
+     * object is an allocation of this node whose class and field the builder names; see {@link
+     * PythonSSAPropagationCallGraphBuilder#setExcludingStores}.
+     *
+     * @param instruction The field write.
+     * @return {@code true} iff the store was constrained here; otherwise the caller constrains it
+     *     as any other.
+     */
+    private boolean putExcluding(SSAPutInstruction instruction) {
+      if (instruction.isStatic()
+          || !(du.getDef(instruction.getRef()) instanceof SSANewInstruction allocation))
+        return false;
+      Map<String, Set<TypeReference>> fields =
+          getBuilder().excludingStores.get(allocation.getConcreteType());
+      if (fields == null) return false;
+      Set<TypeReference> excluded = fields.get(instruction.getDeclaredField().getName().toString());
+      if (excluded == null) return false;
+      IClassHierarchy cha = getClassHierarchy();
+      Set<IClass> excludedClasses = HashSetFactory.make();
+      for (TypeReference type : excluded) {
+        IClass c = cha.lookupClass(type);
+        if (c != null) excludedClasses.add(c);
+      }
+      IField f = cha.resolveField(instruction.getDeclaredField());
+      InstanceKey object = getInstanceKeyForAllocation(allocation.getNewSite());
+      if (excludedClasses.isEmpty() || f == null || object == null) return false;
+      system.findOrCreateIndexForInstanceKey(object);
+      PointerKey field = getPointerKeyForInstanceField(object, f);
+      int value = instruction.getVal();
+      if (contentsAreInvariant(symbolTable, du, value)) {
+        system.recordImplicitPointsToSet(getPointerKeyForLocal(value));
+        for (InstanceKey key : getInvariantContents(value))
+          if (!getBuilder().isInstanceOf(key, excludedClasses)) system.newConstraint(field, key);
+      } else
+        system.newConstraint(
+            field,
+            getBuilder().new ExcludingAssignOperator(Set.copyOf(excludedClasses)),
+            getPointerKeyForLocal(value));
+      return true;
     }
 
     /**
@@ -7009,6 +7073,98 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "list-operation elements of " + from + " into " + contentsKey;
+    }
+  }
+
+  /**
+   * Whether a key is an instance of one of some classes or of their subclasses.
+   *
+   * @param key A key.
+   * @param types The classes.
+   * @return {@code true} iff the key's concrete type is one of the classes or a subclass of one.
+   */
+  private boolean isInstanceOf(InstanceKey key, Set<IClass> types) {
+    IClass concrete = key.concreteType();
+    if (concrete == null) return false;
+    for (IClass type : types) if (getClassHierarchy().isSubclassOf(concrete, type)) return true;
+    return false;
+  }
+
+  /**
+   * An assignment that leaves out the instances of some classes and of their subclasses
+   * (wala/ML#997); see {@link #setExcludingStores}. Equal for the same classes, so the propagation
+   * system keeps one constraint per pair of variables, as for an assignment.
+   */
+  public final class ExcludingAssignOperator extends UnaryOperator<PointsToSetVariable> {
+    /** The classes whose instances are left out. */
+    private final Set<IClass> excluded;
+
+    private ExcludingAssignOperator(Set<IClass> excluded) {
+      this.excluded = excluded;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      MutableIntSet out = IntSetUtil.make();
+      rhs.getValue()
+          .foreach(
+              i -> {
+                if (!isInstanceOf(getSystem().getInstanceKey(i), excluded)) out.add(i);
+              });
+      return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
+    }
+
+    /**
+     * Whether this assignment leaves out every value a variable holds, so that nothing flows across
+     * it from that variable.
+     *
+     * @param rhs The variable assigned from.
+     * @return {@code true} iff the variable holds a value and every one is left out.
+     */
+    public boolean excludesAll(PointsToSetVariable rhs) {
+      IntSet values = rhs.getValue();
+      if (values == null || values.isEmpty()) return false;
+      IntIterator it = values.intIterator();
+      while (it.hasNext())
+        if (!isInstanceOf(getSystem().getInstanceKey(it.next()), excluded)) return false;
+      return true;
+    }
+
+    /**
+     * Whether this assignment leaves out a value.
+     *
+     * @param key The value.
+     * @return {@code true} iff it is an instance of one of the classes left out.
+     */
+    public boolean excludes(InstanceKey key) {
+      return isInstanceOf(key, excluded);
+    }
+
+    /**
+     * Whether this assignment leaves out the instances of a class.
+     *
+     * @param type The class.
+     * @return {@code true} iff the class is one of those left out.
+     */
+    public boolean excludesClass(TypeReference type) {
+      IClass c = getClassHierarchy().lookupClass(type);
+      return c != null && excluded.contains(c);
+    }
+
+    @Override
+    public int hashCode() {
+      return excluded.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ExcludingAssignOperator other && excluded.equals(other.excluded);
+    }
+
+    @Override
+    public String toString() {
+      return "assignment leaving out instances of " + excluded;
     }
   }
 
