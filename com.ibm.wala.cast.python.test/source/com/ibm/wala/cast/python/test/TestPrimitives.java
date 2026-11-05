@@ -24,6 +24,8 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -284,7 +286,12 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "debugged",
             "side_multiline",
             "side_guarded",
-            "table"))
+            "table",
+            "compared",
+            "unequal",
+            "bounded",
+            "keyed",
+            "nested"))
       assertFalse(callee + " is unreached", getNodes(CG, "script fstring1.py/" + callee).isEmpty());
     // A call in a field is where the program writes it: past the plain string an f-string is
     // joined to, and on the later line of a triple-quoted one.
@@ -315,7 +322,9 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "debug",
             "multiline",
             "guarded",
-            "subscript")) {
+            "subscript",
+            "operators",
+            "nested")) {
       Set<String> kinds = new TreeSet<>();
       Collection<CGNode> nodes = getNodes(CG, "script fstring1.py/sink_" + sink);
       assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
@@ -340,6 +349,47 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("multiline", Set.of("Lstring"));
     expected.put("guarded", Set.of("Lstring"));
     expected.put("subscript", Set.of("Lstring"));
+    expected.put("operators", Set.of("Lstring"));
+    expected.put("nested", Set.of("Lstring"));
     assertEquals(expected, pointees);
+  }
+
+  /**
+   * A call in an f-string's field is at its own line and column in a file that starts with blank
+   * lines, which the copy a field's expression is parsed from keeps as they are (<a
+   * href="https://github.com/wala/ML/issues/1231">wala/ML#1231</a>). The source is written at run
+   * time, since a fixture formatted as the repository's are cannot start with a blank line; it runs
+   * under Python 3.10.
+   */
+  @Test
+  public void testFStringAfterBlankLines()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Path source = Files.createTempDirectory("fstring").resolve("fstring_blank_start.py");
+    Files.writeString(
+        source,
+        """
+
+
+
+        def side():
+            return "s"
+
+
+        sink = f"x{side()}"
+        assert sink == "xs"
+        """);
+    CallGraph CG = process(source.toString());
+    CGNode script = getNodes(CG, "script fstring_blank_start.py").iterator().next();
+    Set<String> positions = new TreeSet<>();
+    for (CGNode target : getNodes(CG, "script fstring_blank_start.py/side"))
+      CG.getPossibleSites(script, target)
+          .forEachRemaining(
+              site -> {
+                for (SSAAbstractInvokeInstruction call : script.getIR().getCalls(site)) {
+                  Position at = ((AstMethod) script.getMethod()).getSourcePosition(call.iIndex());
+                  positions.add(at.getFirstLine() + ":" + at.getFirstCol());
+                }
+              });
+    assertEquals(Set.of("8:11"), positions);
   }
 }

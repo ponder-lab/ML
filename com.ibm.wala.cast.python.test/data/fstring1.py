@@ -131,3 +131,40 @@ sink_guarded(guarded)
 subscript = f"{table()['k']}"
 assert subscript == "3"
 sink_subscript(subscript)
+
+
+def sink_operators(n):
+    pass
+
+
+def sink_nested(n):
+    pass
+
+
+def compared():
+    return 1
+
+
+def unequal():
+    return 1
+
+
+def bounded():
+    return 1
+
+
+def keyed():
+    return 5
+
+
+def nested():
+    return "n"
+
+
+operators = f"{compared() == 1}{unequal() != 1}{bounded() <= 1}{ {'k': keyed()}['k'] }"
+assert operators == "TrueFalseTrue5"
+sink_operators(operators)
+
+inner = f"{f'{nested()}'}"
+assert inner == "n"
+sink_nested(inner)

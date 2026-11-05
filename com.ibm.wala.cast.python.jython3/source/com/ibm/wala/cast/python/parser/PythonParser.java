@@ -2998,12 +2998,16 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      * exact text, which a conversion or a format specification would change, is not modeled. A
      * string with no field is the constant it denotes.
      *
+     * <p>An f-string whose source text does not read as one, such as one with a field the
+     * expression parser rejects, is a string of unknown content too, {@code str()}, with none of
+     * its fields evaluated: its text is not known, and the parser's constant is not it.
+     *
      * <p>TODO: The name {@code str} is resolved where the string is, so a program binding {@code
      * str} to something else there calls that instead.
      *
      * @param string The string the parser made.
-     * @return The translation, or {@code null} if no token of the string is an f-string, or if the
-     *     source text does not read as one, in which case the string is the parser's constant.
+     * @return The translation, or {@code null} if no token of the string is an f-string, in which
+     *     case the string is the parser's constant.
      */
     private CAstNode translateFormattedString(Str string) throws Exception {
       java.util.List<CommonToken> run = parser.getStringRun(string.getCharStartIndex());
@@ -3023,9 +3027,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                       + string.getLine()
                       + ":"
                       + string.getCharPositionInLine()
-                      + " as the parser's constant, since its source text does not read as one"
-                      + " (wala/ML#1231).");
-          return null;
+                      + " as a string of unknown content with no field evaluated, since its source"
+                      + " text does not read as one (wala/ML#1231).");
+          return stringOf(string, null).accept(this);
         }
       if (parts.stream().allMatch(String.class::isInstance)) {
         StringBuilder value = new StringBuilder();
@@ -3049,12 +3053,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      * A call of the builtin {@code str} on a value, at a string's position.
      *
      * @param at The string whose position the call takes.
-     * @param value The value.
+     * @param value The value, or {@code null} for a call with no argument.
      * @return The call.
      */
     private expr stringOf(Str at, expr value) {
       java.util.List<expr> arguments = new ArrayList<>();
-      arguments.add(value);
+      if (value != null) arguments.add(value);
       // A name is read from its token's text, so the name gets a copy of the string's token, with
       // the string's position and the name's text.
       CommonToken name = new CommonToken(at.getToken());
