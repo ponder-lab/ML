@@ -212,4 +212,26 @@ public class TestDatasetFlatMapElement extends AbstractTensorTest {
   public void testNotADataset() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_not_a_dataset", 0, 0);
   }
+
+  /**
+   * The {@code window(n).flat_map(lambda w: w.batch(n))} idiom reads each window's batch: a full
+   * batch, or a short one, since a window's size is unknown.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testWindowedBatch() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_windowed_batch",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(4))))));
+  }
 }

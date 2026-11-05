@@ -55,6 +55,10 @@ def consume_fit_x(x):
     pass
 
 
+def consume_windowed_batch(b):
+    pass
+
+
 flat = tf.data.Dataset.from_tensor_slices(tf.ones([8, 4]))
 pairs = tf.data.Dataset.from_tensor_slices(
     (tf.ones([8, 4]), tf.zeros([8, 3], tf.int32))
@@ -173,7 +177,15 @@ for e in fives.flat_map(fifth_dataset):
     assert e.shape == (6,) and e.dtype == tf.float32
     consume_fifth(e)
 
-# A function that returns no dataset fails when the dataset is built, so it has no element.
+# A window's batch, flattened: each window of 2 batches into one batch of its elements, so every
+# batch is full at run time, but a window's size is unknown, so a batch of it may be short.
+for b in flat.window(2).flat_map(lambda w: w.batch(2)):
+    assert b.shape == (2, 4) and b.dtype == tf.float32
+    consume_windowed_batch(b)
+
+# A function that returns no dataset fails when the dataset is built, so it has no element. Keep
+# this block last: its body always raises an error its handler does not catch, so the analysis
+# reaches nothing after it.
 try:
     for x in flat.flat_map(lambda v: v):
         consume_not_a_dataset(x)
