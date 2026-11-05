@@ -16,6 +16,7 @@ import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -242,14 +243,33 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertFalse(elements.mayHoldNone());
   }
 
-  /** A component of a {@code flat_map}'s datasets, which no declared structure reaches. */
+  /**
+   * A {@code flat_map} whose function returns a dataset of {@code ((a, b), y)} hands {@code call}
+   * the pair {@code (a, b)}: the element is the returned dataset's (wala/ML#1214). A batch of a
+   * {@code flat_map} may be short, since its cardinality is unknown.
+   */
   @Test
   public void testFlatMapped() {
     ContainerElements elements = ofValue("consume_flat_mapped");
     assertEquals(
-        "Types: " + elements.elementTypes(analysis) + ".", OptionalInt.empty(), elements.arity());
-    assertFalse("Types: " + elements.elementTypes(analysis) + ".", elements.isComplete());
-    assertTrue(elements.mayHoldNone());
+        "Types: " + elements.elementTypes(analysis) + ".", OptionalInt.of(2), elements.arity());
+    assertEquals(
+        List.of(
+            Set.of(TensorType.of(FLOAT32, 2, 4), unknownBatchOf(4)),
+            Set.of(TensorType.of(FLOAT32, 2, 3), unknownBatchOf(3))),
+        elements.positionTypes(analysis));
+    assertTrue(elements.isComplete());
+    assertFalse(elements.mayHoldNone());
+  }
+
+  /**
+   * A {@code float32} batch of rows of a size whose count is unknown.
+   *
+   * @param size The rows' size.
+   * @return The batch's type.
+   */
+  private static TensorType unknownBatchOf(int size) {
+    return new TensorType(FLOAT32, List.of(new SymbolicDim("?"), new NumericDim(size)));
   }
 
   /** A component {@code tuple(parts)} builds is a tuple the program does not write as a display. */
