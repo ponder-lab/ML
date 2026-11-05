@@ -87,6 +87,18 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   /**
+   * {@inheritDoc}
+   *
+   * @implNote The datasets, so elements read over different datasets off one anchor, as a step's
+   *     inputs read where the element is a tensor and the element read whole, neither share a
+   *     memoized result nor cut each other as a self-recursion (wala/ML#997).
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    return this.datasets;
+  }
+
+  /**
    * The element allocations among a value's points-to set.
    *
    * @param source The value's points-to set variable.

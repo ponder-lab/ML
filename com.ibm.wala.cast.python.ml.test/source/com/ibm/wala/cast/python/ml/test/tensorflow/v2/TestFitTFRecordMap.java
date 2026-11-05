@@ -133,4 +133,61 @@ public class TestFitTFRecordMap extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 2, 4),
                 new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
   }
+
+  /**
+   * One of two maps over a {@code TFRecordDataset}, one returning {@code (x, y)} and one a tensor,
+   * the dataset {@code fit} is given: the inputs read the batched tensor, {@code (2, 3)} at run
+   * time, and the batched {@code x} of the pair, which the analysis cannot rule out, but never the
+   * pair's {@code y}: the step takes a pair's first member, not the pair whole. The record count is
+   * not read, so each batch may also be partial.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTFRecordEitherDatasetInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_fit_tfrecord_either_dataset.py",
+        "consume_fit_inputs",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))),
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
+  }
+
+  /**
+   * A map over a {@code TFRecordDataset} whose function returns {@code (x, y)} on one call and a
+   * computed rank-2 tensor alone on another, the call whose dataset {@code fit} is given: the
+   * inputs read the batched tensor, {@code (2, 2, 3)} at run time, and the batched {@code x} the
+   * step takes from the pair, but no row of the tensor, which the step never takes. The record
+   * count is not read, so each batch may also be partial.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTFRecordMaybeLabelledRankTwoInputs()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_fit_tfrecord_map_maybe_labelled_rank2.py",
+        "consume_fit_inputs",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 2, 3),
+                new TensorType(
+                    FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2), new NumericDim(3))),
+                TensorType.of(FLOAT_32, 2, 4),
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(4))))));
+  }
 }

@@ -321,6 +321,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -1480,7 +1481,7 @@ public class TensorGeneratorFactory {
             .getPointerAnalysis()
             .getHeapModel()
             .getPointerKeyForLocal(node, read.getObjectRef());
-    List<TensorGenerator> parts = new ArrayList<>();
+    Map<List<Object>, List<TensorGenerator>> byPath = new LinkedHashMap<>();
     List<TensorGenerator> tensorDatasets = new ArrayList<>();
     for (InstanceKey ik :
         withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(objectKey))) {
@@ -1521,13 +1522,25 @@ public class TensorGeneratorFactory {
       // no tensor: its members are read at the longer paths, and a read of the whole would join
       // them into one tensor of their shapes.
       if (dataset.isStructureAt(builder, below)) continue;
-      TensorGenerator part = new DatasetTupleElementGenerator(source, dataset, below);
-      if (!parts.contains(part)) parts.add(part);
+      List<TensorGenerator> at = byPath.computeIfAbsent(below, k -> new ArrayList<>());
+      if (!at.contains((TensorGenerator) dataset)) at.add((TensorGenerator) dataset);
     }
-    // Keep this one row read over every such dataset: a DatasetIteratorElementGenerator has no
-    // discriminator, so one per dataset anchored on the read would share a memo key and replay the
-    // first one's result for the others. A read with no tuple part is a tensor subscript alone,
-    // which the other readers read.
+    // One read per path over every element or dataset reaching it: a tuple element's generator is
+    // keyed on its path, so one per element anchored on this read would replay the first one's
+    // result for the others.
+    List<TensorGenerator> parts = new ArrayList<>();
+    for (Map.Entry<List<Object>, List<TensorGenerator>> entry : byPath.entrySet()) {
+      List<TensorGenerator> at = entry.getValue();
+      TupleElementProvider underlying =
+          at.size() == 1
+              ? (TupleElementProvider) at.get(0)
+              : new DatasetIteratorElementGenerator(node, at);
+      parts.add(new DatasetTupleElementGenerator(source, underlying, entry.getKey()));
+    }
+    // One row read over every dataset whose element may be a tensor. Its container is keyed on
+    // those datasets, as every DatasetIteratorElementGenerator is, so it shares no memoized result
+    // with another element read anchored on the read. A read with no tuple part is a tensor
+    // subscript alone, which the other readers read.
     if (!parts.isEmpty() && !tensorDatasets.isEmpty())
       parts.add(
           new TensorElementGenerator(
@@ -1606,6 +1619,7 @@ public class TensorGeneratorFactory {
       return null;
     boolean inputs = readsStepInputs(lpk, builder);
     List<TensorGenerator> parts = new ArrayList<>();
+    List<TensorGenerator> tupleDatasets = new ArrayList<>();
     for (InstanceKey ik : withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(lpk))) {
       AllocationSiteInNode asin;
       try {
@@ -1618,15 +1632,24 @@ public class TensorGeneratorFactory {
       if (!type.equals(TensorFlowTypes.DATASET_ELEMENT_TYPE)
           && TensorFlowTypes.datasetElementComponentIndex(type) < 0) return null;
       TensorGenerator part = TensorGenerator.createManualGenerator(asin.getNode(), asin, builder);
-      // A Keras step takes its data whole only where it is no tuple, so a read of its inputs that
-      // holds the element whole reads it where it is a tensor: over the tensors a `map` returns
-      // that may also return a structure, as the element's mirrored leaf at the root is read
-      // (wala/ML#997).
-      if (inputs && part instanceof DatasetIteratorElementGenerator element)
-        part =
-            new DatasetIteratorElementGenerator(
-                asin.getNode(),
-                overTensorReturns(spreadOverReceivers(element.getDatasets(), builder), builder));
+      // A Keras step takes its data whole where it is no tuple and its first member where it is
+      // one, so a read of its inputs that holds the element whole reads it that way (wala/ML#997):
+      // whole over the datasets whose element may be a tensor, a `map` that may also return a
+      // structure viewed over the tensors it returns, as the element's mirrored leaf at the root
+      // is read, and at position 0 over those that may yield a tuple, the `map` included, rather
+      // than through the step's read of position 0, which a receiver that does not resolve leaves
+      // with nothing.
+      if (inputs && part instanceof DatasetIteratorElementGenerator element) {
+        List<TensorGenerator> tensors = tensorDatasets(element.getDatasets(), builder);
+        if (!tensors.isEmpty())
+          parts.add(new DatasetIteratorElementGenerator(asin.getNode(), tensors));
+        for (TensorGenerator dataset : spreadOverReceivers(element.getDatasets(), builder))
+          if (dataset instanceof TupleElementProvider tep
+              && tep.yieldsTuple(builder)
+              && !tep.isStructureAt(builder, List.of(0))
+              && !tupleDatasets.contains(dataset)) tupleDatasets.add(dataset);
+        continue;
+      }
       // A component that is itself a structure, as the pair of a `((x, z), y)` element at [0], is
       // no tensor: its members are read at the longer paths (wala/ML#997).
       if (part instanceof DatasetTupleElementGenerator component
@@ -1634,6 +1657,15 @@ public class TensorGeneratorFactory {
           && underlying.isStructureAt(builder, component.getPath())) continue;
       if (part != null) parts.add(part);
     }
+    // One read at position 0 over every dataset that may yield a tuple: a tuple element's generator
+    // is keyed on its path, so one per dataset anchored on this read would replay the first one's
+    // result for the others.
+    if (!tupleDatasets.isEmpty())
+      parts.add(
+          new DatasetTupleElementGenerator(
+              source,
+              new DatasetIteratorElementGenerator(lpk.getNode(), tupleDatasets),
+              List.of(0)));
     if (parts.isEmpty()) return null;
     return parts.size() == 1 ? parts.get(0) : new CreatorJoin(source, parts);
   }
