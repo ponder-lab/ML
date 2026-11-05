@@ -4380,6 +4380,8 @@ public class TensorGeneratorFactory {
       return new DatasetSampleFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SKIP_TYPE)) return new DatasetSkipGenerator(source);
     else if (isType(calledFunction, DATASET_SHARD_TYPE)) return new DatasetShardGenerator(source);
+    // A take counts the elements it keeps (wala/ML#1216).
+    else if (isType(calledFunction, DATASET_TAKE_TYPE)) return new DatasetTakeGenerator(source);
     // The element of `flat_map` and `interleave` is any element of the datasets their function
     // returns (wala/ML#1214).
     else if (isType(calledFunction, DATASET_FLAT_MAP_TYPE)
@@ -4394,7 +4396,6 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET_REPEAT_TYPE)
         || isType(calledFunction, DATASET_PREFETCH_TYPE)
         || isType(calledFunction, DATASET_CACHE_TYPE)
-        || isType(calledFunction, DATASET_TAKE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
         || isType(calledFunction, DATASET_REDUCE_TYPE)
         || isType(calledFunction, DATASET_FILTER_TYPE)
