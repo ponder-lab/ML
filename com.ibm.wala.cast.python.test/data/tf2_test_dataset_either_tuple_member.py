@@ -5,7 +5,6 @@ import tempfile
 
 import tensorflow as tf
 
-
 path = os.path.join(tempfile.mkdtemp(), "records.tfrecord")
 with tf.io.TFRecordWriter(path) as writer:
     for _ in range(4):
