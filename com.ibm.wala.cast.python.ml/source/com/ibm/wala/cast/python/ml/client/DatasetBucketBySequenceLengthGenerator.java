@@ -1,14 +1,19 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -79,13 +84,14 @@ public class DatasetBucketBySequenceLengthGenerator extends DatasetBatchGenerato
   /**
    * {@inheritDoc}
    *
-   * @implNote Each shape behind a batch dimension of unknown size, where padding leaves it as it
-   *     is, and unknown otherwise.
+   * @implNote Each shape behind a batch dimension of unknown size, where padding to the longest
+   *     element leaves the shapes as they are ({@link #keepsElementShapes}), and unknown otherwise.
+   *     The shapes given are already padded ({@link #padAgainst}).
    */
   @Override
   protected Set<List<Dimension<?>>> applyBatching(
       Set<List<Dimension<?>>> inputShapes, PropagationCallGraphBuilder builder) {
-    if (!this.keepsElementShapes(builder)) return null;
+    if (inputShapes == null || !this.keepsElementShapes(builder)) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> shape : inputShapes) {
       List<Dimension<?>> batched = new ArrayList<>();
@@ -94,6 +100,110 @@ public class DatasetBucketBySequenceLengthGenerator extends DatasetBatchGenerato
       ret.add(batched);
     }
     return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The receiver's element shapes, padded against every shape the receiver may yield.
+   */
+  @Override
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    Set<List<Dimension<?>>> inputShapes = this.getReceiverElementShapes(builder);
+    if (inputShapes == null || inputShapes.isEmpty()) return null;
+    return this.applyBatching(padAgainst(inputShapes, this.paddingContext(builder, null)), builder);
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    return this.getShapesForPath(builder, List.of(index));
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The receiver's component's shapes, padded against every shape the receiver may yield
+   *     there.
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapesForPath(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    TensorGenerator receiver = this.getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) {
+      Set<List<Dimension<?>>> componentShapes = tep.getShapesForPath(builder, path);
+      if (componentShapes == null) return null;
+      if (!componentShapes.isEmpty())
+        return this.applyBatching(
+            padAgainst(componentShapes, this.paddingContext(builder, path)), builder);
+    }
+    return this.getShapes(builder);
+  }
+
+  /**
+   * Every shape the receiver may yield, whole or at a path, read over the receiver as a whole and
+   * not over the one dataset a view of this transformation is fixed to ({@link #overReceiver}). A
+   * batch pads elements that arrive together, and the elements of every dataset a concatenation
+   * joins arrive in one run, though a view is fixed to one of them. Reading every dataset the
+   * receiver may be over-approximates where the receiver is one of several in a run, and only where
+   * their shapes differ on more than one axis.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param path The path of a component, or {@code null} for the whole element.
+   * @return The shapes, or {@code null} where some do not resolve.
+   */
+  private Set<List<Dimension<?>>> paddingContext(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    OrdinalSet<InstanceKey> receiverPTS = this.getReceiverPTS(builder);
+    if (receiverPTS == null || receiverPTS.isEmpty()) return null;
+    if (path == null) return this.getShapesOfValue(builder, receiverPTS);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (InstanceKey valueIK : receiverPTS) {
+      TensorGenerator receiver = DatasetGenerator.receiverGenerator(builder, valueIK);
+      if (!(receiver instanceof TupleElementProvider tep)) return null;
+      Set<List<Dimension<?>>> shapes = tep.getShapesForPath(builder, path);
+      if (shapes == null) return null;
+      ret.addAll(shapes);
+    }
+    return ret;
+  }
+
+  /**
+   * The shapes elements take once padded to the longest in their batch, which pads each axis to
+   * that axis's longest extent. Where the shapes of one rank that may share a batch differ on one
+   * axis at most, the padded shape is one of them, so each stands. Where they differ on more, the
+   * padded shape may combine the axes of different elements, so the axes they differ on are {@link
+   * DynamicDim}: the padded extent varies per batch.
+   *
+   * @param shapes The shapes to pad.
+   * @param context Every shape that may share a batch with them, or {@code null} where it is
+   *     unknown.
+   * @return The padded shapes, or {@code null} where the context is unknown.
+   */
+  private static Set<List<Dimension<?>>> padAgainst(
+      Set<List<Dimension<?>>> shapes, Set<List<Dimension<?>>> context) {
+    if (context == null) return null;
+    Map<Integer, List<List<Dimension<?>>>> byRank = new HashMap<>();
+    for (List<Dimension<?>> shape : context)
+      byRank.computeIfAbsent(shape.size(), k -> new ArrayList<>()).add(shape);
+    Map<Integer, List<Dimension<?>>> joinedByRank = new HashMap<>();
+    for (Map.Entry<Integer, List<List<Dimension<?>>>> entry : byRank.entrySet()) {
+      List<List<Dimension<?>>> group = entry.getValue();
+      List<Dimension<?>> first = group.get(0);
+      List<Dimension<?>> joined = new ArrayList<>(first);
+      int differing = 0;
+      for (int axis = 0; axis < first.size(); axis++) {
+        Dimension<?> dim = first.get(axis);
+        final int at = axis;
+        if (group.stream().anyMatch(shape -> !shape.get(at).equals(dim))) {
+          differing++;
+          joined.set(axis, DynamicDim.INSTANCE);
+        }
+      }
+      if (differing > 1) joinedByRank.put(entry.getKey(), joined);
+    }
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> shape : shapes) ret.add(joinedByRank.getOrDefault(shape.size(), shape));
+    return ret;
   }
 
   /**

@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -70,6 +71,19 @@ public class TestDatasetElementTransformations extends AbstractTensorTest {
   @Test
   public void testUnbatchedRows() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_unbatched_rows", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * The element of {@code unbatch} over a dataset of scalars, which {@code unbatch} rejects, is no
+   * tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testUnbatchedScalar() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_unbatched_scalar", 0, 0, Map.of());
   }
 
   /**
@@ -182,5 +196,28 @@ public class TestDatasetElementTransformations extends AbstractTensorTest {
   @Test
   public void testBucketedPadded() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_bucketed_padded", 1, 1, Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+  }
+
+  /**
+   * Elements whose shapes differ on two axes may share a batch, padded on each axis to its longest,
+   * so the padded extents on those axes vary per batch.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testBucketedMixed() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_bucketed_mixed",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    List.of(new SymbolicDim("?"), DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
   }
 }

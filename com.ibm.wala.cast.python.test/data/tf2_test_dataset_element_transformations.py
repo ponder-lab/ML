@@ -7,6 +7,10 @@ def consume_unbatched(x):
     pass
 
 
+def consume_unbatched_scalar(x):
+    pass
+
+
 def consume_unbatched_pair_x(x):
     pass
 
@@ -55,6 +59,10 @@ def consume_bucketed_padded(x):
     pass
 
 
+def consume_bucketed_mixed(x):
+    pass
+
+
 flat = tf.data.Dataset.from_tensor_slices(tf.ones([8, 4]))
 pairs = tf.data.Dataset.from_tensor_slices(
     (tf.ones([8, 4]), tf.zeros([8, 3], tf.int32))
@@ -72,6 +80,13 @@ for x, y in pairs.batch(2).unbatch():
 for x in tf.data.Dataset.from_tensor_slices(tf.ones([8, 2, 4])).unbatch():
     assert x.shape == (4,) and x.dtype == tf.float32
     consume_unbatched_rows(x)
+# A scalar has no rows: `unbatch` rejects it.
+try:
+    for x in tf.data.Dataset.from_tensor_slices(tf.ones([8])).unbatch():
+        consume_unbatched_scalar(x)
+    assert False
+except ValueError:
+    pass
 # 8 rows batch by 3 into two full batches and one of 2.
 for x in flat.batch(2).unbatch().batch(3):
     assert x.shape in ((3, 4), (2, 4))
@@ -124,3 +139,15 @@ for x in flat.bucket_by_sequence_length(
 ):
     assert x.shape == (2, 5) and x.dtype == tf.float32
     consume_bucketed_padded(x)
+
+# Elements whose shapes differ on two axes share a batch, padded on each axis to its longest.
+mixed = tf.data.Dataset.from_tensor_slices(tf.ones([8, 2, 5])).concatenate(
+    tf.data.Dataset.from_tensor_slices(tf.ones([8, 4, 3]))
+)
+for x in mixed.bucket_by_sequence_length(
+    element_length_func=lambda v: tf.shape(v)[0],
+    bucket_boundaries=[10],
+    bucket_batch_sizes=[3, 3],
+):
+    assert x.shape[1:] in ((2, 5), (4, 5), (4, 3)) and x.dtype == tf.float32
+    consume_bucketed_mixed(x)
