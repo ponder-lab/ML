@@ -382,48 +382,55 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "window_dataset"));
 
   /**
-   * Which part of its receiver's element a window holds, by its allocation type (wala/ML#1201):
-   * {@code -1} for a window of the whole element, the component's index for a window of one of a
-   * tuple element's components, one class per index as for the element's components, and {@code
-   * null} for any type that is no window.
+   * The class of a window of a component of a dataset's tuple element (wala/ML#1221): a dataset of
+   * that component's values, whose position its maker's {@code index} gives.
+   */
+  public static final TypeReference DATASET_WINDOW_COMPONENT =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "window_component"));
+
+  /** {@link #datasetWindowComponent}'s reading of a window of the whole element. */
+  public static final int DATASET_WINDOW_WHOLE = -1;
+
+  /**
+   * {@link #datasetWindowComponent}'s reading of a window of a component, whose position its maker
+   * gives.
+   */
+  public static final int DATASET_WINDOW_OF_COMPONENT = -2;
+
+  /**
+   * Which part of its receiver's element a window holds, by its allocation type (wala/ML#1201,
+   * wala/ML#1221).
    *
    * @param type An allocation type.
-   * @return The component, {@code -1}, or {@code null}.
+   * @return {@link #DATASET_WINDOW_WHOLE} for a window of the whole element, {@link
+   *     #DATASET_WINDOW_OF_COMPONENT} for a window of a tuple element's component, and {@code null}
+   *     for any type that is no window.
    */
   public static Integer datasetWindowComponent(TypeReference type) {
-    if (type.equals(DATASET_WINDOW_DATASET)) return -1;
-    String name = type.getName().toString();
-    String prefix = DATA_PACKAGE_PREFIX + "window_";
-    if (!name.startsWith(prefix)) return null;
-    try {
-      int index = Integer.parseInt(name.substring(prefix.length()));
-      return index >= 0 && index < DATASET_ELEMENT_COMPONENTS ? index : null;
-    } catch (NumberFormatException e) {
-      return null;
-    }
+    if (type.equals(DATASET_WINDOW_DATASET)) return DATASET_WINDOW_WHOLE;
+    if (type.equals(DATASET_WINDOW_COMPONENT)) return DATASET_WINDOW_OF_COMPONENT;
+    return null;
   }
 
   /**
-   * Which part of its receiver's element the window a summary class makes holds (wala/ML#1201):
-   * {@code window} calls {@code make_window} for the window of the whole element and {@code
-   * make_window_k} for the window of component {@code k} of a tuple element, each allocating and
-   * returning its window, so a window's node allocates no other dataset.
+   * Which part of its receiver's element the window a summary class makes holds (wala/ML#1201,
+   * wala/ML#1221): {@code window} calls {@code make_window} for the window of the whole element and
+   * {@code make_window_component} for the window of each of a tuple element's components, with the
+   * component's position, each allocating and returning its window, so a window's node allocates no
+   * other dataset.
    *
    * @param type A summary class.
-   * @return {@code -1} for {@code make_window}, {@code k} for {@code make_window_k}, or {@code
-   *     null} for any other class.
+   * @return {@link #DATASET_WINDOW_WHOLE} for {@code make_window}, {@link
+   *     #DATASET_WINDOW_OF_COMPONENT} for {@code make_window_component}, or {@code null} for any
+   *     other class.
    */
   public static Integer datasetWindowMakerComponent(TypeReference type) {
     String name = type.getName().toString();
-    String maker = DATA_PACKAGE_PREFIX + "make_window";
-    if (name.equals(maker)) return -1;
-    if (!name.startsWith(maker + "_")) return null;
-    try {
-      int index = Integer.parseInt(name.substring(maker.length() + 1));
-      return index >= 0 && index < DATASET_ELEMENT_COMPONENTS ? index : null;
-    } catch (NumberFormatException e) {
-      return null;
-    }
+    if (name.equals(DATA_PACKAGE_PREFIX + "make_window")) return DATASET_WINDOW_WHOLE;
+    if (name.equals(DATA_PACKAGE_PREFIX + "make_window_component"))
+      return DATASET_WINDOW_OF_COMPONENT;
+    return null;
   }
 
   public static final TypeReference DATASET_MAP_TYPE =
