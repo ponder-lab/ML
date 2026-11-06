@@ -55,6 +55,10 @@ def consume_bucketed_unpadded(x):
     pass
 
 
+def consume_resampled_batch_sizes(x):
+    pass
+
+
 def consume_bucketed_padded(x):
     pass
 
@@ -115,6 +119,21 @@ for c, (x, y) in pairs.rejection_resample(
 ):
     assert x.shape == (4,) and x.dtype == tf.float32
     consume_resampled_pair_x(x)
+# Resampling draws as many elements as it likes: here 10 of 8, so a batch of 3 ends with one of 1.
+counted = tf.data.Dataset.from_tensor_slices(
+    tf.reshape(tf.range(32, dtype=tf.float32), [8, 4])
+)
+sizes = []
+for c, x in counted.rejection_resample(
+    class_func=lambda v: tf.cast(v[0] > 12.0, tf.int32),
+    target_dist=[0.5, 0.5],
+    initial_dist=[0.375, 0.625],
+    seed=4,
+).batch(3):
+    sizes.append(x.shape[0])
+    assert x.shape[1:] == (4,) and x.dtype == tf.float32
+    consume_resampled_batch_sizes(x)
+assert sizes == [3, 3, 3, 1]
 for x in flat.bucket_by_sequence_length(
     element_length_func=lambda v: tf.shape(v)[0],
     bucket_boundaries=[3],
