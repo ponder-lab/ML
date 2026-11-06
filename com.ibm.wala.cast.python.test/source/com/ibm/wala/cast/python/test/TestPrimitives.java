@@ -264,7 +264,9 @@ public class TestPrimitives extends TestJythonCallGraphShape {
    * in its fields is evaluated where the program writes it, so a function called only there is
    * reached, at its own line and column. That holds for a field in a format specification, one with
    * a conversion or a {@code =} specifier, one in an f-string joined to a plain string beside it,
-   * one on a later line of a triple-quoted f-string, and one under a {@code try}. An f-string with
+   * one on a later line of a triple-quoted f-string, one under a {@code try}, one in an f-string
+   * joined to a raw string, and one holding a triple-quoted string. A field the front end cannot
+   * parse, such as one with {@code :=}, still leaves a string of unknown content. An f-string with
    * no field is the constant it denotes, its doubled braces read as single ones (<a
    * href="https://github.com/wala/ML/issues/1231">wala/ML#1231</a>). Each {@code sink_*} function
    * in {@code fstring1.py} is read for what its parameter points to.
@@ -291,7 +293,9 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "unequal",
             "bounded",
             "keyed",
-            "nested"))
+            "nested",
+            "side_raw",
+            "side_triple"))
       assertFalse(callee + " is unreached", getNodes(CG, "script fstring1.py/" + callee).isEmpty());
     // A call in a field is where the program writes it: past the plain string an f-string is
     // joined to, and on the later line of a triple-quoted one.
@@ -324,7 +328,10 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "guarded",
             "subscript",
             "operators",
-            "nested")) {
+            "nested",
+            "raw_joined",
+            "triple_quoted",
+            "unparsed")) {
       Set<String> kinds = new TreeSet<>();
       Collection<CGNode> nodes = getNodes(CG, "script fstring1.py/sink_" + sink);
       assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
@@ -351,6 +358,9 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("subscript", Set.of("Lstring"));
     expected.put("operators", Set.of("Lstring"));
     expected.put("nested", Set.of("Lstring"));
+    expected.put("raw_joined", Set.of("Lstring"));
+    expected.put("triple_quoted", Set.of("Lstring"));
+    expected.put("unparsed", Set.of("Lstring"));
     assertEquals(expected, pointees);
   }
 
