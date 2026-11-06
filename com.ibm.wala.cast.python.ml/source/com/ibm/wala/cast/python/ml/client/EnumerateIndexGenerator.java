@@ -9,6 +9,10 @@ import java.util.List;
 import java.util.Set;
 
 /** A generator for the index tensor produced by {@code tf.data.Dataset.enumerate}. */
+@DispatchExempt(
+    "Constructed only by delegation: an enumerated dataset's generator makes it for the index of"
+        + " an element that is not copied ({@link DatasetEnumerateGenerator#getIndexGenerator});"
+        + " no dispatch-table type names it (wala/ML#1214).")
 public class EnumerateIndexGenerator extends TensorGenerator {
 
   public EnumerateIndexGenerator(PointsToSetVariable source) {

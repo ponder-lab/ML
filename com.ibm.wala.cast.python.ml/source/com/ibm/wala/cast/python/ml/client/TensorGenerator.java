@@ -12825,6 +12825,10 @@ public abstract class TensorGenerator implements Cloneable {
       return new DatasetShardGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_TAKE_TYPE)) {
       return new DatasetTakeGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_UNBATCH_TYPE)) {
+      return new DatasetUnbatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE)) {
+      return new DatasetBucketBySequenceLengthGenerator(node);
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
