@@ -199,6 +199,15 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     WalkContext getParent();
 
+    /**
+     * The handlers of the {@code try} statement this context is for, if it is for one.
+     *
+     * @return The handlers, in the order the program writes them; none for any other context.
+     */
+    default Collection<CAstNode> handlers() {
+      return Collections.emptyList();
+    }
+
     default CAstEntity entity() {
       return getParent().entity();
     }
@@ -1198,12 +1207,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       CAstNode f = notePosition(arg0.getInternalFunc().accept(this), arg0.getInternalFunc());
 
       CAstNode call = notePosition(Ast.makeNode(CAstNode.CALL, f, args), arg0);
-
-      if (context.getCatchTarget("Exception") != null) {
-        context.cfg().map(arg0, call);
-        context.cfg().add(arg0, context.getCatchTarget("Exception"), "Exception");
-      }
-
+      this.addExceptionEdges(arg0, call);
       return call;
     }
 
@@ -2914,12 +2918,38 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitRaise(Raise arg0) throws Exception {
-      if (arg0.getInternalExc() == null) {
-        return Ast.makeNode(
-            CAstNode.THROW, Ast.makeNode(CAstNode.VAR, Ast.makeConstant("$currentException")));
-      } else {
-        return Ast.makeNode(CAstNode.THROW, arg0.getInternalExc().accept(this));
-      }
+      CAstNode raise =
+          arg0.getInternalExc() == null
+              ? Ast.makeNode(
+                  CAstNode.THROW, Ast.makeNode(CAstNode.VAR, Ast.makeConstant("$currentException")))
+              : Ast.makeNode(CAstNode.THROW, arg0.getInternalExc().accept(this));
+      this.addExceptionEdges(arg0, raise);
+      return raise;
+    }
+
+    /**
+     * Adds an exceptional edge from what may raise to each handler that may catch it: every handler
+     * of every {@code try} statement enclosing it in its function, innermost first (<a
+     * href="https://github.com/wala/ML/issues/1005">wala/ML#1005</a>). The type an exception has is
+     * not known here, so a handler naming a type, or a tuple of them, may catch it as a bare one
+     * may, and one that does not catch it passes it to the enclosing {@code try}. The walk stops at
+     * the function, since an exception leaves a function to its caller, never to a {@code try}
+     * around the function's definition (wala/ML#1004).
+     *
+     * @param tree The node that may raise.
+     * @param raise Its translation.
+     */
+    private void addExceptionEdges(PythonTree tree, CAstNode raise) {
+      java.util.List<CAstNode> handlers = new ArrayList<>();
+      for (WalkContext c = context;
+          c != null && !(c instanceof FunctionContext) && !(c instanceof RootContext);
+          c = c.getParent()) handlers.addAll(c.handlers());
+      if (handlers.isEmpty()) return;
+      context.cfg().map(tree, raise);
+      // Each edge needs a label of its own, since the control-flow map keys an edge by its source
+      // and its label.
+      for (int i = 0; i < handlers.size(); i++)
+        context.cfg().add(tree, handlers.get(i), "handler " + i);
     }
 
     @Override
@@ -3328,8 +3358,17 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     private class TryCatchContext extends TranslatorToCAst.TryCatchContext<WalkContext, PythonTree>
         implements WalkContext {
 
+      /** The {@code try} statement's handlers, in the order the program writes them. */
+      private final Collection<CAstNode> handlers;
+
       TryCatchContext(WalkContext parent, Map<String, CAstNode> catchNode) {
         super(parent, catchNode);
+        this.handlers = java.util.List.copyOf(catchNode.values());
+      }
+
+      @Override
+      public Collection<CAstNode> handlers() {
+        return this.handlers;
       }
 
       @Override
@@ -3340,7 +3379,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitTryExcept(TryExcept arg0) throws Exception {
-      Map<String, CAstNode> handlers = HashMapFactory.make();
+      // In the order the program writes them, each under its own key, so that two handlers whose
+      // types read the same both stay in the translation (wala/ML#1005).
+      Map<String, CAstNode> handlers = new java.util.LinkedHashMap<>();
       for (PyObject x : arg0.getChildren()) {
         if (x instanceof ExceptHandler) {
           CAstNode n1, n2;
@@ -3366,7 +3407,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
             type = type.getChild(0);
           }
           String typeStr = type.getValue().toString();
-          handlers.put(typeStr, handler);
+          String key = typeStr;
+          for (int i = 1; handlers.containsKey(key); i++) key = typeStr + "#" + i;
+          handlers.put(key, handler);
 
           context.cfg().map(handler, handler);
 
