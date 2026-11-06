@@ -5998,12 +5998,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   /**
    * The scalar type of an instance key, for the operator rules of <a
    * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>: a type-level key of a Python
-   * scalar type (wala/ML#1148) has that type, and a numeric or Boolean constant the type of its
-   * value.
+   * scalar type (wala/ML#1148, wala/ML#1232) has that type, and a numeric, Boolean or string
+   * constant the type of its value.
    *
    * @param key An instance key.
-   * @return {@link PythonTypes#PYTHON_INT}, {@link PythonTypes#PYTHON_FLOAT} or {@link
-   *     PythonTypes#PYTHON_BOOL}, or {@code null} when the key is no Python scalar.
+   * @return {@link PythonTypes#PYTHON_INT}, {@link PythonTypes#PYTHON_FLOAT}, {@link
+   *     PythonTypes#PYTHON_BOOL} or {@link PythonTypes#string}, or {@code null} when the key is no
+   *     Python scalar.
    */
   static TypeReference scalarTypeOf(InstanceKey key) {
     if (key instanceof ConstantKey<?> constant) return scalarTypeOfValue(constant.getValue());
@@ -6016,12 +6017,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
   /**
    * The scalar type of a constant value: {@code bool} for a {@link Boolean}, {@code float} for a
-   * {@link Double} or {@link Float}, and {@code int} for any other {@link Number}.
+   * {@link Double} or {@link Float}, {@code int} for any other {@link Number}, and {@code str} for
+   * a {@link String} (wala/ML#1232).
    *
    * @param value A constant value.
-   * @return The value's scalar type, or {@code null} when it is no number or Boolean.
+   * @return The value's scalar type, or {@code null} when it is no number, Boolean or string.
    */
   static TypeReference scalarTypeOfValue(Object value) {
+    if (value instanceof String) return PythonTypes.string;
     if (value instanceof Boolean) return PYTHON_BOOL;
     if (value instanceof Double || value instanceof Float) return PYTHON_FLOAT;
     if (value instanceof Number) return PYTHON_INT;
@@ -6059,6 +6062,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    *       ~} an {@code int}, and nothing over a {@code float}.
    * </ul>
    *
+   * <p>With a {@code str} operand (<a
+   * href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>), a comparison gives a {@code
+   * bool}, {@code +} of two {@code str}s, {@code *} of a {@code str} and an {@code int} or {@code
+   * bool}, and {@code %} with a {@code str} on the left give a {@code str}, and every other
+   * operator, unary ones and the builtins included, raises and gives nothing.
+   *
    * @param operator The binary or unary operator.
    * @param left The type of the first operand.
    * @param right The type of the second operand, or {@code null} for a unary operator.
@@ -6066,6 +6075,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   static Set<TypeReference> scalarResultTypes(
       Object operator, TypeReference left, TypeReference right) {
+    if (PythonTypes.string.equals(left) || PythonTypes.string.equals(right))
+      return stringResultTypes(operator, left, right);
     boolean anyFloat = PYTHON_FLOAT.equals(left) || PYTHON_FLOAT.equals(right);
     // The builtins whose result follows their arguments (wala/ML#1148).
     if (operator == ScalarBuiltin.ROUND) return Set.of(PYTHON_INT);
@@ -6106,6 +6117,42 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return Set.of(anyFloat ? PYTHON_FLOAT : PYTHON_INT);
     if (operator == IBinaryOpInstruction.Operator.DIV)
       return anyFloat ? Set.of(PYTHON_FLOAT) : Set.of(PYTHON_FLOAT, PYTHON_INT);
+    return Set.of();
+  }
+
+  /**
+   * The types of the result of an operator with a {@code str} operand, as {@link
+   * #scalarResultTypes} describes them (wala/ML#1232).
+   *
+   * @param operator The binary or unary operator.
+   * @param left The type of the first operand.
+   * @param right The type of the second operand, or {@code null} for a unary operator.
+   * @return {@code bool} for a comparison, {@code str} for a concatenation, a repetition or a
+   *     formatting, and nothing otherwise.
+   */
+  private static Set<TypeReference> stringResultTypes(
+      Object operator, TypeReference left, TypeReference right) {
+    if (right == null || operator instanceof ScalarBuiltin) return Set.of();
+    if (operator == CAstBinaryOp.EQ
+        || operator == CAstBinaryOp.NE
+        || operator == CAstBinaryOp.LT
+        || operator == CAstBinaryOp.LE
+        || operator == CAstBinaryOp.GT
+        || operator == CAstBinaryOp.GE
+        || operator == CAstBinaryOp.STRICT_EQ
+        || operator == CAstBinaryOp.STRICT_NE) return Set.of(PYTHON_BOOL);
+    boolean leftString = PythonTypes.string.equals(left);
+    boolean rightString = PythonTypes.string.equals(right);
+    if (operator == IBinaryOpInstruction.Operator.ADD)
+      return leftString && rightString ? Set.of(PythonTypes.string) : Set.of();
+    if (operator == IBinaryOpInstruction.Operator.MUL) {
+      TypeReference count = leftString ? right : left;
+      return leftString != rightString && (PYTHON_INT.equals(count) || PYTHON_BOOL.equals(count))
+          ? Set.of(PythonTypes.string)
+          : Set.of();
+    }
+    if (operator == IBinaryOpInstruction.Operator.REM)
+      return leftString ? Set.of(PythonTypes.string) : Set.of();
     return Set.of();
   }
 

@@ -455,13 +455,14 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     // `epsilon=1e-6`, bound to the default's constant by the call trampoline (wala/ML#739).
     PointerKey scalarPk =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    // Read without the client-only mask: the type-level key of a Python scalar of unknown value,
-    // such as an `int(...)` result, is evidence of a scalar too (wala/ML#1148, wala/ML#1163).
+    // Read without the client-only mask: the type-level key of a numeric Python scalar of unknown
+    // value, such as an `int(...)` result, is evidence of a scalar too (wala/ML#1148,
+    // wala/ML#1163). A string's key is not, as a string constant is not (wala/ML#1232).
     OrdinalSet<InstanceKey> scalarPts = builder.getPointerAnalysis().getPointsToSet(scalarPk);
     if (scalarPts != null && !scalarPts.isEmpty()) {
       boolean allScalars = true;
       for (InstanceKey ik : scalarPts)
-        if (!Util.isPythonScalarKey(ik)
+        if (!(Util.isPythonScalarKey(ik) && PythonTypes.isNumeric(ik.concreteType().getReference()))
             && (!(ik instanceof ConstantKey)
                 || !(((ConstantKey<?>) ik).getValue() instanceof Number))) {
           allScalars = false;

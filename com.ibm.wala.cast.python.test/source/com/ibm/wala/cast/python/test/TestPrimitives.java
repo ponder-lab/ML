@@ -253,4 +253,54 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     }
     assertEquals(Map.of("f", Set.of("Llist"), "g", Set.of("0.1")), pointees);
   }
+
+  /**
+   * A Python {@code str} whose value is not a literal points to one type-level key, as an {@code
+   * int} does: the result of {@code str(...)}, of concatenating two strings, of repeating one, and
+   * of formatting one with {@code %}. A comparison of one gives a {@code bool}, parsing one with
+   * {@code int} an {@code int}, and a literal keeps its constant key (<a
+   * href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>). Each {@code sink_*} function
+   * in {@code string_keys1.py} is read for what its parameter points to, and the kind of each key.
+   */
+  @Test
+  public void testStringKeys()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("string_keys1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Map<String, Set<String>> pointees = new TreeMap<>();
+    for (String sink :
+        List.of(
+            "str",
+            "str_literal",
+            "concatenated",
+            "repeated",
+            "formatted",
+            "compared",
+            "parsed",
+            "literal")) {
+      Set<String> kinds = new TreeSet<>();
+      Collection<CGNode> nodes = getNodes(CG, "script string_keys1.py/sink_" + sink);
+      assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
+      for (CGNode node : nodes)
+        for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, 2)))
+          kinds.add(
+              ik instanceof ConstantKey<?> c
+                  ? "constant " + c.getValue()
+                  : ik.getClass().getSimpleName() + " " + ik.concreteType().getName());
+      pointees.put(sink, kinds);
+    }
+    Map<String, Set<String>> expected = new TreeMap<>();
+    expected.put("str", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("str_literal", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("concatenated", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("repeated", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("formatted", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("compared", Set.of("ConcreteTypeKey Lbool"));
+    expected.put("parsed", Set.of("ConcreteTypeKey Lint"));
+    expected.put("literal", Set.of("constant h"));
+    assertEquals(expected, pointees);
+  }
 }

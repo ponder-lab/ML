@@ -126,6 +126,10 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference dict =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ldict"));
 
+  /**
+   * Python's {@code str}. A value of this type whose value is not a literal points to one
+   * type-level instance key, as {@link #PYTHON_INT} does (wala/ML#1232).
+   */
   public static final TypeReference string =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lstring"));
 
@@ -274,14 +278,27 @@ public class PythonTypes extends AstTypeReference {
   /**
    * Whether a type is one of the Python scalar types whose values of unknown value share one
    * type-level instance key: {@link #PYTHON_INT}, {@link #PYTHON_FLOAT} and {@link #PYTHON_BOOL}
-   * (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>). Such a key says that the
-   * value is a Python scalar, so it is evidence that the value is not a tensor.
+   * (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>), and {@link #string} (<a
+   * href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>). Such a key says that the value
+   * is a Python scalar, so it is evidence that the value is not a tensor.
+   *
+   * @param type The type.
+   * @return {@code true} iff {@code type} is {@link #PYTHON_INT}, {@link #PYTHON_FLOAT}, {@link
+   *     #PYTHON_BOOL} or {@link #string}.
+   */
+  public static boolean isScalar(TypeReference type) {
+    return isNumeric(type) || string.equals(type);
+  }
+
+  /**
+   * Whether a type is one of the numeric Python scalar types, the {@link #isScalar} types other
+   * than {@link #string}: a {@code bool} counts as a number, as it does in arithmetic.
    *
    * @param type The type.
    * @return {@code true} iff {@code type} is {@link #PYTHON_INT}, {@link #PYTHON_FLOAT} or {@link
    *     #PYTHON_BOOL}.
    */
-  public static boolean isScalar(TypeReference type) {
+  public static boolean isNumeric(TypeReference type) {
     return PYTHON_INT.equals(type) || PYTHON_FLOAT.equals(type) || PYTHON_BOOL.equals(type);
   }
 

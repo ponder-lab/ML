@@ -485,8 +485,9 @@ public class Util {
 
   /**
    * Whether an instance key is the type-level key of a Python scalar of unknown value, such as the
-   * result of {@code len(xs)} (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
-   * A literal is a {@link ConstantKey} instead.
+   * result of {@code len(xs)} (<a href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>)
+   * or of {@code str(x)} (<a href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>). A
+   * literal is a {@link ConstantKey} instead.
    *
    * @param instanceKey The {@link InstanceKey} in question.
    * @return {@code true} iff {@code instanceKey} is a {@link ConcreteTypeKey} of a Python scalar
