@@ -5419,6 +5419,7 @@
           <new def="rd_skip" class="Ltensorflow/data/skip"/>
           <new def="rd_shard" class="Ltensorflow/data/shard"/>
           <new def="rd_cache" class="Ltensorflow/data/cache"/>
+          <new def="rd_scan" class="Ltensorflow/data/scan"/>
           <new def="rd_bucket_by_sequence_length" class="Ltensorflow/data/bucket_by_sequence_length"/>
           <new def="rd_rejection_resample" class="Ltensorflow/data/rejection_resample"/>
           <new def="rd_apply" class="Ltensorflow/data/apply"/>
@@ -5427,6 +5428,7 @@
           <putfield class="LRoot" field="skip" fieldType="LRoot" ref="x" value="rd_skip"/>
           <putfield class="LRoot" field="shard" fieldType="LRoot" ref="x" value="rd_shard"/>
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
+          <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
@@ -5479,6 +5481,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_skip" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shard" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_scan" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
@@ -5507,6 +5510,7 @@
           <new def="rd_skip" class="Ltensorflow/data/skip"/>
           <new def="rd_shard" class="Ltensorflow/data/shard"/>
           <new def="rd_cache" class="Ltensorflow/data/cache"/>
+          <new def="rd_scan" class="Ltensorflow/data/scan"/>
           <new def="rd_bucket_by_sequence_length" class="Ltensorflow/data/bucket_by_sequence_length"/>
           <new def="rd_rejection_resample" class="Ltensorflow/data/rejection_resample"/>
           <new def="rd_apply" class="Ltensorflow/data/apply"/>
@@ -5515,6 +5519,7 @@
           <putfield class="LRoot" field="skip" fieldType="LRoot" ref="x" value="rd_skip"/>
           <putfield class="LRoot" field="shard" fieldType="LRoot" ref="x" value="rd_shard"/>
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
+          <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
@@ -5567,6 +5572,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_skip" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shard" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_scan" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
@@ -5591,6 +5597,7 @@
           <new def="rd_skip" class="Ltensorflow/data/skip"/>
           <new def="rd_shard" class="Ltensorflow/data/shard"/>
           <new def="rd_cache" class="Ltensorflow/data/cache"/>
+          <new def="rd_scan" class="Ltensorflow/data/scan"/>
           <new def="rd_bucket_by_sequence_length" class="Ltensorflow/data/bucket_by_sequence_length"/>
           <new def="rd_rejection_resample" class="Ltensorflow/data/rejection_resample"/>
           <new def="rd_apply" class="Ltensorflow/data/apply"/>
@@ -5599,6 +5606,7 @@
           <putfield class="LRoot" field="skip" fieldType="LRoot" ref="x" value="rd_skip"/>
           <putfield class="LRoot" field="shard" fieldType="LRoot" ref="x" value="rd_shard"/>
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
+          <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
@@ -5641,6 +5649,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_skip" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shard" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_scan" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
@@ -5663,6 +5672,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shard" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_cache" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_scan" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_rejection_resample" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_unbatch" value="element"/>

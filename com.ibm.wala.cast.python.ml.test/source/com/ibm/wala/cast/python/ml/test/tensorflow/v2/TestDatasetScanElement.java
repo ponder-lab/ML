@@ -137,4 +137,31 @@ public class TestDatasetScanElement extends AbstractTensorTest {
   public void testHeldMapped() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_held_mapped", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32))));
   }
+
+  /**
+   * A member of a structured second member, such as a tuple, is that tuple's member, which the
+   * function returns.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSplitFirst() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_split_first", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * A batch of a structured second member is not modeled: the generator does not read a member of a
+   * structure, so a member of the batch is no tensor rather than a tensor of unknown type standing
+   * in for the missing model (wala/ML#1214).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testSplitBatchFirst() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_split_batch_first", 0, 0, Map.of());
+  }
 }

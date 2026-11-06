@@ -25,6 +25,10 @@ def total(s, v):
     return t, t
 
 
+def split(s, v):
+    return s + 1.0, (v, v * 2.0)
+
+
 def consume_stepped(x):
     assert x.shape == (4,)
     assert x.dtype == tf.float32
@@ -55,6 +59,16 @@ def consume_held_mapped(x):
     assert x.dtype == tf.float32
 
 
+def consume_split_first(x):
+    assert x.shape == (4,)
+    assert x.dtype == tf.float32
+
+
+def consume_split_batch_first(x):
+    assert x.shape == (2, 4)
+    assert x.dtype == tf.float32
+
+
 flat = tf.data.Dataset.from_tensor_slices(tf.ones([8, 4]))
 
 for x in flat.scan(tf.constant(0.0), step):
@@ -74,3 +88,10 @@ for x in flat.scan(tf.constant(0.0), total).batch(2):
 
 for x in flat.scan(tf.constant(0.0), hold).map(lambda h: h * 2.0):
     consume_held_mapped(x)
+
+# A structured second member: its members are the tuple's own.
+for x, y in flat.scan(tf.constant(0.0), split):
+    consume_split_first(x)
+
+for x, y in flat.scan(tf.constant(0.0), split).batch(2):
+    consume_split_batch_first(x)
