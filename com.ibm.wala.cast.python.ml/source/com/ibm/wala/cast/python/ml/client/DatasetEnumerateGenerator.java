@@ -49,8 +49,8 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     Set<TensorType> types = HashSetFactory.make();
 
-    // Add the index type (int64 scalar)
-    types.add(new TensorType(DType.INT64.name().toLowerCase(Locale.ROOT), Collections.emptyList()));
+    // Add the index type, a scalar.
+    types.add(new TensorType(this.getIndexDType().name().toLowerCase(Locale.ROOT), INDEX_SHAPE));
 
     // Add the underlying datasets' types
     Receivers receivers = this.receivers(builder);
@@ -69,6 +69,25 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
 
   /** The index's shape, a scalar. */
   private static final List<Dimension<?>> INDEX_SHAPE = Collections.emptyList();
+
+  /**
+   * The dtype of the scalar at position 0 of the element.
+   *
+   * @return {@link DType#INT64}, an index's.
+   */
+  protected DType getIndexDType() {
+    return DType.INT64;
+  }
+
+  /**
+   * A generator for the scalar at position 0 of an element of this dataset that is not copied.
+   *
+   * @param source The element's variable.
+   * @return The index's generator.
+   */
+  public TensorGenerator getIndexGenerator(PointsToSetVariable source) {
+    return new EnumerateIndexGenerator(source);
+  }
 
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
@@ -112,7 +131,7 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
 
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    if (index == INDEX_POSITION) return EnumSet.of(DType.INT64);
+    if (index == INDEX_POSITION) return EnumSet.of(this.getIndexDType());
     if (index == ELEMENT_POSITION) {
       Receivers receivers = this.receivers(builder);
       Set<DType> ret = EnumSet.noneOf(DType.class);
