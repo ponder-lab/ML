@@ -18,6 +18,14 @@ def sink_formatted(n):
     pass
 
 
+def sink_formatted_tuple(n):
+    pass
+
+
+def sink_formatted_dict(n):
+    pass
+
+
 def sink_compared(n):
     pass
 
@@ -44,6 +52,12 @@ for i in range(3):
     formatted = "h%d" % i
     assert formatted == concatenated
     sink_formatted(formatted)
+    formatted_tuple = "%d-%s" % (i, text)
+    assert formatted_tuple == "%d-%d" % (i, i)
+    sink_formatted_tuple(formatted_tuple)
+    formatted_dict = "%(k)s" % {"k": text}
+    assert formatted_dict == text
+    sink_formatted_dict(formatted_dict)
     compared = text == "1"
     assert isinstance(compared, bool)
     sink_compared(compared)

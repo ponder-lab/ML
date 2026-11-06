@@ -2309,10 +2309,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       SymbolTable symtab = ir.getSymbolTable();
       PointerKey[] keys = new PointerKey[2];
       Set<TypeReference>[] fixed = newScalarTypeSets();
+      boolean[] fixedMember = new boolean[2];
       for (int i = 0; i < 2; i++) {
         int use = binop.getUse(i);
         if (use <= 0) continue;
         if (symtab.isConstant(use)) {
+          fixedMember[i] = true;
           TypeReference type = scalarTypeOfValue(symtab.getConstantValue(use));
           if (type != null) fixed[i].add(type);
           continue;
@@ -2322,6 +2324,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         // since a constraint over its key would materialize it (the wala/ML#668 trap).
         if (contentsAreInvariant(symtab, du, use) || system.isImplicit(key)) {
           for (InstanceKey ik : getInvariantContents(symtab, du, node, use)) {
+            fixedMember[i] = true;
             TypeReference type = scalarTypeOf(ik);
             if (type != null) fixed[i].add(type);
           }
@@ -2335,7 +2338,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               getPointerKeyForLocal(binop.getDef()),
               binop.getOperator(),
               keys,
-              fixed);
+              fixed,
+              fixedMember);
       if (keys[0] == null && keys[1] == null) operator.apply();
       for (PointerKey key : keys) if (key != null) system.newSideEffect(operator, key);
     }
@@ -6184,6 +6188,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final Object operator;
     private final PointerKey[] keys;
     private final Set<TypeReference>[] fixed;
+
+    /**
+     * Whether each operand has a fixed member of any kind, a scalar or not, which {@code %} with a
+     * {@code str} on the left reads (wala/ML#1232).
+     */
+    private final boolean[] fixedMember;
+
     private final boolean unary;
 
     private ScalarOperationOperator(
@@ -6193,12 +6204,24 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         Object operator,
         PointerKey[] keys,
         Set<TypeReference>[] fixed) {
+      this(node, pc, resultKey, operator, keys, fixed, new boolean[2]);
+    }
+
+    private ScalarOperationOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        Object operator,
+        PointerKey[] keys,
+        Set<TypeReference>[] fixed,
+        boolean[] fixedMember) {
       this.node = node;
       this.pc = pc;
       this.resultKey = resultKey;
       this.operator = operator;
       this.keys = keys;
       this.fixed = fixed;
+      this.fixedMember = fixedMember;
       this.unary =
           operator instanceof IUnaryOpInstruction.IOperator || operator == ScalarBuiltin.ROUND;
     }
@@ -6219,11 +6242,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         Set<TypeReference> right = operandTypes(1);
         for (TypeReference l : left)
           for (TypeReference r : right) results.addAll(scalarResultTypes(operator, l, r));
+        // `%` with a `str` on the left formats whatever is on the right, a tuple or a dict as well
+        // as a scalar, and gives a `str` or raises (wala/ML#1232).
+        if (operator == IBinaryOpInstruction.Operator.REM
+            && left.contains(PythonTypes.string)
+            && this.hasMember(1)) results.add(PythonTypes.string);
       }
       for (TypeReference type : results) {
         InstanceKey key = getScalarTypeKey(node, pc, type);
         if (key != null) getSystem().newConstraint(resultKey, key);
       }
+    }
+
+    /**
+     * Whether an operand has a member of any kind: a fixed one, or one in its key's current
+     * points-to set.
+     *
+     * @param i The operand's position.
+     * @return {@code true} iff the operand has a member.
+     */
+    private boolean hasMember(int i) {
+      if (fixedMember[i] || !fixed[i].isEmpty()) return true;
+      if (keys[i] == null) return false;
+      PointsToSetVariable variable = getSystem().findOrCreatePointsToSet(keys[i]);
+      return variable.getValue() != null && !variable.getValue().isEmpty();
     }
 
     /**

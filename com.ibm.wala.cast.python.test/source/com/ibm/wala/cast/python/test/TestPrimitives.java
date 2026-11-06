@@ -257,10 +257,11 @@ public class TestPrimitives extends TestJythonCallGraphShape {
   /**
    * A Python {@code str} whose value is not a literal points to one type-level key, as an {@code
    * int} does: the result of {@code str(...)}, of concatenating two strings, of repeating one, and
-   * of formatting one with {@code %}. A comparison of one gives a {@code bool}, parsing one with
-   * {@code int} an {@code int}, and a literal keeps its constant key (<a
-   * href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>). Each {@code sink_*} function
-   * in {@code string_keys1.py} is read for what its parameter points to, and the kind of each key.
+   * of formatting one with {@code %}, over a scalar, a tuple or a dict. A comparison of one gives a
+   * {@code bool}, parsing one with {@code int} an {@code int}, and a literal keeps its constant key
+   * (<a href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>). Each {@code sink_*}
+   * function in {@code string_keys1.py} is read for what its parameter points to, and the kind of
+   * each key.
    */
   @Test
   public void testStringKeys()
@@ -278,6 +279,8 @@ public class TestPrimitives extends TestJythonCallGraphShape {
             "concatenated",
             "repeated",
             "formatted",
+            "formatted_tuple",
+            "formatted_dict",
             "compared",
             "parsed",
             "literal")) {
@@ -298,6 +301,8 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("concatenated", Set.of("ConcreteTypeKey Lstring"));
     expected.put("repeated", Set.of("ConcreteTypeKey Lstring"));
     expected.put("formatted", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("formatted_tuple", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("formatted_dict", Set.of("ConcreteTypeKey Lstring"));
     expected.put("compared", Set.of("ConcreteTypeKey Lbool"));
     expected.put("parsed", Set.of("ConcreteTypeKey Lint"));
     expected.put("literal", Set.of("constant h"));
