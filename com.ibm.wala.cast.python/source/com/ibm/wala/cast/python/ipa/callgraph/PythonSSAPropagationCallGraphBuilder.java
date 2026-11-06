@@ -2309,10 +2309,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       SymbolTable symtab = ir.getSymbolTable();
       PointerKey[] keys = new PointerKey[2];
       Set<TypeReference>[] fixed = newScalarTypeSets();
+      boolean[] fixedMember = new boolean[2];
       for (int i = 0; i < 2; i++) {
         int use = binop.getUse(i);
         if (use <= 0) continue;
         if (symtab.isConstant(use)) {
+          fixedMember[i] = true;
           TypeReference type = scalarTypeOfValue(symtab.getConstantValue(use));
           if (type != null) fixed[i].add(type);
           continue;
@@ -2322,6 +2324,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         // since a constraint over its key would materialize it (the wala/ML#668 trap).
         if (contentsAreInvariant(symtab, du, use) || system.isImplicit(key)) {
           for (InstanceKey ik : getInvariantContents(symtab, du, node, use)) {
+            fixedMember[i] = true;
             TypeReference type = scalarTypeOf(ik);
             if (type != null) fixed[i].add(type);
           }
@@ -2335,7 +2338,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               getPointerKeyForLocal(binop.getDef()),
               binop.getOperator(),
               keys,
-              fixed);
+              fixed,
+              fixedMember);
       if (keys[0] == null && keys[1] == null) operator.apply();
       for (PointerKey key : keys) if (key != null) system.newSideEffect(operator, key);
     }
@@ -5998,12 +6002,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   /**
    * The scalar type of an instance key, for the operator rules of <a
    * href="https://github.com/wala/ML/issues/1149">wala/ML#1149</a>: a type-level key of a Python
-   * scalar type (wala/ML#1148) has that type, and a numeric or Boolean constant the type of its
-   * value.
+   * scalar type (wala/ML#1148, wala/ML#1232) has that type, and a numeric, Boolean or string
+   * constant the type of its value.
    *
    * @param key An instance key.
-   * @return {@link PythonTypes#PYTHON_INT}, {@link PythonTypes#PYTHON_FLOAT} or {@link
-   *     PythonTypes#PYTHON_BOOL}, or {@code null} when the key is no Python scalar.
+   * @return {@link PythonTypes#PYTHON_INT}, {@link PythonTypes#PYTHON_FLOAT}, {@link
+   *     PythonTypes#PYTHON_BOOL} or {@link PythonTypes#string}, or {@code null} when the key is no
+   *     Python scalar.
    */
   static TypeReference scalarTypeOf(InstanceKey key) {
     if (key instanceof ConstantKey<?> constant) return scalarTypeOfValue(constant.getValue());
@@ -6016,12 +6021,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
   /**
    * The scalar type of a constant value: {@code bool} for a {@link Boolean}, {@code float} for a
-   * {@link Double} or {@link Float}, and {@code int} for any other {@link Number}.
+   * {@link Double} or {@link Float}, {@code int} for any other {@link Number}, and {@code str} for
+   * a {@link String} (wala/ML#1232).
    *
    * @param value A constant value.
-   * @return The value's scalar type, or {@code null} when it is no number or Boolean.
+   * @return The value's scalar type, or {@code null} when it is no number, Boolean or string.
    */
   static TypeReference scalarTypeOfValue(Object value) {
+    if (value instanceof String) return PythonTypes.string;
     if (value instanceof Boolean) return PYTHON_BOOL;
     if (value instanceof Double || value instanceof Float) return PYTHON_FLOAT;
     if (value instanceof Number) return PYTHON_INT;
@@ -6059,6 +6066,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    *       ~} an {@code int}, and nothing over a {@code float}.
    * </ul>
    *
+   * <p>With a {@code str} operand (<a
+   * href="https://github.com/wala/ML/issues/1232">wala/ML#1232</a>), a comparison gives a {@code
+   * bool}, {@code +} of two {@code str}s, {@code *} of a {@code str} and an {@code int} or {@code
+   * bool}, and {@code %} with a {@code str} on the left give a {@code str}, and every other
+   * operator, unary ones and the builtins included, raises and gives nothing.
+   *
    * @param operator The binary or unary operator.
    * @param left The type of the first operand.
    * @param right The type of the second operand, or {@code null} for a unary operator.
@@ -6066,6 +6079,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   static Set<TypeReference> scalarResultTypes(
       Object operator, TypeReference left, TypeReference right) {
+    if (PythonTypes.string.equals(left) || PythonTypes.string.equals(right))
+      return stringResultTypes(operator, left, right);
     boolean anyFloat = PYTHON_FLOAT.equals(left) || PYTHON_FLOAT.equals(right);
     // The builtins whose result follows their arguments (wala/ML#1148).
     if (operator == ScalarBuiltin.ROUND) return Set.of(PYTHON_INT);
@@ -6110,6 +6125,42 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The types of the result of an operator with a {@code str} operand, as {@link
+   * #scalarResultTypes} describes them (wala/ML#1232).
+   *
+   * @param operator The binary or unary operator.
+   * @param left The type of the first operand.
+   * @param right The type of the second operand, or {@code null} for a unary operator.
+   * @return {@code bool} for a comparison, {@code str} for a concatenation, a repetition or a
+   *     formatting, and nothing otherwise.
+   */
+  private static Set<TypeReference> stringResultTypes(
+      Object operator, TypeReference left, TypeReference right) {
+    if (right == null || operator instanceof ScalarBuiltin) return Set.of();
+    if (operator == CAstBinaryOp.EQ
+        || operator == CAstBinaryOp.NE
+        || operator == CAstBinaryOp.LT
+        || operator == CAstBinaryOp.LE
+        || operator == CAstBinaryOp.GT
+        || operator == CAstBinaryOp.GE
+        || operator == CAstBinaryOp.STRICT_EQ
+        || operator == CAstBinaryOp.STRICT_NE) return Set.of(PYTHON_BOOL);
+    boolean leftString = PythonTypes.string.equals(left);
+    boolean rightString = PythonTypes.string.equals(right);
+    if (operator == IBinaryOpInstruction.Operator.ADD)
+      return leftString && rightString ? Set.of(PythonTypes.string) : Set.of();
+    if (operator == IBinaryOpInstruction.Operator.MUL) {
+      TypeReference count = leftString ? right : left;
+      return leftString != rightString && (PYTHON_INT.equals(count) || PYTHON_BOOL.equals(count))
+          ? Set.of(PythonTypes.string)
+          : Set.of();
+    }
+    if (operator == IBinaryOpInstruction.Operator.REM)
+      return leftString ? Set.of(PythonTypes.string) : Set.of();
+    return Set.of();
+  }
+
+  /**
    * The type-level key of a Python scalar type, as {@link PythonInstanceKeys} makes it for an
    * allocation of that type (wala/ML#1148).
    *
@@ -6137,6 +6188,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     private final Object operator;
     private final PointerKey[] keys;
     private final Set<TypeReference>[] fixed;
+
+    /**
+     * Whether each operand has a fixed member of any kind, a scalar or not, which {@code %} with a
+     * {@code str} on the left reads (wala/ML#1232).
+     */
+    private final boolean[] fixedMember;
+
     private final boolean unary;
 
     private ScalarOperationOperator(
@@ -6146,12 +6204,24 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         Object operator,
         PointerKey[] keys,
         Set<TypeReference>[] fixed) {
+      this(node, pc, resultKey, operator, keys, fixed, new boolean[2]);
+    }
+
+    private ScalarOperationOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        Object operator,
+        PointerKey[] keys,
+        Set<TypeReference>[] fixed,
+        boolean[] fixedMember) {
       this.node = node;
       this.pc = pc;
       this.resultKey = resultKey;
       this.operator = operator;
       this.keys = keys;
       this.fixed = fixed;
+      this.fixedMember = fixedMember;
       this.unary =
           operator instanceof IUnaryOpInstruction.IOperator || operator == ScalarBuiltin.ROUND;
     }
@@ -6172,11 +6242,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         Set<TypeReference> right = operandTypes(1);
         for (TypeReference l : left)
           for (TypeReference r : right) results.addAll(scalarResultTypes(operator, l, r));
+        // `%` with a `str` on the left formats whatever is on the right, a tuple or a dict as well
+        // as a scalar, and gives a `str` or raises (wala/ML#1232).
+        if (operator == IBinaryOpInstruction.Operator.REM
+            && left.contains(PythonTypes.string)
+            && this.hasMember(1)) results.add(PythonTypes.string);
       }
       for (TypeReference type : results) {
         InstanceKey key = getScalarTypeKey(node, pc, type);
         if (key != null) getSystem().newConstraint(resultKey, key);
       }
+    }
+
+    /**
+     * Whether an operand has a member of any kind: a fixed one, or one in its key's current
+     * points-to set.
+     *
+     * @param i The operand's position.
+     * @return {@code true} iff the operand has a member.
+     */
+    private boolean hasMember(int i) {
+      if (fixedMember[i] || !fixed[i].isEmpty()) return true;
+      if (keys[i] == null) return false;
+      PointsToSetVariable variable = getSystem().findOrCreatePointsToSet(keys[i]);
+      return variable.getValue() != null && !variable.getValue().isEmpty();
     }
 
     /**
