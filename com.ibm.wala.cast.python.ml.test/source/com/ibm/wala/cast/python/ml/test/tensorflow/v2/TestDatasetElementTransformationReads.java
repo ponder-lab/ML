@@ -13,7 +13,7 @@ import org.junit.Test;
 
 /**
  * The elements of the transformations {@code unbatch}, {@code rejection_resample} and {@code
- * bucket_by_sequence_length} read a member at a time, and batched in turn (<a
+ * bucket_by_sequence_length} read a member at a time, and read past a further transformation (<a
  * href="https://github.com/wala/ML/issues/1214">wala/ML#1214</a>).
  */
 public class TestDatasetElementTransformationReads extends AbstractTensorTest {
@@ -95,15 +95,15 @@ public class TestDatasetElementTransformationReads extends AbstractTensorTest {
   }
 
   /**
-   * A batch of a resampled dataset's element stacks the receiver's element.
+   * A member of a resampled element read past a {@code skip} is the receiver's element.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error.
    */
   @Test
-  public void testResampledBatch() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_resampled_batch", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  public void testResampledSkipped() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_resampled_skipped", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
   }
 
   /**

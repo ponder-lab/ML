@@ -1,6 +1,6 @@
 # Test https://github.com/wala/ML/issues/1214: the members of a bucketed or unbatched element read
-# one at a time, the class of a resampled element read by its index, and a batch of a bucketed or
-# resampled dataset.
+# one at a time, the class of a resampled element read by its index, a batch of a bucketed dataset,
+# and the element of a resampled dataset read past a `skip`.
 import tensorflow as tf
 
 
@@ -20,7 +20,7 @@ def consume_resampled_class_read(c):
     pass
 
 
-def consume_resampled_batch(x):
+def consume_resampled_skipped(x):
     pass
 
 
@@ -71,9 +71,9 @@ for element in resampled:
     c = element[0]
     assert c.shape == () and c.dtype == tf.int32
     consume_resampled_class_read(c)
-for c, x in resampled.batch(2):
-    assert x.shape[1:] == (4,) and x.dtype == tf.float32
-    consume_resampled_batch(x)
+for c, x in resampled.skip(1):
+    assert x.shape == (4,) and x.dtype == tf.float32
+    consume_resampled_skipped(x)
 
 dicts = tf.data.Dataset.from_tensor_slices(
     {"a": tf.ones([8, 4]), "b": tf.zeros([8, 3], tf.int32)}
