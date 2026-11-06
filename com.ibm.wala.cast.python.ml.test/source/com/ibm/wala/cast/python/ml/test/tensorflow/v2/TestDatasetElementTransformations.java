@@ -163,6 +163,29 @@ public class TestDatasetElementTransformations extends AbstractTensorTest {
   }
 
   /**
+   * A batch of a resampled dataset may end with a batch of any size: resampling draws as many
+   * elements as it likes, ten of eight here, so a batch of three ends with one of one, not of two.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testResampledBatchSizes()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_resampled_batch_sizes",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 3, 4),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(4))))));
+  }
+
+  /**
    * The element of {@code bucket_by_sequence_length} is a batch of the receiver's element.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.

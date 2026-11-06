@@ -3,11 +3,16 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * A generator for datasets created by {@code tf.data.Dataset.rejection_resample} (wala/ML#1214).
  * The element is the pair {@code (class, element)}: the int32 scalar {@code class_func} returns at
  * position 0 and the receiver's element at position 1, as {@code enumerate}'s is with its index.
+ * Unlike {@code enumerate}, it doesn't keep its receiver's size: it rejects some elements and
+ * repeats others, as many as it draws.
  */
 public class DatasetRejectionResampleGenerator extends DatasetEnumerateGenerator {
 
@@ -32,5 +37,16 @@ public class DatasetRejectionResampleGenerator extends DatasetEnumerateGenerator
   @Override
   public TensorGenerator getIndexGenerator(PointsToSetVariable source) {
     return new ResampledClassGenerator(source);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote Unknown. Resampling draws each element against the target distribution, so the number
+   *     of elements is random and may be more or fewer than the receiver's.
+   */
+  @Override
+  public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
+    return Collections.emptySet();
   }
 }
