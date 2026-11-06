@@ -354,7 +354,8 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("conversion", Set.of("Lstring"));
     expected.put("debug", Set.of("Lstring"));
     expected.put("multiline", Set.of("Lstring"));
-    expected.put("guarded", Set.of("Lstring"));
+    // The `except ValueError:` handler that sets `guarded` to `None` is reached (wala/ML#1005).
+    expected.put("guarded", Set.of("Lstring", "constant null"));
     expected.put("subscript", Set.of("Lstring"));
     expected.put("operators", Set.of("Lstring"));
     expected.put("nested", Set.of("Lstring"));
