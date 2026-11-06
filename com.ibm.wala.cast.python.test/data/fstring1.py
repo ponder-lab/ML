@@ -168,3 +168,41 @@ sink_operators(operators)
 inner = f"{f'{nested()}'}"
 assert inner == "n"
 sink_nested(inner)
+
+
+def sink_raw_joined(n):
+    pass
+
+
+def sink_triple_quoted(n):
+    pass
+
+
+def sink_unparsed(n):
+    pass
+
+
+def side_raw():
+    return "r"
+
+
+def side_triple():
+    return "t"
+
+
+def side_unparsed():
+    return "u"
+
+
+raw_joined = r"\d" f"{side_raw()}"
+assert raw_joined == "\\dr"
+sink_raw_joined(raw_joined)
+
+triple_quoted = f"{'''t''' + side_triple()}"
+assert triple_quoted == "tt"
+sink_triple_quoted(triple_quoted)
+
+# The front end's grammar has no `:=`, so this field does not parse there.
+unparsed = f"{(walrus := side_unparsed())}"
+assert unparsed == "u" and walrus == "u"
+sink_unparsed(unparsed)
