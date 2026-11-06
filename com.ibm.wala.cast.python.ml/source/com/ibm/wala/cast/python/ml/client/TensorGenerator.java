@@ -12819,6 +12819,11 @@ public abstract class TensorGenerator implements Cloneable {
       // A window, which its maker allocates and returns, holds the part of the receiver's element
       // its maker names (wala/ML#1201).
       return new DatasetWindowGenerator(node, TensorFlowTypes.datasetWindowMakerComponent(type));
+    } else if (type.equals(TensorFlowTypes.DATASET_SCAN_TYPE)) {
+      // The scan twin of the map arm above: the DATA_PACKAGE_PREFIX catch-all would inherit from
+      // scan.do's own receiver, typing the element from the scan function's input rather than its
+      // return (wala/ML#1214).
+      return new DatasetScanGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_SKIP_TYPE)) {
       return new DatasetSkipGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_SHARD_TYPE)) {
