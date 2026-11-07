@@ -250,6 +250,10 @@
         <putfield class="LRoot" field="experimental" fieldType="LRoot" ref="data" value="data_experimental"/>
         <new def="data_cardinality" class="Ltensorflow/data/cardinality"/>
         <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="data_experimental" value="data_cardinality"/>
+        <new def="data_experimental_group_by_window" class="Ltensorflow/data/experimental_group_by_window"/>
+        <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="data_experimental" value="data_experimental_group_by_window"/>
+        <new def="data_experimental_bucket_by_sequence_length" class="Ltensorflow/data/experimental_bucket_by_sequence_length"/>
+        <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="data_experimental" value="data_experimental_bucket_by_sequence_length"/>
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
         <!-- Distinct class type so the factory can dispatch to `TextLineDatasetGenerator` and seed iteration elements as 0-D string tensors (wala/ML#452). -->
         <new def="TextLineDataset" class="Ltensorflow/data/TextLineDataset"/>
@@ -5436,6 +5440,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -5456,7 +5463,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -5473,6 +5482,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -5527,6 +5537,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -5547,7 +5560,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -5564,6 +5579,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -5614,6 +5630,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -5634,7 +5653,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -5666,6 +5687,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
@@ -5691,6 +5713,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -5731,6 +5754,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -5751,7 +5777,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -5768,6 +5796,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -5826,7 +5855,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -5862,6 +5893,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -5882,7 +5916,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -5899,6 +5935,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -5957,7 +5994,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -5993,6 +6032,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6013,7 +6055,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6030,6 +6074,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -6088,7 +6133,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -6124,6 +6171,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6144,7 +6194,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6161,6 +6213,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -6219,7 +6272,9 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -6261,6 +6316,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6277,7 +6335,9 @@
           <new def="rd_map" class="Ltensorflow/data/map"/>
           <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6294,6 +6354,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
@@ -6352,7 +6413,9 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -6400,6 +6463,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6416,7 +6482,9 @@
           <new def="rd_map" class="Ltensorflow/data/map"/>
           <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6433,6 +6501,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
@@ -6472,6 +6541,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -6511,6 +6581,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6527,7 +6600,9 @@
           <new def="rd_map" class="Ltensorflow/data/map"/>
           <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6544,6 +6619,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
@@ -6602,7 +6678,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -6640,6 +6718,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6660,7 +6741,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6677,6 +6760,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -6735,7 +6819,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -6772,6 +6858,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6792,7 +6881,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6809,6 +6900,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -6867,7 +6959,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -6903,6 +6997,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -6923,7 +7020,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -6940,6 +7039,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -6998,7 +7098,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -7034,6 +7136,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -7054,7 +7159,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7071,6 +7178,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -7129,7 +7237,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -7232,6 +7342,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -7252,7 +7365,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7303,7 +7418,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="w"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="w"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="w"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="w"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="w"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="w"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="w"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="w"/>
           <return value="x"/>
@@ -7331,6 +7448,9 @@
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="w" value="rd_scan"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="w" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="w"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="w" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="w"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="w" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="w" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="w" value="rd_unbatch"/>
@@ -7353,7 +7473,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="w" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="w" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="w" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="w" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="w" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7370,6 +7492,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -7428,7 +7551,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="w"/>
@@ -7456,6 +7581,9 @@
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="w" value="rd_scan"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="w" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="w"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="w" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="w"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="w" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="w" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="w" value="rd_unbatch"/>
@@ -7478,7 +7606,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="w" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="w" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="w" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="w" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="w" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7529,7 +7659,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="w"/>
@@ -7589,6 +7721,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -7609,7 +7744,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7626,6 +7763,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -7684,7 +7822,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -7720,6 +7860,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -7740,7 +7883,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7757,6 +7902,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -7815,7 +7961,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -7877,6 +8025,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -7897,7 +8048,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -7914,6 +8067,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -7952,6 +8106,7 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="mapped_element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
@@ -7973,8 +8128,211 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
+        </method>
+      </class>
+      <class name="group_by_window" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#group_by_window. Each window is a dataset of some of the receiver's elements, which this method object carries. `key_func` is called on the receiver's element as `map` calls its function, and `reduce_func` on a key and the window; the element is any element of the datasets `reduce_func` returns, as `flat_map`'s is (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self key_func reduce_func window_size window_size_func name">
+          <new def="x" class="Ltensorflow/data/Dataset"/>
+          <getfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="self" def="received_dataset"/>
+          <!-- The keys are the elements of the receiver mapped by `key_func`. -->
+          <getfield class="LRoot" field="map" fieldType="LRoot" ref="received_dataset" def="received_map"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="received_map" arg1="key_func" numArgs="2" def="keys"/>
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="keys" def="key"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="window_size_func" arg1="key" numArgs="2" def="size"/>
+          <!-- A window holds some of the receiver's elements, how many is not counted (wala/ML#1214). -->
+          <getfield class="LRoot" field="group_window" fieldType="LRoot" ref="received_dataset" def="window_method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="window_method" numArgs="1" def="window"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="reduce_func" arg1="key" arg2="window" numArgs="3" def="returned"/>
+          <!-- The datasets `reduce_func` returns, which this dataset's generator joins over, as `flat_map`'s does. -->
+          <putfield class="LRoot" field="element" fieldType="LRoot" ref="x" value="returned"/>
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="returned" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="returned" def="legacy"/>
+          <getfield class="LRoot" field="map" fieldType="LRoot" ref="returned" def="returned_map"/>
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="returned_map" def="mapped_element"/>
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
+          <new def="rd_skip" class="Ltensorflow/data/skip"/>
+          <new def="rd_shard" class="Ltensorflow/data/shard"/>
+          <new def="rd_cache" class="Ltensorflow/data/cache"/>
+          <new def="rd_scan" class="Ltensorflow/data/scan"/>
+          <new def="rd_apply" class="Ltensorflow/data/apply"/>
+          <new def="rd_bucket_by_sequence_length" class="Ltensorflow/data/bucket_by_sequence_length"/>
+          <new def="rd_rejection_resample" class="Ltensorflow/data/rejection_resample"/>
+          <new def="rd_unbatch" class="Ltensorflow/data/unbatch"/>
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
+          <putfield class="LRoot" field="skip" fieldType="LRoot" ref="x" value="rd_skip"/>
+          <putfield class="LRoot" field="shard" fieldType="LRoot" ref="x" value="rd_shard"/>
+          <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
+          <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
+          <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
+          <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
+          <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
+          <new def="rd_batch" class="Ltensorflow/data/batch"/>
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
+          <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch"/>
+          <new def="rd_with_options" class="Ltensorflow/data/with_options"/>
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options"/>
+          <new def="rd_take" class="Ltensorflow/data/take"/>
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take"/>
+          <new def="rd_map" class="Ltensorflow/data/map"/>
+          <new def="rd_flat_map" class="Ltensorflow/data/flat_map"/>
+          <new def="rd_interleave" class="Ltensorflow/data/interleave"/>
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
+          <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
+          <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
+          <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
+          <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_skip" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shard" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_scan" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). It is the function's return. -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="mapped_element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shard" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_cache" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_scan" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_rejection_resample" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_unbatch" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_enumerate" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_flat_map" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
+          <return value="x"/>
+        </method>
+      </class>
+      <class name="experimental_group_by_window" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/experimental/group_by_window. The transformation `apply` hands the dataset to (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self key_func reduce_func window_size window_size_func">
+          <new def="fn" class="Ltensorflow/data/experimental_group_by_window_fn"/>
+          <putfield class="LRoot" field="key_func" fieldType="LRoot" ref="fn" value="key_func"/>
+          <putfield class="LRoot" field="reduce_func" fieldType="LRoot" ref="fn" value="reduce_func"/>
+          <putfield class="LRoot" field="window_size" fieldType="LRoot" ref="fn" value="window_size"/>
+          <putfield class="LRoot" field="window_size_func" fieldType="LRoot" ref="fn" value="window_size_func"/>
+          <return value="fn"/>
+        </method>
+      </class>
+      <class name="experimental_group_by_window_fn" allocatable="true">
+        <!-- Calls the dataset's own `group_by_window` with the arguments the transformation was made with (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
+          <getfield class="LRoot" field="key_func" fieldType="LRoot" ref="self" def="key_func"/>
+          <getfield class="LRoot" field="reduce_func" fieldType="LRoot" ref="self" def="reduce_func"/>
+          <getfield class="LRoot" field="window_size" fieldType="LRoot" ref="self" def="window_size"/>
+          <getfield class="LRoot" field="window_size_func" fieldType="LRoot" ref="self" def="window_size_func"/>
+          <getfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="dataset" def="method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="method" arg1="key_func" arg2="reduce_func" arg3="window_size" arg4="window_size_func" numArgs="5" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
+      <class name="experimental_bucket_by_sequence_length" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/experimental/bucket_by_sequence_length. The transformation `apply` hands the dataset to (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self element_length_func bucket_boundaries bucket_batch_sizes padded_shapes padding_values pad_to_bucket_boundary no_padding drop_remainder">
+          <new def="fn" class="Ltensorflow/data/experimental_bucket_by_sequence_length_fn"/>
+          <putfield class="LRoot" field="element_length_func" fieldType="LRoot" ref="fn" value="element_length_func"/>
+          <putfield class="LRoot" field="bucket_boundaries" fieldType="LRoot" ref="fn" value="bucket_boundaries"/>
+          <putfield class="LRoot" field="bucket_batch_sizes" fieldType="LRoot" ref="fn" value="bucket_batch_sizes"/>
+          <putfield class="LRoot" field="padded_shapes" fieldType="LRoot" ref="fn" value="padded_shapes"/>
+          <putfield class="LRoot" field="padding_values" fieldType="LRoot" ref="fn" value="padding_values"/>
+          <putfield class="LRoot" field="pad_to_bucket_boundary" fieldType="LRoot" ref="fn" value="pad_to_bucket_boundary"/>
+          <putfield class="LRoot" field="no_padding" fieldType="LRoot" ref="fn" value="no_padding"/>
+          <putfield class="LRoot" field="drop_remainder" fieldType="LRoot" ref="fn" value="drop_remainder"/>
+          <return value="fn"/>
+        </method>
+      </class>
+      <class name="experimental_bucket_by_sequence_length_fn" allocatable="true">
+        <!-- Calls the dataset's own `bucket_by_sequence_length` with the arguments the transformation was made with (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
+          <getfield class="LRoot" field="element_length_func" fieldType="LRoot" ref="self" def="element_length_func"/>
+          <getfield class="LRoot" field="bucket_boundaries" fieldType="LRoot" ref="self" def="bucket_boundaries"/>
+          <getfield class="LRoot" field="bucket_batch_sizes" fieldType="LRoot" ref="self" def="bucket_batch_sizes"/>
+          <getfield class="LRoot" field="padded_shapes" fieldType="LRoot" ref="self" def="padded_shapes"/>
+          <getfield class="LRoot" field="padding_values" fieldType="LRoot" ref="self" def="padding_values"/>
+          <getfield class="LRoot" field="pad_to_bucket_boundary" fieldType="LRoot" ref="self" def="pad_to_bucket_boundary"/>
+          <getfield class="LRoot" field="no_padding" fieldType="LRoot" ref="self" def="no_padding"/>
+          <getfield class="LRoot" field="drop_remainder" fieldType="LRoot" ref="self" def="drop_remainder"/>
+          <getfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="dataset" def="method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="method" arg1="element_length_func" arg2="bucket_boundaries" arg3="bucket_batch_sizes" arg4="padded_shapes" arg5="padding_values" arg6="pad_to_bucket_boundary" arg7="no_padding" arg8="drop_remainder" numArgs="9" def="result"/>
+          <return value="result"/>
         </method>
       </class>
       <class name="flat_map" allocatable="true">
@@ -8030,6 +8388,9 @@
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
@@ -8052,7 +8413,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8069,6 +8432,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -8107,6 +8471,7 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="mapped_element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
@@ -8128,6 +8493,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -8185,6 +8551,9 @@
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
@@ -8207,7 +8576,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8224,6 +8595,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -8262,6 +8634,7 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="mapped_element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="mapped_element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="mapped_element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
@@ -8283,13 +8656,14 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
       </class>
-      <class name="filter" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#filter -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
+      <class name="group_window" allocatable="true">
+        <!-- A window `group_by_window` hands its `reduce_func`: some of the receiver's elements, as many as the window holds, so it is a `filter` of them whose size is not counted (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="x" class="Ltensorflow/data/Dataset"/>
           <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
           <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
@@ -8317,6 +8691,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8337,7 +8714,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8354,6 +8733,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -8412,7 +8792,148 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
+          <return value="x"/>
+        </method>
+      </class>
+      <class name="filter" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#filter -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
+          <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
+          <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="self" def="legacy"/>
+          <!-- The element is the receiver's, which this method object carries: this transform leaves its types unchanged (wala/ML#1190). -->
+          <getfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="self" def="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
+          <!-- The receiver's element structure, which this method object carries (wala/ML#1088). -->
+          <getfield class="LRoot" field="element_structure" fieldType="LRoot" ref="self" def="structure"/>
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
+          <new def="rd_skip" class="Ltensorflow/data/skip"/>
+          <new def="rd_shard" class="Ltensorflow/data/shard"/>
+          <new def="rd_cache" class="Ltensorflow/data/cache"/>
+          <new def="rd_scan" class="Ltensorflow/data/scan"/>
+          <new def="rd_bucket_by_sequence_length" class="Ltensorflow/data/bucket_by_sequence_length"/>
+          <new def="rd_rejection_resample" class="Ltensorflow/data/rejection_resample"/>
+          <new def="rd_apply" class="Ltensorflow/data/apply"/>
+          <new def="rd_unbatch" class="Ltensorflow/data/unbatch"/>
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
+          <putfield class="LRoot" field="skip" fieldType="LRoot" ref="x" value="rd_skip"/>
+          <putfield class="LRoot" field="shard" fieldType="LRoot" ref="x" value="rd_shard"/>
+          <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
+          <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
+          <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
+          <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
+          <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
+          <new def="rd_batch" class="Ltensorflow/data/batch"/>
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
+          <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch"/>
+          <new def="rd_with_options" class="Ltensorflow/data/with_options"/>
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options"/>
+          <new def="rd_take" class="Ltensorflow/data/take"/>
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take"/>
+          <new def="rd_map" class="Ltensorflow/data/map"/>
+          <new def="rd_flat_map" class="Ltensorflow/data/flat_map"/>
+          <new def="rd_interleave" class="Ltensorflow/data/interleave"/>
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
+          <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
+          <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
+          <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
+          <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <new def="rd_cardinality" class="Ltensorflow/data/cardinality"/>
+          <putfield class="LRoot" field="cardinality" fieldType="LRoot" ref="x" value="rd_cardinality"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cardinality" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_reduce" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_skip" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_shard" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_scan" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
+          <!-- Each method installed here that `map_argument` or a pass-through reads the element structure from carries this dataset's (wala/ML#1088). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shard" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_cache" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_scan" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_rejection_resample" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_unbatch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_enumerate" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_enumerate" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_flat_map" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -8451,6 +8972,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8471,7 +8995,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8488,6 +9014,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -8526,6 +9053,7 @@
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <!-- Each method installed here carries both datasets' elements and markers (wala/ML#1215). -->
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_batch" value="other_legacy"/>
@@ -8533,6 +9061,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="other_legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="other_legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="other_legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="other_legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="other_legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="other_legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="other_legacy"/>
@@ -8590,7 +9119,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="other_element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="other_element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="other_element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="other_element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="other_element"/>
           <return value="x"/>
@@ -8648,6 +9179,9 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
@@ -8669,7 +9203,9 @@
           <new def="rd_map" class="Ltensorflow/data/map"/>
           <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8720,7 +9256,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -8756,6 +9294,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8776,7 +9317,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8793,6 +9336,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -8832,6 +9376,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -8866,6 +9411,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8886,7 +9434,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -8937,7 +9487,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="tensors"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="tensors"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -8970,6 +9522,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8990,7 +9545,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9041,7 +9598,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="tensors"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="tensors"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="tensors"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
@@ -9076,6 +9635,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9096,7 +9658,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9112,6 +9676,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -9151,6 +9716,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -9181,6 +9747,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9201,7 +9770,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9218,6 +9789,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -9268,6 +9840,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9288,7 +9863,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9304,6 +9881,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -9343,6 +9921,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -9378,6 +9957,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9398,7 +9980,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9414,6 +9998,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -9490,8 +10075,11 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="output_types"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="output_types"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="output_signature"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="output_signature"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="output_types"/>
           <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="output_signature"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
@@ -9527,6 +10115,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9547,7 +10138,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9563,6 +10156,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
@@ -9602,6 +10196,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -9634,6 +10229,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9654,7 +10252,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9686,6 +10286,7 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
           <return value="x"/>
         </method>
@@ -9715,6 +10316,9 @@
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
+          <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
+          <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
+          <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -9735,7 +10339,9 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <new def="rd_group_window" class="Ltensorflow/data/group_window"/>
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <putfield class="LRoot" field="group_window" fieldType="LRoot" ref="x" value="rd_group_window"/>
           <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
           <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
           <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
@@ -9752,6 +10358,7 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_interleave" value="legacy"/>

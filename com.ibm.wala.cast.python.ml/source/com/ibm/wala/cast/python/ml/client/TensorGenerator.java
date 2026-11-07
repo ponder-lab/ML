@@ -6540,7 +6540,7 @@ public abstract class TensorGenerator implements Cloneable {
    *     if it carries a starred unpack or a keyword ({@code **}) spread that could (see {@link
    *     #KEYWORD_SPREAD_NAME}), and {@code FALSE} otherwise.
    */
-  private static Boolean invokeSuppliesArgument(
+  protected static Boolean invokeSuppliesArgument(
       PythonInvokeInstruction call, int paramPos, String paramName) {
     if (paramName != null && call.getKeywords().contains(paramName)) return true;
     if (paramPos >= 0 && call.getNumberOfPositionalParameters() - 1 > paramPos) return true;
@@ -12777,7 +12777,8 @@ public abstract class TensorGenerator implements Cloneable {
       // (wala/ML#759).
       return new DatasetPaddedBatchGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_FLAT_MAP_TYPE)
-        || type.equals(TensorFlowTypes.DATASET_INTERLEAVE_TYPE)) {
+        || type.equals(TensorFlowTypes.DATASET_INTERLEAVE_TYPE)
+        || type.equals(TensorFlowTypes.DATASET_GROUP_BY_WINDOW_TYPE)) {
       // The twin of the source arm: the catch-all below would follow the receiver, whose element
       // is the function's argument, not this dataset's (wala/ML#1214).
       return new DatasetFlatMapGenerator(node);
@@ -12834,6 +12835,10 @@ public abstract class TensorGenerator implements Cloneable {
       return new DatasetUnbatchGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE)) {
       return new DatasetBucketBySequenceLengthGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_GROUP_WINDOW_TYPE)) {
+      // The twin of the source arm: the catch-all below would count the receiver's elements
+      // (wala/ML#1214).
+      return new DatasetGroupWindowGenerator(node);
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
