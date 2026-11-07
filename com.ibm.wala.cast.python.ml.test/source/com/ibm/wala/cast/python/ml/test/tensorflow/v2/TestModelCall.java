@@ -2415,6 +2415,146 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * The {@code Convolution1D} alias spelling resolves to {@code Conv1D}'s class, so its call reads
+   * as {@code Conv1D}'s does (wala/ML#1236).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConvolution1DAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_convolution1d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 4))));
+  }
+
+  /**
+   * The {@code Conv1D} spelling the {@code Convolution1D} alias stands for, as a control for {@link
+   * #testConvolution1DAlias()}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv1DBesideAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_conv1d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 4))));
+  }
+
+  /**
+   * The {@code Convolution2D} alias spelling resolves to {@code Conv2D}'s class, so its call reads
+   * as {@code Conv2D}'s does (wala/ML#1236).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConvolution2DAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_convolution2d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 8, 4))));
+  }
+
+  /**
+   * The {@code Conv2D} spelling the {@code Convolution2D} alias stands for, as a control for {@link
+   * #testConvolution2DAlias()}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DBesideAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_conv2d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 8, 4))));
+  }
+
+  /**
+   * The {@code Convolution2DTranspose} alias spelling resolves to {@code Conv2DTranspose}'s class,
+   * so its call reads as {@code Conv2DTranspose}'s does (wala/ML#1236).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConvolution2DTransposeAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_convolution2d_transpose",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 8, 4))));
+  }
+
+  /**
+   * The {@code Conv2DTranspose} spelling the {@code Convolution2DTranspose} alias stands for, as a
+   * control for {@link #testConvolution2DTransposeAlias()}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DTransposeBesideAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_conv2d_transpose",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 8, 4))));
+  }
+
+  /**
+   * A {@code Convolution2D} layer a custom layer's constructor stores in a field and its {@code
+   * call} applies reads as a {@code Conv2D} would (wala/ML#1236).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConvolution2DAliasField()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convolution_aliases.py",
+        "consume_convolution2d_field",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 8, 8, 4))));
+  }
+
+  /**
    * Average pooling under {@code same} padding: the spatial extent is ⌈size / stride⌉, where {@code
    * valid} would give 13 for a pool of 3 over 28 at stride 2 — so this pins the padding mode
    * actually being read (wala/ML#840).
