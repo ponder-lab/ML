@@ -27,10 +27,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A generator for datasets created by {@code tf.data.Dataset.flat_map} and {@code interleave}
- * (wala/ML#1214). Each calls its function on the receiver's element, as {@code map} does, and its
- * element is any element of the datasets the function returns, so those datasets are the ones a
- * read of the element joins over. The summary stores them on the dataset's {@code element} field.
+ * A generator for datasets created by {@code tf.data.Dataset.flat_map}, {@code interleave} and
+ * {@code group_by_window} (wala/ML#1214). Each calls its function on the receiver's element, as
+ * {@code map} does, and its element is any element of the datasets the function returns, so those
+ * datasets are the ones a read of the element joins over. For {@code group_by_window}, that
+ * function is {@code reduce_func}, called on a key and a window. The summary stores them on the
+ * dataset's {@code element} field.
  */
 public class DatasetFlatMapGenerator extends DatasetJoinGenerator {
 

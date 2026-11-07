@@ -457,6 +457,35 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_INTERLEAVE_SIGNATURE = "tf.data.Dataset.interleave()";
 
+  /**
+   * The summary class of {@code tf.data.Dataset.group_by_window}, whose element is any element of
+   * the datasets its {@code reduce_func} returns, as {@code flat_map}'s is (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_GROUP_BY_WINDOW_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/group_by_window"));
+
+  public static final String DATASET_GROUP_BY_WINDOW_SIGNATURE =
+      "tf.data.Dataset.group_by_window()";
+
+  /**
+   * The summary class of the window {@code tf.data.Dataset.group_by_window} hands its {@code
+   * reduce_func}: some of the receiver's elements, how many is not counted (wala/ML#1214).
+   */
+  public static final TypeReference DATASET_GROUP_WINDOW_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/group_window"));
+
+  /**
+   * The summary class of the transformation {@code tf.data.experimental.bucket_by_sequence_length}
+   * returns, which calls the dataset's own {@code bucket_by_sequence_length} with the arguments it
+   * was made with when {@code apply} hands it the dataset (wala/ML#1214).
+   */
+  public static final TypeReference EXPERIMENTAL_BUCKET_BY_SEQUENCE_LENGTH_FN_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/data/experimental_bucket_by_sequence_length_fn"));
+
   public static final TypeReference DATASET_REPEAT_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/repeat"));
 
@@ -3259,6 +3288,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_MAP_TYPE, DATASET_MAP_SIGNATURE),
           Map.entry(DATASET_FLAT_MAP_TYPE, DATASET_FLAT_MAP_SIGNATURE),
           Map.entry(DATASET_INTERLEAVE_TYPE, DATASET_INTERLEAVE_SIGNATURE),
+          Map.entry(DATASET_GROUP_BY_WINDOW_TYPE, DATASET_GROUP_BY_WINDOW_SIGNATURE),
           Map.entry(DATASET_REPEAT_TYPE, DATASET_REPEAT_SIGNATURE),
           Map.entry(DATASET_PREFETCH_TYPE, DATASET_PREFETCH_SIGNATURE),
           Map.entry(DATASET_SKIP_TYPE, DATASET_SKIP_SIGNATURE),

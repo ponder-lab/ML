@@ -63,6 +63,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FLAT_MAP
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSORS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_GROUP_BY_WINDOW_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_GROUP_WINDOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_INTERLEAVE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_LIST_FILES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
@@ -4393,9 +4395,11 @@ public class TensorGeneratorFactory {
     // A take counts the elements it keeps (wala/ML#1216).
     else if (isType(calledFunction, DATASET_TAKE_TYPE)) return new DatasetTakeGenerator(source);
     // The element of `flat_map` and `interleave` is any element of the datasets their function
-    // returns (wala/ML#1214).
+    // returns, and that of `group_by_window` any element of the datasets its `reduce_func` returns
+    // (wala/ML#1214).
     else if (isType(calledFunction, DATASET_FLAT_MAP_TYPE)
-        || isType(calledFunction, DATASET_INTERLEAVE_TYPE))
+        || isType(calledFunction, DATASET_INTERLEAVE_TYPE)
+        || isType(calledFunction, DATASET_GROUP_BY_WINDOW_TYPE))
       return new DatasetFlatMapGenerator(source);
     // A row of the receiver's element, so it takes the batch family's per-path reads
     // (wala/ML#1214).
@@ -4403,6 +4407,9 @@ public class TensorGeneratorFactory {
       return new DatasetUnbatchGenerator(source);
     else if (isType(calledFunction, DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE))
       return new DatasetBucketBySequenceLengthGenerator(source);
+    // A window of `group_by_window` holds some of the receiver's elements (wala/ML#1214).
+    else if (isType(calledFunction, DATASET_GROUP_WINDOW_TYPE))
+      return new DatasetGroupWindowGenerator(source);
     // A concatenation's element is either dataset's, so it follows both (wala/ML#1215).
     else if (isType(calledFunction, DATASET_CONCATENATE_TYPE))
       return new DatasetConcatenateGenerator(source);

@@ -1,13 +1,21 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,6 +53,91 @@ public class DatasetBucketBySequenceLengthGenerator extends DatasetBatchGenerato
 
   public DatasetBucketBySequenceLengthGenerator(CGNode node) {
     super(node);
+  }
+
+  /**
+   * Whether a node is the summary of the transformation {@code
+   * tf.data.experimental.bucket_by_sequence_length} returns, which forwards every argument it was
+   * made with to the dataset's own method, supplied or not.
+   *
+   * @param node The node.
+   * @return {@code true} iff the node forwards the arguments.
+   */
+  private static boolean isForwarder(CGNode node) {
+    return node.getMethod()
+        .getDeclaringClass()
+        .getReference()
+        .equals(TensorFlowTypes.EXPERIMENTAL_BUCKET_BY_SEQUENCE_LENGTH_FN_TYPE);
+  }
+
+  /**
+   * Whether the program supplies an argument to the {@code
+   * tf.data.experimental.bucket_by_sequence_length} calls that made the transformations a
+   * forwarding node runs as. The function's parameters are the method's, in the same order.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param forwarder The forwarding node.
+   * @param paramPos The argument's position, excluding the receiver.
+   * @param paramName The argument's keyword name.
+   * @return {@code TRUE}, {@code FALSE}, or {@code null}, as {@link
+   *     #isArgumentSyntacticallySupplied} answers.
+   */
+  private static Boolean suppliedToTransformation(
+      PropagationCallGraphBuilder builder, CGNode forwarder, int paramPos, String paramName) {
+    PointerKey self =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(forwarder, forwarder.getIR().getParameter(0));
+    boolean sawMaker = false;
+    boolean indeterminate = false;
+    for (InstanceKey transformation : builder.getPointerAnalysis().getPointsToSet(self)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(transformation);
+      if (asin == null) return null;
+      sawMaker = true;
+      Boolean here =
+          isArgumentSyntacticallySuppliedAt(builder, asin.getNode(), paramPos, paramName);
+      if (Boolean.TRUE.equals(here)) return true;
+      if (here == null) indeterminate = true;
+    }
+    if (indeterminate) return null;
+    return sawMaker ? Boolean.FALSE : null;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote A call from the transformation {@code tf.data.experimental.bucket_by_sequence_length}
+   *     returns, which {@code apply} runs, passes every argument whether the program supplied it or
+   *     not, so there the program's calls of {@code tf.data.experimental.bucket_by_sequence_length}
+   *     decide (wala/ML#1214).
+   */
+  @Override
+  protected Boolean isArgumentSyntacticallySupplied(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    CGNode node = this.getNode();
+    if (node == null) return super.isArgumentSyntacticallySupplied(builder, paramPos, paramName);
+    PythonInvokeInstruction call = this.getInvokeInstruction();
+    if (call != null)
+      return isForwarder(node)
+          ? suppliedToTransformation(builder, node, paramPos, paramName)
+          : super.isArgumentSyntacticallySupplied(builder, paramPos, paramName);
+    boolean sawSite = false;
+    boolean indeterminate = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      Boolean here;
+      if (isForwarder(callerInvoke.fst))
+        here = suppliedToTransformation(builder, callerInvoke.fst, paramPos, paramName);
+      else if (callerInvoke.snd instanceof PythonInvokeInstruction invoke)
+        here = invokeSuppliesArgument(invoke, paramPos, paramName);
+      else here = null;
+      sawSite = true;
+      if (Boolean.TRUE.equals(here)) return true;
+      if (here == null) indeterminate = true;
+    }
+    if (indeterminate) return null;
+    return sawSite ? Boolean.FALSE : null;
   }
 
   @Override
