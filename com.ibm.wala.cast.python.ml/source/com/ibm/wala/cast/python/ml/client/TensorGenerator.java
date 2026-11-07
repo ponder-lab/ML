@@ -12830,6 +12830,10 @@ public abstract class TensorGenerator implements Cloneable {
       return new DatasetShardGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_TAKE_TYPE)) {
       return new DatasetTakeGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_FILTER_TYPE)) {
+      // The twin of the source arm: the catch-all below would count the receiver's elements
+      // (wala/ML#1237).
+      return new DatasetFilterGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_UNBATCH_TYPE)) {
       return new DatasetUnbatchGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE)) {
