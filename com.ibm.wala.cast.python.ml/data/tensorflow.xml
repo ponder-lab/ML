@@ -540,8 +540,10 @@
         <putfield class="LRoot" field="Dense" fieldType="LRoot" ref="layers" value="Dense"/>
         <new def="Conv2DCls" class="Ltensorflow/keras/layers/class/Conv2D"/>
         <putfield class="LRoot" field="Conv2D" fieldType="LRoot" ref="layers" value="Conv2DCls"/>
+        <putfield class="LRoot" field="Convolution2D" fieldType="LRoot" ref="layers" value="Conv2DCls"/>
         <new def="Conv1DCls" class="Ltensorflow/keras/layers/class/Conv1D"/>
         <putfield class="LRoot" field="Conv1D" fieldType="LRoot" ref="layers" value="Conv1DCls"/>
+        <putfield class="LRoot" field="Convolution1D" fieldType="LRoot" ref="layers" value="Conv1DCls"/>
         <new def="FlattenLayerCls" class="Ltensorflow/keras/layers/class/Flatten"/>
         <putfield class="LRoot" field="Flatten" fieldType="LRoot" ref="layers" value="FlattenLayerCls"/>
         <new def="GlobalAveragePooling1DCls" class="Ltensorflow/keras/layers/class/GlobalAveragePooling1D"/>
@@ -579,6 +581,7 @@
         <putfield class="LRoot" field="GlobalMaxPool2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
         <new def="Conv2DTransposeLayerCls" class="Ltensorflow/keras/layers/class/Conv2DTranspose"/>
         <putfield class="LRoot" field="Conv2DTranspose" fieldType="LRoot" ref="layers" value="Conv2DTransposeLayerCls"/>
+        <putfield class="LRoot" field="Convolution2DTranspose" fieldType="LRoot" ref="layers" value="Conv2DTransposeLayerCls"/>
         <new def="ZeroPadding2DLayerCls" class="Ltensorflow/keras/layers/class/ZeroPadding2D"/>
         <putfield class="LRoot" field="ZeroPadding2D" fieldType="LRoot" ref="layers" value="ZeroPadding2DLayerCls"/>
         <new def="LSTMLayerCls" class="Ltensorflow/keras/layers/class/LSTM"/>
