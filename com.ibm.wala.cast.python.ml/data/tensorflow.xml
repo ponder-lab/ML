@@ -5437,6 +5437,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -5534,6 +5535,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -5627,6 +5629,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -5751,6 +5754,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -5890,6 +5894,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6029,6 +6034,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6168,6 +6174,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6313,6 +6320,7 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6460,6 +6468,7 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6547,7 +6556,7 @@
         </method>
       </class>
       <class name="bucket_by_sequence_length" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#bucket_by_sequence_length. Modeled like `padded_batch`, a fresh Dataset whose element mirrors the receiver's, typed at its paths by `DatasetBucketBySequenceLengthGenerator` as a batch of uncounted size. `element_length_func` is not called here (wala/ML#1214). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#bucket_by_sequence_length. Modeled like `padded_batch`, a fresh Dataset whose element mirrors the receiver's, typed at its paths by `DatasetBucketBySequenceLengthGenerator` as a batch of uncounted size (wala/ML#1214). -->
         <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self element_length_func bucket_boundaries bucket_batch_sizes padded_shapes padding_values pad_to_bucket_boundary no_padding drop_remainder name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
           <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
@@ -6559,6 +6568,10 @@
           <new def="mirror_fn" class="Ltensorflow/data/element_mirror"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="mirror_fn" arg1="received" arg2="x" numArgs="3" def="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
+          <!-- `element_length_func` is called on the receiver's element through the receiver's own `map`, as `group_by_window` calls `key_func`, so its body is analyzed (wala/ML#1214). -->
+          <getfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="self" def="received_dataset"/>
+          <getfield class="LRoot" field="map" fieldType="LRoot" ref="received_dataset" def="received_map"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="received_map" arg1="element_length_func" numArgs="2" def="lengths"/>
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <new def="rd_skip" class="Ltensorflow/data/skip"/>
           <new def="rd_shard" class="Ltensorflow/data/shard"/>
@@ -6578,6 +6591,7 @@
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6715,6 +6729,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6855,6 +6870,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -6994,6 +7010,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -7133,6 +7150,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -7339,6 +7357,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -7452,6 +7471,7 @@
           <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="w" value="rd_group_by_window"/>
           <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="w"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="w" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="w"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="w" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="w" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -7585,6 +7605,7 @@
           <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="w" value="rd_group_by_window"/>
           <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="w"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="w" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="w"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="w" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="w" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -7718,6 +7739,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -7857,6 +7879,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -8022,6 +8045,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -8175,6 +8199,7 @@
           <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
           <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -8392,6 +8417,7 @@
           <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
           <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -8555,6 +8581,7 @@
           <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
           <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -8688,6 +8715,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -8827,6 +8855,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -8969,6 +8998,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9183,6 +9213,7 @@
           <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="x" value="rd_group_by_window"/>
           <putfield class="LRoot" field="grouped_dataset" fieldType="LRoot" ref="rd_group_by_window" value="x"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
@@ -9291,6 +9322,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9408,6 +9440,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9519,6 +9552,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9632,6 +9666,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9744,6 +9779,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9837,6 +9873,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -9954,6 +9991,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -10112,6 +10150,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -10226,6 +10265,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
@@ -10313,6 +10353,7 @@
           <putfield class="LRoot" field="cache" fieldType="LRoot" ref="x" value="rd_cache"/>
           <putfield class="LRoot" field="scan" fieldType="LRoot" ref="x" value="rd_scan"/>
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
+          <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
