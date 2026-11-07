@@ -4328,9 +4328,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * {@inheritDoc}
    *
    * <p>Once this returns, a query on the builder, such as {@link ContainerElements#of}, {@link
-   * ContainerElements#ofValue}, {@link TensorFlowApis#of} or a generator's tensor types, only reads
-   * its points-to map, so a client may make such queries from several threads, or while another
-   * thread walks the pointer keys (<a
+   * TensorFlowApis#of} or a generator's tensor types, only reads its points-to map, so a client may
+   * make such queries from several threads, or while another thread walks the pointer keys (<a
    * href="https://github.com/wala/ML/issues/1173">wala/ML#1173</a>). This holds for a {@link
    * PythonSSAPropagationCallGraphBuilder}, whose points-to map stops growing here. A client reading
    * the pointer analysis directly, through {@link PointerAnalysis#getPointsToSet}, reads only for

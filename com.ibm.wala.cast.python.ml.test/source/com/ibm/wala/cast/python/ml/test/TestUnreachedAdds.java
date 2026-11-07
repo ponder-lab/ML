@@ -5,7 +5,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
-import com.ibm.wala.cast.python.ml.client.ContainerElements;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -29,7 +28,7 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
    * @return The parameter's elements.
    * @throws Exception if the fixture cannot be analyzed.
    */
-  private ContainerElements consumed(String file) throws Exception {
+  private ValueElements consumed(String file) throws Exception {
     PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), file);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     builder.makeCallGraph(builder.getOptions());
@@ -39,7 +38,7 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
       if (node.getMethod().getDeclaringClass().getName().toString().endsWith("/consume"))
         keys.add(builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
     assertEquals("Expecting one node for consume.", 1, keys.size());
-    return ContainerElements.ofValue(builder, keys.get(0));
+    return ValueElements.of(builder, keys.get(0));
   }
 
   /**

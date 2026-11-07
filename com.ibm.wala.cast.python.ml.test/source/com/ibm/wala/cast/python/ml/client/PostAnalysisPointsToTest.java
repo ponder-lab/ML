@@ -101,7 +101,6 @@ public class PostAnalysisPointsToTest extends TestPythonMLCallGraphShape {
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
           if (builder.getPropagationSystem().isImplicit(value)) continue;
           if (unsolved == null && !held.contains(value)) unsolved = value;
-          ContainerElements.ofValue(builder, value).elementTypes(analysis);
           for (InstanceKey container : builder.getPointerAnalysis().getPointsToSet(value))
             ContainerElements.of(builder, container).elementTypes(analysis);
         }

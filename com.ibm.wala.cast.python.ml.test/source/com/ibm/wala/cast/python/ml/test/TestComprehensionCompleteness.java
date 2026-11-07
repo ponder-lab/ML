@@ -5,7 +5,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
-import com.ibm.wala.cast.python.ml.client.ContainerElements;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -53,13 +52,13 @@ public class TestComprehensionCompleteness extends TestPythonMLCallGraphShape {
    * @param sink The sink's name.
    * @return Its parameter's elements.
    */
-  private static ContainerElements ofValue(String sink) {
+  private static ValueElements ofValue(String sink) {
     List<PointerKey> keys = new ArrayList<>();
     for (CGNode node : builder().getCallGraph())
       if (node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + sink))
         keys.add(builder().getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
     assertEquals("Expecting one node for " + sink + ".", 1, keys.size());
-    return ContainerElements.ofValue(builder(), keys.get(0));
+    return ValueElements.of(builder(), keys.get(0));
   }
 
   /** A comprehension over {@code range(3)} builds a list whose elements are all known. */
