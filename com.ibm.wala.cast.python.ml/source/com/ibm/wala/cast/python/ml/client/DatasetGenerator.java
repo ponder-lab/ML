@@ -340,6 +340,20 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     return this.getClass() == DatasetGenerator.class;
   }
 
+  /**
+   * Whether this transformation passes its receiver through: its element is its receiver's,
+   * unchanged, and it never ends a receiver that never ends, so the walks above a dataset ({@link
+   * #upstreamIsInfinite}, {@link #upstreamRepeat}) and the factory's unwrapping of a subscripted
+   * element look through it. A plain pass-through ({@code shuffle}, {@code prefetch}, {@code
+   * repeat}, ...) does, and so does a {@code filter}, though how many elements it keeps is not
+   * counted (wala/ML#1237).
+   *
+   * @return {@code true} iff the transformation passes its receiver through.
+   */
+  public boolean passesReceiverThrough() {
+    return this.getClass() == DatasetGenerator.class;
+  }
+
   /** How deep {@link #spread} follows a chain of transformations. */
   static final int SPREAD_DEPTH = 16;
 
@@ -539,12 +553,12 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    * the nearest finite-ness-affecting ancestor is {@code .repeat()} rather than {@code .take(N)} or
    * a finite source.
    *
-   * <p>Walks upstream via {@link #getReceiverGenerator}, only following plain {@link
-   * DatasetGenerator} instances (the pass-through layer the factory creates for
-   * shuffle/map/repeat/take/prefetch/etc.; see {@code TensorGeneratorFactory}'s dispatch for {@link
-   * TensorFlowTypes#DATASET_REPEAT_TYPE} and friends). Each visited generator's invoke instruction
-   * is inspected by resolving the call's callees and checking the declaring class of each callee.
-   * The walk terminates at:
+   * <p>Walks upstream via {@link #getReceiverGenerator}, only following the transformations that
+   * pass their receiver through ({@link #passesReceiverThrough}: the plain pass-through layer the
+   * factory creates for shuffle/map/repeat/prefetch/etc., see {@code TensorGeneratorFactory}'s
+   * dispatch for {@link TensorFlowTypes#DATASET_REPEAT_TYPE} and friends, and {@code filter}). Each
+   * visited generator's invoke instruction is inspected by resolving the call's callees and
+   * checking the declaring class of each callee. The walk terminates at:
    *
    * <ul>
    *   <li>The first {@link TensorFlowTypes#DATASET_REPEAT_TYPE} callee &rarr; returns {@code true}
@@ -566,8 +580,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    */
   protected boolean upstreamIsInfinite(PropagationCallGraphBuilder builder) {
     TensorGenerator up = this.getReceiverGenerator(builder);
-    while (up != null && up.getClass() == DatasetGenerator.class) {
-      DatasetGenerator dg = (DatasetGenerator) up;
+    while (up instanceof DatasetGenerator dg && dg.passesReceiverThrough()) {
       TypeReference declaring = upstreamOpClass(dg, builder);
       if (declaring != null) {
         if (declaring.equals(TensorFlowTypes.DATASET_REPEAT_TYPE)) return true;
@@ -595,7 +608,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   private static final String REPEAT_COUNT_PARAMETER_NAME = "count";
 
   /**
-   * The nearest {@code repeat} above this dataset, walking the plain pass-throughs as {@link
+   * The nearest {@code repeat} above this dataset, walking the pass-throughs as {@link
    * #upstreamIsInfinite} does, and whether it repeats without end (wala/ML#1216). Unlike that walk,
    * this one reads the {@code repeat}'s count, since a {@code repeat} with a count ends.
    *
@@ -604,8 +617,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    */
   UpstreamRepeat upstreamRepeat(PropagationCallGraphBuilder builder) {
     TensorGenerator up = this.getReceiverGenerator(builder);
-    while (up != null && up.getClass() == DatasetGenerator.class) {
-      DatasetGenerator dg = (DatasetGenerator) up;
+    while (up instanceof DatasetGenerator dg && dg.passesReceiverThrough()) {
       TypeReference declaring = upstreamOpClass(dg, builder);
       if (declaring != null && declaring.equals(TensorFlowTypes.DATASET_REPEAT_TYPE))
         return dg.repeatsWithoutEnd(builder) ? UpstreamRepeat.ENDLESS : UpstreamRepeat.COUNTED;

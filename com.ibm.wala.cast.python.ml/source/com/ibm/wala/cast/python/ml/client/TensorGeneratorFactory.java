@@ -3949,13 +3949,12 @@ public class TensorGeneratorFactory {
               changed = true;
             }
           }
-          // Exact class check, not instanceof: only plain DatasetGenerator (pass-through wrappers
-          // like shuffle/map/repeat/prefetch/take) should be unwrapped. Subclasses have their own
-          // shape logic (e.g., DatasetBatchGenerator prepends a batch dim) that would be skipped.
+          // Only a pass-through (shuffle/map/repeat/prefetch/filter) is unwrapped, not every
+          // DatasetGenerator: other subclasses have their own shape logic (e.g.,
+          // DatasetBatchGenerator prepends a batch dim) that would be skipped.
           if (!changed
-              && effectiveGenerator != null
-              && effectiveGenerator.getClass() == DatasetGenerator.class) {
-            DatasetGenerator dg = (DatasetGenerator) effectiveGenerator;
+              && effectiveGenerator instanceof DatasetGenerator dg
+              && dg.passesReceiverThrough()) {
             TensorGenerator receiver = dg.getReceiverGenerator(builder);
             if (receiver != null && receiver != effectiveGenerator) {
               effectiveGenerator = receiver;
@@ -4392,6 +4391,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_SHARD_TYPE)) return new DatasetShardGenerator(source);
     // A take counts the elements it keeps (wala/ML#1216).
     else if (isType(calledFunction, DATASET_TAKE_TYPE)) return new DatasetTakeGenerator(source);
+    // A filter keeps an uncounted number of its receiver's elements (wala/ML#1237).
+    else if (isType(calledFunction, DATASET_FILTER_TYPE)) return new DatasetFilterGenerator(source);
     // The element of `flat_map` and `interleave` is any element of the datasets their function
     // returns (wala/ML#1214).
     else if (isType(calledFunction, DATASET_FLAT_MAP_TYPE)
@@ -4414,7 +4415,6 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET_CACHE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
         || isType(calledFunction, DATASET_REDUCE_TYPE)
-        || isType(calledFunction, DATASET_FILTER_TYPE)
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);
     else if (isType(calledFunction, IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE))
       return new FlowFromDirectoryGenerator(source);
