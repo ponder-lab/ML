@@ -31,9 +31,10 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * Tests {@link ContainerElements#ofValue} on {@code tf2_test_container_elements_of_value.py}, where
- * each sink receives one value: the {@code inputs} a Keras step hands to {@code call} when {@code
- * fit} is given a dataset, which no container instance stands for, and an ordinary local tuple.
+ * Tests the elements of a value, read as a client reads them ({@link ValueElements}), on {@code
+ * tf2_test_container_elements_of_value.py}, where each sink receives one value: the {@code inputs}
+ * a Keras step hands to {@code call} when {@code fit} is given a dataset, which no container
+ * instance stands for, and an ordinary local tuple.
  */
 public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
 
@@ -108,8 +109,8 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    * @param sink The sink's name.
    * @return Its parameter's elements.
    */
-  private static ContainerElements ofValue(String sink) {
-    return ContainerElements.ofValue(builder(), parameter(sink));
+  private static ValueElements ofValue(String sink) {
+    return ValueElements.of(builder(), parameter(sink));
   }
 
   /**
@@ -118,7 +119,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testPair() {
-    ContainerElements elements = ofValue("consume_pair");
+    ValueElements elements = ofValue("consume_pair");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertTrue(elements.isComplete());
     // The component is the element's copy of the pair, so each position has its key.
@@ -138,7 +139,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testKeyed() {
-    ContainerElements elements = ofValue("consume_keyed");
+    ValueElements elements = ofValue("consume_keyed");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertTrue(elements.isComplete());
@@ -151,7 +152,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   /** A {@code from_generator} component its {@code output_signature} declares as three specs. */
   @Test
   public void testTriple() {
-    ContainerElements elements = ofValue("consume_triple");
+    ValueElements elements = ofValue("consume_triple");
     assertEquals(OptionalInt.of(3), elements.arity());
     assertTrue(elements.isComplete());
     assertEquals(3, elements.positionTypes(analysis).size());
@@ -170,7 +171,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testPairFromGenerator() {
-    ContainerElements elements = ofValue("consume_pair_from_generator");
+    ValueElements elements = ofValue("consume_pair_from_generator");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         List.of(Set.of(batched("float32", 4)), Set.of(batched("float32", 3))),
@@ -183,7 +184,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testZippedPair() {
-    ContainerElements elements = ofValue("consume_zipped_pair");
+    ValueElements elements = ofValue("consume_zipped_pair");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         List.of(Set.of(batched("float32", 4)), Set.of(batched("float32", 3))),
@@ -197,7 +198,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testZippedTensors() {
-    ContainerElements elements = ofValue("consume_zipped_tensors");
+    ValueElements elements = ofValue("consume_zipped_tensors");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
@@ -212,7 +213,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testNested() {
-    ContainerElements elements = ofValue("consume_nested");
+    ValueElements elements = ofValue("consume_nested");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         "Positions: " + elements.positionTypes(analysis) + ".",
@@ -228,7 +229,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testStarred() {
-    ContainerElements elements = ofValue("consume_starred");
+    ValueElements elements = ofValue("consume_starred");
     assertEquals(
         "Positions: " + elements.positionTypes(analysis) + ".",
         OptionalInt.empty(),
@@ -250,7 +251,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testFlatMapped() {
-    ContainerElements elements = ofValue("consume_flat_mapped");
+    ValueElements elements = ofValue("consume_flat_mapped");
     assertEquals(
         "Types: " + elements.elementTypes(analysis) + ".", OptionalInt.of(2), elements.arity());
     assertEquals(
@@ -275,7 +276,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   /** A component {@code tuple(parts)} builds is a tuple the program does not write as a display. */
   @Test
   public void testBuilt() {
-    ContainerElements elements = ofValue("consume_built");
+    ValueElements elements = ofValue("consume_built");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
   }
@@ -287,7 +288,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testMixed() {
-    ContainerElements elements = ofValue("consume_mixed");
+    ValueElements elements = ofValue("consume_mixed");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertEquals(
@@ -302,7 +303,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testMixedBatched() {
-    ContainerElements elements = ofValue("consume_mixed_batched");
+    ValueElements elements = ofValue("consume_mixed_batched");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertTrue(
@@ -320,7 +321,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testLengthsShuffled() {
-    ContainerElements elements = ofValue("consume_lengths_shuffled");
+    ValueElements elements = ofValue("consume_lengths_shuffled");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
   }
@@ -331,7 +332,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testMixedShuffled() {
-    ContainerElements elements = ofValue("consume_mixed_shuffled");
+    ValueElements elements = ofValue("consume_mixed_shuffled");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(
         "Types: " + elements.elementTypes(analysis) + ".",
@@ -348,7 +349,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testAgreeing() {
-    ContainerElements elements = ofValue("consume_agreeing");
+    ValueElements elements = ofValue("consume_agreeing");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         List.of(
@@ -361,14 +362,13 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
 
   /**
    * A {@code map} that keeps the element's pair, {@code lambda inp, y: inp}: {@code fit} takes the
-   * pair's first member for the inputs, a tensor.
+   * pair's first member for the inputs, a tensor, which a client reads from the analysis.
    */
   @Test
   public void testMappedInputs() {
-    ContainerElements elements = ofValue("consume_mapped_inputs");
+    ValueElements elements = ofValue("consume_mapped_inputs");
     assertEquals(OptionalInt.empty(), elements.arity());
-    assertEquals(Set.of(TensorType.of(FLOAT32, 2, 4)), elements.elementTypes(analysis));
-    assertTrue(elements.isComplete());
+    assertEquals(Set.of(TensorType.of(FLOAT32, 2, 4)), typesOf("consume_mapped_inputs"));
   }
 
   /**
@@ -377,7 +377,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testLoopLengths() {
-    ContainerElements elements = ofValue("consume_loop_lengths");
+    ValueElements elements = ofValue("consume_loop_lengths");
     assertEquals(OptionalInt.empty(), elements.arity());
   }
 
@@ -387,7 +387,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testLoopAgreeing() {
-    ContainerElements elements = ofValue("consume_loop_agreeing");
+    ValueElements elements = ofValue("consume_loop_agreeing");
     assertEquals(
         "Types: " + elements.positionTypes(analysis) + ".", OptionalInt.of(2), elements.arity());
   }
@@ -399,7 +399,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testMappedPair() {
-    ContainerElements elements = ofValue("consume_mapped_pair");
+    ValueElements elements = ofValue("consume_mapped_pair");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
@@ -407,14 +407,16 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertTrue(elements.isComplete());
   }
 
-  /** A flat dataset input is a tensor: no length, and its own type. */
+  /**
+   * A flat dataset input is a tensor: no length, and the analysis gives it its own type, which a
+   * client reads from the analysis rather than as an element.
+   */
   @Test
   public void testFlat() {
-    ContainerElements elements = ofValue("consume_flat");
+    ValueElements elements = ofValue("consume_flat");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
-    assertEquals(Set.of(TensorType.of(FLOAT32, 2, 4)), elements.elementTypes(analysis));
-    assertTrue(elements.isComplete());
+    assertEquals(Set.of(TensorType.of(FLOAT32, 2, 4)), typesOf("consume_flat"));
   }
 
   /** An ordinary local tuple reads as its one instance does. */
@@ -425,7 +427,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     builder().getPointerAnalysis().getPointsToSet(parameter).forEach(instances::add);
     assertEquals(1, instances.size());
     ContainerElements of = ContainerElements.of(builder(), instances.get(0));
-    ContainerElements value = ContainerElements.ofValue(builder(), parameter);
+    ValueElements value = ValueElements.of(builder(), parameter);
     assertEquals(OptionalInt.of(2), value.arity());
     assertEquals(of.arity(), value.arity());
     assertEquals(of.positions(), value.positions());
@@ -441,7 +443,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testLocalJoin() {
-    ContainerElements elements = ofValue("consume_local_join");
+    ValueElements elements = ofValue("consume_local_join");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(
         List.of(
@@ -455,7 +457,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   /** A value that is a local pair or a local triple has no one length, but both are complete. */
   @Test
   public void testLocalLengths() {
-    ContainerElements elements = ofValue("consume_local_lengths");
+    ValueElements elements = ofValue("consume_local_lengths");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertEquals(
@@ -474,7 +476,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testMappedBuilt() {
-    ContainerElements elements = ofValue("consume_mapped_built");
+    ValueElements elements = ofValue("consume_mapped_built");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertTrue(elements.isComplete());
   }
@@ -482,7 +484,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   /** As {@link #testMappedBuilt()}, the built pair's positions: each is {@code (2, 4)} float32. */
   @Test
   public void testMappedBuiltPositions() {
-    ContainerElements elements = ofValue("consume_mapped_built");
+    ValueElements elements = ofValue("consume_mapped_built");
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 4))),
         elements.positionTypes(analysis));
@@ -496,7 +498,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testStarredElement() {
-    ContainerElements elements = ofValue("consume_starred_element");
+    ValueElements elements = ofValue("consume_starred_element");
     assertEquals(OptionalInt.empty(), elements.arity());
     assertEquals(
         Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),

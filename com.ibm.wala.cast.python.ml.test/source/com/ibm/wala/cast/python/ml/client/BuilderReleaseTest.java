@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
@@ -37,9 +36,9 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A dataset component queried after the analysis, as a client reads a {@code fit} step's {@code
-   * inputs}, leaves no memoized dispatch behind: the query resolves the component's generator, and
-   * before wala/ML#1170 that memoized it again after the analysis had cleared the memo.
+   * A generator read made after the analysis, here of the tensor a {@code fit} step hands {@code
+   * call}, leaves no memoized dispatch behind: the read resolves the value's generator, and before
+   * wala/ML#1170 that memoized it again after the analysis had cleared the memo.
    */
   @Test
   public void testPostAnalysisQueryMemoizesNoDispatch() throws Exception {
@@ -51,13 +50,15 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
 
       List<PointerKey> parameters = new ArrayList<>();
       for (CGNode node : builder.getCallGraph())
-        if (node.getMethod().getDeclaringClass().getName().toString().endsWith("/consume_pair"))
+        if (node.getMethod().getDeclaringClass().getName().toString().endsWith("/consume_flat"))
           parameters.add(
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
-      assertEquals("Expecting one node for consume_pair.", 1, parameters.size());
+      assertEquals("Expecting one node for consume_flat.", 1, parameters.size());
 
-      ContainerElements elements = ContainerElements.ofValue(builder, parameters.get(0));
-      assertTrue("The query reads the component as a declared pair.", elements.arity().isPresent());
+      TensorGenerator generator =
+          TensorGeneratorFactory.getGenerator(
+              builder.getPropagationSystem().findOrCreatePointsToSet(parameters.get(0)), builder);
+      assertFalse("The read finds the value's types.", generator.getTensorTypes(builder).isEmpty());
 
       assertFalse(
           "A query made after the analysis memoizes no dispatch.",

@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
+import com.ibm.wala.cast.python.ml.test.ValueElements;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ssa.IR;
@@ -61,7 +62,7 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
    * @param analysis The analysis whose types the positions read.
    * @return The rendering.
    */
-  private static String render(ContainerElements elements, TensorTypeAnalysis analysis) {
+  private static String render(ValueElements elements, TensorTypeAnalysis analysis) {
     if (elements == null) return "none";
     return elements.arity()
         + " "
@@ -98,7 +99,7 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
         } catch (RuntimeException e) {
           types = e.getClass().getName();
         }
-        ContainerElements elements = ContainerElements.ofValue(builder, value);
+        ValueElements elements = ValueElements.of(builder, value);
         ret.put(node + " v" + vn, types + " | " + render(elements, analysis));
       }
     }

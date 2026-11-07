@@ -1,7 +1,8 @@
-# The elements `ContainerElements.ofValue` reads for values that may be no container instance: the
-# structured `inputs` a Keras step hands to `call` when `fit` is given a dataset, a flat one, one
-# that is a tuple on one branch and a tensor on the other, and an ordinary local tuple. `fit` traces
-# `call` with the batch axis unspecified, so the sinks check the other axes.
+# The elements a client reads (`ContainerElements.of` of each instance) for values that may be
+# no container instance: the structured `inputs` a Keras step hands to `call` when `fit` is given
+# a dataset, a flat one, one that is a tuple on one branch and a tensor on the other, and an
+# ordinary local tuple. `fit` traces `call` with the batch axis unspecified, so the sinks check the
+# other axes.
 import tensorflow as tf
 
 

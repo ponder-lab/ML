@@ -3487,9 +3487,9 @@ public class TensorGeneratorFactory {
     // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
     // source, so return null here rather than dereferencing it in `getGeneratorBody`. wala/ML#614.
     if (source == null) return null;
-    // Memoize only while an analysis is resolving for the builder. A query made after it, such as
-    // `ContainerElements.datasetComponent`, would refill the memo the analysis cleared, and the
-    // entries' values keep the weak key reachable (wala/ML#1170).
+    // Memoize only while an analysis is resolving for the builder. A query made after it, such as a
+    // client's generator read, would refill the memo the analysis cleared, and the entries' values
+    // keep the weak key reachable (wala/ML#1170).
     Map<PointsToSetVariable, Dispatch> dispatches =
         visited.memoizes() && WorklistTypeResolver.active(builder) != null
             ? dispatches(builder)

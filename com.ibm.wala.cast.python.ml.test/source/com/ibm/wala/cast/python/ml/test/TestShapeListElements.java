@@ -21,8 +21,8 @@ import org.junit.Test;
  * Tests that the elements of a tensor's static shape list are Python ints to a points-to client, on
  * {@code tf2_test_shape_list_elements.py} (<a
  * href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>): each sink receives a list, and
- * the test reads whether {@link ContainerElements} finds a Python {@code int}'s type-level key
- * among its elements.
+ * the test reads whether {@link ContainerElements} of each of its instances finds a Python {@code
+ * int}'s type-level key among its elements.
  */
 public class TestShapeListElements extends TestPythonMLCallGraphShape {
 
@@ -64,7 +64,7 @@ public class TestShapeListElements extends TestPythonMLCallGraphShape {
         parameters.add(
             builder().getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
     assertEquals("Expecting one node for " + sink + ".", 1, parameters.size());
-    for (PointerKey element : ContainerElements.ofValue(builder(), parameters.get(0)).allElements())
+    for (PointerKey element : ValueElements.of(builder(), parameters.get(0)).allElements())
       for (InstanceKey ik : builder().getPointerAnalysis().getPointsToSet(element))
         if (Util.isPythonScalarKey(ik)) return true;
     return false;
