@@ -463,28 +463,12 @@ public final class ContainerElements {
    */
   private void addTypes(TensorTypeAnalysis analysis, PointerKey key, Set<TensorType> types) {
     PointsToSetVariable variable = this.variable(key);
-    // A key the analysis's flow graph does not hold has no state, rather than an empty one.
-    if (variable == null || !analysis.getProblem().getFlowGraph().containsNode(variable)) {
-      // A field of a dataset element's copy that nothing reads is outside the flow graph, so its
-      // leaves are typed as the analysis seeds them, at their paths (wala/ML#1190).
-      this.addLeafTypes(key, types);
-      return;
-    }
+    // A key the analysis's flow graph does not hold has no state, rather than an empty one. A field
+    // of a dataset element's copy that nothing reads is in the graph, seeded as the element's other
+    // fields are (wala/ML#1190).
+    if (variable == null || !analysis.getProblem().getFlowGraph().containsNode(variable)) return;
     Set<TensorType> state = analysis.getOutState(variable);
     if (state != null) types.addAll(state);
-  }
-
-  /**
-   * Adds the tensor types of the leaves of a dataset element's copy that a key holds, read at their
-   * paths as the analysis seeds them.
-   *
-   * @param key The key.
-   * @param types The types, which this adds to.
-   */
-  private void addLeafTypes(PointerKey key, Set<TensorType> types) {
-    for (InstanceKey member : this.builder.getPointerAnalysis().getPointsToSet(key))
-      if (member instanceof ElementMirrorKey leaf && leaf.isLeaf())
-        types.addAll(TensorGeneratorFactory.mirroredLeafTypes(leaf, this.builder));
   }
 
   /**

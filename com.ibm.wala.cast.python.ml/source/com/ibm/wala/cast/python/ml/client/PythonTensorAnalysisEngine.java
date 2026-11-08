@@ -261,6 +261,40 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Adds to the analysis's dataflow graph each field of a mirrored dataset element that holds a
+   * leaf but that nothing reads (wala/ML#1190). The pointer analysis gives such a field its leaves,
+   * but no constraint mentions it, so it is outside the flow graph and {@link
+   * #seedElementMirrorFields} never reaches it. Added, it is seeded as the element's other fields
+   * are, so the analysis types every member of the element, those a program passes along without
+   * reading included, as a {@code fit} model's {@code call} does with a tuple input it reads only
+   * the first member of.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param dataflow The analysis's dataflow graph, which this adds the fields to.
+   */
+  private static void addUnreadElementMirrorFields(
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
+    if (!(builder instanceof PythonSSAPropagationCallGraphBuilder)) return;
+    List<PointerKey> unread = new ArrayList<>();
+    for (PointerKey key : builder.getPointerAnalysis().getPointerKeys()) {
+      if (!(key instanceof InstanceFieldKey fieldKey)
+          || !(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
+          || builder.getPropagationSystem().isImplicit(key)) continue;
+      for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(key))
+        if (value instanceof ElementMirrorKey leaf && leaf.isLeaf()) {
+          unread.add(key);
+          break;
+        }
+    }
+    for (PointerKey key : unread) {
+      PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(key);
+      if (dataflow.containsNode(var)) continue;
+      LOGGER.fine(() -> "Adding unread mirrored element field " + key + " to the dataflow graph.");
+      dataflow.addNode(var);
+    }
+  }
+
+  /**
    * Seeds each field a mirrored dataset element's leaf is stored in (wala/ML#1190): a field of a
    * mirrored structure, or the {@code mirrored_element} field of a dataset whose element is itself
    * a leaf. A leaf is typed by the generator of the dataset the mirror built it for, at each path
@@ -4406,6 +4440,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       }
 
       seedMapDictElementFields(builder, dataflow, init, initOrigins);
+
+      addUnreadElementMirrorFields(builder, dataflow);
 
       seedElementMirrorFields(builder, dataflow, init, initOrigins);
 
