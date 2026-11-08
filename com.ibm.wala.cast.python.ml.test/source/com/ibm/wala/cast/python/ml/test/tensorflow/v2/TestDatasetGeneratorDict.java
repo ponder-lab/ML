@@ -520,25 +520,35 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
 
   /**
    * As {@link #testMapDictParameterContainer()}, for a dict an {@code output_signature} declares.
+   * The function never reads {@code n}, which is typed as the signature declares it (<a
+   * href="https://github.com/wala/ML/issues/1190">wala/ML#1190</a>).
    */
   @Test
   public void testMapSignatureDictParameterContainer()
       throws ClassHierarchyException, CancelException, IOException {
     assertEquals(
-        Map.of("x", Set.of(TensorType.of(FLOAT_32, 2))),
+        Map.of("x", Set.of(TensorType.of(FLOAT_32, 2)), "n", Set.of(TensorType.of(INT_32))),
         dictParameterFieldTypes(DICT_MAP_FILE, "load_signed"));
   }
 
-  /** As {@link #testMapDictParameterContainer()}, for a batch of dicts. */
+  /**
+   * As {@link #testMapDictParameterContainer()}, for a batch of dicts, whose {@code utt_ids} the
+   * function never reads (<a href="https://github.com/wala/ML/issues/1190">wala/ML#1190</a>).
+   */
   @Test
   public void testMapBatchedDictParameterContainer()
       throws ClassHierarchyException, CancelException, IOException {
     assertEquals(
-        Map.of("mels", Set.of(new TensorType(FLOAT_32, null))),
+        Map.of(
+            "mels", Set.of(new TensorType(FLOAT_32, null)),
+            "utt_ids", Set.of(new TensorType(STRING, null))),
         dictParameterFieldTypes(DICT_MAP_FILE, "load_batched"));
   }
 
-  /** As {@link #testMapDictParameterContainer()}, for a padded batch of dicts. */
+  /**
+   * As {@link #testMapDictParameterContainer()}, for a padded batch of dicts, whose {@code utt_ids}
+   * the function never reads (<a href="https://github.com/wala/ML/issues/1190">wala/ML#1190</a>).
+   */
   @Test
   public void testMapPaddedDictParameterContainer()
       throws ClassHierarchyException, CancelException, IOException {
@@ -547,7 +557,9 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
             "mels",
             Set.of(
                 new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)),
-                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))),
+                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE))),
+            "utt_ids",
+            Set.of(TensorType.of(STRING, 2), new TensorType(STRING, asList(new SymbolicDim("?"))))),
         dictParameterFieldTypes(DICT_MAP_FILE, "load_padded"));
   }
 
@@ -678,8 +690,8 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
     Map<String, Set<TensorType>> ret = HashMapFactory.make();
     // Every field the pointer analysis has for the dicts, so a field that exists but holds no
     // tensor reads as an empty set rather than as absent. A field holding a leaf of a mirrored
-    // element holds a tensor, which is typed where the function reads it, so a key the function
-    // never reads is left out rather than read as holding none (wala/ML#164).
+    // element holds a tensor, which the analysis types whether or not the function reads it
+    // (wala/ML#164, wala/ML#1190), so it is left to the analysis rather than read as holding none.
     for (PointerKey key : builder.getPointerAnalysis().getPointerKeys())
       if (key instanceof InstanceFieldKey fieldKey
           && dicts.contains(fieldKey.getInstanceKey())
