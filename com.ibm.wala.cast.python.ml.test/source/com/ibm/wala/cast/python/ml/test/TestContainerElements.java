@@ -114,7 +114,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * @return Per position, its types.
    */
   private static List<Set<TensorType>> positionTypes(ContainerElements elements) {
-    return ElementTypes.positionTypes(builder(FILE), analysis(), elements);
+    return ElementTypes.positionTypes(analysis(), elements);
   }
 
   /**
@@ -125,7 +125,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * @return The union of the elements' types.
    */
   private static Set<TensorType> elementTypes(String file, ContainerElements elements) {
-    return ElementTypes.elementTypes(builder(file), analysis(file), elements);
+    return ElementTypes.elementTypes(analysis(file), elements);
   }
 
   /**
