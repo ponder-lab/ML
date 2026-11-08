@@ -432,8 +432,9 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(of.arity(), value.arity());
     assertEquals(of.positions(), value.positions());
     assertEquals(of.isComplete(), value.isComplete());
-    assertEquals(of.positionTypes(analysis), value.positionTypes(analysis));
-    assertEquals(of.elementTypes(analysis), value.elementTypes(analysis));
+    assertEquals(
+        ElementTypes.positionTypes(builder(), analysis, of), value.positionTypes(analysis));
+    assertEquals(ElementTypes.elementTypes(builder(), analysis, of), value.elementTypes(analysis));
     assertEquals(of.mayHoldNone(), value.mayHoldNone());
   }
 

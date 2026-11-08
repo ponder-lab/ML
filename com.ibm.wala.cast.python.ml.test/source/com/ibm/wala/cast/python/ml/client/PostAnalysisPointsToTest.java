@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.test.ElementTypes;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
@@ -102,7 +103,7 @@ public class PostAnalysisPointsToTest extends TestPythonMLCallGraphShape {
           if (builder.getPropagationSystem().isImplicit(value)) continue;
           if (unsolved == null && !held.contains(value)) unsolved = value;
           for (InstanceKey container : builder.getPointerAnalysis().getPointsToSet(value))
-            ContainerElements.of(builder, container).elementTypes(analysis);
+            ElementTypes.elementTypes(builder, analysis, ContainerElements.of(builder, container));
         }
       }
 

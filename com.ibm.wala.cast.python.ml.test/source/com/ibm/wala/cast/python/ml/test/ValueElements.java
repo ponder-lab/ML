@@ -22,10 +22,14 @@ import java.util.Set;
  */
 public final class ValueElements {
 
+  /** The builder whose pointer analysis models the value. */
+  private final PropagationCallGraphBuilder builder;
+
   /** The elements of each instance the value may hold. */
   private final List<ContainerElements> parts;
 
-  private ValueElements(List<ContainerElements> parts) {
+  private ValueElements(PropagationCallGraphBuilder builder, List<ContainerElements> parts) {
+    this.builder = builder;
     this.parts = parts;
   }
 
@@ -40,7 +44,7 @@ public final class ValueElements {
     List<ContainerElements> parts = new ArrayList<>();
     for (InstanceKey instance : builder.getPointerAnalysis().getPointsToSet(value))
       parts.add(ContainerElements.of(builder, instance));
-    return new ValueElements(parts);
+    return new ValueElements(builder, parts);
   }
 
   /**
@@ -94,13 +98,14 @@ public final class ValueElements {
    * @return The types, empty when the length is not known.
    */
   public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
-    if (this.parts.size() == 1) return this.parts.get(0).positionTypes(analysis);
+    if (this.parts.size() == 1)
+      return ElementTypes.positionTypes(this.builder, analysis, this.parts.get(0));
     OptionalInt arity = this.arity();
     if (arity.isEmpty()) return List.of();
     List<Set<TensorType>> ret = new ArrayList<>();
     for (int i = 0; i < arity.getAsInt(); i++) ret.add(new HashSet<>());
     for (ContainerElements part : this.parts) {
-      List<Set<TensorType>> types = part.positionTypes(analysis);
+      List<Set<TensorType>> types = ElementTypes.positionTypes(this.builder, analysis, part);
       for (int i = 0; i < ret.size() && i < types.size(); i++) ret.get(i).addAll(types.get(i));
     }
     List<Set<TensorType>> unmodifiable = new ArrayList<>();
@@ -116,7 +121,8 @@ public final class ValueElements {
    */
   public Set<TensorType> elementTypes(TensorTypeAnalysis analysis) {
     Set<TensorType> ret = new HashSet<>();
-    for (ContainerElements part : this.parts) ret.addAll(part.elementTypes(analysis));
+    for (ContainerElements part : this.parts)
+      ret.addAll(ElementTypes.elementTypes(this.builder, analysis, part));
     return Collections.unmodifiableSet(ret);
   }
 

@@ -108,6 +108,27 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The tensor types the analysis of the main fixture gives a container's positions.
+   *
+   * @param elements The container's elements.
+   * @return Per position, its types.
+   */
+  private static List<Set<TensorType>> positionTypes(ContainerElements elements) {
+    return ElementTypes.positionTypes(builder(FILE), analysis(), elements);
+  }
+
+  /**
+   * The tensor types the analysis of a fixture gives a container's elements.
+   *
+   * @param file The fixture.
+   * @param elements The container's elements.
+   * @return The union of the elements' types.
+   */
+  private static Set<TensorType> elementTypes(String file, ContainerElements elements) {
+    return ElementTypes.elementTypes(builder(file), analysis(file), elements);
+  }
+
+  /**
    * The elements of the one container a sink of the main fixture receives.
    *
    * @param sink The sink's name.
@@ -177,7 +198,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
     ContainerElements elements = elements(sink);
     assertEquals(sink, OptionalInt.empty(), elements.arity());
     assertTrue(sink, elements.positions().isEmpty());
-    assertTrue(sink, elements.positionTypes(analysis()).isEmpty());
+    assertTrue(sink, positionTypes(elements).isEmpty());
     assertFalse(sink, elements.allElements().isEmpty());
   }
 
@@ -187,7 +208,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
     ContainerElements elements = elements("sink_tuple");
     assertEquals(OptionalInt.of(2), elements.arity());
     assertEquals(2, elements.positions().size());
-    assertEquals(List.of(Set.of(F32_2_3), Set.of(I32_4)), elements.positionTypes(analysis()));
+    assertEquals(List.of(Set.of(F32_2_3), Set.of(I32_4)), positionTypes(elements));
     assertFalse(elements.mayHoldNone());
   }
 
@@ -196,9 +217,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   public void testList() {
     ContainerElements elements = elements("sink_list");
     assertEquals(OptionalInt.of(3), elements.arity());
-    assertEquals(
-        List.of(Set.of(F32_2_3), Set.of(I32_4), Set.of(F32_2_3)),
-        elements.positionTypes(analysis()));
+    assertEquals(List.of(Set.of(F32_2_3), Set.of(I32_4), Set.of(F32_2_3)), positionTypes(elements));
   }
 
   /** A list only read through a method that changes neither its length nor its order. */
@@ -220,7 +239,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   public void testNested() {
     ContainerElements elements = elements("sink_nested");
     assertEquals(OptionalInt.of(2), elements.arity());
-    assertEquals(List.of(Set.of(F32_2_3), Set.of()), elements.positionTypes(analysis()));
+    assertEquals(List.of(Set.of(F32_2_3), Set.of()), positionTypes(elements));
   }
 
   /** A {@code None} element, against the same tuple without one. */
@@ -534,8 +553,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testElementTypesOfAppended() {
     ContainerElements elements = elements("sink_appended");
-    assertTrue(elements.positionTypes(analysis()).isEmpty());
-    assertEquals(Set.of(F32_2_3, I32_4), elements.elementTypes(analysis()));
+    assertTrue(positionTypes(elements).isEmpty());
+    assertEquals(Set.of(F32_2_3, I32_4), elementTypes(FILE, elements));
   }
 
   /**
@@ -545,10 +564,10 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testElementTypesOfComprehension() {
     ContainerElements elements = elements("sink_comprehension");
-    assertTrue(elements.positionTypes(analysis()).isEmpty());
+    assertTrue(positionTypes(elements).isEmpty());
     assertEquals(
         Set.of(new TensorType("float32", List.of(UnresolvedDim.INSTANCE))),
-        elements.elementTypes(analysis()));
+        elementTypes(FILE, elements));
   }
 
   /** A list of ints has a length, but no element with tensor evidence. */
@@ -556,13 +575,13 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   public void testElementTypesOfInts() {
     ContainerElements elements = elements("sink_ints");
     assertEquals(OptionalInt.of(3), elements.arity());
-    assertEquals(Set.of(), elements.elementTypes(analysis()));
+    assertEquals(Set.of(), elementTypes(FILE, elements));
   }
 
   /** A tuple's element types are the union of its position types. */
   @Test
   public void testElementTypesOfTuple() {
-    assertEquals(Set.of(F32_2_3, I32_4), elements("sink_tuple").elementTypes(analysis()));
+    assertEquals(Set.of(F32_2_3, I32_4), elementTypes(FILE, elements("sink_tuple")));
   }
 
   /** A dict keyed by a float: its tensor value is an element. */
@@ -570,7 +589,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   public void testFloatKeyElementTypes() {
     ContainerElements elements = elements(DICT_KEYS, "sink_float_tensor");
     assertTrue(elements.isComplete());
-    assertEquals(Set.of(F32_2_3), elements.elementTypes(analysis(DICT_KEYS)));
+    assertEquals(Set.of(F32_2_3), elementTypes(DICT_KEYS, elements));
     assertFalse(elements.mayHoldNone());
   }
 
@@ -585,7 +604,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   public void testBoolKeyElementTypes() {
     ContainerElements elements = elements(DICT_KEYS, "sink_bool_tensor");
     assertTrue(elements.isComplete());
-    assertEquals(Set.of(F32_2_3), elements.elementTypes(analysis(DICT_KEYS)));
+    assertEquals(Set.of(F32_2_3), elementTypes(DICT_KEYS, elements));
     assertFalse(elements.mayHoldNone());
   }
 
