@@ -261,13 +261,35 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * Adds to the analysis's dataflow graph each field of a mirrored dataset element that holds a
-   * leaf but that nothing reads (wala/ML#1190). The pointer analysis gives such a field its leaves,
-   * but no constraint mentions it, so it is outside the flow graph and {@link
-   * #seedElementMirrorFields} never reaches it. Added, it is seeded as the element's other fields
-   * are, so the analysis types every member of the element, those a program passes along without
-   * reading included, as a {@code fit} model's {@code call} does with a tuple input it reads only
-   * the first member of.
+   * Whether a field holds a mirrored dataset element's keys (wala/ML#1190), and so is seeded by
+   * {@link #seedElementMirrorFields}: a field of a mirrored structure, the {@code mirrored_element}
+   * field of a dataset, a field of the holder of {@code map}'s function's arguments, or a field of
+   * a window.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param fieldKey The field's key.
+   * @return {@code true} iff the field is one of those.
+   */
+  private static boolean isElementMirrorField(
+      PropagationCallGraphBuilder builder, InstanceFieldKey fieldKey) {
+    InstanceKey holder = fieldKey.getInstanceKey();
+    return holder instanceof ElementMirrorKey
+        || (fieldKey.getField().getName().toString().equals("mirrored_element")
+            && isDataset(builder, holder))
+        || isMapArguments(holder)
+        || windowOf(holder) != null;
+  }
+
+  /**
+   * Adds to the analysis's dataflow graph each field of a mirrored dataset element ({@link
+   * #isElementMirrorField}) that holds a leaf but that nothing reads (wala/ML#1190). The pointer
+   * analysis gives such a field its leaves, but no constraint mentions it, so it is outside the
+   * flow graph and {@link #seedElementMirrorFields} never reaches it. Added, it is seeded as the
+   * element's other fields are, so the analysis types every member of the element, those a program
+   * passes along without reading included, as a {@code fit} model's {@code call} does with a tuple
+   * input it reads only the first member of. A field that holds no leaf is not added, so an unread
+   * position of a mirrored structure that holds nothing gets no state, rather than the unknown type
+   * a read one is seeded with.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param dataflow The analysis's dataflow graph, which this adds the fields to.
@@ -278,7 +300,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     List<PointerKey> unread = new ArrayList<>();
     for (PointerKey key : builder.getPointerAnalysis().getPointerKeys()) {
       if (!(key instanceof InstanceFieldKey fieldKey)
-          || !(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
+          || !isElementMirrorField(builder, fieldKey)
           || builder.getPropagationSystem().isImplicit(key)) continue;
       for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(key))
         if (value instanceof ElementMirrorKey leaf && leaf.isLeaf()) {
@@ -318,11 +340,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Map<InstanceKey, Set<TensorType>> leafTypes = HashMapFactory.make();
     for (PointsToSetVariable var : dataflow) {
       if (!(var.getPointerKey() instanceof InstanceFieldKey fieldKey)) continue;
-      if (!(fieldKey.getInstanceKey() instanceof ElementMirrorKey)
-          && !(fieldKey.getField().getName().toString().equals("mirrored_element")
-              && isDataset(builder, fieldKey.getInstanceKey()))
-          && !isMapArguments(fieldKey.getInstanceKey())
-          && windowOf(fieldKey.getInstanceKey()) == null) continue;
+      if (!isElementMirrorField(builder, fieldKey)) continue;
       Set<TensorType> types = null;
       OrdinalSet<InstanceKey> values = builder.getPointerAnalysis().getPointsToSet(fieldKey);
       for (InstanceKey value : values) {
