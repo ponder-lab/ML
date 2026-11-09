@@ -33,11 +33,11 @@ import java.util.Set;
  */
 public class DatasetEnumerateGenerator extends DatasetGenerator {
 
-  public DatasetEnumerateGenerator(PointsToSetVariable source) {
+  protected DatasetEnumerateGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetEnumerateGenerator(CGNode node) {
+  protected DatasetEnumerateGenerator(CGNode node) {
     super(node);
   }
 

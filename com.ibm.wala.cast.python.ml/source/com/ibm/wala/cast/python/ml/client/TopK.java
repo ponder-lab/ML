@@ -90,11 +90,11 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
     }
   }
 
-  public TopK(PointsToSetVariable source) {
+  protected TopK(PointsToSetVariable source) {
     super(source);
   }
 
-  public TopK(CGNode node) {
+  protected TopK(CGNode node) {
     super(node);
   }
 

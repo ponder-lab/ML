@@ -40,11 +40,11 @@ public class MatMul extends TensorGenerator {
     }
   }
 
-  public MatMul(PointsToSetVariable source) {
+  protected MatMul(PointsToSetVariable source) {
     super(source);
   }
 
-  public MatMul(CGNode node) {
+  protected MatMul(CGNode node) {
     super(node);
   }
 

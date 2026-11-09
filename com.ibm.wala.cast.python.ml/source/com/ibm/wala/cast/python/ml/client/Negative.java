@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Negative extends PassThroughUnaryTensorGenerator {
 
-  public Negative(PointsToSetVariable source) {
+  protected Negative(PointsToSetVariable source) {
     super(source);
   }
 
-  public Negative(CGNode node) {
+  protected Negative(CGNode node) {
     super(node);
   }
 

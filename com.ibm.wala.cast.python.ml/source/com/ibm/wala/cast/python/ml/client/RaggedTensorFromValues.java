@@ -26,7 +26,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(RaggedTensorFromValues.class.getName());
 
-  public RaggedTensorFromValues(PointsToSetVariable source) {
+  protected RaggedTensorFromValues(PointsToSetVariable source) {
     super(source);
   }
 
@@ -35,7 +35,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedTensorFromValues(CGNode node) {
+  protected RaggedTensorFromValues(CGNode node) {
     super(node);
   }
 

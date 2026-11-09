@@ -37,11 +37,11 @@ import java.util.logging.Logger;
 public class SliceOperation extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(SliceOperation.class.getName());
 
-  public SliceOperation(PointsToSetVariable source) {
+  protected SliceOperation(PointsToSetVariable source) {
     super(source);
   }
 
-  public SliceOperation(CGNode node) {
+  protected SliceOperation(CGNode node) {
     super(node);
   }
 

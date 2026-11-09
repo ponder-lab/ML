@@ -13,11 +13,11 @@ import java.util.Set;
 /** A generator for tensors created by {@code tf.data.Dataset.random}. */
 public class DatasetRandomGenerator extends DatasetGenerator {
 
-  public DatasetRandomGenerator(PointsToSetVariable source) {
+  protected DatasetRandomGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetRandomGenerator(CGNode node) {
+  protected DatasetRandomGenerator(CGNode node) {
     super(node);
   }
 

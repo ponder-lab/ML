@@ -50,7 +50,7 @@ public class Fill extends Constant {
    */
   private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = UNDEFINED_PARAMETER_POSITION;
 
-  public Fill(PointsToSetVariable source) {
+  protected Fill(PointsToSetVariable source) {
     super(source);
   }
 
@@ -59,7 +59,7 @@ public class Fill extends Constant {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Fill(CGNode node) {
+  protected Fill(CGNode node) {
     super(node);
   }
 

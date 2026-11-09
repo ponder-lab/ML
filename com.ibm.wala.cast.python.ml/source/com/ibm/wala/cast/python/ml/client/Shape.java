@@ -57,11 +57,11 @@ public class Shape extends TensorGenerator {
     }
   }
 
-  public Shape(PointsToSetVariable source) {
+  protected Shape(PointsToSetVariable source) {
     super(source);
   }
 
-  public Shape(CGNode node) {
+  protected Shape(CGNode node) {
     super(node);
   }
 

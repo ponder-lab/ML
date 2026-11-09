@@ -27,7 +27,7 @@ public class AddWeight extends TensorTypeAllocator {
    *
    * @param source The points-to set variable representing the source of the weight tensor.
    */
-  public AddWeight(PointsToSetVariable source) {
+  protected AddWeight(PointsToSetVariable source) {
     super(source);
   }
 
@@ -36,7 +36,7 @@ public class AddWeight extends TensorTypeAllocator {
    *
    * @param node The call graph node representing the {@code add_weight()} call.
    */
-  public AddWeight(CGNode node) {
+  protected AddWeight(CGNode node) {
     super(node);
   }
 

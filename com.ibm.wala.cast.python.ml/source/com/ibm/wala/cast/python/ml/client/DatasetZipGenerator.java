@@ -53,11 +53,11 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
     }
   }
 
-  public DatasetZipGenerator(PointsToSetVariable source) {
+  protected DatasetZipGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetZipGenerator(CGNode node) {
+  protected DatasetZipGenerator(CGNode node) {
     super(node);
   }
 

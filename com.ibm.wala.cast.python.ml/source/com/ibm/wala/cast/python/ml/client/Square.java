@@ -45,11 +45,11 @@ public class Square extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Square(PointsToSetVariable source) {
+  protected Square(PointsToSetVariable source) {
     super(source);
   }
 
-  public Square(CGNode node) {
+  protected Square(CGNode node) {
     super(node);
   }
 

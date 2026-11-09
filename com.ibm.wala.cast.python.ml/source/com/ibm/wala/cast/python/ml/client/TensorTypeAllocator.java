@@ -50,11 +50,11 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     }
   }
 
-  public TensorTypeAllocator(PointsToSetVariable source) {
+  protected TensorTypeAllocator(PointsToSetVariable source) {
     super(source);
   }
 
-  public TensorTypeAllocator(CGNode node) {
+  protected TensorTypeAllocator(CGNode node) {
     super(node);
   }
 

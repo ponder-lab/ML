@@ -60,11 +60,11 @@ public class Cast extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Cast(PointsToSetVariable source) {
+  protected Cast(PointsToSetVariable source) {
     super(source);
   }
 
-  public Cast(CGNode node) {
+  protected Cast(CGNode node) {
     super(node);
   }
 

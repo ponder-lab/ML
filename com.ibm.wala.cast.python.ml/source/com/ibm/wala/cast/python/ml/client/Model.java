@@ -51,11 +51,11 @@ public class Model extends TensorGenerator {
     }
   }
 
-  public Model(PointsToSetVariable source) {
+  protected Model(PointsToSetVariable source) {
     super(source);
   }
 
-  public Model(CGNode node) {
+  protected Model(CGNode node) {
     super(node);
   }
 

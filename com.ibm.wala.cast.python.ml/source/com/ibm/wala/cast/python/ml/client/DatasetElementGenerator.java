@@ -26,7 +26,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
    * @param source the points-to set variable representing the source of the element
    * @param underlying the generator representing the underlying dataset
    */
-  public DatasetElementGenerator(PointsToSetVariable source, TensorGenerator underlying) {
+  protected DatasetElementGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
   }

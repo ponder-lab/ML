@@ -25,7 +25,7 @@ public class NpRandomIntegerDraw extends NpRandomSizedDraw {
    */
   private static final int DTYPE_POSITION = 3;
 
-  public NpRandomIntegerDraw(PointsToSetVariable source) {
+  protected NpRandomIntegerDraw(PointsToSetVariable source) {
     super(source);
   }
 
@@ -34,7 +34,7 @@ public class NpRandomIntegerDraw extends NpRandomSizedDraw {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public NpRandomIntegerDraw(CGNode node) {
+  protected NpRandomIntegerDraw(CGNode node) {
     super(node);
   }
 

@@ -23,11 +23,11 @@ import java.util.Set;
  */
 public class GatherNd extends PassThroughUnaryTensorGenerator {
 
-  public GatherNd(PointsToSetVariable source) {
+  protected GatherNd(PointsToSetVariable source) {
     super(source);
   }
 
-  public GatherNd(CGNode node) {
+  protected GatherNd(CGNode node) {
     super(node);
   }
 

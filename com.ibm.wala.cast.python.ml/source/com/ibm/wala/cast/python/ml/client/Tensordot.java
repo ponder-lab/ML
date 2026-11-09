@@ -34,11 +34,11 @@ import java.util.Set;
  */
 public class Tensordot extends PassThroughUnaryTensorGenerator {
 
-  public Tensordot(PointsToSetVariable source) {
+  protected Tensordot(PointsToSetVariable source) {
     super(source);
   }
 
-  public Tensordot(CGNode node) {
+  protected Tensordot(CGNode node) {
     super(node);
   }
 

@@ -20,11 +20,11 @@ public class DatasetTakeGenerator extends DatasetGenerator {
   /** The keyword name of the {@code count} argument. */
   private static final String COUNT_PARAMETER_NAME = "count";
 
-  public DatasetTakeGenerator(PointsToSetVariable source) {
+  protected DatasetTakeGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetTakeGenerator(CGNode node) {
+  protected DatasetTakeGenerator(CGNode node) {
     super(node);
   }
 

@@ -70,11 +70,11 @@ public class Meshgrid extends TensorGenerator implements TupleElementProvider {
     }
   }
 
-  public Meshgrid(PointsToSetVariable source) {
+  protected Meshgrid(PointsToSetVariable source) {
     super(source);
   }
 
-  public Meshgrid(CGNode node) {
+  protected Meshgrid(CGNode node) {
     super(node);
   }
 

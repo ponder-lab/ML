@@ -30,7 +30,7 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
    */
   private final Object containerDiscriminator;
 
-  public TensorElementGenerator(PointsToSetVariable source, TensorGenerator containerGenerator) {
+  protected TensorElementGenerator(PointsToSetVariable source, TensorGenerator containerGenerator) {
     this(source, containerGenerator, false);
   }
 

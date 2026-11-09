@@ -37,7 +37,7 @@ public class SparseToDense extends TensorTypeAllocator {
     }
   }
 
-  public SparseToDense(PointsToSetVariable source) {
+  protected SparseToDense(PointsToSetVariable source) {
     super(source);
   }
 
@@ -46,7 +46,7 @@ public class SparseToDense extends TensorTypeAllocator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public SparseToDense(CGNode node) {
+  protected SparseToDense(CGNode node) {
     super(node);
   }
 

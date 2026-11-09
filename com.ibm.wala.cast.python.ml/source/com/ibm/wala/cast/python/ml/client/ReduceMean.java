@@ -17,7 +17,7 @@ import java.util.Set;
  */
 public class ReduceMean extends Reduction {
 
-  public ReduceMean(PointsToSetVariable source) {
+  protected ReduceMean(PointsToSetVariable source) {
     super(source);
   }
 
@@ -26,7 +26,7 @@ public class ReduceMean extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceMean(CGNode node) {
+  protected ReduceMean(CGNode node) {
     super(node);
   }
 

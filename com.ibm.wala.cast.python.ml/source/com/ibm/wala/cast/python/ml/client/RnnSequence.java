@@ -38,11 +38,11 @@ public class RnnSequence extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public RnnSequence(PointsToSetVariable source) {
+  protected RnnSequence(PointsToSetVariable source) {
     super(source);
   }
 
-  public RnnSequence(CGNode node) {
+  protected RnnSequence(CGNode node) {
     super(node);
   }
 

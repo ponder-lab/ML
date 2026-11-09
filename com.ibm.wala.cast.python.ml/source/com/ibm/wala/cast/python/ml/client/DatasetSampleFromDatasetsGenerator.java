@@ -65,11 +65,11 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetJoinGenerator {
     }
   }
 
-  public DatasetSampleFromDatasetsGenerator(PointsToSetVariable source) {
+  protected DatasetSampleFromDatasetsGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetSampleFromDatasetsGenerator(CGNode node) {
+  protected DatasetSampleFromDatasetsGenerator(CGNode node) {
     super(node);
   }
 

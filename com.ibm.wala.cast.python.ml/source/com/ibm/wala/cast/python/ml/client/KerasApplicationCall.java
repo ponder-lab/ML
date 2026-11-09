@@ -60,7 +60,7 @@ public class KerasApplicationCall extends TensorGenerator {
   /** Rank of a pooled or classifying output: batch and features. */
   private static final int VECTOR_RANK = 2;
 
-  public KerasApplicationCall(PointsToSetVariable source) {
+  protected KerasApplicationCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -69,7 +69,7 @@ public class KerasApplicationCall extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public KerasApplicationCall(CGNode node) {
+  protected KerasApplicationCall(CGNode node) {
     super(node);
   }
 

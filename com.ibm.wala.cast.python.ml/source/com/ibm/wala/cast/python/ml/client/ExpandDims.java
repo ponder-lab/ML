@@ -60,11 +60,11 @@ public class ExpandDims extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public ExpandDims(PointsToSetVariable source) {
+  protected ExpandDims(PointsToSetVariable source) {
     super(source);
   }
 
-  public ExpandDims(CGNode node) {
+  protected ExpandDims(CGNode node) {
     super(node);
   }
 

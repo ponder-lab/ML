@@ -43,11 +43,11 @@ public class NpEye extends EyeBase {
     }
   }
 
-  public NpEye(PointsToSetVariable source) {
+  protected NpEye(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpEye(CGNode node) {
+  protected NpEye(CGNode node) {
     super(node);
   }
 

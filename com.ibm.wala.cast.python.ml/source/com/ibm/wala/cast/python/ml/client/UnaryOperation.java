@@ -33,7 +33,7 @@ public class UnaryOperation extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the operator.
    */
-  public UnaryOperation(PointsToSetVariable source) {
+  protected UnaryOperation(PointsToSetVariable source) {
     super(source);
   }
 

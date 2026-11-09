@@ -32,11 +32,11 @@ public class Eye extends EyeBase {
     }
   }
 
-  public Eye(PointsToSetVariable source) {
+  protected Eye(PointsToSetVariable source) {
     super(source);
   }
 
-  public Eye(CGNode node) {
+  protected Eye(CGNode node) {
     super(node);
   }
 

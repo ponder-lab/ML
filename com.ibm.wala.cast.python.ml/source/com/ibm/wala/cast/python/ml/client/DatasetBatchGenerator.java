@@ -86,11 +86,11 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     return values != null && values.equals(Collections.singleton(Boolean.TRUE));
   }
 
-  public DatasetBatchGenerator(PointsToSetVariable source) {
+  protected DatasetBatchGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetBatchGenerator(CGNode node) {
+  protected DatasetBatchGenerator(CGNode node) {
     super(node);
   }
 

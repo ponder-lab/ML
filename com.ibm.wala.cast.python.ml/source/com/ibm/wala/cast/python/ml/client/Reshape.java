@@ -52,7 +52,7 @@ public class Reshape extends TensorGenerator {
     }
   }
 
-  public Reshape(PointsToSetVariable source) {
+  protected Reshape(PointsToSetVariable source) {
     super(source);
   }
 
@@ -61,7 +61,7 @@ public class Reshape extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Reshape(CGNode node) {
+  protected Reshape(CGNode node) {
     super(node);
   }
 

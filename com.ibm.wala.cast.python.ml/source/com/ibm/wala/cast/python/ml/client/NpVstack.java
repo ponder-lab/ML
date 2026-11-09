@@ -21,11 +21,11 @@ import java.util.Set;
  */
 public class NpVstack extends NpConcatenate {
 
-  public NpVstack(PointsToSetVariable source) {
+  protected NpVstack(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpVstack(CGNode node) {
+  protected NpVstack(CGNode node) {
     super(node);
   }
 

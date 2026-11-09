@@ -45,11 +45,11 @@ public class Asinh extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Asinh(PointsToSetVariable source) {
+  protected Asinh(PointsToSetVariable source) {
     super(source);
   }
 
-  public Asinh(CGNode node) {
+  protected Asinh(CGNode node) {
     super(node);
   }
 

@@ -35,7 +35,7 @@ public class FixedLenFeature extends TensorTypeAllocator {
     }
   }
 
-  public FixedLenFeature(PointsToSetVariable source) {
+  protected FixedLenFeature(PointsToSetVariable source) {
     super(source);
   }
 
@@ -49,7 +49,7 @@ public class FixedLenFeature extends TensorTypeAllocator {
    *
    * @param node The {@code FixedLenFeature.do()} call-graph node that allocated the tensor.
    */
-  public FixedLenFeature(CGNode node) {
+  protected FixedLenFeature(CGNode node) {
     super(node);
   }
 

@@ -45,11 +45,11 @@ public class Atanh extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Atanh(PointsToSetVariable source) {
+  protected Atanh(PointsToSetVariable source) {
     super(source);
   }
 
-  public Atanh(CGNode node) {
+  protected Atanh(CGNode node) {
     super(node);
   }
 

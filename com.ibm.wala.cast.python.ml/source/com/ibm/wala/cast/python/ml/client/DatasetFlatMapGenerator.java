@@ -42,11 +42,11 @@ public class DatasetFlatMapGenerator extends DatasetJoinGenerator {
   /** A method every summary dataset carries on a field of its own. */
   private static final String METHOD_FIELD = "batch";
 
-  public DatasetFlatMapGenerator(PointsToSetVariable source) {
+  protected DatasetFlatMapGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetFlatMapGenerator(CGNode node) {
+  protected DatasetFlatMapGenerator(CGNode node) {
     super(node);
   }
 

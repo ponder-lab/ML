@@ -33,11 +33,11 @@ public class EmbeddingWeight extends EyeBase {
     }
   }
 
-  public EmbeddingWeight(PointsToSetVariable source) {
+  protected EmbeddingWeight(PointsToSetVariable source) {
     super(source);
   }
 
-  public EmbeddingWeight(CGNode node) {
+  protected EmbeddingWeight(CGNode node) {
     super(node);
   }
 

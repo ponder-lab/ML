@@ -44,11 +44,11 @@ public class NpRandomSizedDraw extends NpRandomDraw {
     }
   }
 
-  public NpRandomSizedDraw(PointsToSetVariable source) {
+  protected NpRandomSizedDraw(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpRandomSizedDraw(CGNode node) {
+  protected NpRandomSizedDraw(CGNode node) {
     super(node);
   }
 

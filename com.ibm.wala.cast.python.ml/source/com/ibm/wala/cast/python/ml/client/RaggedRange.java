@@ -52,7 +52,7 @@ public class RaggedRange extends Range {
     }
   }
 
-  public RaggedRange(PointsToSetVariable source) {
+  protected RaggedRange(PointsToSetVariable source) {
     super(source);
   }
 
@@ -61,7 +61,7 @@ public class RaggedRange extends Range {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedRange(CGNode node) {
+  protected RaggedRange(CGNode node) {
     super(node);
   }
 

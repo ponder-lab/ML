@@ -24,11 +24,11 @@ import java.util.Set;
  */
 public class TFRecordDatasetGenerator extends DatasetGenerator {
 
-  public TFRecordDatasetGenerator(PointsToSetVariable source) {
+  protected TFRecordDatasetGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public TFRecordDatasetGenerator(CGNode node) {
+  protected TFRecordDatasetGenerator(CGNode node) {
     super(node);
   }
 

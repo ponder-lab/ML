@@ -27,7 +27,7 @@ public class RandomNormalCall extends Normal {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a {@code tf.initializers.RandomNormal} instance.
    */
-  public RandomNormalCall(PointsToSetVariable source) {
+  protected RandomNormalCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -38,7 +38,7 @@ public class RandomNormalCall extends Normal {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public RandomNormalCall(CGNode node) {
+  protected RandomNormalCall(CGNode node) {
     super(node);
   }
 

@@ -31,7 +31,7 @@ public class OnesLike extends ValueExtractingTensorGenerator {
     }
   }
 
-  public OnesLike(PointsToSetVariable source) {
+  protected OnesLike(PointsToSetVariable source) {
     super(source);
   }
 
@@ -40,7 +40,7 @@ public class OnesLike extends ValueExtractingTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public OnesLike(CGNode node) {
+  protected OnesLike(CGNode node) {
     super(node);
   }
 

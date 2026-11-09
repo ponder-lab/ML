@@ -81,11 +81,11 @@ public class Where extends TensorGenerator {
     }
   }
 
-  public Where(PointsToSetVariable source) {
+  protected Where(PointsToSetVariable source) {
     super(source);
   }
 
-  public Where(CGNode node) {
+  protected Where(CGNode node) {
     super(node);
   }
 

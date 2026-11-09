@@ -15,11 +15,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ReverseSequence extends PassThroughUnaryTensorGenerator {
 
-  public ReverseSequence(PointsToSetVariable source) {
+  protected ReverseSequence(PointsToSetVariable source) {
     super(source);
   }
 
-  public ReverseSequence(CGNode node) {
+  protected ReverseSequence(CGNode node) {
     super(node);
   }
 

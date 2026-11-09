@@ -43,7 +43,7 @@ public class OneHot extends TensorTypeAllocator {
     }
   }
 
-  public OneHot(PointsToSetVariable source) {
+  protected OneHot(PointsToSetVariable source) {
     super(source);
   }
 
@@ -52,7 +52,7 @@ public class OneHot extends TensorTypeAllocator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public OneHot(CGNode node) {
+  protected OneHot(CGNode node) {
     super(node);
   }
 

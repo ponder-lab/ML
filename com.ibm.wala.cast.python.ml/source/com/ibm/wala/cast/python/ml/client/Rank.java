@@ -20,11 +20,11 @@ import java.util.Set;
  */
 public class Rank extends TensorGenerator {
 
-  public Rank(PointsToSetVariable source) {
+  protected Rank(PointsToSetVariable source) {
     super(source);
   }
 
-  public Rank(CGNode node) {
+  protected Rank(CGNode node) {
     super(node);
   }
 

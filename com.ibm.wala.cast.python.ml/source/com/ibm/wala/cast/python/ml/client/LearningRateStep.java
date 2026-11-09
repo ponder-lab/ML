@@ -31,7 +31,7 @@ public class LearningRateStep extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} representing the step.
    */
-  public LearningRateStep(PointsToSetVariable source) {
+  protected LearningRateStep(PointsToSetVariable source) {
     super(source);
   }
 
@@ -40,7 +40,7 @@ public class LearningRateStep extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method allocating the step.
    */
-  public LearningRateStep(CGNode node) {
+  protected LearningRateStep(CGNode node) {
     super(node);
   }
 

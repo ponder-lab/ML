@@ -59,11 +59,11 @@ public class BroadcastTo extends TensorGenerator {
     }
   }
 
-  public BroadcastTo(PointsToSetVariable source) {
+  protected BroadcastTo(PointsToSetVariable source) {
     super(source);
   }
 
-  public BroadcastTo(CGNode node) {
+  protected BroadcastTo(CGNode node) {
     super(node);
   }
 

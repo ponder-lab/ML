@@ -79,7 +79,7 @@ public class MaxPool extends TensorGenerator {
     }
   }
 
-  public MaxPool(PointsToSetVariable source) {
+  protected MaxPool(PointsToSetVariable source) {
     super(source);
   }
 
@@ -88,7 +88,7 @@ public class MaxPool extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public MaxPool(CGNode node) {
+  protected MaxPool(CGNode node) {
     super(node);
   }
 

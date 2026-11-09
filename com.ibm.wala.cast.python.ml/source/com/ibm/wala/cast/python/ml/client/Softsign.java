@@ -45,11 +45,11 @@ public class Softsign extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Softsign(PointsToSetVariable source) {
+  protected Softsign(PointsToSetVariable source) {
     super(source);
   }
 
-  public Softsign(CGNode node) {
+  protected Softsign(CGNode node) {
     super(node);
   }
 

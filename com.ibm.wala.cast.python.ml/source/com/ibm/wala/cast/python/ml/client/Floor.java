@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Floor extends PassThroughUnaryTensorGenerator {
 
-  public Floor(PointsToSetVariable source) {
+  protected Floor(PointsToSetVariable source) {
     super(source);
   }
 
-  public Floor(CGNode node) {
+  protected Floor(CGNode node) {
     super(node);
   }
 

@@ -70,7 +70,7 @@ public class NpArray extends TensorGenerator {
   /** The type-name shape of the front-end's synthetic comprehension functions. */
   private static final Pattern COMPREHENSION_TYPE_NAME = Pattern.compile(".*/comprehension\\d+");
 
-  public NpArray(PointsToSetVariable source) {
+  protected NpArray(PointsToSetVariable source) {
     super(source);
   }
 
@@ -79,7 +79,7 @@ public class NpArray extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public NpArray(CGNode node) {
+  protected NpArray(CGNode node) {
     super(node);
   }
 

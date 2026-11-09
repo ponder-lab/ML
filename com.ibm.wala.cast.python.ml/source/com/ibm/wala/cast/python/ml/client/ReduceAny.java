@@ -15,7 +15,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ReduceAny extends ReduceAll {
 
-  public ReduceAny(PointsToSetVariable source) {
+  protected ReduceAny(PointsToSetVariable source) {
     super(source);
   }
 
@@ -24,7 +24,7 @@ public class ReduceAny extends ReduceAll {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceAny(CGNode node) {
+  protected ReduceAny(CGNode node) {
     super(node);
   }
 }

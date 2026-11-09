@@ -15,7 +15,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ReduceLogSumExp extends Reduction {
 
-  public ReduceLogSumExp(PointsToSetVariable source) {
+  protected ReduceLogSumExp(PointsToSetVariable source) {
     super(source);
   }
 
@@ -24,7 +24,7 @@ public class ReduceLogSumExp extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceLogSumExp(CGNode node) {
+  protected ReduceLogSumExp(CGNode node) {
     super(node);
   }
 }

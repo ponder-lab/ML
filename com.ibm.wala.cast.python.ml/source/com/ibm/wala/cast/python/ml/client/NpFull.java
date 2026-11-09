@@ -60,7 +60,7 @@ public class NpFull extends NpOnes {
     }
   }
 
-  public NpFull(PointsToSetVariable source) {
+  protected NpFull(PointsToSetVariable source) {
     super(source);
   }
 
@@ -69,7 +69,7 @@ public class NpFull extends NpOnes {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public NpFull(CGNode node) {
+  protected NpFull(CGNode node) {
     super(node);
   }
 

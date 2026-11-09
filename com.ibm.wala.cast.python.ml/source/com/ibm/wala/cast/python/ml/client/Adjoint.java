@@ -21,7 +21,7 @@ public class Adjoint extends MatrixTranspose {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public Adjoint(PointsToSetVariable source) {
+  protected Adjoint(PointsToSetVariable source) {
     super(source);
   }
 
@@ -30,7 +30,7 @@ public class Adjoint extends MatrixTranspose {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Adjoint(CGNode node) {
+  protected Adjoint(CGNode node) {
     super(node);
   }
 

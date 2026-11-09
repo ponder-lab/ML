@@ -20,7 +20,7 @@ import java.util.Set;
  */
 public class ComparisonOperation extends ElementWiseOperation {
 
-  public ComparisonOperation(PointsToSetVariable source) {
+  protected ComparisonOperation(PointsToSetVariable source) {
     super(source);
   }
 
@@ -29,7 +29,7 @@ public class ComparisonOperation extends ElementWiseOperation {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ComparisonOperation(CGNode node) {
+  protected ComparisonOperation(CGNode node) {
     super(node);
   }
 

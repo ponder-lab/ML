@@ -22,11 +22,11 @@ import java.util.Set;
  */
 public class Trace extends PassThroughUnaryTensorGenerator {
 
-  public Trace(PointsToSetVariable source) {
+  protected Trace(PointsToSetVariable source) {
     super(source);
   }
 
-  public Trace(CGNode node) {
+  protected Trace(CGNode node) {
     super(node);
   }
 

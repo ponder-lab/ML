@@ -46,11 +46,11 @@ public class Reciprocal extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Reciprocal(PointsToSetVariable source) {
+  protected Reciprocal(PointsToSetVariable source) {
     super(source);
   }
 
-  public Reciprocal(CGNode node) {
+  protected Reciprocal(CGNode node) {
     super(node);
   }
 

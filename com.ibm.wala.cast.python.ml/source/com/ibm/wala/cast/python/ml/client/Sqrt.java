@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Sqrt extends PassThroughUnaryTensorGenerator {
 
-  public Sqrt(PointsToSetVariable source) {
+  protected Sqrt(PointsToSetVariable source) {
     super(source);
   }
 
-  public Sqrt(CGNode node) {
+  protected Sqrt(CGNode node) {
     super(node);
   }
 

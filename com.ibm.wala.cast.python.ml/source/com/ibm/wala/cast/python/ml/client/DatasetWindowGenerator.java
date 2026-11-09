@@ -72,7 +72,7 @@ public class DatasetWindowGenerator extends DatasetGenerator {
    *     TensorFlowTypes#DATASET_WINDOW_WHOLE} or {@link
    *     TensorFlowTypes#DATASET_WINDOW_OF_COMPONENT}.
    */
-  public DatasetWindowGenerator(CGNode node, int component) {
+  protected DatasetWindowGenerator(CGNode node, int component) {
     super(node);
     this.component = component;
   }

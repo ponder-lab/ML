@@ -102,7 +102,7 @@ public class Conv2DTransposeCall extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a {@code Conv2DTranspose} layer instance.
    */
-  public Conv2DTransposeCall(PointsToSetVariable source) {
+  protected Conv2DTransposeCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -111,7 +111,7 @@ public class Conv2DTransposeCall extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public Conv2DTransposeCall(CGNode node) {
+  protected Conv2DTransposeCall(CGNode node) {
     super(node);
   }
 

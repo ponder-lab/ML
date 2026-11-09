@@ -49,7 +49,7 @@ public abstract class Reduction extends TensorGenerator {
     }
   }
 
-  public Reduction(PointsToSetVariable source) {
+  protected Reduction(PointsToSetVariable source) {
     super(source);
   }
 
@@ -58,7 +58,7 @@ public abstract class Reduction extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Reduction(CGNode node) {
+  protected Reduction(CGNode node) {
     super(node);
   }
 

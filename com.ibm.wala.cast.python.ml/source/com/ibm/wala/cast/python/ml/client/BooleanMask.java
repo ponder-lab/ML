@@ -28,11 +28,11 @@ import java.util.Set;
  */
 public class BooleanMask extends PassThroughUnaryTensorGenerator {
 
-  public BooleanMask(PointsToSetVariable source) {
+  protected BooleanMask(PointsToSetVariable source) {
     super(source);
   }
 
-  public BooleanMask(CGNode node) {
+  protected BooleanMask(CGNode node) {
     super(node);
   }
 

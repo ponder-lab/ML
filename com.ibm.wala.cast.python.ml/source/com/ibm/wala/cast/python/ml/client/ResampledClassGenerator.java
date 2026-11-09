@@ -17,7 +17,7 @@ import java.util.Set;
         + " (wala/ML#1214).")
 public class ResampledClassGenerator extends EnumerateIndexGenerator {
 
-  public ResampledClassGenerator(PointsToSetVariable source) {
+  protected ResampledClassGenerator(PointsToSetVariable source) {
     super(source);
   }
 

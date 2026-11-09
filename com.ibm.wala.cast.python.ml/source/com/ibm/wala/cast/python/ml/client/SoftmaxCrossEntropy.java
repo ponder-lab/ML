@@ -74,7 +74,7 @@ public class SoftmaxCrossEntropy extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public SoftmaxCrossEntropy(PointsToSetVariable source) {
+  protected SoftmaxCrossEntropy(PointsToSetVariable source) {
     super(source);
   }
 
@@ -87,7 +87,7 @@ public class SoftmaxCrossEntropy extends TensorGenerator {
    * @param node The {@link CGNode} for the {@code (sparse_)softmax_cross_entropy_with_logits.do()}
    *     synthetic method.
    */
-  public SoftmaxCrossEntropy(CGNode node) {
+  protected SoftmaxCrossEntropy(CGNode node) {
     super(node);
   }
 

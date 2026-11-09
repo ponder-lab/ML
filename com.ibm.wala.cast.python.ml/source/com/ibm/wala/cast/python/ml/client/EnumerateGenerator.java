@@ -24,7 +24,7 @@ public class EnumerateGenerator extends TensorGenerator implements DelegatingTen
   /** The generator for the underlying iterable being enumerated. */
   private final TensorGenerator underlying;
 
-  public EnumerateGenerator(PointsToSetVariable source, TensorGenerator underlying) {
+  protected EnumerateGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
   }

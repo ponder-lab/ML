@@ -24,11 +24,11 @@ import java.util.Set;
  */
 public class ListFilesDatasetGenerator extends DatasetGenerator {
 
-  public ListFilesDatasetGenerator(PointsToSetVariable source) {
+  protected ListFilesDatasetGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public ListFilesDatasetGenerator(CGNode node) {
+  protected ListFilesDatasetGenerator(CGNode node) {
     super(node);
   }
 

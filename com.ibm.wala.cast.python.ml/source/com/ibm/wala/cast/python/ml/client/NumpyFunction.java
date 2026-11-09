@@ -59,11 +59,11 @@ public class NumpyFunction extends TensorTypeAllocator {
     }
   }
 
-  public NumpyFunction(PointsToSetVariable source) {
+  protected NumpyFunction(PointsToSetVariable source) {
     super(source);
   }
 
-  public NumpyFunction(CGNode node) {
+  protected NumpyFunction(CGNode node) {
     super(node);
   }
 

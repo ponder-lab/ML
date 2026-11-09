@@ -64,7 +64,7 @@ public class NpFinfoValue extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} the helper call defines.
    */
-  public NpFinfoValue(PointsToSetVariable source) {
+  protected NpFinfoValue(PointsToSetVariable source) {
     super(source);
   }
 
@@ -73,7 +73,7 @@ public class NpFinfoValue extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the helper's {@code do()} method.
    */
-  public NpFinfoValue(CGNode node) {
+  protected NpFinfoValue(CGNode node) {
     super(node);
   }
 

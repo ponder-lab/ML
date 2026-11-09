@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public class IsNan extends PassThroughUnaryTensorGenerator {
 
-  public IsNan(PointsToSetVariable source) {
+  protected IsNan(PointsToSetVariable source) {
     super(source);
   }
 
@@ -24,7 +24,7 @@ public class IsNan extends PassThroughUnaryTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public IsNan(CGNode node) {
+  protected IsNan(CGNode node) {
     super(node);
   }
 

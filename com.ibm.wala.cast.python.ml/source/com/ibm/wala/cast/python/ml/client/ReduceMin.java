@@ -14,7 +14,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ReduceMin extends Reduction {
 
-  public ReduceMin(PointsToSetVariable source) {
+  protected ReduceMin(PointsToSetVariable source) {
     super(source);
   }
 
@@ -23,7 +23,7 @@ public class ReduceMin extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceMin(CGNode node) {
+  protected ReduceMin(CGNode node) {
     super(node);
   }
 }

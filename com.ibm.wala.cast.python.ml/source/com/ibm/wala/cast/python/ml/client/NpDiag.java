@@ -22,11 +22,11 @@ import java.util.Set;
  */
 public class NpDiag extends NpArrayFunction {
 
-  public NpDiag(PointsToSetVariable source) {
+  protected NpDiag(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpDiag(CGNode node) {
+  protected NpDiag(CGNode node) {
     super(node);
   }
 

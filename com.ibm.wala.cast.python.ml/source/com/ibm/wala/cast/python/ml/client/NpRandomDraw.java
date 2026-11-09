@@ -41,11 +41,11 @@ public abstract class NpRandomDraw extends TensorTypeAllocator {
 
   private static final Logger LOGGER = getLogger(NpRandomDraw.class.getName());
 
-  public NpRandomDraw(PointsToSetVariable source) {
+  protected NpRandomDraw(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpRandomDraw(CGNode node) {
+  protected NpRandomDraw(CGNode node) {
     super(node);
   }
 

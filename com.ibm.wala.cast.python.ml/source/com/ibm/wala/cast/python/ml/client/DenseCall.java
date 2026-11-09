@@ -109,11 +109,11 @@ public class DenseCall extends TensorGenerator {
     }
   }
 
-  public DenseCall(PointsToSetVariable source) {
+  protected DenseCall(PointsToSetVariable source) {
     super(source);
   }
 
-  public DenseCall(CGNode node) {
+  protected DenseCall(CGNode node) {
     super(node);
   }
 

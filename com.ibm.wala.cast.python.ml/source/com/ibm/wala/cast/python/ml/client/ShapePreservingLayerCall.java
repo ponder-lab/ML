@@ -37,7 +37,7 @@ public class ShapePreservingLayerCall extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a shape-preserving Keras layer instance.
    */
-  public ShapePreservingLayerCall(PointsToSetVariable source) {
+  protected ShapePreservingLayerCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -46,7 +46,7 @@ public class ShapePreservingLayerCall extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public ShapePreservingLayerCall(CGNode node) {
+  protected ShapePreservingLayerCall(CGNode node) {
     super(node);
   }
 

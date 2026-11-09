@@ -27,11 +27,11 @@ import java.util.Set;
  */
 public class ExtractPatches extends PassThroughUnaryTensorGenerator {
 
-  public ExtractPatches(PointsToSetVariable source) {
+  protected ExtractPatches(PointsToSetVariable source) {
     super(source);
   }
 
-  public ExtractPatches(CGNode node) {
+  protected ExtractPatches(CGNode node) {
     super(node);
   }
 

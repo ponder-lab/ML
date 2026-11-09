@@ -25,11 +25,11 @@ public class DatasetShardGenerator extends DatasetGenerator {
   /** The keyword name of the {@code index} argument. */
   private static final String INDEX_PARAMETER_NAME = "index";
 
-  public DatasetShardGenerator(PointsToSetVariable source) {
+  protected DatasetShardGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetShardGenerator(CGNode node) {
+  protected DatasetShardGenerator(CGNode node) {
     super(node);
   }
 

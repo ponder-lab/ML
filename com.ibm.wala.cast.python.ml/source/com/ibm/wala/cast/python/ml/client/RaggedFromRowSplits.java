@@ -40,7 +40,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
     }
   }
 
-  public RaggedFromRowSplits(PointsToSetVariable source) {
+  protected RaggedFromRowSplits(PointsToSetVariable source) {
     super(source);
   }
 
@@ -49,7 +49,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedFromRowSplits(CGNode node) {
+  protected RaggedFromRowSplits(CGNode node) {
     super(node);
   }
 

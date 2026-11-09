@@ -22,7 +22,7 @@ public class IteratorGenerator extends TensorGenerator implements DelegatingTens
   /** The generator for the underlying iterable. */
   private final TensorGenerator underlying;
 
-  public IteratorGenerator(PointsToSetVariable source, TensorGenerator underlying) {
+  protected IteratorGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
   }

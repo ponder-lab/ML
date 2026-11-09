@@ -70,7 +70,7 @@ public class NdarrayReshape extends TensorGenerator {
     }
   }
 
-  public NdarrayReshape(PointsToSetVariable source) {
+  protected NdarrayReshape(PointsToSetVariable source) {
     super(source);
   }
 
@@ -82,7 +82,7 @@ public class NdarrayReshape extends TensorGenerator {
    *
    * @param node The synthetic {@code do()} node that allocated the value.
    */
-  public NdarrayReshape(CGNode node) {
+  protected NdarrayReshape(CGNode node) {
     super(node);
   }
 

@@ -13,7 +13,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ReduceMax extends Reduction {
 
-  public ReduceMax(PointsToSetVariable source) {
+  protected ReduceMax(PointsToSetVariable source) {
     super(source);
   }
 
@@ -22,7 +22,7 @@ public class ReduceMax extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceMax(CGNode node) {
+  protected ReduceMax(CGNode node) {
     super(node);
   }
 }

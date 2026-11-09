@@ -44,11 +44,11 @@ public class Relu extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Relu(PointsToSetVariable source) {
+  protected Relu(PointsToSetVariable source) {
     super(source);
   }
 
-  public Relu(CGNode node) {
+  protected Relu(CGNode node) {
     super(node);
   }
 

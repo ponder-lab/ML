@@ -14,11 +14,11 @@ import java.util.Set;
  */
 public class DatasetGroupWindowGenerator extends DatasetGenerator {
 
-  public DatasetGroupWindowGenerator(PointsToSetVariable source) {
+  protected DatasetGroupWindowGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetGroupWindowGenerator(CGNode node) {
+  protected DatasetGroupWindowGenerator(CGNode node) {
     super(node);
   }
 

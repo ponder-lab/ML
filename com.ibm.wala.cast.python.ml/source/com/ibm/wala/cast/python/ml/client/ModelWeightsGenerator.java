@@ -18,7 +18,7 @@ public class ModelWeightsGenerator extends TensorGenerator
 
   private final Model modelGenerator;
 
-  public ModelWeightsGenerator(PointsToSetVariable source, Model modelGenerator) {
+  protected ModelWeightsGenerator(PointsToSetVariable source, Model modelGenerator) {
     super(source);
     this.modelGenerator = modelGenerator;
   }

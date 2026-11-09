@@ -74,7 +74,7 @@ public class Categorical extends TensorGenerator {
     }
   }
 
-  public Categorical(PointsToSetVariable source) {
+  protected Categorical(PointsToSetVariable source) {
     super(source);
   }
 
@@ -83,7 +83,7 @@ public class Categorical extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Categorical(CGNode node) {
+  protected Categorical(CGNode node) {
     super(node);
   }
 

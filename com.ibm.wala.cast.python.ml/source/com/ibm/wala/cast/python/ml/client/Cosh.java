@@ -45,11 +45,11 @@ public class Cosh extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Cosh(PointsToSetVariable source) {
+  protected Cosh(PointsToSetVariable source) {
     super(source);
   }
 
-  public Cosh(CGNode node) {
+  protected Cosh(CGNode node) {
     super(node);
   }
 

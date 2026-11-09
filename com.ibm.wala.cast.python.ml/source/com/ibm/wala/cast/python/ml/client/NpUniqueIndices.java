@@ -25,11 +25,11 @@ import java.util.Set;
  */
 public class NpUniqueIndices extends TensorGenerator {
 
-  public NpUniqueIndices(PointsToSetVariable source) {
+  protected NpUniqueIndices(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpUniqueIndices(CGNode node) {
+  protected NpUniqueIndices(CGNode node) {
     super(node);
   }
 

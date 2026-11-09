@@ -11,11 +11,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Zeros extends TensorTypeAllocator {
 
-  public Zeros(PointsToSetVariable source) {
+  protected Zeros(PointsToSetVariable source) {
     super(source);
   }
 
-  public Zeros(CGNode node) {
+  protected Zeros(CGNode node) {
     super(node);
   }
 }
