@@ -40,7 +40,7 @@ public class ModelWeightsGenerator extends TensorGenerator
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return modelGenerator.getWeightDTypes(builder, this.getSource());
+    return modelGenerator.getWeightDTypes();
   }
 
   @Override

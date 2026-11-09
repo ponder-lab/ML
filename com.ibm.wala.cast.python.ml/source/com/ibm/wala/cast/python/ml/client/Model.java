@@ -86,7 +86,7 @@ public class Model extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return this.getWeightDTypes(builder, this.getSource());
+    return this.getWeightDTypes();
   }
 
   /**
@@ -195,11 +195,9 @@ public class Model extends TensorGenerator {
   /**
    * Infers the dtypes of the model's weights.
    *
-   * @param builder The propagation call graph builder.
-   * @param modelSource The source points-to set variable representing the model.
    * @return A set of weight dtypes.
    */
-  Set<DType> getWeightDTypes(PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
+  Set<DType> getWeightDTypes() {
     // For now, we assume float32 for most Keras weights.
     return EnumSet.of(DType.FLOAT32);
   }
