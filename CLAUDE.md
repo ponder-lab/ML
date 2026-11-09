@@ -102,7 +102,6 @@ PythonTensorAnalysisEngine.performAnalysis()
 - The **call graph and the pointer analysis are final.** `makeCallGraph` completes before `getDataflowSources` seeds anything, so no generator can change what the PA knows, and a generator-side change cannot move a call-graph node or edge *by construction*.
 - **`TensorTypeAnalysis` state does not exist yet.** A generator cannot read the dataflow fixpoint it is helping to seed — if a mechanism needs a variable's tensor *state*, it is in the wrong phase.
 - **`WorklistTypeResolver` is a fixpoint over generator queries** — chaotic iteration over the query-dependency graph, joining at every update — **not** merely a re-entrancy guard. It promotes bottom-valued members of nontrivial SCCs to the unknown-marked element and re-solves, so ⊤-on-cycle is the engine's own policy and a guard that answers a cycle with ⊥ disagrees with it.
-- **But the resolver is absent on the null-engine path** (`applyRecursionGuards`, wala/ML#753). There a query runs **once** and is memoized, so an *optimistic* value is never revised and ships as read: optimism is sound only where something iterates.
 
 ### PTS vs `TensorTypeAnalysis` — two separate systems
 

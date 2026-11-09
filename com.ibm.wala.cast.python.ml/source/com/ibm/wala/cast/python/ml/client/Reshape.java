@@ -78,7 +78,7 @@ public class Reshape extends TensorGenerator {
    * @return A set of possible shapes for the resulting tensor.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     return this.getShapeResult(builder).toLegacy();
   }
 
@@ -327,7 +327,7 @@ public class Reshape extends TensorGenerator {
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     return getDefaultDTypes(builder);
   }
 

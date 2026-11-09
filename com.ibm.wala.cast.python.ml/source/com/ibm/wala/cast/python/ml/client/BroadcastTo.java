@@ -90,7 +90,7 @@ public class BroadcastTo extends TensorGenerator {
    * @return The shapes per {@link #getDefaultShapes}.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     return getDefaultShapes(builder);
   }
 

@@ -186,7 +186,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
    *     as a single tensor type.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> tensorsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());

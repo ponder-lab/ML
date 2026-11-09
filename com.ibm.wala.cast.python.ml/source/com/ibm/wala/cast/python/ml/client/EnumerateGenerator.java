@@ -39,7 +39,7 @@ public class EnumerateGenerator extends TensorGenerator implements DelegatingTen
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     // The underlying generator may be null if the factory's recursive walk could not resolve the
     // iterable's source (see wala/ML#363). Return empty set (⊥ / not-a-tensor) so the source is
     // effectively dropped from tensor analysis, matching the pre-audit behaviour where the IAE

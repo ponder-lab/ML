@@ -98,7 +98,7 @@ public class Model extends TensorGenerator {
    * @return A set of weight shapes, or {@code null} when a {@code Dense} layer's {@code units} may
    *     be {@code None} or a {@code Sequential} model's layer list cannot give them.
    */
-  public Set<List<Dimension<?>>> getWeightShapes(
+  Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
     Set<List<Dimension<?>>> weightShapes = HashSetFactory.make();
 
@@ -199,8 +199,7 @@ public class Model extends TensorGenerator {
    * @param modelSource The source points-to set variable representing the model.
    * @return A set of weight dtypes.
    */
-  public Set<DType> getWeightDTypes(
-      PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
+  Set<DType> getWeightDTypes(PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
     // For now, we assume float32 for most Keras weights.
     return EnumSet.of(DType.FLOAT32);
   }

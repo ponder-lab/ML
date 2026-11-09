@@ -94,7 +94,7 @@ public class CreatorJoin extends TensorGenerator {
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     return this.guarded(
         builder,
         () -> {

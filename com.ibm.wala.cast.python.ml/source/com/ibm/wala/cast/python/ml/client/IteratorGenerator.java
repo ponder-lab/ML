@@ -37,7 +37,7 @@ public class IteratorGenerator extends TensorGenerator implements DelegatingTens
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     // An iterator is not a tensor (⊥).
     return HashSetFactory.make();
   }

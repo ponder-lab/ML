@@ -205,7 +205,7 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> datasetsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());

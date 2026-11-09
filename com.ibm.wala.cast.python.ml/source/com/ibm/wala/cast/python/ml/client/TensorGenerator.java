@@ -351,38 +351,9 @@ public abstract class TensorGenerator implements Cloneable {
       ThreadLocal.withInitial(NullEngineReads::new);
 
   /**
-   * The most queries a read outside an analysis run evaluates one inside another. A query met
-   * deeper is answered as a cycle is, with the unknown element. Each query is evaluated by
-   * recursion, so the depth of a read is the length of the longest chain of queries its value
-   * depends on, which a program's dataflow does not bound: a read of the last of {@code k} layers
-   * that each guard on their input's rank nests {@code 4k} queries, and a deep enough chain
-   * overflows the reading thread's stack. A worker of a client's parallel stream has the default
-   * stack, which holds well over a thousand of these queries.
-   */
-  static int nullEngineReadDepthLimit = 256;
-
-  /** The queries reads after the analysis answered at {@link #nullEngineReadDepthLimit}. */
-  private static final AtomicLong NULL_ENGINE_READ_DEPTH_CUTS = new AtomicLong();
-
-  /**
-   * The number of queries that reads made after the analysis have answered with the unknown element
-   * because they were nested deeper than {@link #nullEngineReadDepthLimit}, since this class was
-   * loaded (<a href="https://github.com/wala/ML/issues/1186">wala/ML#1186</a>). A client reads it
-   * before and after its reads to learn whether the limit decided any of their answers. The count
-   * is shared by every thread in the process, so while other threads read too, only an unchanged
-   * count is conclusive: it means no read cut a query, and a change may be another thread's. Each
-   * cut is also logged at {@link Level#FINE} with the query it answered.
-   *
-   * @return The number of such queries.
-   */
-  public static long getNullEngineReadDepthCuts() {
-    return NULL_ENGINE_READ_DEPTH_CUTS.get();
-  }
-
-  /**
-   * Evaluates a query with no {@link WorklistTypeResolver} installed, the path a read made through
-   * the public surface after an analysis run takes (wala/ML#753), answering {@code onCycle} when
-   * the same query is already being evaluated on this thread (<a
+   * Evaluates a query with no {@link WorklistTypeResolver} installed, the path a read made outside
+   * an analysis run takes (wala/ML#753), answering {@code onCycle} when the same query is already
+   * being evaluated on this thread (<a
    * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>). The resolver converges a cycle
    * of queries by iterating from ⊥; on this path nothing iterates, so a cycle through two
    * operations, two nodes, or two φs recursed until the stack overflowed. The answer at the first
@@ -429,19 +400,6 @@ public abstract class TensorGenerator implements Cloneable {
       return onCycle;
     }
     int depth = reads.active.size();
-    if (depth >= nullEngineReadDepthLimit) {
-      NULL_ENGINE_READ_DEPTH_CUTS.incrementAndGet();
-      LOGGER.fine(
-          () ->
-              "A read after the analysis answered a query nested "
-                  + depth
-                  + " deep with the unknown element: "
-                  + key);
-      // Answered as a query re-entered at this depth would be, so the queries above it are kept as
-      // they are for a cycle closed below them.
-      reads.cycleDepth = Math.min(reads.cycleDepth, depth);
-      return onCycle;
-    }
     reads.active.put(query, depth);
     int outerCycleDepth = reads.cycleDepth;
     reads.cycleDepth = Integer.MAX_VALUE;
@@ -1005,7 +963,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
    * @return A set of possible {@link TensorType}s, or {@code null} if the shape is unknown.
    */
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     ShapeResult shapes = memoizedShapeResult(builder, this);
     Set<DType> dTypes = memoizedDTypes(builder, this);
 

@@ -120,7 +120,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    *     tuple index.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return isIndex()
           ? underlying.getTensorTypesForIndex(builder, index())
@@ -136,7 +136,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    *     tuple index.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return isIndex()
           ? underlying.getShapesForIndex(builder, index())
@@ -152,7 +152,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    *     tuple index.
    */
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return isIndex()
           ? underlying.getDTypesForIndex(builder, index())

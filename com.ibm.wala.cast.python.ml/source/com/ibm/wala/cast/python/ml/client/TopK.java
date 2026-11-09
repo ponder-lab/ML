@@ -259,7 +259,7 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
    * @return Union of per-index tensor types.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     Set<TensorType> ret = HashSetFactory.make();
     ret.addAll(this.getTensorTypesForIndex(builder, VALUES_INDEX));
     ret.addAll(this.getTensorTypesForIndex(builder, INDICES_INDEX));

@@ -230,7 +230,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getTensorTypes(builder);
     Set<TensorType> ret = HashSetFactory.make();
     for (TensorGenerator dataset : this.datasets) {
@@ -243,7 +243,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getShapes(builder);
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (TensorGenerator dataset : this.datasets) {
@@ -256,7 +256,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getDTypes(builder);
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (TensorGenerator dataset : this.datasets) ret.addAll(memoizedDTypes(builder, dataset));

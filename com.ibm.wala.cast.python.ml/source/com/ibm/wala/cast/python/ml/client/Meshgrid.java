@@ -120,7 +120,7 @@ public class Meshgrid extends TensorGenerator implements TupleElementProvider {
    * @return The element tensor type (all N outputs share this).
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     return this.getTensorTypesForIndex(builder, 0);
   }
 

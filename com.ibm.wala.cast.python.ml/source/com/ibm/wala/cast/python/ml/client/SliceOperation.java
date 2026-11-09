@@ -46,7 +46,7 @@ public class SliceOperation extends TensorGenerator {
   }
 
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     return getDefaultShapes(builder);
   }
 
@@ -110,7 +110,7 @@ public class SliceOperation extends TensorGenerator {
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     return getDefaultDTypes(builder);
   }
 
