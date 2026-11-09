@@ -20,7 +20,7 @@ public class ImageAugmentation extends PassThroughUnaryTensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public ImageAugmentation(PointsToSetVariable source) {
+  protected ImageAugmentation(PointsToSetVariable source) {
     super(source);
   }
 
@@ -29,7 +29,7 @@ public class ImageAugmentation extends PassThroughUnaryTensorGenerator {
    *
    * @param node The synthetic {@link CGNode} allocating the result.
    */
-  public ImageAugmentation(CGNode node) {
+  protected ImageAugmentation(CGNode node) {
     super(node);
   }
 

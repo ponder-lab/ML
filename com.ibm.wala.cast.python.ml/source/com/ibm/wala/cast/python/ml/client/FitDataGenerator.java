@@ -67,7 +67,7 @@ public class FitDataGenerator extends TensorGenerator implements TupleElementPro
    * @param node The summary node that allocated the data.
    * @param allocation The allocation.
    */
-  public FitDataGenerator(CGNode node, AllocationSiteInNode allocation) {
+  protected FitDataGenerator(CGNode node, AllocationSiteInNode allocation) {
     super(node);
     this.allocation = allocation;
     this.unpack = UNPACKED_DATA_TYPE.equals(allocation.concreteType().getReference());

@@ -32,11 +32,11 @@ import java.util.Set;
  */
 public class InheritedModelCall extends ModelCall {
 
-  public InheritedModelCall(PointsToSetVariable source) {
+  protected InheritedModelCall(PointsToSetVariable source) {
     super(source);
   }
 
-  public InheritedModelCall(CGNode node) {
+  protected InheritedModelCall(CGNode node) {
     super(node);
   }
 

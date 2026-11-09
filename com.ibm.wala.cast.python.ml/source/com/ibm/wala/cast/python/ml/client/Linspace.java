@@ -76,11 +76,11 @@ public class Linspace extends TensorGenerator {
     }
   }
 
-  public Linspace(PointsToSetVariable source) {
+  protected Linspace(PointsToSetVariable source) {
     super(source);
   }
 
-  public Linspace(CGNode node) {
+  protected Linspace(CGNode node) {
     super(node);
   }
 

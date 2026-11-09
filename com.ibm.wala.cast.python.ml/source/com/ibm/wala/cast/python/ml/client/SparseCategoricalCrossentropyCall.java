@@ -69,7 +69,7 @@ public class SparseCategoricalCrossentropyCall extends TensorGenerator {
     }
   }
 
-  public SparseCategoricalCrossentropyCall(PointsToSetVariable source) {
+  protected SparseCategoricalCrossentropyCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -78,7 +78,7 @@ public class SparseCategoricalCrossentropyCall extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code __call__} method.
    */
-  public SparseCategoricalCrossentropyCall(CGNode node) {
+  protected SparseCategoricalCrossentropyCall(CGNode node) {
     super(node);
   }
 

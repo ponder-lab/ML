@@ -41,7 +41,7 @@ public class Tile extends PassThroughUnaryTensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public Tile(PointsToSetVariable source) {
+  protected Tile(PointsToSetVariable source) {
     super(source);
   }
 
@@ -50,7 +50,7 @@ public class Tile extends PassThroughUnaryTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Tile(CGNode node) {
+  protected Tile(CGNode node) {
     super(node);
   }
 

@@ -33,11 +33,11 @@ public class Unstack extends PassThroughUnaryTensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(Unstack.class.getName());
 
-  public Unstack(PointsToSetVariable source) {
+  protected Unstack(PointsToSetVariable source) {
     super(source);
   }
 
-  public Unstack(CGNode node) {
+  protected Unstack(CGNode node) {
     super(node);
   }
 

@@ -15,7 +15,7 @@ import java.util.Set;
         + " no dispatch-table type names it (wala/ML#1214).")
 public class EnumerateIndexGenerator extends TensorGenerator {
 
-  public EnumerateIndexGenerator(PointsToSetVariable source) {
+  protected EnumerateIndexGenerator(PointsToSetVariable source) {
     super(source);
   }
 

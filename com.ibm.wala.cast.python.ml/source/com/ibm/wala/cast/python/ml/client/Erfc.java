@@ -45,11 +45,11 @@ public class Erfc extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Erfc(PointsToSetVariable source) {
+  protected Erfc(PointsToSetVariable source) {
     super(source);
   }
 
-  public Erfc(CGNode node) {
+  protected Erfc(CGNode node) {
     super(node);
   }
 

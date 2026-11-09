@@ -48,11 +48,11 @@ public class TfdsDatasetGenerator extends DatasetGenerator {
     }
   }
 
-  public TfdsDatasetGenerator(PointsToSetVariable source) {
+  protected TfdsDatasetGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public TfdsDatasetGenerator(CGNode node) {
+  protected TfdsDatasetGenerator(CGNode node) {
     super(node);
   }
 

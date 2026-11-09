@@ -80,7 +80,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     }
   }
 
-  public ElementWiseOperation(PointsToSetVariable source) {
+  protected ElementWiseOperation(PointsToSetVariable source) {
     super(source);
   }
 
@@ -91,7 +91,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ElementWiseOperation(CGNode node) {
+  protected ElementWiseOperation(CGNode node) {
     super(node);
   }
 

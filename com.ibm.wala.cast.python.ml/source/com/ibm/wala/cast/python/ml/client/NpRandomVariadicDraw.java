@@ -29,11 +29,11 @@ public class NpRandomVariadicDraw extends NpRandomDraw {
 
   private static final Logger LOGGER = getLogger(NpRandomVariadicDraw.class.getName());
 
-  public NpRandomVariadicDraw(PointsToSetVariable source) {
+  protected NpRandomVariadicDraw(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpRandomVariadicDraw(CGNode node) {
+  protected NpRandomVariadicDraw(CGNode node) {
     super(node);
   }
 

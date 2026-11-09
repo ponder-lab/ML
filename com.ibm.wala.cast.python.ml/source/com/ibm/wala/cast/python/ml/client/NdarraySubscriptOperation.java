@@ -69,7 +69,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     return this.getSource() != null ? this.getSource().getPointerKey() : null;
   }
 
-  public NdarraySubscriptOperation(PointsToSetVariable source) {
+  protected NdarraySubscriptOperation(PointsToSetVariable source) {
     super(source);
   }
 

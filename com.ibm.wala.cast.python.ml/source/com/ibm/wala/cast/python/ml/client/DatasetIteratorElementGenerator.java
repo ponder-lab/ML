@@ -59,7 +59,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
    * @param source The value's points-to set variable.
    * @param datasets The generators of the datasets the value's element allocations came from.
    */
-  public DatasetIteratorElementGenerator(
+  protected DatasetIteratorElementGenerator(
       PointsToSetVariable source, List<TensorGenerator> datasets) {
     super(source);
     this.datasets = List.copyOf(datasets);
@@ -72,7 +72,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
    * @param node The allocating node.
    * @param datasets The generators of the datasets the allocation came from.
    */
-  public DatasetIteratorElementGenerator(CGNode node, List<TensorGenerator> datasets) {
+  protected DatasetIteratorElementGenerator(CGNode node, List<TensorGenerator> datasets) {
     super(node);
     this.datasets = List.copyOf(datasets);
   }
@@ -230,7 +230,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getTensorTypes(builder);
     Set<TensorType> ret = HashSetFactory.make();
     for (TensorGenerator dataset : this.datasets) {
@@ -243,7 +243,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getShapes(builder);
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (TensorGenerator dataset : this.datasets) {
@@ -256,7 +256,7 @@ public class DatasetIteratorElementGenerator extends TensorGenerator
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (this.datasets.isEmpty()) return super.getDTypes(builder);
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (TensorGenerator dataset : this.datasets) ret.addAll(memoizedDTypes(builder, dataset));

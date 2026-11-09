@@ -68,7 +68,7 @@ public class RaggedConstant extends Constant {
     }
   }
 
-  public RaggedConstant(PointsToSetVariable source) {
+  protected RaggedConstant(PointsToSetVariable source) {
     super(source);
   }
 
@@ -77,7 +77,7 @@ public class RaggedConstant extends Constant {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedConstant(CGNode node) {
+  protected RaggedConstant(CGNode node) {
     super(node);
   }
 

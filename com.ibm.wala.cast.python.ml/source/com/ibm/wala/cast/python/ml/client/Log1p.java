@@ -45,11 +45,11 @@ public class Log1p extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Log1p(PointsToSetVariable source) {
+  protected Log1p(PointsToSetVariable source) {
     super(source);
   }
 
-  public Log1p(CGNode node) {
+  protected Log1p(CGNode node) {
     super(node);
   }
 

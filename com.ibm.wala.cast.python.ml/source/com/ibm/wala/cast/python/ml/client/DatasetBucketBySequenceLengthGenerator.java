@@ -47,11 +47,11 @@ public class DatasetBucketBySequenceLengthGenerator extends DatasetBatchGenerato
   /** The position of the {@code drop_remainder} argument, excluding the receiver. */
   private static final int DROP_REMAINDER_PARAMETER_POSITION = 7;
 
-  public DatasetBucketBySequenceLengthGenerator(PointsToSetVariable source) {
+  protected DatasetBucketBySequenceLengthGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetBucketBySequenceLengthGenerator(CGNode node) {
+  protected DatasetBucketBySequenceLengthGenerator(CGNode node) {
     super(node);
   }
 

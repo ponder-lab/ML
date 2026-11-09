@@ -39,7 +39,7 @@ public class BostonHousingInputData extends TensorGenerator {
    * @param shape The Boston-Housing shape — one of {@link #X_TRAIN_SHAPE}, {@link #Y_TRAIN_SHAPE},
    *     {@link #X_TEST_SHAPE}, {@link #Y_TEST_SHAPE}.
    */
-  public BostonHousingInputData(PointsToSetVariable source, List<Dimension<?>> shape) {
+  protected BostonHousingInputData(PointsToSetVariable source, List<Dimension<?>> shape) {
     super(source);
     this.shape = shape;
   }
@@ -50,7 +50,7 @@ public class BostonHousingInputData extends TensorGenerator {
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    * @param shape The Boston-Housing shape to report.
    */
-  public BostonHousingInputData(CGNode node, List<Dimension<?>> shape) {
+  protected BostonHousingInputData(CGNode node, List<Dimension<?>> shape) {
     super(node);
     this.shape = shape;
   }

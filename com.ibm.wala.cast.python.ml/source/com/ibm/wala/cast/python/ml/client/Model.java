@@ -51,11 +51,11 @@ public class Model extends TensorGenerator {
     }
   }
 
-  public Model(PointsToSetVariable source) {
+  protected Model(PointsToSetVariable source) {
     super(source);
   }
 
-  public Model(CGNode node) {
+  protected Model(CGNode node) {
     super(node);
   }
 
@@ -86,7 +86,7 @@ public class Model extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return this.getWeightDTypes(builder, this.getSource());
+    return this.getWeightDTypes();
   }
 
   /**
@@ -98,7 +98,7 @@ public class Model extends TensorGenerator {
    * @return A set of weight shapes, or {@code null} when a {@code Dense} layer's {@code units} may
    *     be {@code None} or a {@code Sequential} model's layer list cannot give them.
    */
-  public Set<List<Dimension<?>>> getWeightShapes(
+  Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
     Set<List<Dimension<?>>> weightShapes = HashSetFactory.make();
 
@@ -195,12 +195,9 @@ public class Model extends TensorGenerator {
   /**
    * Infers the dtypes of the model's weights.
    *
-   * @param builder The propagation call graph builder.
-   * @param modelSource The source points-to set variable representing the model.
    * @return A set of weight dtypes.
    */
-  public Set<DType> getWeightDTypes(
-      PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
+  Set<DType> getWeightDTypes() {
     // For now, we assume float32 for most Keras weights.
     return EnumSet.of(DType.FLOAT32);
   }

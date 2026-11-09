@@ -48,11 +48,11 @@ public class LeakyRelu extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public LeakyRelu(PointsToSetVariable source) {
+  protected LeakyRelu(PointsToSetVariable source) {
     super(source);
   }
 
-  public LeakyRelu(CGNode node) {
+  protected LeakyRelu(CGNode node) {
     super(node);
   }
 

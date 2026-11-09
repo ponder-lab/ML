@@ -20,7 +20,7 @@ public class UnresolvedComponent extends TensorGenerator {
    *
    * @param source The read's {@link PointsToSetVariable}.
    */
-  public UnresolvedComponent(PointsToSetVariable source) {
+  protected UnresolvedComponent(PointsToSetVariable source) {
     super(source);
   }
 

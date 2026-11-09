@@ -36,7 +36,7 @@ public class Softmax extends PassThroughUnaryTensorGenerator {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     tf.nn.softmax(...)} invoke.
    */
-  public Softmax(PointsToSetVariable source) {
+  protected Softmax(PointsToSetVariable source) {
     super(source);
   }
 
@@ -45,7 +45,7 @@ public class Softmax extends PassThroughUnaryTensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code softmax.do()} synthetic method.
    */
-  public Softmax(CGNode node) {
+  protected Softmax(CGNode node) {
     super(node);
   }
 

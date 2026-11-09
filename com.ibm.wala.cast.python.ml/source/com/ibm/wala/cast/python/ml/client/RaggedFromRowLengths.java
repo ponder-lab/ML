@@ -41,7 +41,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
     }
   }
 
-  public RaggedFromRowLengths(PointsToSetVariable source) {
+  protected RaggedFromRowLengths(PointsToSetVariable source) {
     super(source);
   }
 
@@ -50,7 +50,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedFromRowLengths(CGNode node) {
+  protected RaggedFromRowLengths(CGNode node) {
     super(node);
   }
 

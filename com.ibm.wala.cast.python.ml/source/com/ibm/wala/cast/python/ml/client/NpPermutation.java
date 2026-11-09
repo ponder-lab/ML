@@ -50,7 +50,7 @@ public class NpPermutation extends TensorGenerator {
   /** The keyword name of the argument. */
   private static final String X_PARAMETER_NAME = "x";
 
-  public NpPermutation(PointsToSetVariable source) {
+  protected NpPermutation(PointsToSetVariable source) {
     super(source);
   }
 
@@ -60,7 +60,7 @@ public class NpPermutation extends TensorGenerator {
    *
    * @param node The synthetic {@code do()} node that allocated the value.
    */
-  public NpPermutation(CGNode node) {
+  protected NpPermutation(CGNode node) {
     super(node);
   }
 

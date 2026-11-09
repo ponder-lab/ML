@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Exp extends PassThroughUnaryTensorGenerator {
 
-  public Exp(PointsToSetVariable source) {
+  protected Exp(PointsToSetVariable source) {
     super(source);
   }
 
-  public Exp(CGNode node) {
+  protected Exp(CGNode node) {
     super(node);
   }
 

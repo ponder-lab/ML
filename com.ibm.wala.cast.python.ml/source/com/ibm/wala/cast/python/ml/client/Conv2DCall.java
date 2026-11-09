@@ -26,7 +26,7 @@ public class Conv2DCall extends ConvolutionCall {
   /** Rank of a two-dimensional convolution's input: batch, two spatial axes, and channels. */
   private static final int CONV2D_RANK = 4;
 
-  public Conv2DCall(PointsToSetVariable source) {
+  protected Conv2DCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -35,7 +35,7 @@ public class Conv2DCall extends ConvolutionCall {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Conv2DCall(CGNode node) {
+  protected Conv2DCall(CGNode node) {
     super(node);
   }
 

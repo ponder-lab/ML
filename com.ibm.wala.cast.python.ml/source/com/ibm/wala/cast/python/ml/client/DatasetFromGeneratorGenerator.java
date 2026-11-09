@@ -78,7 +78,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    *
    * @param source the points-to set variable representing the source of the dataset
    */
-  public DatasetFromGeneratorGenerator(PointsToSetVariable source) {
+  protected DatasetFromGeneratorGenerator(PointsToSetVariable source) {
     super(source);
   }
 
@@ -87,7 +87,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    *
    * @param node the call graph node where the dataset is created
    */
-  public DatasetFromGeneratorGenerator(CGNode node) {
+  protected DatasetFromGeneratorGenerator(CGNode node) {
     super(node);
   }
 

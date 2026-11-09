@@ -52,7 +52,7 @@ public class Cifar100InputData extends TensorGenerator {
    * @param dtypes The dtype set: {@link #X_DTYPES} ({@code uint8}) for image arrays, {@link
    *     #Y_DTYPES} ({@code int64}) for label arrays.
    */
-  public Cifar100InputData(
+  protected Cifar100InputData(
       PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
     super(source);
     this.shape = shape;
@@ -66,7 +66,7 @@ public class Cifar100InputData extends TensorGenerator {
    * @param shape The cifar100 shape to report.
    * @param dtypes The dtype set.
    */
-  public Cifar100InputData(CGNode node, List<Dimension<?>> shape, Set<DType> dtypes) {
+  protected Cifar100InputData(CGNode node, List<Dimension<?>> shape, Set<DType> dtypes) {
     super(node);
     this.shape = shape;
     this.dtypes = dtypes;

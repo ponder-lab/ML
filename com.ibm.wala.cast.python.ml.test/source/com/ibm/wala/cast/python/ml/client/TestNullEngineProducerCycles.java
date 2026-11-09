@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
+package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static org.junit.Assert.assertEquals;
@@ -7,9 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
-import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
-import com.ibm.wala.cast.python.ml.client.TensorGenerator;
-import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
+import com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;

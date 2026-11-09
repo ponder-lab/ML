@@ -50,11 +50,11 @@ public class Input extends TensorTypeAllocator {
     }
   }
 
-  public Input(PointsToSetVariable source) {
+  protected Input(PointsToSetVariable source) {
     super(source);
   }
 
-  public Input(CGNode node) {
+  protected Input(CGNode node) {
     super(node);
   }
 

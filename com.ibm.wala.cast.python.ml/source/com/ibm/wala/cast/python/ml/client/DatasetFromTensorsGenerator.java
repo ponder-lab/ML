@@ -61,7 +61,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
    *
    * @param source the points-to set variable representing the source of the dataset
    */
-  public DatasetFromTensorsGenerator(PointsToSetVariable source) {
+  protected DatasetFromTensorsGenerator(PointsToSetVariable source) {
     super(source);
   }
 
@@ -70,7 +70,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
    *
    * @param node the call graph node where the dataset is created
    */
-  public DatasetFromTensorsGenerator(CGNode node) {
+  protected DatasetFromTensorsGenerator(CGNode node) {
     super(node);
   }
 
@@ -186,7 +186,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
    *     as a single tensor type.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> tensorsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());

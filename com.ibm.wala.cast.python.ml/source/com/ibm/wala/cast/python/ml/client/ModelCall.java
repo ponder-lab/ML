@@ -86,11 +86,11 @@ public class ModelCall extends TensorGenerator {
     }
   }
 
-  public ModelCall(PointsToSetVariable source) {
+  protected ModelCall(PointsToSetVariable source) {
     super(source);
   }
 
-  public ModelCall(CGNode node) {
+  protected ModelCall(CGNode node) {
     super(node);
   }
 

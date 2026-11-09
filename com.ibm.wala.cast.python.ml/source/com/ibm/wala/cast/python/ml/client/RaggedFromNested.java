@@ -55,7 +55,7 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
     }
   }
 
-  public RaggedFromNested(PointsToSetVariable source) {
+  protected RaggedFromNested(PointsToSetVariable source) {
     super(source);
   }
 
@@ -64,7 +64,7 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedFromNested(CGNode node) {
+  protected RaggedFromNested(CGNode node) {
     super(node);
   }
 

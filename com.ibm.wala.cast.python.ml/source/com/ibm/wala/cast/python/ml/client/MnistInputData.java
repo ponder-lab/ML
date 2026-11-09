@@ -39,7 +39,7 @@ public class MnistInputData extends TensorGenerator {
    *     generator produces.
    * @param shape The MNIST shape to report for {@code source}.
    */
-  public MnistInputData(PointsToSetVariable source, List<Dimension<?>> shape) {
+  protected MnistInputData(PointsToSetVariable source, List<Dimension<?>> shape) {
     super(source);
     this.shape = shape;
   }
@@ -51,7 +51,7 @@ public class MnistInputData extends TensorGenerator {
    * @param node The CG node the generator is anchored at.
    * @param shape The MNIST shape to report for the node's tensor.
    */
-  public MnistInputData(CGNode node, List<Dimension<?>> shape) {
+  protected MnistInputData(CGNode node, List<Dimension<?>> shape) {
     super(node);
     this.shape = shape;
   }

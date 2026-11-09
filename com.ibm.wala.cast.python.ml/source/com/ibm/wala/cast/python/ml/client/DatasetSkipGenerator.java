@@ -20,11 +20,11 @@ public class DatasetSkipGenerator extends DatasetGenerator {
   /** The keyword name of the {@code count} argument. */
   private static final String COUNT_PARAMETER_NAME = "count";
 
-  public DatasetSkipGenerator(PointsToSetVariable source) {
+  protected DatasetSkipGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetSkipGenerator(CGNode node) {
+  protected DatasetSkipGenerator(CGNode node) {
     super(node);
   }
 

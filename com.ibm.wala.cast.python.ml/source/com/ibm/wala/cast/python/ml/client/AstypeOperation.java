@@ -25,7 +25,7 @@ import java.util.logging.Logger;
 public class AstypeOperation extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(AstypeOperation.class.getName());
 
-  public AstypeOperation(PointsToSetVariable source) {
+  protected AstypeOperation(PointsToSetVariable source) {
     super(source);
   }
 
@@ -35,7 +35,7 @@ public class AstypeOperation extends TensorGenerator {
    *
    * @param node The synthetic {@code do()} node that allocated the value.
    */
-  public AstypeOperation(CGNode node) {
+  protected AstypeOperation(CGNode node) {
     super(node);
   }
 

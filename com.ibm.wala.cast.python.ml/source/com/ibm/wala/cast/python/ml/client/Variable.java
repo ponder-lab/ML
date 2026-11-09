@@ -44,7 +44,7 @@ public class Variable extends TensorGenerator {
     }
   }
 
-  public Variable(PointsToSetVariable source) {
+  protected Variable(PointsToSetVariable source) {
     super(source);
   }
 
@@ -57,7 +57,7 @@ public class Variable extends TensorGenerator {
    *
    * @param node The {@link com.ibm.wala.ipa.callgraph.CGNode} for {@code Variable.do()}.
    */
-  public Variable(com.ibm.wala.ipa.callgraph.CGNode node) {
+  protected Variable(com.ibm.wala.ipa.callgraph.CGNode node) {
     super(node);
   }
 

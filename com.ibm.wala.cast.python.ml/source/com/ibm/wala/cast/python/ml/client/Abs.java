@@ -16,11 +16,11 @@ import java.util.Set;
  */
 public class Abs extends PassThroughUnaryTensorGenerator {
 
-  public Abs(PointsToSetVariable source) {
+  protected Abs(PointsToSetVariable source) {
     super(source);
   }
 
-  public Abs(CGNode node) {
+  protected Abs(CGNode node) {
     super(node);
   }
 

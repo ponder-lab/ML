@@ -46,7 +46,7 @@ public class Sigmoid extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public Sigmoid(PointsToSetVariable source) {
+  protected Sigmoid(PointsToSetVariable source) {
     super(source);
   }
 
@@ -57,7 +57,7 @@ public class Sigmoid extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code sigmoid.do()} synthetic method.
    */
-  public Sigmoid(CGNode node) {
+  protected Sigmoid(CGNode node) {
     super(node);
   }
 

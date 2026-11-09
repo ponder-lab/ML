@@ -22,11 +22,11 @@ public class DatasetConcatenateGenerator extends DatasetJoinGenerator {
   /** The name of the concatenated dataset's parameter. */
   private static final String DATASET_PARAMETER_NAME = "dataset";
 
-  public DatasetConcatenateGenerator(PointsToSetVariable source) {
+  protected DatasetConcatenateGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetConcatenateGenerator(CGNode node) {
+  protected DatasetConcatenateGenerator(CGNode node) {
     super(node);
   }
 

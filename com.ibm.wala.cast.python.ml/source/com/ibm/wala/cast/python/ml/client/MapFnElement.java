@@ -29,11 +29,11 @@ import java.util.Set;
  */
 public class MapFnElement extends PassThroughUnaryTensorGenerator {
 
-  public MapFnElement(PointsToSetVariable source) {
+  protected MapFnElement(PointsToSetVariable source) {
     super(source);
   }
 
-  public MapFnElement(CGNode node) {
+  protected MapFnElement(CGNode node) {
     super(node);
   }
 

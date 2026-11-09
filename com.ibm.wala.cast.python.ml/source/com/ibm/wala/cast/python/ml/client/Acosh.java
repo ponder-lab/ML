@@ -45,11 +45,11 @@ public class Acosh extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Acosh(PointsToSetVariable source) {
+  protected Acosh(PointsToSetVariable source) {
     super(source);
   }
 
-  public Acosh(CGNode node) {
+  protected Acosh(CGNode node) {
     super(node);
   }
 

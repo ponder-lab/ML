@@ -42,7 +42,7 @@ public class EnsureShape extends TensorGenerator {
     }
   }
 
-  public EnsureShape(PointsToSetVariable source) {
+  protected EnsureShape(PointsToSetVariable source) {
     super(source);
   }
 
@@ -51,7 +51,7 @@ public class EnsureShape extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public EnsureShape(CGNode node) {
+  protected EnsureShape(CGNode node) {
     super(node);
   }
 
@@ -146,12 +146,12 @@ public class EnsureShape extends TensorGenerator {
   }
 
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     return this.getDefaultShapes(builder);
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     return this.getDefaultDTypes(builder);
   }
 

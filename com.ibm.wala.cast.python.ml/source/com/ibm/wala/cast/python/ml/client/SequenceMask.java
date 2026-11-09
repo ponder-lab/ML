@@ -31,11 +31,11 @@ import java.util.Set;
  */
 public class SequenceMask extends PassThroughUnaryTensorGenerator {
 
-  public SequenceMask(PointsToSetVariable source) {
+  protected SequenceMask(PointsToSetVariable source) {
     super(source);
   }
 
-  public SequenceMask(CGNode node) {
+  protected SequenceMask(CGNode node) {
     super(node);
   }
 

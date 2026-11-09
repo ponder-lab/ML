@@ -28,7 +28,7 @@ public class Conv1DCall extends ConvolutionCall {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the call.
    */
-  public Conv1DCall(PointsToSetVariable source) {
+  protected Conv1DCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -37,7 +37,7 @@ public class Conv1DCall extends ConvolutionCall {
    *
    * @param node The {@link CGNode} for the synthetic method.
    */
-  public Conv1DCall(CGNode node) {
+  protected Conv1DCall(CGNode node) {
     super(node);
   }
 

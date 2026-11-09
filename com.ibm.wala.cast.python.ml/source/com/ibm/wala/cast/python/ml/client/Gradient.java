@@ -64,7 +64,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
     }
   }
 
-  public Gradient(PointsToSetVariable source) {
+  protected Gradient(PointsToSetVariable source) {
     super(source);
   }
 
@@ -76,7 +76,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
    *
    * @param node The {@link CGNode} for the {@code gradient.do()} synthetic method.
    */
-  public Gradient(CGNode node) {
+  protected Gradient(CGNode node) {
     super(node);
   }
 

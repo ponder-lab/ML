@@ -78,7 +78,7 @@ public class NpPad extends TensorGenerator {
   private static final List<TypeReference> SHAPED_CONSTRUCTORS =
       List.of(NumpyTypes.ZEROS.getDeclaringClass(), NumpyTypes.ONES.getDeclaringClass());
 
-  public NpPad(PointsToSetVariable source) {
+  protected NpPad(PointsToSetVariable source) {
     super(source);
   }
 
@@ -87,7 +87,7 @@ public class NpPad extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public NpPad(CGNode node) {
+  protected NpPad(CGNode node) {
     super(node);
   }
 

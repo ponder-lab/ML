@@ -29,11 +29,11 @@ import java.util.Locale;
  */
 public class Gather extends EmbeddingLookup {
 
-  public Gather(PointsToSetVariable source) {
+  protected Gather(PointsToSetVariable source) {
     super(source);
   }
 
-  public Gather(CGNode node) {
+  protected Gather(CGNode node) {
     super(node);
   }
 

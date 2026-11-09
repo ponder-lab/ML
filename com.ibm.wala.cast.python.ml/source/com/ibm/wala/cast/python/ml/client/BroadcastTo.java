@@ -59,11 +59,11 @@ public class BroadcastTo extends TensorGenerator {
     }
   }
 
-  public BroadcastTo(PointsToSetVariable source) {
+  protected BroadcastTo(PointsToSetVariable source) {
     super(source);
   }
 
-  public BroadcastTo(CGNode node) {
+  protected BroadcastTo(CGNode node) {
     super(node);
   }
 
@@ -90,7 +90,7 @@ public class BroadcastTo extends TensorGenerator {
    * @return The shapes per {@link #getDefaultShapes}.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     return getDefaultShapes(builder);
   }
 

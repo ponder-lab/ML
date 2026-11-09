@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ml.test;
+package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static org.junit.Assert.assertNull;
@@ -6,7 +6,7 @@ import static org.junit.Assert.assertNull;
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
-import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
+import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;

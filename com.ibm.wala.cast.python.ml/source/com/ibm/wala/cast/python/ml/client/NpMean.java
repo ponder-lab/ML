@@ -56,7 +56,7 @@ public class NpMean extends NpArrayFunction {
    * @param source The source.
    * @param real Whether the reduction's result is real, as {@code std}'s is.
    */
-  public NpMean(PointsToSetVariable source, boolean real) {
+  protected NpMean(PointsToSetVariable source, boolean real) {
     super(source);
     this.real = real;
   }
@@ -67,7 +67,7 @@ public class NpMean extends NpArrayFunction {
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    * @param real Whether the reduction's result is real, as {@code std}'s is.
    */
-  public NpMean(CGNode node, boolean real) {
+  protected NpMean(CGNode node, boolean real) {
     super(node);
     this.real = real;
   }

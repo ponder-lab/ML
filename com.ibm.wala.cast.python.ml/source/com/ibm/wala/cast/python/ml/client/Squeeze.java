@@ -34,11 +34,11 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(Squeeze.class.getName());
 
-  public Squeeze(PointsToSetVariable source) {
+  protected Squeeze(PointsToSetVariable source) {
     super(source);
   }
 
-  public Squeeze(CGNode node) {
+  protected Squeeze(CGNode node) {
     super(node);
   }
 

@@ -20,11 +20,11 @@ import java.util.Set;
  */
 public class NpOuter extends NpArrayFunction {
 
-  public NpOuter(PointsToSetVariable source) {
+  protected NpOuter(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpOuter(CGNode node) {
+  protected NpOuter(CGNode node) {
     super(node);
   }
 

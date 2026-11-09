@@ -60,7 +60,7 @@ public class Range extends TensorGenerator {
   @SuppressWarnings("unused")
   private static final Logger LOGGER = getLogger(Range.class.getName());
 
-  public Range(PointsToSetVariable source) {
+  protected Range(PointsToSetVariable source) {
     super(source);
   }
 
@@ -69,7 +69,7 @@ public class Range extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Range(CGNode node) {
+  protected Range(CGNode node) {
     super(node);
   }
 

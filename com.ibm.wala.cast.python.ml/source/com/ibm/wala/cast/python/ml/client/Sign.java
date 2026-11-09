@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Sign extends PassThroughUnaryTensorGenerator {
 
-  public Sign(PointsToSetVariable source) {
+  protected Sign(PointsToSetVariable source) {
     super(source);
   }
 
-  public Sign(CGNode node) {
+  protected Sign(CGNode node) {
     super(node);
   }
 

@@ -34,11 +34,11 @@ public class DatasetScanGenerator extends DatasetGenerator {
   /** The field the summary of {@code scan} stores the element on. */
   private static final String ELEMENT_FIELD = "mirrored_element";
 
-  public DatasetScanGenerator(PointsToSetVariable source) {
+  protected DatasetScanGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetScanGenerator(CGNode node) {
+  protected DatasetScanGenerator(CGNode node) {
     super(node);
   }
 

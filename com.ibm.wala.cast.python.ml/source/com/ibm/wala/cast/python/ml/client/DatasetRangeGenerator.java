@@ -40,11 +40,11 @@ public class DatasetRangeGenerator extends DatasetGenerator {
     }
   }
 
-  public DatasetRangeGenerator(PointsToSetVariable source) {
+  protected DatasetRangeGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetRangeGenerator(CGNode node) {
+  protected DatasetRangeGenerator(CGNode node) {
     super(node);
   }
 

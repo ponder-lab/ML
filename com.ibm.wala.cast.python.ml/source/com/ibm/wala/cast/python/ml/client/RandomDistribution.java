@@ -14,11 +14,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public abstract class RandomDistribution extends TensorTypeAllocator {
 
-  public RandomDistribution(PointsToSetVariable source) {
+  protected RandomDistribution(PointsToSetVariable source) {
     super(source);
   }
 
-  public RandomDistribution(CGNode node) {
+  protected RandomDistribution(CGNode node) {
     super(node);
   }
 

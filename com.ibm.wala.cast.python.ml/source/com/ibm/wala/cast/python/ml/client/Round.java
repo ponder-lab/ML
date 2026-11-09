@@ -45,11 +45,11 @@ public class Round extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Round(PointsToSetVariable source) {
+  protected Round(PointsToSetVariable source) {
     super(source);
   }
 
-  public Round(CGNode node) {
+  protected Round(CGNode node) {
     super(node);
   }
 

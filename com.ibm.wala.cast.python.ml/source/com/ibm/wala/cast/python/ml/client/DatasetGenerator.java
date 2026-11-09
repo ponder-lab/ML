@@ -40,11 +40,11 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    */
   private TensorGenerator receiver;
 
-  public DatasetGenerator(PointsToSetVariable source) {
+  protected DatasetGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetGenerator(CGNode node) {
+  protected DatasetGenerator(CGNode node) {
     super(node);
   }
 

@@ -27,11 +27,11 @@ import java.util.Set;
  */
 public class NpRepeat extends NpArrayFunction {
 
-  public NpRepeat(PointsToSetVariable source) {
+  protected NpRepeat(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpRepeat(CGNode node) {
+  protected NpRepeat(CGNode node) {
     super(node);
   }
 

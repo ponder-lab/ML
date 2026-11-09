@@ -61,7 +61,7 @@ public class RecurrentLayerCall extends DenseCall {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a recurrent layer instance.
    */
-  public RecurrentLayerCall(PointsToSetVariable source) {
+  protected RecurrentLayerCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -70,7 +70,7 @@ public class RecurrentLayerCall extends DenseCall {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public RecurrentLayerCall(CGNode node) {
+  protected RecurrentLayerCall(CGNode node) {
     super(node);
   }
 

@@ -31,11 +31,11 @@ public class NpCumsum extends NpArray {
 
   private static final int DTYPE_POSITION = 2;
 
-  public NpCumsum(PointsToSetVariable source) {
+  protected NpCumsum(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpCumsum(CGNode node) {
+  protected NpCumsum(CGNode node) {
     super(node);
   }
 

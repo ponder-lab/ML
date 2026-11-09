@@ -137,11 +137,11 @@ public class SequentialCall extends ModelCall {
    */
   private static final int MAXIMUM_CHAINS = 8;
 
-  public SequentialCall(PointsToSetVariable source) {
+  protected SequentialCall(PointsToSetVariable source) {
     super(source);
   }
 
-  public SequentialCall(CGNode node) {
+  protected SequentialCall(CGNode node) {
     super(node);
   }
 

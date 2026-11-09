@@ -98,11 +98,11 @@ public class Concat extends TensorGenerator {
     }
   }
 
-  public Concat(PointsToSetVariable source) {
+  protected Concat(PointsToSetVariable source) {
     super(source);
   }
 
-  public Concat(CGNode node) {
+  protected Concat(CGNode node) {
     super(node);
   }
 

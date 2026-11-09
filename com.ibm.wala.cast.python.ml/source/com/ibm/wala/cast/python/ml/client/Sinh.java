@@ -45,11 +45,11 @@ public class Sinh extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Sinh(PointsToSetVariable source) {
+  protected Sinh(PointsToSetVariable source) {
     super(source);
   }
 
-  public Sinh(CGNode node) {
+  protected Sinh(CGNode node) {
     super(node);
   }
 

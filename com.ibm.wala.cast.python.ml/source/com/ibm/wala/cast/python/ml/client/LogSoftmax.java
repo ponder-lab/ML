@@ -13,11 +13,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class LogSoftmax extends PassThroughUnaryTensorGenerator {
 
-  public LogSoftmax(PointsToSetVariable source) {
+  protected LogSoftmax(PointsToSetVariable source) {
     super(source);
   }
 
-  public LogSoftmax(CGNode node) {
+  protected LogSoftmax(CGNode node) {
     super(node);
   }
 

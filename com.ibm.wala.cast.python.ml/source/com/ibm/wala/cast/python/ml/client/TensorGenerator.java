@@ -983,7 +983,7 @@ public abstract class TensorGenerator implements Cloneable {
    *
    * @param source The points-to set variable representing the source of the tensor.
    */
-  public TensorGenerator(PointsToSetVariable source) {
+  protected TensorGenerator(PointsToSetVariable source) {
     this.source = source;
   }
 
@@ -993,7 +993,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param node The call graph node representing the operation that generates the tensor. Used as a
    *     fallback when standard pointer analysis fails to provide a trackable source.
    */
-  public TensorGenerator(CGNode node) {
+  protected TensorGenerator(CGNode node) {
     this.manualNode = node;
   }
 
@@ -1005,7 +1005,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
    * @return A set of possible {@link TensorType}s, or {@code null} if the shape is unknown.
    */
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     ShapeResult shapes = memoizedShapeResult(builder, this);
     Set<DType> dTypes = memoizedDTypes(builder, this);
 

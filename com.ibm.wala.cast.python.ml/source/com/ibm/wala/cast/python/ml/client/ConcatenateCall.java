@@ -45,7 +45,7 @@ public class ConcatenateCall extends KerasConcatenate {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a {@code Concatenate} instance.
    */
-  public ConcatenateCall(PointsToSetVariable source) {
+  protected ConcatenateCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -54,7 +54,7 @@ public class ConcatenateCall extends KerasConcatenate {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public ConcatenateCall(CGNode node) {
+  protected ConcatenateCall(CGNode node) {
     super(node);
   }
 

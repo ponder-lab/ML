@@ -58,7 +58,7 @@ public class ConvertToTensor extends ValueExtractingTensorGenerator {
     }
   }
 
-  public ConvertToTensor(PointsToSetVariable source) {
+  protected ConvertToTensor(PointsToSetVariable source) {
     super(source);
   }
 
@@ -67,7 +67,7 @@ public class ConvertToTensor extends ValueExtractingTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ConvertToTensor(CGNode node) {
+  protected ConvertToTensor(CGNode node) {
     super(node);
   }
 

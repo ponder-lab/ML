@@ -22,11 +22,11 @@ public class RnnStep extends PassThroughUnaryTensorGenerator {
   /** The time axis of a batch-major sequence. */
   private static final int TIME_AXIS = 1;
 
-  public RnnStep(PointsToSetVariable source) {
+  protected RnnStep(PointsToSetVariable source) {
     super(source);
   }
 
-  public RnnStep(CGNode node) {
+  protected RnnStep(CGNode node) {
     super(node);
   }
 

@@ -31,7 +31,7 @@ public class TensorCall extends TensorGenerator {
     }
   }
 
-  public TensorCall(PointsToSetVariable source) {
+  protected TensorCall(PointsToSetVariable source) {
     super(source);
   }
 

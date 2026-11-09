@@ -70,7 +70,7 @@ public class NdarrayReshape extends TensorGenerator {
     }
   }
 
-  public NdarrayReshape(PointsToSetVariable source) {
+  protected NdarrayReshape(PointsToSetVariable source) {
     super(source);
   }
 
@@ -82,7 +82,7 @@ public class NdarrayReshape extends TensorGenerator {
    *
    * @param node The synthetic {@code do()} node that allocated the value.
    */
-  public NdarrayReshape(CGNode node) {
+  protected NdarrayReshape(CGNode node) {
     super(node);
   }
 
@@ -112,7 +112,7 @@ public class NdarrayReshape extends TensorGenerator {
   }
 
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     // Resolve the target shape from the `shape` argument, applying the `-1` inference rule by
     // dividing the receiver's known total size by the product of the explicit dims.
     Set<List<Dimension<?>>> rawShapes;
@@ -274,7 +274,7 @@ public class NdarrayReshape extends TensorGenerator {
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     return getDefaultDTypes(builder);
   }
 

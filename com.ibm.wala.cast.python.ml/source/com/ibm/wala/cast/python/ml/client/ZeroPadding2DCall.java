@@ -59,7 +59,7 @@ public class ZeroPadding2DCall extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a {@code ZeroPadding2D} layer instance.
    */
-  public ZeroPadding2DCall(PointsToSetVariable source) {
+  protected ZeroPadding2DCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -68,7 +68,7 @@ public class ZeroPadding2DCall extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public ZeroPadding2DCall(CGNode node) {
+  protected ZeroPadding2DCall(CGNode node) {
     super(node);
   }
 

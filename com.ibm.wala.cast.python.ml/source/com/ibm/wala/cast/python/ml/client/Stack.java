@@ -86,11 +86,11 @@ public class Stack extends TensorGenerator {
     }
   }
 
-  public Stack(PointsToSetVariable source) {
+  protected Stack(PointsToSetVariable source) {
     super(source);
   }
 
-  public Stack(CGNode node) {
+  protected Stack(CGNode node) {
     super(node);
   }
 

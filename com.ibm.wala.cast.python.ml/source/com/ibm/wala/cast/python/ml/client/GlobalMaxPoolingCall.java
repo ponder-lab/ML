@@ -51,7 +51,7 @@ public class GlobalMaxPoolingCall extends TensorGenerator {
    * @param inputRank The input rank the layer class fixes ({@link #INPUT_RANK_1D} or {@link
    *     #INPUT_RANK_2D}).
    */
-  public GlobalMaxPoolingCall(PointsToSetVariable source, int inputRank) {
+  protected GlobalMaxPoolingCall(PointsToSetVariable source, int inputRank) {
     super(source);
     this.inputRank = inputRank;
   }
@@ -63,7 +63,7 @@ public class GlobalMaxPoolingCall extends TensorGenerator {
    * @param inputRank The input rank the layer class fixes ({@link #INPUT_RANK_1D} or {@link
    *     #INPUT_RANK_2D}).
    */
-  public GlobalMaxPoolingCall(CGNode node, int inputRank) {
+  protected GlobalMaxPoolingCall(CGNode node, int inputRank) {
     super(node);
     this.inputRank = inputRank;
   }

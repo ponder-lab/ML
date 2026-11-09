@@ -32,7 +32,7 @@ public class SparseFromDense extends ConvertToTensor {
     }
   }
 
-  public SparseFromDense(PointsToSetVariable source) {
+  protected SparseFromDense(PointsToSetVariable source) {
     super(source);
   }
 
@@ -41,7 +41,7 @@ public class SparseFromDense extends ConvertToTensor {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public SparseFromDense(CGNode node) {
+  protected SparseFromDense(CGNode node) {
     super(node);
   }
 

@@ -53,7 +53,7 @@ public class StopGradient extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public StopGradient(PointsToSetVariable source) {
+  protected StopGradient(PointsToSetVariable source) {
     super(source);
   }
 
@@ -66,7 +66,7 @@ public class StopGradient extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code stop_gradient.do()} synthetic method.
    */
-  public StopGradient(CGNode node) {
+  protected StopGradient(CGNode node) {
     super(node);
   }
 

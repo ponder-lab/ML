@@ -44,7 +44,7 @@ public class ImdbInputData extends TensorGenerator {
    * @param dtypes The dtype set: {@code int64} for the {@code y_*} arrays, {@code object} for the
    *     {@code x_*} arrays (which are not regular tensors).
    */
-  public ImdbInputData(PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
+  protected ImdbInputData(PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
     super(source);
     this.shape = shape;
     this.dtypes = dtypes;
@@ -57,7 +57,7 @@ public class ImdbInputData extends TensorGenerator {
    * @param shape The IMDB shape to report.
    * @param dtypes The dtype set.
    */
-  public ImdbInputData(CGNode node, List<Dimension<?>> shape, Set<DType> dtypes) {
+  protected ImdbInputData(CGNode node, List<Dimension<?>> shape, Set<DType> dtypes) {
     super(node);
     this.shape = shape;
     this.dtypes = dtypes;

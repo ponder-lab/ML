@@ -13,11 +13,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class TruncatedNormal extends RandomDistribution {
 
-  public TruncatedNormal(PointsToSetVariable source) {
+  protected TruncatedNormal(PointsToSetVariable source) {
     super(source);
   }
 
-  public TruncatedNormal(CGNode node) {
+  protected TruncatedNormal(CGNode node) {
     super(node);
   }
 }

@@ -51,7 +51,7 @@ public class EmbeddingCall extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a {@code tf.keras.layers.Embedding} instance.
    */
-  public EmbeddingCall(PointsToSetVariable source) {
+  protected EmbeddingCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -60,7 +60,7 @@ public class EmbeddingCall extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public EmbeddingCall(CGNode node) {
+  protected EmbeddingCall(CGNode node) {
     super(node);
   }
 
