@@ -5677,6 +5677,11 @@ public abstract class TensorGenerator implements Cloneable {
    * @param env The call site's constant bindings, keyed by parameter value number.
    * @param targets The blocks whose reachability is asked, or {@code null} for every block.
    * @return The reachable blocks.
+   * @implNote The walk is written by hand so that it decides a branch only in a block it reaches:
+   *     deciding one reads shapes and constants, and can re-enter a read in progress. WALA's {@link
+   *     com.ibm.wala.ipa.cfg.PrunedCFG} does not fit, since building it also walks backward from
+   *     the exit, deciding branches in blocks this walk never reaches, and keeps only the blocks on
+   *     a path from the entry to the exit.
    */
   static Set<ISSABasicBlock> computeReachableBlocksUnderBindings(
       PropagationCallGraphBuilder builder,
