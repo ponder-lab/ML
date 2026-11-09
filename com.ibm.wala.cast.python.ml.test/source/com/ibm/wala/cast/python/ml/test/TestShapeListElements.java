@@ -5,8 +5,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
-import com.ibm.wala.cast.python.ml.client.ContainerElements;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.ValueElements;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -21,7 +21,7 @@ import org.junit.Test;
  * Tests that the elements of a tensor's static shape list are Python ints to a points-to client, on
  * {@code tf2_test_shape_list_elements.py} (<a
  * href="https://github.com/wala/ML/issues/1104">wala/ML#1104</a>): each sink receives a list, and
- * the test reads whether {@link ContainerElements} of each of its instances finds a Python {@code
+ * the test reads whether {@code ContainerElements} of each of its instances finds a Python {@code
  * int}'s type-level key among its elements.
  */
 public class TestShapeListElements extends TestPythonMLCallGraphShape {

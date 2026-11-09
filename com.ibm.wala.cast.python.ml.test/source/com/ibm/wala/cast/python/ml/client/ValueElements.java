@@ -1,7 +1,6 @@
-package com.ibm.wala.cast.python.ml.test;
+package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
-import com.ibm.wala.cast.python.ml.client.ContainerElements;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -15,10 +14,10 @@ import java.util.OptionalInt;
 import java.util.Set;
 
 /**
- * The elements of a value, read as a client reads them: {@link ContainerElements#of} for each
- * instance the value's points-to set holds, merged. Their common length, when they agree, the union
- * of their types, and completeness only when each is complete. A value whose points-to set is empty
- * has no length and is not complete.
+ * The elements of a value, read through {@link ContainerElements#of} for each instance the value's
+ * points-to set holds, merged. Their common length, when they agree, the union of their types, and
+ * completeness only when each is complete. A value whose points-to set is empty has no length and
+ * is not complete.
  */
 public final class ValueElements {
 

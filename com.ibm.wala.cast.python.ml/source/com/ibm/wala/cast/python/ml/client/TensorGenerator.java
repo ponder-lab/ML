@@ -619,10 +619,9 @@ public abstract class TensorGenerator implements Cloneable {
    * analysis to release cache memory deterministically, rather than waiting for the builder to be
    * garbage-collected. Safe to call more than once. {@link
    * PythonTensorAnalysisEngine#performAnalysis} calls it when its analysis ends. A client that
-   * queries the builder afterward, as through {@link ContainerElements}, may call it again to
-   * release the builder; since <a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>
-   * such queries memoize no generator dispatch, so they don't retain the builder through {@link
-   * TensorGeneratorFactory}.
+   * queries the builder afterward may call it again to release the builder; since <a
+   * href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a> such queries memoize no
+   * generator dispatch, so they don't retain the builder through {@link TensorGeneratorFactory}.
    *
    * @param builder The builder whose cache entries should be cleared.
    * @implNote {@link #WARNED_UNREGISTERED_MANUAL_TYPES} is intentionally <em>not</em> cleared here.

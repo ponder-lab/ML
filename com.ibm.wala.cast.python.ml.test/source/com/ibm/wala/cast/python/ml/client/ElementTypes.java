@@ -1,8 +1,7 @@
-package com.ibm.wala.cast.python.ml.test;
+package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
-import com.ibm.wala.cast.python.ml.client.ContainerElements;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.util.collections.Pair;

@@ -64,14 +64,13 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
- * The elements of a container instance, as the analysis models them: the client-facing authority on
- * a container's length, the key of each element, and whether an element may be {@code None}.
- *
- * <p>A client asks this rather than reading the container's object catalog, the names of the
- * analysis's internal element channels ({@link
+ * The elements of a container instance, as the analysis models them: a container's length, the key
+ * of each element, and whether an element may be {@code None}, read off the container's object
+ * catalog and the element channels ({@link
  * PythonSSAPropagationCallGraphBuilder#LIST_APPEND_CONTENTS_FIELD}, {@link
- * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD}) or the encoding of element
- * indices, all of which are the analysis's own conventions and may change with it.
+ * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD}). It is internal to this
+ * package, for the analysis's own reads of a container's length and elements; a client reads a
+ * container through the object catalog itself.
  *
  * <p>A container here means a container in the analysis's element model: a list, tuple, set, dict
  * or {@code enumerate} object, the same set {@code PythonTypes.isContainer} names. It does not mean
@@ -88,14 +87,8 @@ import java.util.stream.Collectors;
  * mutate unrecorded (see {@link #mutations}). A list or tuple a library summary or an operator
  * model allocates reports none: its catalog holds the model's placeholder slots, not its run-time
  * elements. Every other container reports no length.
- *
- * <p>A client queries this after the analysis, on the builder the analysis ran on. Those queries
- * don't keep the builder reachable through the generator memos, which only an analysis in progress
- * writes (<a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>). A client done with a
- * builder may still call {@link TensorGenerator#clearCaches} to release any other per-builder memo
- * deterministically.
  */
-public final class ContainerElements {
+final class ContainerElements {
 
   private static final Logger LOGGER = Logger.getLogger(ContainerElements.class.getName());
 
@@ -288,7 +281,7 @@ public final class ContainerElements {
    * @param container The container instance.
    * @return Its elements.
    */
-  public static ContainerElements of(PropagationCallGraphBuilder builder, InstanceKey container) {
+  static ContainerElements of(PropagationCallGraphBuilder builder, InstanceKey container) {
     OrdinalSet<InstanceKey> catalog =
         builder
             .getPointerAnalysis()
@@ -378,7 +371,7 @@ public final class ContainerElements {
    *
    * @return The number of elements, or empty when the length is not known.
    */
-  public OptionalInt arity() {
+  OptionalInt arity() {
     return this.arity < 0 ? OptionalInt.empty() : OptionalInt.of(this.arity);
   }
 
@@ -388,7 +381,7 @@ public final class ContainerElements {
    * @return The keys of positions {@code 0..n-1}, where {@code n} is {@link #arity()}; empty when
    *     the length is not known.
    */
-  public List<PointerKey> positions() {
+  List<PointerKey> positions() {
     return this.positions;
   }
 
@@ -401,7 +394,7 @@ public final class ContainerElements {
    *
    * @return {@code true} iff the element keys are all of them.
    */
-  public boolean isComplete() {
+  boolean isComplete() {
     return this.complete;
   }
 
@@ -411,7 +404,7 @@ public final class ContainerElements {
    *
    * @return The element keys.
    */
-  public Set<PointerKey> allElements() {
+  Set<PointerKey> allElements() {
     return this.allElements;
   }
 
@@ -423,7 +416,7 @@ public final class ContainerElements {
    * @return {@code true} iff some element key may hold the {@code None} constant, or the keys are
    *     not all of them.
    */
-  public boolean mayHoldNone() {
+  boolean mayHoldNone() {
     if (!this.complete) return true;
     for (PointerKey key : this.allElements)
       if (TensorGenerator.anyNullConstant(this.builder.getPointerAnalysis().getPointsToSet(key)))
