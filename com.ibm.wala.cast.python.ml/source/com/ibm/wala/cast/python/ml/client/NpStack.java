@@ -19,11 +19,11 @@ import java.util.Set;
  */
 public class NpStack extends Stack {
 
-  public NpStack(PointsToSetVariable source) {
+  protected NpStack(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpStack(CGNode node) {
+  protected NpStack(CGNode node) {
     super(node);
   }
 

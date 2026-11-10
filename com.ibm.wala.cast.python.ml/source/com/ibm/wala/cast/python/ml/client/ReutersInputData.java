@@ -44,7 +44,8 @@ public class ReutersInputData extends TensorGenerator {
    * @param dtypes The dtype set: {@code int64} for labels, {@code object} for the
    *     variable-length-sequence arrays.
    */
-  public ReutersInputData(PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
+  protected ReutersInputData(
+      PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
     super(source);
     this.shape = shape;
     this.dtypes = dtypes;
@@ -57,7 +58,7 @@ public class ReutersInputData extends TensorGenerator {
    * @param shape The Reuters shape to report.
    * @param dtypes The dtype set.
    */
-  public ReutersInputData(CGNode node, List<Dimension<?>> shape, Set<DType> dtypes) {
+  protected ReutersInputData(CGNode node, List<Dimension<?>> shape, Set<DType> dtypes) {
     super(node);
     this.shape = shape;
     this.dtypes = dtypes;

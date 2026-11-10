@@ -24,11 +24,11 @@ import java.util.Set;
  */
 public class Size extends TensorGenerator {
 
-  public Size(PointsToSetVariable source) {
+  protected Size(PointsToSetVariable source) {
     super(source);
   }
 
-  public Size(CGNode node) {
+  protected Size(CGNode node) {
     super(node);
   }
 

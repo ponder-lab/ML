@@ -20,11 +20,11 @@ import java.util.Set;
  */
 public class DatasetUnbatchGenerator extends DatasetBatchGenerator {
 
-  public DatasetUnbatchGenerator(PointsToSetVariable source) {
+  protected DatasetUnbatchGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetUnbatchGenerator(CGNode node) {
+  protected DatasetUnbatchGenerator(CGNode node) {
     super(node);
   }
 

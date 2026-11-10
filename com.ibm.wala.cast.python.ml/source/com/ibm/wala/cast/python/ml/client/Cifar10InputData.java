@@ -45,7 +45,7 @@ public class Cifar10InputData extends TensorGenerator {
    *     generator produces.
    * @param shape The CIFAR-10 shape to report for {@code source}.
    */
-  public Cifar10InputData(PointsToSetVariable source, List<Dimension<?>> shape) {
+  protected Cifar10InputData(PointsToSetVariable source, List<Dimension<?>> shape) {
     super(source);
     this.shape = shape;
   }
@@ -57,7 +57,7 @@ public class Cifar10InputData extends TensorGenerator {
    * @param node The CG node the generator is anchored at.
    * @param shape The CIFAR-10 shape to report for the node's tensor.
    */
-  public Cifar10InputData(CGNode node, List<Dimension<?>> shape) {
+  protected Cifar10InputData(CGNode node, List<Dimension<?>> shape) {
     super(node);
     this.shape = shape;
   }

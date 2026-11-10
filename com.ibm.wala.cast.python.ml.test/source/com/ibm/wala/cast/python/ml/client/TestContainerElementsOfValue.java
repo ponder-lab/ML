@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ml.test;
+package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
@@ -8,11 +8,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
-import com.ibm.wala.cast.python.ml.client.ContainerElements;
-import com.ibm.wala.cast.python.ml.client.DatasetFromTensorSlicesGenerator;
-import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
-import com.ibm.wala.cast.python.ml.client.TensorGenerator;
-import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
+import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -432,8 +428,8 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(of.arity(), value.arity());
     assertEquals(of.positions(), value.positions());
     assertEquals(of.isComplete(), value.isComplete());
-    assertEquals(of.positionTypes(analysis), value.positionTypes(analysis));
-    assertEquals(of.elementTypes(analysis), value.elementTypes(analysis));
+    assertEquals(ElementTypes.positionTypes(analysis, of), value.positionTypes(analysis));
+    assertEquals(ElementTypes.elementTypes(analysis, of), value.elementTypes(analysis));
     assertEquals(of.mayHoldNone(), value.mayHoldNone());
   }
 

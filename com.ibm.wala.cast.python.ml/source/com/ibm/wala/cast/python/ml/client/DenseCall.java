@@ -109,11 +109,11 @@ public class DenseCall extends TensorGenerator {
     }
   }
 
-  public DenseCall(PointsToSetVariable source) {
+  protected DenseCall(PointsToSetVariable source) {
     super(source);
   }
 
-  public DenseCall(CGNode node) {
+  protected DenseCall(CGNode node) {
     super(node);
   }
 
@@ -308,7 +308,7 @@ public class DenseCall extends TensorGenerator {
    * @return The settled types, with a ⊥ shape settlement read as shape-⊤.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     ShapeResult shapes = memoizedShapeResult(builder, this);
     if (!shapes.isBottom()) return super.getTensorTypes(builder);
     Set<DType> dTypes = memoizedDTypes(builder, this);

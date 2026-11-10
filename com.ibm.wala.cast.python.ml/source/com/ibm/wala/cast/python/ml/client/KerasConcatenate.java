@@ -31,7 +31,7 @@ public class KerasConcatenate extends Concat {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     tf.keras.layers.concatenate} invoke.
    */
-  public KerasConcatenate(PointsToSetVariable source) {
+  protected KerasConcatenate(PointsToSetVariable source) {
     super(source);
   }
 
@@ -40,7 +40,7 @@ public class KerasConcatenate extends Concat {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public KerasConcatenate(CGNode node) {
+  protected KerasConcatenate(CGNode node) {
     super(node);
   }
 

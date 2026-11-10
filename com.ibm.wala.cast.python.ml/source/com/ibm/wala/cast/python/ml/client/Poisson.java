@@ -37,11 +37,11 @@ public class Poisson extends TensorTypeAllocator {
     }
   }
 
-  public Poisson(PointsToSetVariable source) {
+  protected Poisson(PointsToSetVariable source) {
     super(source);
   }
 
-  public Poisson(CGNode node) {
+  protected Poisson(CGNode node) {
     super(node);
   }
 

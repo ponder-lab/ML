@@ -47,11 +47,11 @@ public abstract class EyeBase extends TensorTypeAllocator {
     }
   }
 
-  public EyeBase(PointsToSetVariable source) {
+  protected EyeBase(PointsToSetVariable source) {
     super(source);
   }
 
-  public EyeBase(CGNode node) {
+  protected EyeBase(CGNode node) {
     super(node);
   }
 

@@ -41,11 +41,11 @@ public class Pad extends PassThroughUnaryTensorGenerator {
   /** The keyword name of {@code paddings}. */
   private static final String PADDINGS_NAME = "paddings";
 
-  public Pad(PointsToSetVariable source) {
+  protected Pad(PointsToSetVariable source) {
     super(source);
   }
 
-  public Pad(CGNode node) {
+  protected Pad(CGNode node) {
     super(node);
   }
 

@@ -37,16 +37,16 @@ import java.util.logging.Logger;
 public class SliceOperation extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(SliceOperation.class.getName());
 
-  public SliceOperation(PointsToSetVariable source) {
+  protected SliceOperation(PointsToSetVariable source) {
     super(source);
   }
 
-  public SliceOperation(CGNode node) {
+  protected SliceOperation(CGNode node) {
     super(node);
   }
 
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     return getDefaultShapes(builder);
   }
 
@@ -110,7 +110,7 @@ public class SliceOperation extends TensorGenerator {
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     return getDefaultDTypes(builder);
   }
 

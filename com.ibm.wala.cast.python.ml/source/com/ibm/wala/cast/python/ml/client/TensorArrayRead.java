@@ -36,7 +36,7 @@ public class TensorArrayRead extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(TensorArrayRead.class.getName());
 
-  public TensorArrayRead(PointsToSetVariable source) {
+  protected TensorArrayRead(PointsToSetVariable source) {
     super(source);
   }
 
@@ -45,7 +45,7 @@ public class TensorArrayRead extends TensorGenerator {
    *
    * @param node The method's summary body.
    */
-  public TensorArrayRead(CGNode node) {
+  protected TensorArrayRead(CGNode node) {
     super(node);
   }
 

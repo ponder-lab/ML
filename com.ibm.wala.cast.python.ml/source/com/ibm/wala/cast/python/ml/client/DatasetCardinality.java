@@ -20,11 +20,11 @@ import java.util.Set;
  */
 public class DatasetCardinality extends TensorGenerator {
 
-  public DatasetCardinality(PointsToSetVariable source) {
+  protected DatasetCardinality(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetCardinality(CGNode node) {
+  protected DatasetCardinality(CGNode node) {
     super(node);
   }
 

@@ -63,7 +63,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     }
   }
 
-  public RaggedFromNestedValueRowIds(PointsToSetVariable source) {
+  protected RaggedFromNestedValueRowIds(PointsToSetVariable source) {
     super(source);
   }
 
@@ -72,7 +72,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedFromNestedValueRowIds(CGNode node) {
+  protected RaggedFromNestedValueRowIds(CGNode node) {
     super(node);
   }
 

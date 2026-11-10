@@ -53,7 +53,7 @@ public class NpFullLike extends ValueExtractingTensorGenerator {
     }
   }
 
-  public NpFullLike(PointsToSetVariable source) {
+  protected NpFullLike(PointsToSetVariable source) {
     super(source);
   }
 
@@ -62,7 +62,7 @@ public class NpFullLike extends ValueExtractingTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public NpFullLike(CGNode node) {
+  protected NpFullLike(CGNode node) {
     super(node);
   }
 

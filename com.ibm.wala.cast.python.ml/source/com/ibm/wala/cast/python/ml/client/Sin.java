@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Sin extends PassThroughUnaryTensorGenerator {
 
-  public Sin(PointsToSetVariable source) {
+  protected Sin(PointsToSetVariable source) {
     super(source);
   }
 
-  public Sin(CGNode node) {
+  protected Sin(CGNode node) {
     super(node);
   }
 

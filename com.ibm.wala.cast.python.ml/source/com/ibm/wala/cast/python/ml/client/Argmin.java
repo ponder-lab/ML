@@ -14,7 +14,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Argmin extends Argmax {
 
-  public Argmin(PointsToSetVariable source) {
+  protected Argmin(PointsToSetVariable source) {
     super(source);
   }
 
@@ -23,7 +23,7 @@ public class Argmin extends Argmax {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Argmin(CGNode node) {
+  protected Argmin(CGNode node) {
     super(node);
   }
 }

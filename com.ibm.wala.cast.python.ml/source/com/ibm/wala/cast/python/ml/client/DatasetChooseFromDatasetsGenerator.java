@@ -63,11 +63,11 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetJoinGenerator {
     }
   }
 
-  public DatasetChooseFromDatasetsGenerator(PointsToSetVariable source) {
+  protected DatasetChooseFromDatasetsGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetChooseFromDatasetsGenerator(CGNode node) {
+  protected DatasetChooseFromDatasetsGenerator(CGNode node) {
     super(node);
   }
 

@@ -35,7 +35,7 @@ public class FancyIndexGenerator extends TensorGenerator implements DelegatingTe
 
   private final TensorGenerator indexGenerator;
 
-  public FancyIndexGenerator(
+  protected FancyIndexGenerator(
       PointsToSetVariable source,
       TensorGenerator containerGenerator,
       TensorGenerator indexGenerator) {

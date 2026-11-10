@@ -51,11 +51,11 @@ public class ClipByValue extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public ClipByValue(PointsToSetVariable source) {
+  protected ClipByValue(PointsToSetVariable source) {
     super(source);
   }
 
-  public ClipByValue(CGNode node) {
+  protected ClipByValue(CGNode node) {
     super(node);
   }
 

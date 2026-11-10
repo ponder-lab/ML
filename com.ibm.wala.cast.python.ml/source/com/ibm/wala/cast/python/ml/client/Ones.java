@@ -13,11 +13,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Ones extends TensorTypeAllocator {
 
-  public Ones(PointsToSetVariable source) {
+  protected Ones(PointsToSetVariable source) {
     super(source);
   }
 
-  public Ones(CGNode node) {
+  protected Ones(CGNode node) {
     super(node);
   }
 }

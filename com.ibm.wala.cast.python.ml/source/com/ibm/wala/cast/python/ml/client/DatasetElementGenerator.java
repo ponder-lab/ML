@@ -26,7 +26,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
    * @param source the points-to set variable representing the source of the element
    * @param underlying the generator representing the underlying dataset
    */
-  public DatasetElementGenerator(PointsToSetVariable source, TensorGenerator underlying) {
+  protected DatasetElementGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
   }
@@ -51,7 +51,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
    * @implNote This implementation delegates to the underlying dataset generator.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return underlying.getTensorTypes(builder);
     }
@@ -64,7 +64,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
    * @implNote This implementation delegates to the underlying dataset generator.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       // Diverted through the engine's memo layer (wala/ML#365): a direct 1-arg call recurses
       // outside the engine and breaks order-dependently on cyclic chains (wala/ML#753).
@@ -79,7 +79,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
    * @implNote This implementation delegates to the underlying dataset generator.
    */
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       // Diverted like the shape counterpart (wala/ML#365).
       return memoizedDTypes(builder, underlying);

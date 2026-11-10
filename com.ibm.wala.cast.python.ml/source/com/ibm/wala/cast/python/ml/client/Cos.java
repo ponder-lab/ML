@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Cos extends PassThroughUnaryTensorGenerator {
 
-  public Cos(PointsToSetVariable source) {
+  protected Cos(PointsToSetVariable source) {
     super(source);
   }
 
-  public Cos(CGNode node) {
+  protected Cos(CGNode node) {
     super(node);
   }
 

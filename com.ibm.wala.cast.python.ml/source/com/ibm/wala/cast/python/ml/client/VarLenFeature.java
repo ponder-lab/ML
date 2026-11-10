@@ -45,7 +45,7 @@ public class VarLenFeature extends TensorTypeAllocator {
     }
   }
 
-  public VarLenFeature(PointsToSetVariable source) {
+  protected VarLenFeature(PointsToSetVariable source) {
     super(source);
   }
 
@@ -59,7 +59,7 @@ public class VarLenFeature extends TensorTypeAllocator {
    *
    * @param node The {@code VarLenFeature.do()} call-graph node that allocated the SparseTensor.
    */
-  public VarLenFeature(CGNode node) {
+  protected VarLenFeature(CGNode node) {
     super(node);
   }
 

@@ -61,7 +61,7 @@ public class Repeat extends PassThroughUnaryTensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public Repeat(PointsToSetVariable source) {
+  protected Repeat(PointsToSetVariable source) {
     super(source);
   }
 
@@ -70,7 +70,7 @@ public class Repeat extends PassThroughUnaryTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Repeat(CGNode node) {
+  protected Repeat(CGNode node) {
     super(node);
   }
 

@@ -61,11 +61,11 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     }
   }
 
-  public DatasetFromTensorSlicesGenerator(PointsToSetVariable source) {
+  protected DatasetFromTensorSlicesGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetFromTensorSlicesGenerator(CGNode node) {
+  protected DatasetFromTensorSlicesGenerator(CGNode node) {
     super(node);
   }
 

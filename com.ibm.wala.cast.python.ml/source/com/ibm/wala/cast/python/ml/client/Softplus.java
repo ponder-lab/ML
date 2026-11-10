@@ -45,11 +45,11 @@ public class Softplus extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Softplus(PointsToSetVariable source) {
+  protected Softplus(PointsToSetVariable source) {
     super(source);
   }
 
-  public Softplus(CGNode node) {
+  protected Softplus(CGNode node) {
     super(node);
   }
 

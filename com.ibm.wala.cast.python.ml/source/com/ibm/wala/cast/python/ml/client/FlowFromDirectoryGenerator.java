@@ -71,11 +71,11 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
   /** The position of {@code class_mode} among the call's arguments, {@code self} excluded. */
   private static final int CLASS_MODE_POSITION = 4;
 
-  public FlowFromDirectoryGenerator(PointsToSetVariable source) {
+  protected FlowFromDirectoryGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public FlowFromDirectoryGenerator(CGNode node) {
+  protected FlowFromDirectoryGenerator(CGNode node) {
     super(node);
   }
 

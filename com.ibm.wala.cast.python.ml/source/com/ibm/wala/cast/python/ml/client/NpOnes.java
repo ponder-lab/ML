@@ -29,11 +29,11 @@ public class NpOnes extends Ones {
 
   private static final Logger LOGGER = getLogger(NpOnes.class.getName());
 
-  public NpOnes(PointsToSetVariable source) {
+  protected NpOnes(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpOnes(CGNode node) {
+  protected NpOnes(CGNode node) {
     super(node);
   }
 

@@ -18,7 +18,7 @@ import java.util.Set;
  */
 public class ReduceAll extends Reduction {
 
-  public ReduceAll(PointsToSetVariable source) {
+  protected ReduceAll(PointsToSetVariable source) {
     super(source);
   }
 
@@ -27,7 +27,7 @@ public class ReduceAll extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceAll(CGNode node) {
+  protected ReduceAll(CGNode node) {
     super(node);
   }
 

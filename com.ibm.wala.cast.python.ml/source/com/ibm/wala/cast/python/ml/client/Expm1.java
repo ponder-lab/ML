@@ -45,11 +45,11 @@ public class Expm1 extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Expm1(PointsToSetVariable source) {
+  protected Expm1(PointsToSetVariable source) {
     super(source);
   }
 
-  public Expm1(CGNode node) {
+  protected Expm1(CGNode node) {
     super(node);
   }
 

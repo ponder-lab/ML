@@ -47,7 +47,7 @@ public class DecodeJpeg extends TensorTypeAllocator {
     }
   }
 
-  public DecodeJpeg(PointsToSetVariable source) {
+  protected DecodeJpeg(PointsToSetVariable source) {
     super(source);
   }
 
@@ -58,7 +58,7 @@ public class DecodeJpeg extends TensorTypeAllocator {
    *
    * @param node The {@code decode_jpeg.do()} call-graph node.
    */
-  public DecodeJpeg(CGNode node) {
+  protected DecodeJpeg(CGNode node) {
     super(node);
   }
 

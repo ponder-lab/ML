@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Normal extends RandomDistribution {
 
-  public Normal(PointsToSetVariable source) {
+  protected Normal(PointsToSetVariable source) {
     super(source);
   }
 
-  public Normal(CGNode node) {
+  protected Normal(CGNode node) {
     super(node);
   }
 }

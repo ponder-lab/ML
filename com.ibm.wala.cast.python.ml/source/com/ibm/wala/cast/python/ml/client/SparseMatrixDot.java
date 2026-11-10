@@ -26,11 +26,11 @@ import java.util.Set;
  */
 public class SparseMatrixDot extends PassThroughUnaryTensorGenerator {
 
-  public SparseMatrixDot(PointsToSetVariable source) {
+  protected SparseMatrixDot(PointsToSetVariable source) {
     super(source);
   }
 
-  public SparseMatrixDot(CGNode node) {
+  protected SparseMatrixDot(CGNode node) {
     super(node);
   }
 

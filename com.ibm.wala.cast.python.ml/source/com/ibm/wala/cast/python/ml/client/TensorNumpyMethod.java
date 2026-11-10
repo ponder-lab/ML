@@ -19,11 +19,11 @@ import java.util.Set;
  */
 public class TensorNumpyMethod extends PassThroughUnaryTensorGenerator {
 
-  public TensorNumpyMethod(PointsToSetVariable source) {
+  protected TensorNumpyMethod(PointsToSetVariable source) {
     super(source);
   }
 
-  public TensorNumpyMethod(CGNode node) {
+  protected TensorNumpyMethod(CGNode node) {
     super(node);
   }
 

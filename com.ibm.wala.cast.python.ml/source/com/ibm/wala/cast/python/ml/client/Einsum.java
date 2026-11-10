@@ -102,11 +102,11 @@ public class Einsum extends PassThroughUnaryTensorGenerator implements OperandSh
     }
   }
 
-  public Einsum(PointsToSetVariable source) {
+  protected Einsum(PointsToSetVariable source) {
     super(source);
   }
 
-  public Einsum(CGNode node) {
+  protected Einsum(CGNode node) {
     super(node);
   }
 

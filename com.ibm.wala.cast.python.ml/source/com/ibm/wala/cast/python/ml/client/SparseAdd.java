@@ -44,7 +44,7 @@ public class SparseAdd extends ElementWiseOperation {
     }
   }
 
-  public SparseAdd(PointsToSetVariable source) {
+  protected SparseAdd(PointsToSetVariable source) {
     super(source);
   }
 
@@ -53,7 +53,7 @@ public class SparseAdd extends ElementWiseOperation {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public SparseAdd(CGNode node) {
+  protected SparseAdd(CGNode node) {
     super(node);
   }
 

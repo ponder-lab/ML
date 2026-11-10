@@ -14,11 +14,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Uniform extends RandomDistribution {
 
-  public Uniform(PointsToSetVariable source) {
+  protected Uniform(PointsToSetVariable source) {
     super(source);
   }
 
-  public Uniform(CGNode node) {
+  protected Uniform(CGNode node) {
     super(node);
   }
 }

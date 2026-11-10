@@ -31,7 +31,7 @@ public class ZerosLike extends ValueExtractingTensorGenerator {
     }
   }
 
-  public ZerosLike(PointsToSetVariable source) {
+  protected ZerosLike(PointsToSetVariable source) {
     super(source);
   }
 
@@ -40,7 +40,7 @@ public class ZerosLike extends ValueExtractingTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ZerosLike(CGNode node) {
+  protected ZerosLike(CGNode node) {
     super(node);
   }
 

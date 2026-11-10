@@ -45,11 +45,11 @@ public class Tan extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Tan(PointsToSetVariable source) {
+  protected Tan(PointsToSetVariable source) {
     super(source);
   }
 
-  public Tan(CGNode node) {
+  protected Tan(CGNode node) {
     super(node);
   }
 

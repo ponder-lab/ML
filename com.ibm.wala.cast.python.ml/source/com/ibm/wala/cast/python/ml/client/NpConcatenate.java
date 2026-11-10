@@ -33,11 +33,11 @@ import java.util.Set;
  */
 public class NpConcatenate extends Concat {
 
-  public NpConcatenate(PointsToSetVariable source) {
+  protected NpConcatenate(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpConcatenate(CGNode node) {
+  protected NpConcatenate(CGNode node) {
     super(node);
   }
 

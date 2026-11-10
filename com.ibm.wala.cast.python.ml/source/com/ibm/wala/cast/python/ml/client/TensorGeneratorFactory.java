@@ -3287,7 +3287,7 @@ public class TensorGeneratorFactory {
    * @return the corresponding {@link TensorGenerator} for the TensorFlow function
    * @throws IllegalArgumentException if the function call is unknown or not supported
    */
-  public static TensorGenerator getGenerator(
+  static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     return getGenerator(source, builder, new DispatchPath(UNMEMOIZED_WALKS.get() == 0));
   }
@@ -3302,7 +3302,7 @@ public class TensorGeneratorFactory {
    * @throws IllegalArgumentException if the function call is unknown or not supported
    * @apiNote For comparing the memoized dispatch with the one it memoizes.
    */
-  public static TensorGenerator getUnmemoizedGenerator(
+  static TensorGenerator getUnmemoizedGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     UNMEMOIZED_WALKS.set(UNMEMOIZED_WALKS.get() + 1);
     try {

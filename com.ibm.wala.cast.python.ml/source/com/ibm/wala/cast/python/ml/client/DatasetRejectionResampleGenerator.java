@@ -16,11 +16,11 @@ import java.util.Set;
  */
 public class DatasetRejectionResampleGenerator extends DatasetEnumerateGenerator {
 
-  public DatasetRejectionResampleGenerator(PointsToSetVariable source) {
+  protected DatasetRejectionResampleGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetRejectionResampleGenerator(CGNode node) {
+  protected DatasetRejectionResampleGenerator(CGNode node) {
     super(node);
   }
 

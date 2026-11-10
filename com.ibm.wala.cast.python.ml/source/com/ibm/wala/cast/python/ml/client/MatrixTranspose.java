@@ -28,7 +28,7 @@ public class MatrixTranspose extends PassThroughUnaryTensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public MatrixTranspose(PointsToSetVariable source) {
+  protected MatrixTranspose(PointsToSetVariable source) {
     super(source);
   }
 
@@ -37,7 +37,7 @@ public class MatrixTranspose extends PassThroughUnaryTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public MatrixTranspose(CGNode node) {
+  protected MatrixTranspose(CGNode node) {
     super(node);
   }
 

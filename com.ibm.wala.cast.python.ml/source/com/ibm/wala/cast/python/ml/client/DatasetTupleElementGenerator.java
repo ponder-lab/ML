@@ -32,7 +32,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    * @param underlying the generator representing the underlying dataset
    * @param index the index of this element within the tuple
    */
-  public DatasetTupleElementGenerator(
+  protected DatasetTupleElementGenerator(
       PointsToSetVariable source, TupleElementProvider underlying, int index) {
     this(source, underlying, List.<Object>of(index));
   }
@@ -45,7 +45,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    * @param underlying the generator representing the underlying dataset
    * @param path the selectors, outermost first; never empty
    */
-  public DatasetTupleElementGenerator(
+  protected DatasetTupleElementGenerator(
       PointsToSetVariable source, TupleElementProvider underlying, List<Object> path) {
     super(source);
     this.underlying = underlying;
@@ -79,7 +79,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    * @param underlying the generator representing the underlying dataset
    * @param index the index of this element within the tuple
    */
-  public DatasetTupleElementGenerator(CGNode node, TupleElementProvider underlying, int index) {
+  protected DatasetTupleElementGenerator(CGNode node, TupleElementProvider underlying, int index) {
     super(node);
     this.underlying = underlying;
     this.path = List.of(index);
@@ -120,7 +120,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    *     tuple index.
    */
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return isIndex()
           ? underlying.getTensorTypesForIndex(builder, index())
@@ -136,7 +136,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    *     tuple index.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return isIndex()
           ? underlying.getShapesForIndex(builder, index())
@@ -152,7 +152,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    *     tuple index.
    */
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
       return isIndex()
           ? underlying.getDTypesForIndex(builder, index())

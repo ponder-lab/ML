@@ -13,7 +13,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ReduceProd extends Reduction {
 
-  public ReduceProd(PointsToSetVariable source) {
+  protected ReduceProd(PointsToSetVariable source) {
     super(source);
   }
 
@@ -22,7 +22,7 @@ public class ReduceProd extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ReduceProd(CGNode node) {
+  protected ReduceProd(CGNode node) {
     super(node);
   }
 }

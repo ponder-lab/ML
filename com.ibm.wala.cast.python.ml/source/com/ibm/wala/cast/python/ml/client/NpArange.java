@@ -48,7 +48,7 @@ public class NpArange extends TensorGenerator {
    */
   private static final int DTYPE_POSITION = 3;
 
-  public NpArange(PointsToSetVariable source) {
+  protected NpArange(PointsToSetVariable source) {
     super(source);
   }
 
@@ -57,7 +57,7 @@ public class NpArange extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public NpArange(CGNode node) {
+  protected NpArange(CGNode node) {
     super(node);
   }
 

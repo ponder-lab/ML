@@ -48,7 +48,7 @@ public class Transpose extends PassThroughUnaryTensorGenerator implements Operan
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public Transpose(PointsToSetVariable source) {
+  protected Transpose(PointsToSetVariable source) {
     super(source);
   }
 
@@ -57,7 +57,7 @@ public class Transpose extends PassThroughUnaryTensorGenerator implements Operan
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Transpose(CGNode node) {
+  protected Transpose(CGNode node) {
     super(node);
   }
 

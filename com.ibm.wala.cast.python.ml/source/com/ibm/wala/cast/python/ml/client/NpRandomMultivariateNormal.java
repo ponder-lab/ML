@@ -24,11 +24,11 @@ import java.util.Set;
  */
 public class NpRandomMultivariateNormal extends NpRandomSizedDraw {
 
-  public NpRandomMultivariateNormal(PointsToSetVariable source) {
+  protected NpRandomMultivariateNormal(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpRandomMultivariateNormal(CGNode node) {
+  protected NpRandomMultivariateNormal(CGNode node) {
     super(node);
   }
 

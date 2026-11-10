@@ -27,11 +27,11 @@ import java.util.Set;
  */
 public class TextLineDatasetGenerator extends DatasetGenerator {
 
-  public TextLineDatasetGenerator(PointsToSetVariable source) {
+  protected TextLineDatasetGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public TextLineDatasetGenerator(CGNode node) {
+  protected TextLineDatasetGenerator(CGNode node) {
     super(node);
   }
 

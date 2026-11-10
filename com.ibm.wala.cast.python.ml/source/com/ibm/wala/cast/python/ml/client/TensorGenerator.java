@@ -619,10 +619,9 @@ public abstract class TensorGenerator implements Cloneable {
    * analysis to release cache memory deterministically, rather than waiting for the builder to be
    * garbage-collected. Safe to call more than once. {@link
    * PythonTensorAnalysisEngine#performAnalysis} calls it when its analysis ends. A client that
-   * queries the builder afterward, as through {@link ContainerElements}, may call it again to
-   * release the builder; since <a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>
-   * such queries memoize no generator dispatch, so they don't retain the builder through {@link
-   * TensorGeneratorFactory}.
+   * queries the builder afterward may call it again to release the builder; since <a
+   * href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a> such queries memoize no
+   * generator dispatch, so they don't retain the builder through {@link TensorGeneratorFactory}.
    *
    * @param builder The builder whose cache entries should be cleared.
    * @implNote {@link #WARNED_UNREGISTERED_MANUAL_TYPES} is intentionally <em>not</em> cleared here.
@@ -984,7 +983,7 @@ public abstract class TensorGenerator implements Cloneable {
    *
    * @param source The points-to set variable representing the source of the tensor.
    */
-  public TensorGenerator(PointsToSetVariable source) {
+  protected TensorGenerator(PointsToSetVariable source) {
     this.source = source;
   }
 
@@ -994,7 +993,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param node The call graph node representing the operation that generates the tensor. Used as a
    *     fallback when standard pointer analysis fails to provide a trackable source.
    */
-  public TensorGenerator(CGNode node) {
+  protected TensorGenerator(CGNode node) {
     this.manualNode = node;
   }
 
@@ -1006,7 +1005,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
    * @return A set of possible {@link TensorType}s, or {@code null} if the shape is unknown.
    */
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     ShapeResult shapes = memoizedShapeResult(builder, this);
     Set<DType> dTypes = memoizedDTypes(builder, this);
 
@@ -5677,6 +5676,11 @@ public abstract class TensorGenerator implements Cloneable {
    * @param env The call site's constant bindings, keyed by parameter value number.
    * @param targets The blocks whose reachability is asked, or {@code null} for every block.
    * @return The reachable blocks.
+   * @implNote The walk is written by hand so that it decides a branch only in a block it reaches:
+   *     deciding one reads shapes and constants, and can re-enter a read in progress. WALA's {@link
+   *     com.ibm.wala.ipa.cfg.PrunedCFG} does not fit, since building it also walks backward from
+   *     the exit, deciding branches in blocks this walk never reaches, and keeps only the blocks on
+   *     a path from the entry to the exit.
    */
   static Set<ISSABasicBlock> computeReachableBlocksUnderBindings(
       PropagationCallGraphBuilder builder,

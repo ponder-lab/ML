@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Log extends PassThroughUnaryTensorGenerator {
 
-  public Log(PointsToSetVariable source) {
+  protected Log(PointsToSetVariable source) {
     super(source);
   }
 
-  public Log(CGNode node) {
+  protected Log(CGNode node) {
     super(node);
   }
 

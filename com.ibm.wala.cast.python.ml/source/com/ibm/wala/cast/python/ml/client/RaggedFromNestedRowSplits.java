@@ -16,7 +16,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class RaggedFromNestedRowSplits extends RaggedFromNested {
 
-  public RaggedFromNestedRowSplits(PointsToSetVariable source) {
+  protected RaggedFromNestedRowSplits(PointsToSetVariable source) {
     super(source);
   }
 
@@ -25,7 +25,7 @@ public class RaggedFromNestedRowSplits extends RaggedFromNested {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public RaggedFromNestedRowSplits(CGNode node) {
+  protected RaggedFromNestedRowSplits(CGNode node) {
     super(node);
   }
 

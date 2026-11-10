@@ -22,11 +22,11 @@ import java.util.Set;
  */
 public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
 
-  public EmbeddingLookup(PointsToSetVariable source) {
+  protected EmbeddingLookup(PointsToSetVariable source) {
     super(source);
   }
 
-  public EmbeddingLookup(CGNode node) {
+  protected EmbeddingLookup(CGNode node) {
     super(node);
   }
 

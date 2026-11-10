@@ -26,7 +26,7 @@ import java.util.Set;
  */
 public class ReadFile extends TensorTypeAllocator {
 
-  public ReadFile(PointsToSetVariable source) {
+  protected ReadFile(PointsToSetVariable source) {
     super(source);
   }
 
@@ -37,7 +37,7 @@ public class ReadFile extends TensorTypeAllocator {
    *
    * @param node The {@code read_file.do()} call-graph node.
    */
-  public ReadFile(CGNode node) {
+  protected ReadFile(CGNode node) {
     super(node);
   }
 

@@ -29,11 +29,11 @@ public class SparseEye extends EyeBase {
     }
   }
 
-  public SparseEye(PointsToSetVariable source) {
+  protected SparseEye(PointsToSetVariable source) {
     super(source);
   }
 
-  public SparseEye(CGNode node) {
+  protected SparseEye(CGNode node) {
     super(node);
   }
 

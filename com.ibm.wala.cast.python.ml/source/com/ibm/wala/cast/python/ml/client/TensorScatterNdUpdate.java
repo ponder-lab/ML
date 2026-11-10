@@ -15,11 +15,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class TensorScatterNdUpdate extends PassThroughUnaryTensorGenerator {
 
-  public TensorScatterNdUpdate(PointsToSetVariable source) {
+  protected TensorScatterNdUpdate(PointsToSetVariable source) {
     super(source);
   }
 
-  public TensorScatterNdUpdate(CGNode node) {
+  protected TensorScatterNdUpdate(CGNode node) {
     super(node);
   }
 

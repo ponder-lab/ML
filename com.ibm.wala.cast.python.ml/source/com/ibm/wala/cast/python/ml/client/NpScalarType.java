@@ -46,7 +46,7 @@ public class NpScalarType extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} the call defines.
    * @param dtype The dtype the called scalar type names.
    */
-  public NpScalarType(PointsToSetVariable source, DType dtype) {
+  protected NpScalarType(PointsToSetVariable source, DType dtype) {
     super(source);
     this.dtype = dtype;
   }
@@ -57,7 +57,7 @@ public class NpScalarType extends TensorGenerator {
    * @param node The {@link CGNode} for the scalar type's {@code do()} method.
    * @param dtype The dtype the called scalar type names.
    */
-  public NpScalarType(CGNode node, DType dtype) {
+  protected NpScalarType(CGNode node, DType dtype) {
     super(node);
     this.dtype = dtype;
   }

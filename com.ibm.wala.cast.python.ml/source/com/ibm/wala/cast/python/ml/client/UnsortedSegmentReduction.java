@@ -77,11 +77,11 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public UnsortedSegmentReduction(PointsToSetVariable source) {
+  protected UnsortedSegmentReduction(PointsToSetVariable source) {
     super(source);
   }
 
-  public UnsortedSegmentReduction(CGNode node) {
+  protected UnsortedSegmentReduction(CGNode node) {
     super(node);
   }
 

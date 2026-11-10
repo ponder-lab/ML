@@ -65,19 +65,19 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
    */
   private final boolean attributeForm;
 
-  public NpTranspose(PointsToSetVariable source, boolean methodForm) {
+  protected NpTranspose(PointsToSetVariable source, boolean methodForm) {
     super(source);
     this.methodForm = methodForm;
     this.attributeForm = false;
   }
 
-  public NpTranspose(CGNode node, boolean methodForm) {
+  protected NpTranspose(CGNode node, boolean methodForm) {
     super(node);
     this.methodForm = methodForm;
     this.attributeForm = false;
   }
 
-  public NpTranspose(PointsToSetVariable source, boolean methodForm, boolean attributeForm) {
+  protected NpTranspose(PointsToSetVariable source, boolean methodForm, boolean attributeForm) {
     super(source);
     this.methodForm = methodForm;
     this.attributeForm = attributeForm;

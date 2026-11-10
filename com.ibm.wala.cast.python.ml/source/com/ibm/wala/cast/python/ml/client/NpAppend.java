@@ -23,11 +23,11 @@ import java.util.Set;
  */
 public class NpAppend extends NpArrayFunction {
 
-  public NpAppend(PointsToSetVariable source) {
+  protected NpAppend(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpAppend(CGNode node) {
+  protected NpAppend(CGNode node) {
     super(node);
   }
 

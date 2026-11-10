@@ -102,7 +102,7 @@ public class PostAnalysisPointsToTest extends TestPythonMLCallGraphShape {
           if (builder.getPropagationSystem().isImplicit(value)) continue;
           if (unsolved == null && !held.contains(value)) unsolved = value;
           for (InstanceKey container : builder.getPointerAnalysis().getPointsToSet(value))
-            ContainerElements.of(builder, container).elementTypes(analysis);
+            ElementTypes.elementTypes(analysis, ContainerElements.of(builder, container));
         }
       }
 

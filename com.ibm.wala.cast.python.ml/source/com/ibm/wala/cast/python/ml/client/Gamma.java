@@ -38,11 +38,11 @@ public class Gamma extends TensorTypeAllocator {
     }
   }
 
-  public Gamma(PointsToSetVariable source) {
+  protected Gamma(PointsToSetVariable source) {
     super(source);
   }
 
-  public Gamma(CGNode node) {
+  protected Gamma(CGNode node) {
     super(node);
   }
 

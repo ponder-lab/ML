@@ -19,8 +19,6 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
-import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
-import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -31,7 +29,6 @@ import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
@@ -43,7 +40,6 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
@@ -68,14 +64,13 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
- * The elements of a container instance, as the analysis models them: the client-facing authority on
- * a container's length, the key of each element, and whether an element may be {@code None}.
- *
- * <p>A client asks this rather than reading the container's object catalog, the names of the
- * analysis's internal element channels ({@link
+ * The elements of a container instance, as the analysis models them: a container's length, the key
+ * of each element, and whether an element may be {@code None}, read off the container's object
+ * catalog and the element channels ({@link
  * PythonSSAPropagationCallGraphBuilder#LIST_APPEND_CONTENTS_FIELD}, {@link
- * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD}) or the encoding of element
- * indices, all of which are the analysis's own conventions and may change with it.
+ * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD}). It is internal to this
+ * package, for the analysis's own reads of a container's length and elements; a client reads a
+ * container through the object catalog itself.
  *
  * <p>A container here means a container in the analysis's element model: a list, tuple, set, dict
  * or {@code enumerate} object, the same set {@code PythonTypes.isContainer} names. It does not mean
@@ -92,14 +87,8 @@ import java.util.stream.Collectors;
  * mutate unrecorded (see {@link #mutations}). A list or tuple a library summary or an operator
  * model allocates reports none: its catalog holds the model's placeholder slots, not its run-time
  * elements. Every other container reports no length.
- *
- * <p>A client queries this after the analysis, on the builder the analysis ran on. Those queries
- * don't keep the builder reachable through the generator memos, which only an analysis in progress
- * writes (<a href="https://github.com/wala/ML/issues/1170">wala/ML#1170</a>). A client done with a
- * builder may still call {@link TensorGenerator#clearCaches} to release any other per-builder memo
- * deterministically.
  */
-public final class ContainerElements {
+final class ContainerElements {
 
   private static final Logger LOGGER = Logger.getLogger(ContainerElements.class.getName());
 
@@ -292,7 +281,7 @@ public final class ContainerElements {
    * @param container The container instance.
    * @return Its elements.
    */
-  public static ContainerElements of(PropagationCallGraphBuilder builder, InstanceKey container) {
+  static ContainerElements of(PropagationCallGraphBuilder builder, InstanceKey container) {
     OrdinalSet<InstanceKey> catalog =
         builder
             .getPointerAnalysis()
@@ -382,7 +371,7 @@ public final class ContainerElements {
    *
    * @return The number of elements, or empty when the length is not known.
    */
-  public OptionalInt arity() {
+  OptionalInt arity() {
     return this.arity < 0 ? OptionalInt.empty() : OptionalInt.of(this.arity);
   }
 
@@ -392,7 +381,7 @@ public final class ContainerElements {
    * @return The keys of positions {@code 0..n-1}, where {@code n} is {@link #arity()}; empty when
    *     the length is not known.
    */
-  public List<PointerKey> positions() {
+  List<PointerKey> positions() {
     return this.positions;
   }
 
@@ -405,7 +394,7 @@ public final class ContainerElements {
    *
    * @return {@code true} iff the element keys are all of them.
    */
-  public boolean isComplete() {
+  boolean isComplete() {
     return this.complete;
   }
 
@@ -415,60 +404,8 @@ public final class ContainerElements {
    *
    * @return The element keys.
    */
-  public Set<PointerKey> allElements() {
+  Set<PointerKey> allElements() {
     return this.allElements;
-  }
-
-  /**
-   * The tensor types the analysis gives the element at each position.
-   *
-   * @param analysis The solved {@link TensorTypeAnalysis}.
-   * @return Per position of {@link #positions()}, the element's tensor types, an empty set when the
-   *     analysis gives it none; empty when the length is not known. Exact only when {@link
-   *     #isComplete()}.
-   */
-  public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
-    List<Set<TensorType>> ret = new ArrayList<>(this.positions.size());
-    for (PointerKey key : this.positions) {
-      Set<TensorType> types = new HashSet<>();
-      this.addTypes(analysis, key, types);
-      ret.add(Collections.unmodifiableSet(types));
-    }
-    return Collections.unmodifiableList(ret);
-  }
-
-  /**
-   * The tensor types the analysis gives the container's elements, whatever their positions: the
-   * element types of a container of unknown or known length, over every element key ({@link
-   * #allElements()}), those of elements whose position is unknown included. Each key is read as
-   * {@link #positionTypes} reads one.
-   *
-   * @param analysis The solved {@link TensorTypeAnalysis}.
-   * @return The union of the elements' tensor types; empty when no element has tensor evidence.
-   *     Exact only when {@link #isComplete()}; otherwise the types of the elements the keys name,
-   *     and the client chooses the conservative reading for its own question.
-   */
-  public Set<TensorType> elementTypes(TensorTypeAnalysis analysis) {
-    Set<TensorType> ret = new HashSet<>();
-    for (PointerKey key : this.allElements) this.addTypes(analysis, key, ret);
-    return Collections.unmodifiableSet(ret);
-  }
-
-  /**
-   * Adds the tensor types the analysis gives a key.
-   *
-   * @param analysis The solved analysis.
-   * @param key The key.
-   * @param types The types, which this adds to.
-   */
-  private void addTypes(TensorTypeAnalysis analysis, PointerKey key, Set<TensorType> types) {
-    PointsToSetVariable variable = this.variable(key);
-    // A key the analysis's flow graph does not hold has no state, rather than an empty one. A field
-    // of a dataset element's copy that nothing reads is in the graph, seeded as the element's other
-    // fields are (wala/ML#1190).
-    if (variable == null || !analysis.getProblem().getFlowGraph().containsNode(variable)) return;
-    Set<TensorType> state = analysis.getOutState(variable);
-    if (state != null) types.addAll(state);
   }
 
   /**
@@ -479,7 +416,7 @@ public final class ContainerElements {
    * @return {@code true} iff some element key may hold the {@code None} constant, or the keys are
    *     not all of them.
    */
-  public boolean mayHoldNone() {
+  boolean mayHoldNone() {
     if (!this.complete) return true;
     for (PointerKey key : this.allElements)
       if (TensorGenerator.anyNullConstant(this.builder.getPointerAnalysis().getPointsToSet(key)))
@@ -1069,20 +1006,5 @@ public final class ContainerElements {
    */
   private static int mappedIndex(PropagationCallGraphBuilder builder, InstanceKey container) {
     return builder.getPointerAnalysis().getInstanceKeyMapping().getMappedIndex(container);
-  }
-
-  /**
-   * The flow-graph variable of a key, when the pointer analysis holds it explicitly.
-   *
-   * @param key The key.
-   * @return The variable, or {@code null} for an implicitly represented key.
-   */
-  private PointsToSetVariable variable(PointerKey key) {
-    if (this.builder.getPropagationSystem().isImplicit(key)) return null;
-    try {
-      return this.builder.getPropagationSystem().findOrCreatePointsToSet(key);
-    } catch (UnimplementedError e) {
-      return null;
-    }
   }
 }

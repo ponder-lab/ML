@@ -18,11 +18,11 @@ import java.util.Set;
  */
 public class AsString extends PassThroughUnaryTensorGenerator {
 
-  public AsString(PointsToSetVariable source) {
+  protected AsString(PointsToSetVariable source) {
     super(source);
   }
 
-  public AsString(CGNode node) {
+  protected AsString(CGNode node) {
     super(node);
   }
 

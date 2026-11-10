@@ -37,7 +37,7 @@ import java.util.Set;
  */
 public class NpReshape extends Reshape {
 
-  public NpReshape(PointsToSetVariable source) {
+  protected NpReshape(PointsToSetVariable source) {
     super(source);
   }
 
@@ -49,7 +49,7 @@ public class NpReshape extends Reshape {
    *
    * @param node The synthetic {@code do()} node that allocated the value.
    */
-  public NpReshape(CGNode node) {
+  protected NpReshape(CGNode node) {
     super(node);
   }
 

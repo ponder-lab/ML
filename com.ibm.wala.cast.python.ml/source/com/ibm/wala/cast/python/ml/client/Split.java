@@ -46,11 +46,11 @@ public class Split extends PassThroughUnaryTensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(Split.class.getName());
 
-  public Split(PointsToSetVariable source) {
+  protected Split(PointsToSetVariable source) {
     super(source);
   }
 
-  public Split(CGNode node) {
+  protected Split(CGNode node) {
     super(node);
   }
 

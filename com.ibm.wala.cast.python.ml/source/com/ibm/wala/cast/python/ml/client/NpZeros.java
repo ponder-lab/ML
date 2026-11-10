@@ -16,11 +16,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class NpZeros extends NpOnes {
 
-  public NpZeros(PointsToSetVariable source) {
+  protected NpZeros(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpZeros(CGNode node) {
+  protected NpZeros(CGNode node) {
     super(node);
   }
 }

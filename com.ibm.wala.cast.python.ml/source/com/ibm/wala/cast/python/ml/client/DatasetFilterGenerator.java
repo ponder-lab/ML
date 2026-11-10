@@ -13,11 +13,11 @@ import java.util.Set;
  */
 public class DatasetFilterGenerator extends DatasetGenerator {
 
-  public DatasetFilterGenerator(PointsToSetVariable source) {
+  protected DatasetFilterGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetFilterGenerator(CGNode node) {
+  protected DatasetFilterGenerator(CGNode node) {
     super(node);
   }
 

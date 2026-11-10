@@ -14,11 +14,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class PyFunction extends NumpyFunction {
 
-  public PyFunction(PointsToSetVariable source) {
+  protected PyFunction(PointsToSetVariable source) {
     super(source);
   }
 
-  public PyFunction(CGNode node) {
+  protected PyFunction(CGNode node) {
     super(node);
   }
 }

@@ -25,11 +25,11 @@ import java.util.Set;
  */
 public class SparseDensify extends TensorGenerator {
 
-  public SparseDensify(PointsToSetVariable source) {
+  protected SparseDensify(PointsToSetVariable source) {
     super(source);
   }
 
-  public SparseDensify(CGNode node) {
+  protected SparseDensify(CGNode node) {
     super(node);
   }
 

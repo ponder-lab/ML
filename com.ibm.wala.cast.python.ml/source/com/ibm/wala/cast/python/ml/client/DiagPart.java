@@ -27,7 +27,7 @@ public class DiagPart extends PassThroughUnaryTensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public DiagPart(PointsToSetVariable source) {
+  protected DiagPart(PointsToSetVariable source) {
     super(source);
   }
 
@@ -36,7 +36,7 @@ public class DiagPart extends PassThroughUnaryTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public DiagPart(CGNode node) {
+  protected DiagPart(CGNode node) {
     super(node);
   }
 

@@ -52,11 +52,11 @@ public class NpUniqueValues extends TensorGenerator {
     }
   }
 
-  public NpUniqueValues(PointsToSetVariable source) {
+  protected NpUniqueValues(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpUniqueValues(CGNode node) {
+  protected NpUniqueValues(CGNode node) {
     super(node);
   }
 

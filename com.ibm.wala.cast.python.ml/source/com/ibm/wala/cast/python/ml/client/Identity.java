@@ -50,7 +50,7 @@ public class Identity extends TensorGenerator {
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
    */
-  public Identity(PointsToSetVariable source) {
+  protected Identity(PointsToSetVariable source) {
     super(source);
   }
 
@@ -63,7 +63,7 @@ public class Identity extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the {@code identity.do()} synthetic method.
    */
-  public Identity(CGNode node) {
+  protected Identity(CGNode node) {
     super(node);
   }
 

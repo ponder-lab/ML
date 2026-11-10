@@ -21,7 +21,7 @@ import java.util.Set;
  */
 public class Flatten extends TensorGenerator {
 
-  public Flatten(PointsToSetVariable source) {
+  protected Flatten(PointsToSetVariable source) {
     super(source);
   }
 
@@ -30,7 +30,7 @@ public class Flatten extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Flatten(CGNode node) {
+  protected Flatten(CGNode node) {
     super(node);
   }
 

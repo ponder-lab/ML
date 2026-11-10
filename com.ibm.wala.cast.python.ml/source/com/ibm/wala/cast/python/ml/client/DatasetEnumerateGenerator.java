@@ -33,11 +33,11 @@ import java.util.Set;
  */
 public class DatasetEnumerateGenerator extends DatasetGenerator {
 
-  public DatasetEnumerateGenerator(PointsToSetVariable source) {
+  protected DatasetEnumerateGenerator(PointsToSetVariable source) {
     super(source);
   }
 
-  public DatasetEnumerateGenerator(CGNode node) {
+  protected DatasetEnumerateGenerator(CGNode node) {
     super(node);
   }
 
@@ -46,7 +46,7 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
       new TensorType(DType.UNKNOWN.name().toLowerCase(Locale.ROOT), null);
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     Set<TensorType> types = HashSetFactory.make();
 
     // Add the index type, a scalar.

@@ -56,11 +56,11 @@ public class TolistOperation extends TensorGenerator {
     }
   }
 
-  public TolistOperation(PointsToSetVariable source) {
+  protected TolistOperation(PointsToSetVariable source) {
     super(source);
   }
 
-  public TolistOperation(CGNode node) {
+  protected TolistOperation(CGNode node) {
     super(node);
   }
 

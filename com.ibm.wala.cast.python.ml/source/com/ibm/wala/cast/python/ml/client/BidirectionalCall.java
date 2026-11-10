@@ -55,7 +55,7 @@ public class BidirectionalCall extends RecurrentLayerCall {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     __call__} invoke on a {@code Bidirectional} instance.
    */
-  public BidirectionalCall(PointsToSetVariable source) {
+  protected BidirectionalCall(PointsToSetVariable source) {
     super(source);
   }
 
@@ -64,7 +64,7 @@ public class BidirectionalCall extends RecurrentLayerCall {
    *
    * @param node The {@link CGNode} for the {@code __call__} synthetic method.
    */
-  public BidirectionalCall(CGNode node) {
+  protected BidirectionalCall(CGNode node) {
     super(node);
   }
 

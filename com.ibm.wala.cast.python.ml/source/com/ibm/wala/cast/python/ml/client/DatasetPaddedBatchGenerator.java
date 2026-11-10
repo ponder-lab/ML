@@ -68,7 +68,7 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
    * @param source The {@link PointsToSetVariable} whose defining instruction is the {@code
    *     padded_batch} invoke.
    */
-  public DatasetPaddedBatchGenerator(PointsToSetVariable source) {
+  protected DatasetPaddedBatchGenerator(PointsToSetVariable source) {
     super(source);
   }
 
@@ -87,7 +87,7 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
    *
    * @param node The {@link CGNode} for the {@code padded_batch} synthetic method.
    */
-  public DatasetPaddedBatchGenerator(CGNode node) {
+  protected DatasetPaddedBatchGenerator(CGNode node) {
     super(node);
   }
 

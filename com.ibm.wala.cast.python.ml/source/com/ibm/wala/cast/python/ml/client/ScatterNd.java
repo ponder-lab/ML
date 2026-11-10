@@ -42,11 +42,11 @@ public class ScatterNd extends TensorTypeAllocator {
     }
   }
 
-  public ScatterNd(PointsToSetVariable source) {
+  protected ScatterNd(PointsToSetVariable source) {
     super(source);
   }
 
-  public ScatterNd(CGNode node) {
+  protected ScatterNd(CGNode node) {
     super(node);
   }
 

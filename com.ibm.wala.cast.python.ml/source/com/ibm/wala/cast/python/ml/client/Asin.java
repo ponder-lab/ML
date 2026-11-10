@@ -45,11 +45,11 @@ public class Asin extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Asin(PointsToSetVariable source) {
+  protected Asin(PointsToSetVariable source) {
     super(source);
   }
 
-  public Asin(CGNode node) {
+  protected Asin(CGNode node) {
     super(node);
   }
 

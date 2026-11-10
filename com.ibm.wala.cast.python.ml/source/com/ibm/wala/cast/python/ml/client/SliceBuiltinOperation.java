@@ -86,11 +86,11 @@ public class SliceBuiltinOperation extends TensorGenerator {
     return this.getSource() != null ? this.getSource().getPointerKey() : null;
   }
 
-  public SliceBuiltinOperation(PointsToSetVariable source) {
+  protected SliceBuiltinOperation(PointsToSetVariable source) {
     super(source);
   }
 
-  public SliceBuiltinOperation(CGNode node) {
+  protected SliceBuiltinOperation(CGNode node) {
     super(node);
   }
 

@@ -16,11 +16,11 @@ import java.util.Set;
  */
 public class Placeholder extends TensorGenerator {
 
-  public Placeholder(PointsToSetVariable source) {
+  protected Placeholder(PointsToSetVariable source) {
     super(source);
   }
 
-  public Placeholder(CGNode node) {
+  protected Placeholder(CGNode node) {
     super(node);
   }
 

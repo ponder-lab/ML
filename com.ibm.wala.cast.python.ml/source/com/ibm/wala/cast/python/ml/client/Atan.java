@@ -45,11 +45,11 @@ public class Atan extends PassThroughUnaryTensorGenerator {
     }
   }
 
-  public Atan(PointsToSetVariable source) {
+  protected Atan(PointsToSetVariable source) {
     super(source);
   }
 
-  public Atan(CGNode node) {
+  protected Atan(CGNode node) {
     super(node);
   }
 

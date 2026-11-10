@@ -22,7 +22,7 @@ public class IteratorGenerator extends TensorGenerator implements DelegatingTens
   /** The generator for the underlying iterable. */
   private final TensorGenerator underlying;
 
-  public IteratorGenerator(PointsToSetVariable source, TensorGenerator underlying) {
+  protected IteratorGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
   }
@@ -37,7 +37,7 @@ public class IteratorGenerator extends TensorGenerator implements DelegatingTens
   }
 
   @Override
-  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+  protected Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     // An iterator is not a tensor (⊥).
     return HashSetFactory.make();
   }

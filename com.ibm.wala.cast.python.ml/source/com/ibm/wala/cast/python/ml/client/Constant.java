@@ -30,7 +30,7 @@ public class Constant extends ValueExtractingTensorGenerator {
     }
   }
 
-  public Constant(PointsToSetVariable source) {
+  protected Constant(PointsToSetVariable source) {
     super(source);
   }
 
@@ -39,7 +39,7 @@ public class Constant extends ValueExtractingTensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Constant(CGNode node) {
+  protected Constant(CGNode node) {
     super(node);
   }
 

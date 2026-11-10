@@ -83,12 +83,12 @@ public class DatasetMapGenerator extends DatasetGenerator {
     return (DatasetMapGenerator) super.clone();
   }
 
-  public DatasetMapGenerator(PointsToSetVariable source) {
+  protected DatasetMapGenerator(PointsToSetVariable source) {
     super(source);
     this.mapResultInstance = null;
   }
 
-  public DatasetMapGenerator(CGNode node) {
+  protected DatasetMapGenerator(CGNode node) {
     super(node);
     this.mapResultInstance = null;
   }
@@ -102,7 +102,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * @param node The {@code map.do()} node that allocated the instance.
    * @param mapResultInstance The mapped-dataset instance carrying the {@code element} field.
    */
-  public DatasetMapGenerator(CGNode node, AllocationSiteInNode mapResultInstance) {
+  protected DatasetMapGenerator(CGNode node, AllocationSiteInNode mapResultInstance) {
     super(node);
     this.mapResultInstance = mapResultInstance;
   }

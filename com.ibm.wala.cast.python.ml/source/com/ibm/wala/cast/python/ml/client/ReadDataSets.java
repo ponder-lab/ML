@@ -36,11 +36,11 @@ public class ReadDataSets extends TensorTypeAllocator {
     }
   }
 
-  public ReadDataSets(PointsToSetVariable source) {
+  protected ReadDataSets(PointsToSetVariable source) {
     super(source);
   }
 
-  public ReadDataSets(CGNode node) {
+  protected ReadDataSets(CGNode node) {
     super(node);
   }
 

@@ -40,7 +40,7 @@ public abstract class ValueExtractingTensorGenerator extends TensorGenerator {
     }
   }
 
-  public ValueExtractingTensorGenerator(PointsToSetVariable source) {
+  protected ValueExtractingTensorGenerator(PointsToSetVariable source) {
     super(source);
   }
 
@@ -49,7 +49,7 @@ public abstract class ValueExtractingTensorGenerator extends TensorGenerator {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public ValueExtractingTensorGenerator(CGNode node) {
+  protected ValueExtractingTensorGenerator(CGNode node) {
     super(node);
   }
 

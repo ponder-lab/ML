@@ -53,11 +53,11 @@ public class Slice extends PassThroughUnaryTensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(Slice.class.getName());
 
-  public Slice(PointsToSetVariable source) {
+  protected Slice(PointsToSetVariable source) {
     super(source);
   }
 
-  public Slice(CGNode node) {
+  protected Slice(CGNode node) {
     super(node);
   }
 

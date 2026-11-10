@@ -82,7 +82,7 @@ public class Argmax extends Reduction {
     }
   }
 
-  public Argmax(PointsToSetVariable source) {
+  protected Argmax(PointsToSetVariable source) {
     super(source);
   }
 
@@ -91,7 +91,7 @@ public class Argmax extends Reduction {
    *
    * @param node The {@link CGNode} for the synthetic {@code do()} method.
    */
-  public Argmax(CGNode node) {
+  protected Argmax(CGNode node) {
     super(node);
   }
 

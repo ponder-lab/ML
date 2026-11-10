@@ -12,11 +12,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Ceil extends PassThroughUnaryTensorGenerator {
 
-  public Ceil(PointsToSetVariable source) {
+  protected Ceil(PointsToSetVariable source) {
     super(source);
   }
 
-  public Ceil(CGNode node) {
+  protected Ceil(CGNode node) {
     super(node);
   }
 

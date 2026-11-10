@@ -31,11 +31,11 @@ public class NpRandomChoice extends NpRandomSizedDraw {
   /** The positional index of {@code size}, after {@code a}. */
   private static final int SIZE_POSITION = 1;
 
-  public NpRandomChoice(PointsToSetVariable source) {
+  protected NpRandomChoice(PointsToSetVariable source) {
     super(source);
   }
 
-  public NpRandomChoice(CGNode node) {
+  protected NpRandomChoice(CGNode node) {
     super(node);
   }
 
