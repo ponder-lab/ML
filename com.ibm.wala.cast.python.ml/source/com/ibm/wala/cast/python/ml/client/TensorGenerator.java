@@ -28,6 +28,7 @@ import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
+import static com.ibm.wala.cast.python.util.Util.isPythonScalarKey;
 import static com.ibm.wala.cast.python.util.Util.onlyKeyWithoutClientOnlyKeys;
 import static com.ibm.wala.cast.python.util.Util.parseIntOrNull;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
@@ -4114,8 +4115,11 @@ public abstract class TensorGenerator implements Cloneable {
     }
 
     // A Python number or bool built by a builtin, `float(n)`, is a scalar; the builtin's summary
-    // allocates nothing the points-to set can hold, so the call is read structurally.
-    if (partial == null && pythonScalarBuiltinDType(builder, node, valueNumber) != null)
+    // allocates nothing the points-to set can hold, so the call is read structurally. So is a
+    // `str` of unknown value, as a string literal is (wala/ML#1242).
+    if (partial == null
+        && (pythonScalarBuiltinDType(builder, node, valueNumber) != null
+            || isPythonStringOfUnknownValue(builder, node, valueNumber)))
       return ShapeResult.of(Set.of(emptyList()));
 
     // points-to set is empty. Try to find a generator for this variable.
@@ -6755,6 +6759,33 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * Whether a value is a Python {@code str} of unknown value: its points-to set is not empty and
+   * holds only the type-level key of such a {@code str} (wala/ML#1232), the key a {@code str(...)},
+   * a concatenation or a string's method gives. A value reader filters that key out, as a key for
+   * points-to clients only, so without this the value reads as having no points-to set and, through
+   * its producer, as a tensor of unknown type (wala/ML#1242).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis holds the value.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @return {@code true} iff every key the value may point to is that of a {@code str} of unknown
+   *     value.
+   */
+  protected static boolean isPythonStringOfUnknownValue(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0) return false;
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    OrdinalSet<InstanceKey> pointsToSet =
+        pointerAnalysis.getPointsToSet(
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, vn));
+    if (pointsToSet == null || pointsToSet.isEmpty()) return false;
+    for (InstanceKey ik : pointsToSet)
+      if (!isPythonScalarKey(ik) || !ik.concreteType().getReference().equals(PythonTypes.string))
+        return false;
+    return true;
+  }
+
+  /**
    * The dtype TensorFlow converts a value to when the value is the result of a call to the {@code
    * float}, {@code int} or {@code bool} builtin. The builtins' summaries allocate a primitive type,
    * for which the heap model makes no instance key, so the result's points-to set is empty and the
@@ -8021,6 +8052,8 @@ public abstract class TensorGenerator implements Cloneable {
     // read's twin).
     DType scalarBuiltin = pythonScalarBuiltinDType(builder, node, valueNumber);
     if (scalarBuiltin != null) return EnumSet.of(scalarBuiltin);
+    // So does a `str` of unknown value, as a string literal does (wala/ML#1242).
+    if (isPythonStringOfUnknownValue(builder, node, valueNumber)) return EnumSet.of(STRING);
 
     // points-to set is empty or yielded no dtypes. Try to find a generator for this variable.
     PointsToSetVariable var = null;
