@@ -98,4 +98,21 @@ public class TestTextReads extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
+
+  /**
+   * The list of file names {@code glob.glob} returns, passed to a function that reads it as a
+   * {@code TFRecordDataset}'s file names, is no tensor there, though it now holds strings (<a
+   * href="https://github.com/wala/ML/issues/782">wala/ML#782</a>); the dataset is one of scalar
+   * strings, its records.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGlobbedRecordFiles()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_glob_records.py", "input_fn", 0, 1);
+  }
 }

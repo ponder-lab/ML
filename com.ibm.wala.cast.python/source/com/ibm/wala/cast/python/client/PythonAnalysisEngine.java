@@ -129,7 +129,8 @@ public abstract class PythonAnalysisEngine<T>
         "tqdm.xml",
         "time.xml",
         "random.xml",
-        "cv2.xml"
+        "cv2.xml",
+        "glob.xml"
       };
 
   protected PythonSSAPropagationCallGraphBuilder builder;
