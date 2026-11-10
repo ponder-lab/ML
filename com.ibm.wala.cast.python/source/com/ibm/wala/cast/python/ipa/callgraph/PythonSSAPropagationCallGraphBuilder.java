@@ -2115,9 +2115,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     /**
      * A text read yields strings: {@code f.read()} and {@code f.readline()} on the object {@code
      * open} returns yield a string, and {@code f.readlines()} on it, or {@code s.splitlines()} and
-     * {@code s.split(...)} on a string, yield a list of strings. The receiver is checked when its
-     * points-to set arrives, so a method of the same name on another object is untouched. Without
-     * this a text dataset built from a file's lines carried no element type at all.
+     * {@code s.split(...)} and {@code s.rsplit(...)} on a string, yield a list of strings; and a
+     * string's methods that return a string, such as {@code s.strip()} and {@code s.replace(...)},
+     * yield a string (wala/ML#1242). The receiver is checked when its points-to set arrives, so a
+     * method of the same name on another object is untouched. Without this a text dataset built
+     * from a file's lines carried no element type at all.
      *
      * @param inst The call.
      */
@@ -2132,8 +2134,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if ("read".equals(member) || "readline".equals(member))
         kind = TextReadOperator.Kind.FILE_TEXT;
       else if ("readlines".equals(member)) kind = TextReadOperator.Kind.FILE_LINES;
-      else if ("splitlines".equals(member) || "split".equals(member))
+      else if ("splitlines".equals(member) || "split".equals(member) || "rsplit".equals(member))
         kind = TextReadOperator.Kind.STRING_PIECES;
+      else if (STRING_METHODS.contains(member)) kind = TextReadOperator.Kind.STRING;
       else return;
       TextReadOperator operator =
           getBuilder()
@@ -5629,17 +5632,48 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The methods of {@code str} that return a {@code str} (wala/ML#1242): <a
+   * href="https://docs.python.org/3/library/stdtypes.html#string-methods">string methods</a>.
+   */
+  private static final Set<String> STRING_METHODS =
+      Set.of(
+          "capitalize",
+          "casefold",
+          "center",
+          "expandtabs",
+          "format",
+          "format_map",
+          "join",
+          "ljust",
+          "lower",
+          "lstrip",
+          "removeprefix",
+          "removesuffix",
+          "replace",
+          "rjust",
+          "rstrip",
+          "strip",
+          "swapcase",
+          "title",
+          "translate",
+          "upper",
+          "zfill");
+
+  /**
    * Mints the result of a text read once its receiver is known (see {@code processTextRead}): a
    * string constant for a file's {@code read} or {@code readline}, and a fresh list holding a
    * string constant under index {@code 0} for a file's {@code readlines} or a string's {@code
-   * splitlines} and {@code split}. The list is populated as a literal list is (a catalog entry and
-   * a numbered field), so every element reader sees the string.
+   * splitlines}, {@code split} and {@code rsplit}. The list is populated as a literal list is (a
+   * catalog entry and a numbered field), so every element reader sees the string. A string's method
+   * that returns a string gives the type-level key of a {@code str} of unknown value (wala/ML#1232,
+   * wala/ML#1242). A string receiver is a string constant or that key.
    */
   public final class TextReadOperator extends UnaryOperator<PointsToSetVariable> {
     public enum Kind {
       FILE_TEXT,
       FILE_LINES,
-      STRING_PIECES
+      STRING_PIECES,
+      STRING
     }
 
     private static final String TEXT = "<text>";
@@ -5677,6 +5711,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (!applies) return;
       contributed = true;
       logger.fine(() -> "text read at " + pc + " in " + node + ": " + kind + " applies.");
+      if (kind == Kind.STRING) {
+        InstanceKey string = getScalarTypeKey(node, pc, PythonTypes.string);
+        if (string != null) getSystem().newConstraint(resultKey, string);
+        return;
+      }
       InstanceKey text = getInstanceKeyForConstant(PythonTypes.string, TEXT);
       if (kind == Kind.FILE_TEXT) {
         getSystem().newConstraint(resultKey, text);
@@ -5698,9 +5737,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     private boolean receiverMatches(InstanceKey receiver) {
-      if (kind == Kind.STRING_PIECES)
-        return receiver instanceof ConstantKey
-            && ((ConstantKey<?>) receiver).getValue() instanceof String;
+      if (kind == Kind.STRING_PIECES || kind == Kind.STRING)
+        return PythonTypes.string.equals(scalarTypeOf(receiver));
       IClassHierarchy cha = getClassHierarchy();
       IClass fileClass = cha.lookupClass(PythonTypes.file);
       return fileClass != null && cha.isSubclassOf(receiver.concreteType(), fileClass);

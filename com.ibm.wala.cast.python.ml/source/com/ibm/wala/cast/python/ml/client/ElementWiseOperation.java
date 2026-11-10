@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.isPythonScalarKey;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
@@ -1317,9 +1318,10 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
 
   /**
    * Whether a value is shown to be a Python string (wala/ML#1103): a string literal, a value whose
-   * points-to set holds only Python {@code str} constants, or a binary operation over Python
-   * strings. A value that allocates anything, or whose points-to set is empty and that no literal
-   * or operation defines, is not a string by this test.
+   * points-to set holds only Python {@code str} constants and the type-level key of a {@code str}
+   * of unknown value (wala/ML#1232, wala/ML#1242), or a binary operation over Python strings. A
+   * value that allocates anything, or whose points-to set is empty and that no literal or operation
+   * defines, is not a string by this test.
    *
    * @param builder The propagation call graph builder.
    * @param vn The value number.
@@ -1337,12 +1339,12 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
       return true;
     }
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    OrdinalSet<InstanceKey> pts =
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     if (pts == null || pts.isEmpty()) return false;
     for (InstanceKey ik : pts)
-      if (!(ik instanceof ConstantKey<?> constant) || !(constant.getValue() instanceof String))
-        return false;
+      if (!(ik instanceof ConstantKey<?> constant && constant.getValue() instanceof String)
+          && !(isPythonScalarKey(ik)
+              && ik.concreteType().getReference().equals(PythonTypes.string))) return false;
     return true;
   }
 
