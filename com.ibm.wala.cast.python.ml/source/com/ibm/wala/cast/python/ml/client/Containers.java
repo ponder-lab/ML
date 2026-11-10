@@ -34,7 +34,7 @@ public final class Containers {
    */
   public static OptionalInt getLength(
       PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
-    return ContainerElements.of(builder, container).arity();
+    return ContainerElements.of(builder, container).getArity();
   }
 
   /**
@@ -47,7 +47,7 @@ public final class Containers {
    */
   public static List<PointerKey> getPositionKeys(
       PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
-    return ContainerElements.of(builder, container).positions();
+    return ContainerElements.of(builder, container).getPositions();
   }
 
   /**

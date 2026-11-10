@@ -371,17 +371,17 @@ final class ContainerElements {
    *
    * @return The number of elements, or empty when the length is not known.
    */
-  OptionalInt arity() {
+  OptionalInt getArity() {
     return this.arity < 0 ? OptionalInt.empty() : OptionalInt.of(this.arity);
   }
 
   /**
    * The key of the element at each position.
    *
-   * @return The keys of positions {@code 0..n-1}, where {@code n} is {@link #arity()}; empty when
-   *     the length is not known.
+   * @return The keys of positions {@code 0..n-1}, where {@code n} is {@link #getArity()}; empty
+   *     when the length is not known.
    */
-  List<PointerKey> positions() {
+  List<PointerKey> getPositions() {
     return this.positions;
   }
 

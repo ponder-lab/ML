@@ -116,10 +116,10 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testPair() {
     ValueElements elements = ofValue("consume_pair");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertTrue(elements.isComplete());
     // The component is the element's copy of the pair, so each position has its key.
-    assertEquals(2, elements.positions().size());
+    assertEquals(2, elements.getPositions().size());
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
         elements.positionTypes(analysis));
@@ -136,7 +136,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testKeyed() {
     ValueElements elements = ofValue("consume_keyed");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertTrue(elements.isComplete());
     assertEquals(
@@ -149,7 +149,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testTriple() {
     ValueElements elements = ofValue("consume_triple");
-    assertEquals(OptionalInt.of(3), elements.arity());
+    assertEquals(OptionalInt.of(3), elements.getArity());
     assertTrue(elements.isComplete());
     assertEquals(3, elements.positionTypes(analysis).size());
     assertEquals(
@@ -168,7 +168,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testPairFromGenerator() {
     ValueElements elements = ofValue("consume_pair_from_generator");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(Set.of(batched("float32", 4)), Set.of(batched("float32", 3))),
         elements.positionTypes(analysis));
@@ -181,7 +181,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testZippedPair() {
     ValueElements elements = ofValue("consume_zipped_pair");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(Set.of(batched("float32", 4)), Set.of(batched("float32", 3))),
         elements.positionTypes(analysis));
@@ -195,7 +195,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testZippedTensors() {
     ValueElements elements = ofValue("consume_zipped_tensors");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
         elements.positionTypes(analysis));
@@ -210,7 +210,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testNested() {
     ValueElements elements = ofValue("consume_nested");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         "Positions: " + elements.positionTypes(analysis) + ".",
         Set.of(TensorType.of(FLOAT32, 2, 5)),
@@ -229,7 +229,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(
         "Positions: " + elements.positionTypes(analysis) + ".",
         OptionalInt.empty(),
-        elements.arity());
+        elements.getArity());
     assertEquals(
         Set.of(
             TensorType.of(FLOAT32, 2, 4),
@@ -249,7 +249,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   public void testFlatMapped() {
     ValueElements elements = ofValue("consume_flat_mapped");
     assertEquals(
-        "Types: " + elements.elementTypes(analysis) + ".", OptionalInt.of(2), elements.arity());
+        "Types: " + elements.elementTypes(analysis) + ".", OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(
             Set.of(TensorType.of(FLOAT32, 2, 4), unknownBatchOf(4)),
@@ -273,7 +273,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testBuilt() {
     ValueElements elements = ofValue("consume_built");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
   }
 
@@ -285,7 +285,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testMixed() {
     ValueElements elements = ofValue("consume_mixed");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertEquals(
         Set.of(TensorType.of(FLOAT32, 2, 4), TensorType.of(FLOAT32, 2, 3)),
@@ -300,7 +300,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testMixedBatched() {
     ValueElements elements = ofValue("consume_mixed_batched");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertTrue(
         "Types: " + elements.elementTypes(analysis) + ".",
@@ -318,7 +318,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testLengthsShuffled() {
     ValueElements elements = ofValue("consume_lengths_shuffled");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
   }
 
@@ -329,7 +329,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testMixedShuffled() {
     ValueElements elements = ofValue("consume_mixed_shuffled");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(
         "Types: " + elements.elementTypes(analysis) + ".",
         elements
@@ -346,7 +346,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testAgreeing() {
     ValueElements elements = ofValue("consume_agreeing");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(
             Set.of(TensorType.of(FLOAT32, 2, 4)),
@@ -363,7 +363,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testMappedInputs() {
     ValueElements elements = ofValue("consume_mapped_inputs");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertEquals(Set.of(TensorType.of(FLOAT32, 2, 4)), typesOf("consume_mapped_inputs"));
   }
 
@@ -374,7 +374,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testLoopLengths() {
     ValueElements elements = ofValue("consume_loop_lengths");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
   }
 
   /**
@@ -385,7 +385,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   public void testLoopAgreeing() {
     ValueElements elements = ofValue("consume_loop_agreeing");
     assertEquals(
-        "Types: " + elements.positionTypes(analysis) + ".", OptionalInt.of(2), elements.arity());
+        "Types: " + elements.positionTypes(analysis) + ".", OptionalInt.of(2), elements.getArity());
   }
 
   /**
@@ -396,7 +396,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testMappedPair() {
     ValueElements elements = ofValue("consume_mapped_pair");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(Set.of(TensorType.of(FLOAT32, 2, 4)), Set.of(TensorType.of(FLOAT32, 2, 3))),
         elements.positionTypes(analysis));
@@ -410,7 +410,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testFlat() {
     ValueElements elements = ofValue("consume_flat");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertEquals(Set.of(TensorType.of(FLOAT32, 2, 4)), typesOf("consume_flat"));
   }
@@ -424,9 +424,9 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
     assertEquals(1, instances.size());
     ContainerElements of = ContainerElements.of(builder(), instances.get(0));
     ValueElements value = ValueElements.of(builder(), parameter);
-    assertEquals(OptionalInt.of(2), value.arity());
-    assertEquals(of.arity(), value.arity());
-    assertEquals(of.positions(), value.positions());
+    assertEquals(OptionalInt.of(2), value.getArity());
+    assertEquals(of.getArity(), value.getArity());
+    assertEquals(of.getPositions(), value.getPositions());
     assertEquals(of.isComplete(), value.isComplete());
     assertEquals(ElementTypes.positionTypes(analysis, of), value.positionTypes(analysis));
     assertEquals(ElementTypes.elementTypes(analysis, of), value.elementTypes(analysis));
@@ -440,7 +440,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testLocalJoin() {
     ValueElements elements = ofValue("consume_local_join");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(
         List.of(
             Set.of(TensorType.of(FLOAT32, 2, 3), TensorType.of(FLOAT32, 2, 5)),
@@ -454,7 +454,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testLocalLengths() {
     ValueElements elements = ofValue("consume_local_lengths");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertTrue(elements.positionTypes(analysis).isEmpty());
     assertEquals(
         Set.of(
@@ -473,7 +473,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testMappedBuilt() {
     ValueElements elements = ofValue("consume_mapped_built");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertTrue(elements.isComplete());
   }
 
@@ -495,7 +495,7 @@ public class TestContainerElementsOfValue extends TestPythonMLCallGraphShape {
   @Test
   public void testStarredElement() {
     ValueElements elements = ofValue("consume_starred_element");
-    assertEquals(OptionalInt.empty(), elements.arity());
+    assertEquals(OptionalInt.empty(), elements.getArity());
     assertEquals(
         Set.of(TensorType.of(FLOAT32, 4), TensorType.of(INT32, 3), TensorType.of(FLOAT32)),
         elements.elementTypes(analysis));

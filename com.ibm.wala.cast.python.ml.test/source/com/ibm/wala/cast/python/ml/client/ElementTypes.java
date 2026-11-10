@@ -34,13 +34,13 @@ public final class ElementTypes {
    *
    * @param analysis The solved analysis.
    * @param elements The container's elements.
-   * @return Per position of {@link ContainerElements#positions()}, the element's tensor types, an
-   *     empty set when the analysis gives it none; empty when the length is not known.
+   * @return Per position of {@link ContainerElements#getPositions()}, the element's tensor types,
+   *     an empty set when the analysis gives it none; empty when the length is not known.
    */
   public static List<Set<TensorType>> positionTypes(
       TensorTypeAnalysis analysis, ContainerElements elements) {
-    List<Set<TensorType>> ret = new ArrayList<>(elements.positions().size());
-    for (PointerKey key : elements.positions()) ret.add(of(analysis, key));
+    List<Set<TensorType>> ret = new ArrayList<>(elements.getPositions().size());
+    for (PointerKey key : elements.getPositions()) ret.add(of(analysis, key));
     return Collections.unmodifiableList(ret);
   }
 

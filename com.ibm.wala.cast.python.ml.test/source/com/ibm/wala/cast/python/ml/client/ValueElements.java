@@ -47,11 +47,11 @@ public final class ValueElements {
    *
    * @return The length, or empty when they disagree, when one has none, or when there is none.
    */
-  public OptionalInt arity() {
+  public OptionalInt getArity() {
     if (this.parts.isEmpty()) return OptionalInt.empty();
-    OptionalInt ret = this.parts.get(0).arity();
+    OptionalInt ret = this.parts.get(0).getArity();
     for (ContainerElements part : this.parts)
-      if (!part.arity().equals(ret)) return OptionalInt.empty();
+      if (!part.getArity().equals(ret)) return OptionalInt.empty();
     return ret;
   }
 
@@ -71,8 +71,8 @@ public final class ValueElements {
    *
    * @return Its positions, or empty for none or several instances.
    */
-  public List<PointerKey> positions() {
-    return this.parts.size() == 1 ? this.parts.get(0).positions() : List.of();
+  public List<PointerKey> getPositions() {
+    return this.parts.size() == 1 ? this.parts.get(0).getPositions() : List.of();
   }
 
   /**
@@ -94,7 +94,7 @@ public final class ValueElements {
    */
   public List<Set<TensorType>> positionTypes(TensorTypeAnalysis analysis) {
     if (this.parts.size() == 1) return ElementTypes.positionTypes(analysis, this.parts.get(0));
-    OptionalInt arity = this.arity();
+    OptionalInt arity = this.getArity();
     if (arity.isEmpty()) return List.of();
     List<Set<TensorType>> ret = new ArrayList<>();
     for (int i = 0; i < arity.getAsInt(); i++) ret.add(new HashSet<>());
