@@ -65,6 +65,7 @@ import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction.IOperator;
 import com.ibm.wala.shrike.shrikeBT.IInvokeInstruction.Dispatch;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAOptions;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
@@ -156,8 +157,23 @@ public class PythonCAstToIRTranslator extends AstTranslator {
   private final Set<Pair<Scope, String>> globalDeclSet = new HashSet<>();
   private static boolean singleFileAnalysis = true;
 
+  /**
+   * A translator for the given loader, with WALA's default {@link SSAOptions}.
+   *
+   * @param loader The loader whose code is translated.
+   */
   public PythonCAstToIRTranslator(IClassLoader loader) {
-    super(loader);
+    this(loader, SSAOptions.defaultOptions());
+  }
+
+  /**
+   * A translator for the given loader, with the given {@link SSAOptions}.
+   *
+   * @param loader The loader whose code is translated.
+   * @param ssaOptions The options for the IR this translator builds.
+   */
+  public PythonCAstToIRTranslator(IClassLoader loader, SSAOptions ssaOptions) {
+    super(loader, ssaOptions);
   }
 
   public static boolean isSingleFileAnalysis() {

@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ibm.wala</groupId>
   <artifactId>ml</artifactId>
-  <version>0.52.116-SNAPSHOT</version>
+  <version>0.52.117-SNAPSHOT</version>
   <packaging>pom</packaging>
   <modules>
     <module>com.ibm.wala.cast.python</module>
@@ -34,7 +34,7 @@
     <maven.compiler.version>3.16.0</maven.compiler.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <build-alias>b000</build-alias>
-    <wala.version>1.8.0</wala.version>
+    <wala.version>1.9.0</wala.version>
     <spotless.version>3.11.0</spotless.version>
     <maven.surefire.version>3.6.1</maven.surefire.version>
     <parallel>both</parallel>
@@ -42,6 +42,7 @@
     <jacoco-version>0.8.16</jacoco-version>
     <argLine />
     <junit.4.version>4.13.2</junit.4.version>
+    <archunit.version>1.5.1</archunit.version>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -89,6 +90,11 @@
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
         <version>${junit.4.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit</artifactId>
+        <version>${archunit.version}</version>
       </dependency>
       <dependency>
         <groupId>org.python</groupId>
