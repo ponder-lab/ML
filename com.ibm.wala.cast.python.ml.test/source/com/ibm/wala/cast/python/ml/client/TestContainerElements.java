@@ -198,7 +198,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
     assertEquals(sink, OptionalInt.empty(), elements.getArity());
     assertTrue(sink, elements.getPositions().isEmpty());
     assertTrue(sink, positionTypes(elements).isEmpty());
-    assertFalse(sink, elements.allElements().isEmpty());
+    assertFalse(sink, elements.getAllElements().isEmpty());
   }
 
   /** A tuple literal of two tensors: two positions, each with its tensor's type. */
@@ -230,7 +230,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   public void testDict() {
     ContainerElements elements = elements("sink_dict");
     assertEquals(OptionalInt.empty(), elements.getArity());
-    assertEquals(2, elements.allElements().size());
+    assertEquals(2, elements.getAllElements().size());
   }
 
   /** A position holding a tuple has no tensor type of its own. */

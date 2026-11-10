@@ -80,9 +80,9 @@ public final class ValueElements {
    *
    * @return The keys.
    */
-  public Set<PointerKey> allElements() {
+  public Set<PointerKey> getAllElements() {
     Set<PointerKey> ret = new LinkedHashSet<>();
-    for (ContainerElements part : this.parts) ret.addAll(part.allElements());
+    for (ContainerElements part : this.parts) ret.addAll(part.getAllElements());
     return Collections.unmodifiableSet(ret);
   }
 

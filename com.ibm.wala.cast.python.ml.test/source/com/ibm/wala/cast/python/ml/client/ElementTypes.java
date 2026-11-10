@@ -46,7 +46,7 @@ public final class ElementTypes {
 
   /**
    * The tensor types the analysis gives the container's elements, whatever their positions, over
-   * every element key ({@link ContainerElements#allElements()}).
+   * every element key ({@link ContainerElements#getAllElements()}).
    *
    * @param analysis The solved analysis.
    * @param elements The container's elements.
@@ -55,7 +55,7 @@ public final class ElementTypes {
   public static Set<TensorType> elementTypes(
       TensorTypeAnalysis analysis, ContainerElements elements) {
     Set<TensorType> ret = new HashSet<>();
-    for (PointerKey key : elements.allElements()) ret.addAll(of(analysis, key));
+    for (PointerKey key : elements.getAllElements()) ret.addAll(of(analysis, key));
     return Collections.unmodifiableSet(ret);
   }
 

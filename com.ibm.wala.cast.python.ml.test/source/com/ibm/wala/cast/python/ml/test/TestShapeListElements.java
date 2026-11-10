@@ -64,7 +64,7 @@ public class TestShapeListElements extends TestPythonMLCallGraphShape {
         parameters.add(
             builder().getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2));
     assertEquals("Expecting one node for " + sink + ".", 1, parameters.size());
-    for (PointerKey element : ValueElements.of(builder(), parameters.get(0)).allElements())
+    for (PointerKey element : ValueElements.of(builder(), parameters.get(0)).getAllElements())
       for (InstanceKey ik : builder().getPointerAnalysis().getPointsToSet(element))
         if (Util.isPythonScalarKey(ik)) return true;
     return false;

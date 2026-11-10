@@ -84,7 +84,7 @@ import java.util.stream.Collectors;
  * elements all sit at constant indices forming the run {@code 0..n-1}, with no element whose
  * position is unknown (one appended, built by a comprehension, unpacked from a starred element, or
  * produced by list concatenation or repetition), and, for a list, that nothing in the program may
- * mutate unrecorded (see {@link #mutations}). A list or tuple a library summary or an operator
+ * mutate unrecorded (see {@link #getMutations}). A list or tuple a library summary or an operator
  * model allocates reports none: its catalog holds the model's placeholder slots, not its run-time
  * elements. Every other container reports no length.
  */
@@ -123,7 +123,7 @@ final class ContainerElements {
 
   /**
    * The type-name prefixes of the libraries whose functions do not resize a Python list passed to
-   * them, so an unresolved call of one marks nothing; see {@link #mutations}.
+   * them, so an unresolved call of one marks nothing; see {@link #getMutations}.
    */
   private static final List<String> NON_RESIZING_LIBRARIES = List.of("Ltensorflow", "Lnumpy");
 
@@ -167,7 +167,7 @@ final class ContainerElements {
    */
   private record Mutations(IntSet lists, boolean allLists, IntSet open, boolean allOpen) {}
 
-  /** The mutations {@link #mutations} is collecting. */
+  /** The mutations {@link #getMutations} is collecting. */
   private static final class Marks {
 
     /** See {@link Mutations#lists}. */
@@ -254,7 +254,7 @@ final class ContainerElements {
   /** Every key that can hold an element. */
   private final Set<PointerKey> allElements;
 
-  /** Whether {@link #allElements} holds every key that can hold an element. */
+  /** Whether {@link #getAllElements} holds every key that can hold an element. */
   private final boolean complete;
 
   /** The builder whose pointer analysis holds the keys. */
@@ -311,7 +311,7 @@ final class ContainerElements {
           fieldNames.add((String) value);
           continue;
         }
-        Integer index = index(value);
+        Integer index = getIndex(value);
         if (index != null) {
           indices.add(index);
           fieldNames.add(index.toString());
@@ -328,8 +328,8 @@ final class ContainerElements {
 
     // A container the program may mutate in a way the analysis does not record in its elements.
     if (isMutable(type)) {
-      Mutations mutations = mutations(builder);
-      int index = mappedIndex(builder, container);
+      Mutations mutations = getMutations(builder);
+      int index = getMappedIndex(builder, container);
       if (type.equals(list) && (mutations.allLists() || mutations.lists().contains(index)))
         unpositioned = true;
       if (mutations.allOpen() || mutations.open().contains(index)) complete = false;
@@ -345,7 +345,7 @@ final class ContainerElements {
 
     Set<PointerKey> allElements = new LinkedHashSet<>();
     for (String fieldName : fieldNames) {
-      PointerKey key = fieldKey(builder, container, fieldName);
+      PointerKey key = getFieldKey(builder, container, fieldName);
       if (key != null) allElements.add(key);
     }
 
@@ -357,7 +357,7 @@ final class ContainerElements {
 
     List<PointerKey> positions = new ArrayList<>(indices.size());
     for (int i = 0; i < indices.size(); i++) {
-      PointerKey key = fieldKey(builder, container, Integer.toString(i));
+      PointerKey key = getFieldKey(builder, container, Integer.toString(i));
       // An index the class hierarchy cannot resolve to a field leaves its element unreadable, and
       // with it the length's correspondence to the keys.
       if (key == null) return new ContainerElements(-1, List.of(), allElements, complete, builder);
@@ -386,7 +386,7 @@ final class ContainerElements {
   }
 
   /**
-   * Whether {@link #allElements()} holds every key that can hold an element of the container. It
+   * Whether {@link #getAllElements()} holds every key that can hold an element of the container. It
    * does not when the analysis saw an element stored under a key it could not name, such as {@code
    * d[k] = t} with {@code k} unresolved, or the program may add one by a means it does not record,
    * such as {@code l.extend(m)} or an unresolved call the container is passed to. The element keys,
@@ -404,14 +404,14 @@ final class ContainerElements {
    *
    * @return The element keys.
    */
-  Set<PointerKey> allElements() {
+  Set<PointerKey> getAllElements() {
     return this.allElements;
   }
 
   /**
    * Whether an element of the container may be {@code None}, over every element key ({@link
-   * #allElements()}), read with {@link TensorGenerator#anyNullConstant(OrdinalSet)}. When the keys
-   * are not all of them ({@link #isComplete()}), an element may be anything, {@code None} too.
+   * #getAllElements()}), read with {@link TensorGenerator#anyNullConstant(OrdinalSet)}. When the
+   * keys are not all of them ({@link #isComplete()}), an element may be anything, {@code None} too.
    *
    * @return {@code true} iff some element key may hold the {@code None} constant, or the keys are
    *     not all of them.
@@ -430,7 +430,7 @@ final class ContainerElements {
    * @param value The catalog key's value.
    * @return The index, or {@code null} when the key names no index.
    */
-  private static Integer index(Object value) {
+  private static Integer getIndex(Object value) {
     if (value instanceof Integer i) return i >= 0 ? i : null;
     if (value instanceof Long l)
       return l >= 0 && l <= Integer.MAX_VALUE ? Integer.valueOf(l.intValue()) : null;
@@ -449,7 +449,7 @@ final class ContainerElements {
    * @param name The field's name.
    * @return The key, or {@code null} when the class hierarchy resolves no such field.
    */
-  private static PointerKey fieldKey(
+  private static PointerKey getFieldKey(
       PropagationCallGraphBuilder builder, InstanceKey container, String name) {
     IField field =
         builder
@@ -526,7 +526,7 @@ final class ContainerElements {
    * @param builder The builder.
    * @return The mutations.
    */
-  private static Mutations mutations(PropagationCallGraphBuilder builder) {
+  private static Mutations getMutations(PropagationCallGraphBuilder builder) {
     synchronized (MUTATIONS) {
       Mutations cached = MUTATIONS.get(builder);
       if (cached != null) return cached;
@@ -589,7 +589,7 @@ final class ContainerElements {
   }
 
   /**
-   * Scans the program functions the call graph does not reach; see {@link #mutations}.
+   * Scans the program functions the call graph does not reach; see {@link #getMutations}.
    *
    * @param builder The builder.
    * @param reached The methods of the call graph's nodes.
@@ -675,7 +675,7 @@ final class ContainerElements {
       return false;
     SSAInstruction callee = du.getDef(call.getUse(0));
     String name;
-    if (callee instanceof AstGlobalRead global) name = bareName(global.getGlobalName());
+    if (callee instanceof AstGlobalRead global) name = getBareName(global.getGlobalName());
     else if (callee instanceof AstLexicalRead lexical
         && lexical.getAccessCount() == 1
         && isModule(lexical.getAccess(0).variableDefiner()))
@@ -683,7 +683,7 @@ final class ContainerElements {
     else return false;
     if (!CONTAINER_BUILTINS.contains(name)) return false;
     // A module may bind the name to a function of its own, which may return any container.
-    for (InstanceKey value : variableWrites(builder, writes, name, null))
+    for (InstanceKey value : getVariableWrites(builder, writes, name, null))
       if (value.concreteType().getName().toString().startsWith("Lscript ")) return false;
     return true;
   }
@@ -722,7 +722,7 @@ final class ContainerElements {
     String variable;
     String definer;
     if (current instanceof AstGlobalRead global) {
-      variable = bareName(global.getGlobalName());
+      variable = getBareName(global.getGlobalName());
       definer = null;
     } else if (current instanceof AstLexicalRead lexical && lexical.getAccessCount() == 1) {
       variable = lexical.getAccess(0).variableName();
@@ -733,7 +733,7 @@ final class ContainerElements {
     if (NON_RESIZING_LIBRARY_FUNCTIONS.stream().noneMatch(function -> function.endsWith(path)))
       return false;
     boolean any = false;
-    for (InstanceKey module : variableWrites(builder, writes, variable, definer)) {
+    for (InstanceKey module : getVariableWrites(builder, writes, variable, definer)) {
       String type = module.concreteType().getName().toString();
       if (NON_RESIZING_LIBRARIES.stream().noneMatch(type::startsWith)
           || !NON_RESIZING_LIBRARY_FUNCTIONS.contains(type + path)) return false;
@@ -754,7 +754,7 @@ final class ContainerElements {
    *     global.
    * @return The written values' instance keys.
    */
-  private static Set<InstanceKey> variableWrites(
+  private static Set<InstanceKey> getVariableWrites(
       PropagationCallGraphBuilder builder,
       Map<List<String>, Set<InstanceKey>> writes,
       String name,
@@ -770,7 +770,7 @@ final class ContainerElements {
       for (SSAInstruction instruction : ir.getInstructions())
         if (definer == null
             && instruction instanceof AstGlobalWrite write
-            && name.equals(bareName(write.getGlobalName())))
+            && name.equals(getBareName(write.getGlobalName())))
           pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, write.getVal()))
               .forEach(ret::add);
         else if (instruction instanceof AstLexicalWrite write)
@@ -821,13 +821,13 @@ final class ContainerElements {
    */
   private static void markGlobalWrites(
       PropagationCallGraphBuilder builder, String name, Marks marks, boolean adds) {
-    String bare = bareName(name);
+    String bare = getBareName(name);
     for (CGNode node : builder.getCallGraph()) {
       IR ir = node.getIR();
       if (ir == null) continue;
       for (SSAInstruction instruction : ir.getInstructions())
         if (instruction instanceof AstGlobalWrite write) {
-          if (bare.equals(bareName(write.getGlobalName())))
+          if (bare.equals(getBareName(write.getGlobalName())))
             marks.mark(builder.getPointerAnalysis(), node, write.getVal(), adds);
         } else if (instruction instanceof AstLexicalWrite write)
           for (Access access : write.getAccesses())
@@ -843,7 +843,7 @@ final class ContainerElements {
    * @param name The global's name.
    * @return Its bare name.
    */
-  private static String bareName(String name) {
+  private static String getBareName(String name) {
     if (name == null) return "";
     return name.substring(Math.max(name.lastIndexOf(' '), name.lastIndexOf('/')) + 1);
   }
@@ -1004,7 +1004,7 @@ final class ContainerElements {
    * @param container The container.
    * @return The index.
    */
-  private static int mappedIndex(PropagationCallGraphBuilder builder, InstanceKey container) {
+  private static int getMappedIndex(PropagationCallGraphBuilder builder, InstanceKey container) {
     return builder.getPointerAnalysis().getInstanceKeyMapping().getMappedIndex(container);
   }
 }

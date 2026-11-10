@@ -61,7 +61,7 @@ public final class Containers {
    */
   public static Set<PointerKey> getElementKeys(
       PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
-    return ContainerElements.of(builder, container).allElements();
+    return ContainerElements.of(builder, container).getAllElements();
   }
 
   /**
