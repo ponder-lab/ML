@@ -519,4 +519,37 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     expected.put("not_a_string", Set.of("constant 1"));
     assertEquals(expected, pointees);
   }
+
+  /**
+   * Each name {@code glob.glob}, {@code glob.iglob} and {@code glob.glob1} return is a {@code str}
+   * of unknown value, and so is what {@code glob.escape} returns and a name joined to a literal (<a
+   * href="https://github.com/wala/ML/issues/782">wala/ML#782</a>). Each {@code sink_*} function in
+   * {@code glob1.py} is read for what its parameter points to.
+   */
+  @Test
+  public void testGlob()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("glob1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Map<String, Set<String>> pointees = new TreeMap<>();
+    for (String sink : List.of("name", "iname", "name1", "escaped", "joined")) {
+      Set<String> kinds = new TreeSet<>();
+      Collection<CGNode> nodes = getNodes(CG, "script glob1.py/sink_" + sink);
+      assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
+      for (CGNode node : nodes)
+        for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, 2)))
+          kinds.add(
+              ik instanceof ConstantKey<?> c
+                  ? "constant " + c.getValue()
+                  : ik.getClass().getSimpleName() + " " + ik.concreteType().getName());
+      pointees.put(sink, kinds);
+    }
+    Map<String, Set<String>> expected = new TreeMap<>();
+    for (String sink : List.of("name", "iname", "name1", "escaped", "joined"))
+      expected.put(sink, Set.of("ConcreteTypeKey Lstring"));
+    assertEquals(expected, pointees);
+  }
 }

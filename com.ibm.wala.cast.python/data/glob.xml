@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- glob model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="glob" allocatable="true">
+      <method name="import" static="true" descriptor="()Lglob;">
+        <new def="x" class="Lglob"/>
+        <new def="glob" class="Lglob/functions/glob"/>
+        <putfield class="LRoot" field="glob" fieldType="LRoot" ref="x" value="glob"/>
+        <new def="iglob" class="Lglob/functions/iglob"/>
+        <putfield class="LRoot" field="iglob" fieldType="LRoot" ref="x" value="iglob"/>
+        <new def="glob1" class="Lglob/functions/glob1"/>
+        <putfield class="LRoot" field="glob1" fieldType="LRoot" ref="x" value="glob1"/>
+        <new def="escape" class="Lglob/functions/escape"/>
+        <putfield class="LRoot" field="escape" fieldType="LRoot" ref="x" value="escape"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="glob/functions">
+      <!-- https://docs.python.org/3/library/glob.html (wala/ML#782). Each matching function returns the names of the files that match, a list of strings whose length depends on the file system, so the list holds the type-level key of a `str` of unknown value (wala/ML#1232) under the channel of elements whose position is unknown, as `TensorShape.as_list` holds its sizes. `iglob` returns an iterator over the same names, which a loop and `list(...)` read as they read the list. `glob1` is the undocumented `glob1(dirname, pattern)` that older programs call. -->
+      <class name="glob" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self pathname root_dir recursive include_hidden">
+          <new def="names" class="Llist"/>
+          <new def="name" class="Lstring"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="names" value="name"/>
+          <return value="names"/>
+        </method>
+      </class>
+      <class name="iglob" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self pathname root_dir recursive include_hidden">
+          <new def="names" class="Llist"/>
+          <new def="name" class="Lstring"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="names" value="name"/>
+          <return value="names"/>
+        </method>
+      </class>
+      <class name="glob1" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self dirname pattern">
+          <new def="names" class="Llist"/>
+          <new def="name" class="Lstring"/>
+          <putfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="names" value="name"/>
+          <return value="names"/>
+        </method>
+      </class>
+      <!-- `escape` returns its pathname with the special characters escaped, a string. -->
+      <class name="escape" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self pathname">
+          <new def="escaped" class="Lstring"/>
+          <return value="escaped"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
