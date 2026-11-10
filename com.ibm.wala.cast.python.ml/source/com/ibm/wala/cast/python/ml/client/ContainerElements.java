@@ -69,8 +69,8 @@ import java.util.stream.Collectors;
  * catalog and the element channels ({@link
  * PythonSSAPropagationCallGraphBuilder#LIST_APPEND_CONTENTS_FIELD}, {@link
  * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD}). It is internal to this
- * package, for the analysis's own reads of a container's length and elements; a client reads a
- * container through the object catalog itself.
+ * package, for the analysis's own reads of a container's length and elements; a client queries a
+ * container through {@link Containers}.
  *
  * <p>A container here means a container in the analysis's element model: a list, tuple, set, dict
  * or {@code enumerate} object, the same set {@code PythonTypes.isContainer} names. It does not mean
