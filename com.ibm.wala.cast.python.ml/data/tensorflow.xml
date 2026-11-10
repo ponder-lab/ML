@@ -9418,7 +9418,6 @@
       <class name="from_tensors" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensors -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
-          <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset"/>
           <!-- The element mirrors the structure the dataset was built from, typed at its paths by this dataset's generator (wala/ML#1190). -->
           <new def="mirror_fn" class="Ltensorflow/data/element_mirror"/>
