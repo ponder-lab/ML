@@ -37,4 +37,43 @@ public class TestStringConcat extends AbstractTensorTest {
   public void testTensorPlusString() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_suffixed", 1, 1, Map.of(2, Set.of(new TensorType(STRING, List.of()))));
   }
+
+  /** The fixture of a file name from {@code glob.glob} joined to a line read from that file. */
+  private static final String LINE_FILE = "tf2_test_string_line_concat.py";
+
+  /**
+   * A file name joined to a stripped line of that file reaches the function it is passed to as no
+   * tensor (<a href="https://github.com/wala/ML/issues/1242">wala/ML#1242</a>). Before, the line
+   * had no value, since {@code strip} returned nothing, and read as a tensor of unknown type.
+   */
+  @Test
+  public void testNamePlusLine() throws ClassHierarchyException, CancelException, IOException {
+    test(LINE_FILE, "error_joined", 0, 0);
+  }
+
+  /** So does a file name joined to a literal, and then to a line (wala/ML#1242). */
+  @Test
+  public void testPrefixedNamePlusLine()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(LINE_FILE, "error_prefixed", 0, 0);
+  }
+
+  /** So does a chain of literals, a file name and a line (wala/ML#1242). */
+  @Test
+  public void testChainedLine() throws ClassHierarchyException, CancelException, IOException {
+    test(LINE_FILE, "error_chained", 0, 0);
+  }
+
+  /** So does a message that a {@code +=} extends with a line, at module level (wala/ML#1242). */
+  @Test
+  public void testAugmentedLine() throws ClassHierarchyException, CancelException, IOException {
+    test(LINE_FILE, "error_augmented", 0, 0);
+  }
+
+  /** And in a function (wala/ML#1242). */
+  @Test
+  public void testLocalAugmentedLine()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(LINE_FILE, "error_local_augmented", 0, 0);
+  }
 }

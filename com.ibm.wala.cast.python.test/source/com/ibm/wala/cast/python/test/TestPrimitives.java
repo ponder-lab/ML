@@ -469,6 +469,58 @@ public class TestPrimitives extends TestJythonCallGraphShape {
   }
 
   /**
+   * A method of {@code str} that returns a {@code str} gives the type-level key of a {@code str} of
+   * unknown value, on a string of unknown value, a literal and a line read from a file, and so does
+   * each element of a list built from such results; {@code split} on a string of unknown value
+   * gives a list of strings; and a user class's method of the same name keeps its own result (<a
+   * href="https://github.com/wala/ML/issues/1242">wala/ML#1242</a>). Each {@code sink_*} function
+   * in {@code string_methods1.py} is read for what its parameter points to.
+   */
+  @Test
+  public void testStringMethods()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("string_methods1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Map<String, Set<String>> pointees = new TreeMap<>();
+    for (String sink :
+        List.of(
+            "stripped",
+            "stripped_literal",
+            "replaced",
+            "joined",
+            "upper",
+            "piece",
+            "line_stripped",
+            "listed_line",
+            "not_a_string")) {
+      Set<String> kinds = new TreeSet<>();
+      Collection<CGNode> nodes = getNodes(CG, "script string_methods1.py/sink_" + sink);
+      assertFalse("sink_" + sink + " is unreached", nodes.isEmpty());
+      for (CGNode node : nodes)
+        for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, 2)))
+          kinds.add(
+              ik instanceof ConstantKey<?> c
+                  ? "constant " + c.getValue()
+                  : ik.getClass().getSimpleName() + " " + ik.concreteType().getName());
+      pointees.put(sink, kinds);
+    }
+    Map<String, Set<String>> expected = new TreeMap<>();
+    expected.put("stripped", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("stripped_literal", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("replaced", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("joined", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("upper", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("piece", Set.of("constant <text>"));
+    expected.put("line_stripped", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("listed_line", Set.of("ConcreteTypeKey Lstring"));
+    expected.put("not_a_string", Set.of("constant 1"));
+    assertEquals(expected, pointees);
+  }
+
+  /**
    * Each name {@code glob.glob}, {@code glob.iglob} and {@code glob.glob1} return is a {@code str}
    * of unknown value, and so is what {@code glob.escape} returns and a name joined to a literal (<a
    * href="https://github.com/wala/ML/issues/782">wala/ML#782</a>). Each {@code sink_*} function in
