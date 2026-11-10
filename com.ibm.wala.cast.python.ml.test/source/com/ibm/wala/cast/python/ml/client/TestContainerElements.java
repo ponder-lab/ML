@@ -166,7 +166,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * @param expected The expected length: the run-time one, or empty.
    */
   private static void assertArity(String file, String sink, OptionalInt expected) {
-    assertEquals(file + " " + sink, expected, elements(file, sink).arity());
+    assertEquals(file + " " + sink, expected, elements(file, sink).getArity());
   }
 
   /**
@@ -195,18 +195,18 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    */
   private static void assertNoArity(String sink) {
     ContainerElements elements = elements(sink);
-    assertEquals(sink, OptionalInt.empty(), elements.arity());
-    assertTrue(sink, elements.positions().isEmpty());
+    assertEquals(sink, OptionalInt.empty(), elements.getArity());
+    assertTrue(sink, elements.getPositions().isEmpty());
     assertTrue(sink, positionTypes(elements).isEmpty());
-    assertFalse(sink, elements.allElements().isEmpty());
+    assertFalse(sink, elements.getAllElements().isEmpty());
   }
 
   /** A tuple literal of two tensors: two positions, each with its tensor's type. */
   @Test
   public void testTuple() {
     ContainerElements elements = elements("sink_tuple");
-    assertEquals(OptionalInt.of(2), elements.arity());
-    assertEquals(2, elements.positions().size());
+    assertEquals(OptionalInt.of(2), elements.getArity());
+    assertEquals(2, elements.getPositions().size());
     assertEquals(List.of(Set.of(F32_2_3), Set.of(I32_4)), positionTypes(elements));
     assertFalse(elements.mayHoldNone());
   }
@@ -215,29 +215,29 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testList() {
     ContainerElements elements = elements("sink_list");
-    assertEquals(OptionalInt.of(3), elements.arity());
+    assertEquals(OptionalInt.of(3), elements.getArity());
     assertEquals(List.of(Set.of(F32_2_3), Set.of(I32_4), Set.of(F32_2_3)), positionTypes(elements));
   }
 
   /** A list only read through a method that changes neither its length nor its order. */
   @Test
   public void testListReadThroughCopy() {
-    assertEquals(OptionalInt.of(2), elements("sink_counted").arity());
+    assertEquals(OptionalInt.of(2), elements("sink_counted").getArity());
   }
 
   /** A dict has no positions, but its values are elements. */
   @Test
   public void testDict() {
     ContainerElements elements = elements("sink_dict");
-    assertEquals(OptionalInt.empty(), elements.arity());
-    assertEquals(2, elements.allElements().size());
+    assertEquals(OptionalInt.empty(), elements.getArity());
+    assertEquals(2, elements.getAllElements().size());
   }
 
   /** A position holding a tuple has no tensor type of its own. */
   @Test
   public void testNested() {
     ContainerElements elements = elements("sink_nested");
-    assertEquals(OptionalInt.of(2), elements.arity());
+    assertEquals(OptionalInt.of(2), elements.getArity());
     assertEquals(List.of(Set.of(F32_2_3), Set.of()), positionTypes(elements));
   }
 
@@ -573,7 +573,7 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testElementTypesOfInts() {
     ContainerElements elements = elements("sink_ints");
-    assertEquals(OptionalInt.of(3), elements.arity());
+    assertEquals(OptionalInt.of(3), elements.getArity());
     assertEquals(Set.of(), elementTypes(FILE, elements));
   }
 

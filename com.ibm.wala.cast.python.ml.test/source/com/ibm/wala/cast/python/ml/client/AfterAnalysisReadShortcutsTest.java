@@ -63,7 +63,7 @@ public class AfterAnalysisReadShortcutsTest extends TestPythonMLCallGraphShape {
    */
   private static String render(ValueElements elements, TensorTypeAnalysis analysis) {
     if (elements == null) return "none";
-    return elements.arity()
+    return elements.getArity()
         + " "
         + elements.isComplete()
         + " "

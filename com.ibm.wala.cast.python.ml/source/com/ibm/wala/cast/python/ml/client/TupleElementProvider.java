@@ -124,7 +124,7 @@ interface TupleElementProvider {
 
   /**
    * The length of the tuples a points-to set holds, when it holds only tuple displays that program
-   * code allocates, all of one length ({@link ContainerElements#arity()}).
+   * code allocates, all of one length ({@link ContainerElements#getArity()}).
    *
    * @param builder The propagation call graph builder used for the analysis.
    * @param pointsToSet The points-to set, possibly {@code null}.
@@ -137,7 +137,7 @@ interface TupleElementProvider {
     int ret = -1;
     for (InstanceKey ik : pointsToSet) {
       if (!PythonTypes.tuple.equals(ik.concreteType().getReference())) return OptionalInt.empty();
-      OptionalInt arity = ContainerElements.of(builder, ik).arity();
+      OptionalInt arity = ContainerElements.of(builder, ik).getArity();
       if (arity.isEmpty() || (ret >= 0 && ret != arity.getAsInt())) return OptionalInt.empty();
       ret = arity.getAsInt();
     }

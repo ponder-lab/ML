@@ -162,7 +162,7 @@ public final class ShapeOperandRank {
    */
   private static boolean elementsAreScalars(
       PropagationCallGraphBuilder builder, TensorTypeAnalysis analysis, InstanceKey sequence) {
-    for (PointerKey element : ContainerElements.of(builder, sequence).allElements()) {
+    for (PointerKey element : ContainerElements.of(builder, sequence).getAllElements()) {
       for (InstanceKey member : builder.getPointerAnalysis().getPointsToSet(element))
         if (member instanceof ConstantKey<?> constant) {
           if (!isScalarConstant(constant)) return false;
