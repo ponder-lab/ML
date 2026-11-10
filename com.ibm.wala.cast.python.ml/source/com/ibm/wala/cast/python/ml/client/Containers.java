@@ -1,8 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
-import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -10,7 +10,9 @@ import java.util.Set;
 /**
  * Queries a client makes of a container instance after the analysis: its length, the keys of its
  * elements, whether those keys are all of them, and whether an element may be {@code None}. A
- * container is a list, tuple, set, dict or {@code enumerate} object, as the analysis models them.
+ * container is a list, tuple, set, dict or {@code enumerate} object, as the analysis models them;
+ * the queries do not check that the instance is one, and answer for any other instance as for a
+ * container with no recorded elements, so a client asks them only of a container.
  *
  * <p>The element keys are pointer keys of the builder's pointer analysis, so a client reads an
  * element's points-to set, or its tensor types from the {@link
@@ -27,10 +29,11 @@ public final class Containers {
    * that nothing in the program may mutate in a way the analysis does not record.
    *
    * @param builder The builder whose pointer analysis models the container.
-   * @param container The container instance.
+   * @param container The container instance: a list, tuple, set, dict or {@code enumerate} object.
    * @return The number of elements, or empty when the length is not known.
    */
-  public static OptionalInt getLength(PropagationCallGraphBuilder builder, InstanceKey container) {
+  public static OptionalInt getLength(
+      PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
     return ContainerElements.of(builder, container).arity();
   }
 
@@ -38,12 +41,12 @@ public final class Containers {
    * Gets the key of a container's element at each position.
    *
    * @param builder The builder whose pointer analysis models the container.
-   * @param container The container instance.
+   * @param container The container instance: a list, tuple, set, dict or {@code enumerate} object.
    * @return The keys of positions {@code 0..n-1}, where {@code n} is {@link #getLength}; empty when
    *     the length is not known.
    */
   public static List<PointerKey> getPositionKeys(
-      PropagationCallGraphBuilder builder, InstanceKey container) {
+      PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
     return ContainerElements.of(builder, container).positions();
   }
 
@@ -53,11 +56,11 @@ public final class Containers {
    * subset.
    *
    * @param builder The builder whose pointer analysis models the container.
-   * @param container The container instance.
+   * @param container The container instance: a list, tuple, set, dict or {@code enumerate} object.
    * @return The element keys.
    */
   public static Set<PointerKey> getElementKeys(
-      PropagationCallGraphBuilder builder, InstanceKey container) {
+      PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
     return ContainerElements.of(builder, container).allElements();
   }
 
@@ -68,10 +71,11 @@ public final class Containers {
    * such as {@code l.extend(m)} or an unresolved call the container is passed to.
    *
    * @param builder The builder whose pointer analysis models the container.
-   * @param container The container instance.
+   * @param container The container instance: a list, tuple, set, dict or {@code enumerate} object.
    * @return {@code true} iff the element keys are all of them.
    */
-  public static boolean isComplete(PropagationCallGraphBuilder builder, InstanceKey container) {
+  public static boolean isComplete(
+      PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
     return ContainerElements.of(builder, container).isComplete();
   }
 
@@ -81,10 +85,11 @@ public final class Containers {
    * anything.
    *
    * @param builder The builder whose pointer analysis models the container.
-   * @param container The container instance.
+   * @param container The container instance: a list, tuple, set, dict or {@code enumerate} object.
    * @return {@code true} iff an element may be {@code None}.
    */
-  public static boolean mayHoldNone(PropagationCallGraphBuilder builder, InstanceKey container) {
+  public static boolean mayHoldNone(
+      PythonSSAPropagationCallGraphBuilder builder, InstanceKey container) {
     return ContainerElements.of(builder, container).mayHoldNone();
   }
 }
