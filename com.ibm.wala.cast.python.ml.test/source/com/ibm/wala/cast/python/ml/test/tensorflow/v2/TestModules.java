@@ -1801,4 +1801,200 @@ public class TestModules extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
+
+  /**
+   * A Keras model a module assigns at its top level, imported with {@code from common_model import
+   * model} into a pytest test and called there, reaches its layer's {@code call}, whose argument
+   * reaches {@code consume}. Before, the import read nothing, and {@code consume} had no node (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedModelFromImport()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/test_from_import.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * The same model read through the module, {@code common_model.model(...)}, in a pytest test (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedModelThroughModule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/test_module_import.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * The control: the same model returned by a function of its own module, {@code get_model()},
+   * which read the module's variable and reached {@code consume} before the fix too (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedModelFromGetter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"imported_value_proj/common_model.py", "imported_value_proj/test_getter.py"},
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * An object of a plain class, imported and its method called in a script's function, reaches the
+   * method: neither Keras nor pytest is involved (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedPlainObject()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/script_plain_object.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * The same object's method called at the importing script's top level (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedPlainObjectAtTopLevel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/script_plain_object_top.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * A tensor a module assigns at its top level, imported with {@code from common_model import ones}
+   * and passed to {@code consume}, is a tensor there. Before, {@code consume} was reached with no
+   * tensor parameter (<a href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/script_tensor_value.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * The same tensor read through the module, {@code common_model.ones} (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedTensorThroughModule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/script_module_tensor_value.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * A tensor a module rebinds at its top level by an augmented assignment, {@code scaled *= 2}, is
+   * read by an importer as a tensor (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedAugmentedTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/script_augmented_tensor.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
 }

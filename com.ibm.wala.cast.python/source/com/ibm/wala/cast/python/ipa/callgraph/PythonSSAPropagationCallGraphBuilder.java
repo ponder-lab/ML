@@ -2926,6 +2926,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                           // Found it.
                           int putVal = putInstruction.getVal();
 
+                          // A script's put of a value it assigns at its top level may store a
+                          // constant (wala/ML#1243), which is represented implicitly, so its
+                          // contents are added directly (the wala/ML#668 trap otherwise).
+                          SymbolTable putSymtab = n.getIR().getSymbolTable();
+                          DefUse putDu = getBuilder().getCFAContextInterpreter().getDU(n);
+                          if (contentsAreInvariant(putSymtab, putDu, putVal)) {
+                            for (InstanceKey ik :
+                                getInvariantContents(putSymtab, putDu, n, putVal)) {
+                              system.findOrCreateIndexForInstanceKey(ik);
+                              system.newConstraint(defPK, ik);
+                            }
+                            return;
+                          }
+
                           // Make the def point to the put instruction value.
                           PointerKey putValPK = getBuilder().getPointerKeyForLocal(n, putVal);
 

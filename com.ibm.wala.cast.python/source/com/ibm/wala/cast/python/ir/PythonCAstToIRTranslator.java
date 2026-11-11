@@ -1104,6 +1104,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       assert rval != -1 : CAstPrinter.print(n, context.top().getSourceMap());
       doLocalWrite(context, nm, makeType(ls.type()), rval);
     }
+
+    exposeScriptBinding(context, nm, rval);
   }
 
   @Override
@@ -1151,6 +1153,34 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     } else {
       doLocalWrite(context, nm, type, rval);
     }
+
+    exposeScriptBinding(context, nm, rval);
+  }
+
+  /**
+   * Writes a variable a script assigns at its top level to the field of that name on the script's
+   * object, as a function or class the script defines is written. An import of the variable from
+   * another module, {@code from m import x} or {@code m.x}, reads that field; the variable's global
+   * alone left the read empty, so a call through an imported object reached nothing and an imported
+   * tensor reached a parameter as no tensor (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @param context The context of the assignment.
+   * @param nm The name of the assigned variable.
+   * @param rval The value number of the assigned value.
+   */
+  private void exposeScriptBinding(WalkContext context, String nm, int rval) {
+    if (context.currentScope().getEntity().getKind() != CAstEntity.SCRIPT_ENTITY) return;
+
+    FieldReference field =
+        FieldReference.findOrCreate(
+            PythonTypes.Root, Atom.findOrCreateUnicodeAtom(nm), PythonTypes.Root);
+    // The script is in v1.
+    context
+        .cfg()
+        .addInstruction(
+            Python.instructionFactory()
+                .PutInstruction(context.cfg().getCurrentInstruction(), 1, rval, field));
   }
 
   @Override
