@@ -3863,6 +3863,10 @@
           <getfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" def="joined_data"/>
           <getfield class="LRoot" field="train_step" fieldType="LRoot" ref="self" def="step"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="joined_data" numArgs="2" def="logs"/>
+          <new def="train_hooks" class="Ltensorflow/keras/callbacks/train_hooks"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="train_hooks" arg1="callbacks" arg2="self" numArgs="3" def="train_hooks_result"/>
+          <new def="test_hooks" class="Ltensorflow/keras/callbacks/test_hooks"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="test_hooks" arg1="callbacks" arg2="self" numArgs="3" def="test_hooks_result"/>
           <new def="history" class="Ltensorflow/keras/callbacks/History"/>
           <return value="history"/>
         </method>
@@ -3880,6 +3884,8 @@
           <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="element"/>
           <getfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" def="joined_data"/>
           <getfield class="LRoot" field="test_step" fieldType="LRoot" ref="self" def="step"/>
+          <new def="test_hooks" class="Ltensorflow/keras/callbacks/test_hooks"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="test_hooks" arg1="callbacks" arg2="self" numArgs="3" def="test_hooks_result"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="joined_data" numArgs="2" def="logs"/>
           <return value="logs"/>
         </method>
@@ -3896,6 +3902,8 @@
           <putfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" value="element"/>
           <getfield class="LRoot" field="value" fieldType="LRoot" ref="step_data" def="joined_data"/>
           <getfield class="LRoot" field="predict_step" fieldType="LRoot" ref="self" def="step"/>
+          <new def="predict_hooks" class="Ltensorflow/keras/callbacks/predict_hooks"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="predict_hooks" arg1="callbacks" arg2="self" numArgs="3" def="predict_hooks_result"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="step" arg1="joined_data" numArgs="2" def="pred"/>
           <return value="pred"/>
         </method>
@@ -4027,6 +4035,136 @@
     <package name="tensorflow/keras/callbacks">
       <!-- The object `fit` returns (wala/ML#997); its `epoch` and `history` fields are not modeled. -->
       <class name="History" allocatable="true"></class>
+      <!-- The holder the hook summaries below join a `callbacks` list's elements through (wala/ML#1244). -->
+      <class name="CallbackHolder" allocatable="true"></class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/callbacks/Callback. The hooks `fit` calls on each callback it is passed (wala/ML#1244), after setting the callback's `model` to the model being trained, as `set_model` does. A callback is an element of the `callbacks` list: its first eight positions, or an element appended or of unknown position. Each hook a callback defines is called once, with an `int` of unknown value for an epoch or batch index, since it is a different one on each call (as `StaticTensorShape.as_list` allocates its sizes, wala/ML#1104), and a `dict` of logs; `on_batch_begin` and `on_batch_end` are the older names Keras still calls for a training batch. -->
+      <class name="train_hooks" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self callbacks model">
+          <new def="holder" class="Ltensorflow/keras/callbacks/CallbackHolder"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="callbacks" def="c0"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="callbacks" def="c1"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c1"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="callbacks" def="c2"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="callbacks" def="c3"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="callbacks" def="c4"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="callbacks" def="c5"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="callbacks" def="c6"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c6"/>
+          <getfield class="LRoot" field="7" fieldType="LRoot" ref="callbacks" def="c7"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c7"/>
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="callbacks" def="appended"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="callbacks" def="listed"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="listed"/>
+          <getfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" def="callback"/>
+          <putfield class="LRoot" field="model" fieldType="LRoot" ref="callback" value="model"/>
+          <new def="index" class="Lint"/>
+          <new def="logs" class="Ldict"/>
+          <getfield class="LRoot" field="on_train_begin" fieldType="LRoot" ref="callback" def="on_train_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_train_begin" arg1="logs" numArgs="2" def="on_train_begin_result"/>
+          <getfield class="LRoot" field="on_epoch_begin" fieldType="LRoot" ref="callback" def="on_epoch_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_epoch_begin" arg1="index" arg2="logs" numArgs="3" def="on_epoch_begin_result"/>
+          <getfield class="LRoot" field="on_train_batch_begin" fieldType="LRoot" ref="callback" def="on_train_batch_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_train_batch_begin" arg1="index" arg2="logs" numArgs="3" def="on_train_batch_begin_result"/>
+          <getfield class="LRoot" field="on_batch_begin" fieldType="LRoot" ref="callback" def="on_batch_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_batch_begin" arg1="index" arg2="logs" numArgs="3" def="on_batch_begin_result"/>
+          <getfield class="LRoot" field="on_train_batch_end" fieldType="LRoot" ref="callback" def="on_train_batch_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_train_batch_end" arg1="index" arg2="logs" numArgs="3" def="on_train_batch_end_result"/>
+          <getfield class="LRoot" field="on_batch_end" fieldType="LRoot" ref="callback" def="on_batch_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_batch_end" arg1="index" arg2="logs" numArgs="3" def="on_batch_end_result"/>
+          <getfield class="LRoot" field="on_epoch_end" fieldType="LRoot" ref="callback" def="on_epoch_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_epoch_end" arg1="index" arg2="logs" numArgs="3" def="on_epoch_end_result"/>
+          <getfield class="LRoot" field="on_train_end" fieldType="LRoot" ref="callback" def="on_train_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_train_end" arg1="logs" numArgs="2" def="on_train_end_result"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
+      </class>
+      <!-- The hooks `evaluate` calls on each callback it is passed (wala/ML#1244); see `train_hooks`. The `fit` summary calls them too, whether or not it is given validation data, which over-approximates: only a fit that validates runs them. -->
+      <class name="test_hooks" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self callbacks model">
+          <new def="holder" class="Ltensorflow/keras/callbacks/CallbackHolder"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="callbacks" def="c0"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="callbacks" def="c1"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c1"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="callbacks" def="c2"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="callbacks" def="c3"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="callbacks" def="c4"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="callbacks" def="c5"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="callbacks" def="c6"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c6"/>
+          <getfield class="LRoot" field="7" fieldType="LRoot" ref="callbacks" def="c7"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c7"/>
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="callbacks" def="appended"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="callbacks" def="listed"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="listed"/>
+          <getfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" def="callback"/>
+          <putfield class="LRoot" field="model" fieldType="LRoot" ref="callback" value="model"/>
+          <new def="index" class="Lint"/>
+          <new def="logs" class="Ldict"/>
+          <getfield class="LRoot" field="on_test_begin" fieldType="LRoot" ref="callback" def="on_test_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_test_begin" arg1="logs" numArgs="2" def="on_test_begin_result"/>
+          <getfield class="LRoot" field="on_test_batch_begin" fieldType="LRoot" ref="callback" def="on_test_batch_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_test_batch_begin" arg1="index" arg2="logs" numArgs="3" def="on_test_batch_begin_result"/>
+          <getfield class="LRoot" field="on_test_batch_end" fieldType="LRoot" ref="callback" def="on_test_batch_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_test_batch_end" arg1="index" arg2="logs" numArgs="3" def="on_test_batch_end_result"/>
+          <getfield class="LRoot" field="on_test_end" fieldType="LRoot" ref="callback" def="on_test_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_test_end" arg1="logs" numArgs="2" def="on_test_end_result"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
+      </class>
+      <!-- The hooks `predict` calls on each callback it is passed (wala/ML#1244); see `train_hooks`. -->
+      <class name="predict_hooks" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self callbacks model">
+          <new def="holder" class="Ltensorflow/keras/callbacks/CallbackHolder"/>
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="callbacks" def="c0"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="callbacks" def="c1"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c1"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="callbacks" def="c2"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="callbacks" def="c3"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="callbacks" def="c4"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="callbacks" def="c5"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="callbacks" def="c6"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c6"/>
+          <getfield class="LRoot" field="7" fieldType="LRoot" ref="callbacks" def="c7"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="c7"/>
+          <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="callbacks" def="appended"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="appended"/>
+          <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="callbacks" def="listed"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="listed"/>
+          <getfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" def="callback"/>
+          <putfield class="LRoot" field="model" fieldType="LRoot" ref="callback" value="model"/>
+          <new def="index" class="Lint"/>
+          <new def="logs" class="Ldict"/>
+          <getfield class="LRoot" field="on_predict_begin" fieldType="LRoot" ref="callback" def="on_predict_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_predict_begin" arg1="logs" numArgs="2" def="on_predict_begin_result"/>
+          <getfield class="LRoot" field="on_predict_batch_begin" fieldType="LRoot" ref="callback" def="on_predict_batch_begin"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_predict_batch_begin" arg1="index" arg2="logs" numArgs="3" def="on_predict_batch_begin_result"/>
+          <getfield class="LRoot" field="on_predict_batch_end" fieldType="LRoot" ref="callback" def="on_predict_batch_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_predict_batch_end" arg1="index" arg2="logs" numArgs="3" def="on_predict_batch_end_result"/>
+          <getfield class="LRoot" field="on_predict_end" fieldType="LRoot" ref="callback" def="on_predict_end"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_predict_end" arg1="logs" numArgs="2" def="on_predict_end_result"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/keras/utils">
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/unpack_x_y_sample_weight (wala/ML#997): `(x, y, sample_weight)` from a step's data; the result's components are `data`'s when `data` is a tuple and `data` itself at index 0 otherwise, which `FitDataGenerator` types. -->
