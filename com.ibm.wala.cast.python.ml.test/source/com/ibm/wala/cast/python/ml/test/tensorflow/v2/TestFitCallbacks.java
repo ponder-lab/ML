@@ -91,4 +91,18 @@ public class TestFitCallbacks extends AbstractTensorTest {
   public void testAppendedCallback() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_keras_callbacks_appended.py", "reached_epoch_end", 0, 0);
   }
+
+  /**
+   * A hook's epoch is an {@code int} of unknown value, as it is a different one on each epoch, so a
+   * branch on it, {@code if epoch > 0:}, is not folded away and the tensor computed in it reaches
+   * its use.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEpochBranch() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "later_epoch_output", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
+  }
 }

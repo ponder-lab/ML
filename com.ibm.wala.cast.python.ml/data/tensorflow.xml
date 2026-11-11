@@ -4037,7 +4037,7 @@
       <class name="History" allocatable="true"></class>
       <!-- The holder the hook summaries below join a `callbacks` list's elements through (wala/ML#1244). -->
       <class name="CallbackHolder" allocatable="true"></class>
-      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/callbacks/Callback. The hooks `fit` calls on each callback it is passed (wala/ML#1244), after setting the callback's `model` to the model being trained, as `set_model` does. A callback is an element of the `callbacks` list: its first eight positions, or an element appended or of unknown position. Each hook a callback defines is called once, with an `int` for an epoch or batch index and a `dict` of logs; `on_batch_begin` and `on_batch_end` are the older names Keras still calls for a training batch. -->
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/callbacks/Callback. The hooks `fit` calls on each callback it is passed (wala/ML#1244), after setting the callback's `model` to the model being trained, as `set_model` does. A callback is an element of the `callbacks` list: its first eight positions, or an element appended or of unknown position. Each hook a callback defines is called once, with an `int` of unknown value for an epoch or batch index, since it is a different one on each call (as `StaticTensorShape.as_list` allocates its sizes, wala/ML#1104), and a `dict` of logs; `on_batch_begin` and `on_batch_end` are the older names Keras still calls for a training batch. -->
       <class name="train_hooks" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self callbacks model">
           <new def="holder" class="Ltensorflow/keras/callbacks/CallbackHolder"/>
@@ -4063,7 +4063,7 @@
           <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="listed"/>
           <getfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" def="callback"/>
           <putfield class="LRoot" field="model" fieldType="LRoot" ref="callback" value="model"/>
-          <constant name="index" type="int" value="0"/>
+          <new def="index" class="Lint"/>
           <new def="logs" class="Ldict"/>
           <getfield class="LRoot" field="on_train_begin" fieldType="LRoot" ref="callback" def="on_train_begin"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_train_begin" arg1="logs" numArgs="2" def="on_train_begin_result"/>
@@ -4085,7 +4085,7 @@
           <return value="none"/>
         </method>
       </class>
-      <!-- The hooks `evaluate` calls on each callback it is passed, and `fit` too when it validates (wala/ML#1244); see `train_hooks`. -->
+      <!-- The hooks `evaluate` calls on each callback it is passed (wala/ML#1244); see `train_hooks`. The `fit` summary calls them too, whether or not it is given validation data, which over-approximates: only a fit that validates runs them. -->
       <class name="test_hooks" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self callbacks model">
           <new def="holder" class="Ltensorflow/keras/callbacks/CallbackHolder"/>
@@ -4111,7 +4111,7 @@
           <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="listed"/>
           <getfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" def="callback"/>
           <putfield class="LRoot" field="model" fieldType="LRoot" ref="callback" value="model"/>
-          <constant name="index" type="int" value="0"/>
+          <new def="index" class="Lint"/>
           <new def="logs" class="Ldict"/>
           <getfield class="LRoot" field="on_test_begin" fieldType="LRoot" ref="callback" def="on_test_begin"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_test_begin" arg1="logs" numArgs="2" def="on_test_begin_result"/>
@@ -4151,7 +4151,7 @@
           <putfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" value="listed"/>
           <getfield class="LRoot" field="callback" fieldType="LRoot" ref="holder" def="callback"/>
           <putfield class="LRoot" field="model" fieldType="LRoot" ref="callback" value="model"/>
-          <constant name="index" type="int" value="0"/>
+          <new def="index" class="Lint"/>
           <new def="logs" class="Ldict"/>
           <getfield class="LRoot" field="on_predict_begin" fieldType="LRoot" ref="callback" def="on_predict_begin"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="on_predict_begin" arg1="logs" numArgs="2" def="on_predict_begin_result"/>
