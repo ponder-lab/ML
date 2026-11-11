@@ -1997,4 +1997,28 @@ public class TestModules extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
   }
+
+  /**
+   * An integer a module assigns at its top level, imported and used as a size, sizes the tensor (<a
+   * href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportedConstant()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "imported_value_proj/common_model.py", "imported_value_proj/script_constant_value.py"
+        },
+        "common_model.py",
+        "consume",
+        "imported_value_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
 }

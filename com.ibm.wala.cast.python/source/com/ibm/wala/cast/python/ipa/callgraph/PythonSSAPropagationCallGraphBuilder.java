@@ -107,6 +107,7 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.MonitorUtil.IProgressMonitor;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
@@ -2925,20 +2926,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                         if (fieldName.equals(putField.getName().toString())) {
                           // Found it.
                           int putVal = putInstruction.getVal();
-
-                          // A script's put of a value it assigns at its top level may store a
-                          // constant (wala/ML#1243), which is represented implicitly, so its
-                          // contents are added directly (the wala/ML#668 trap otherwise).
-                          SymbolTable putSymtab = n.getIR().getSymbolTable();
-                          DefUse putDu = getBuilder().getCFAContextInterpreter().getDU(n);
-                          if (contentsAreInvariant(putSymtab, putDu, putVal)) {
-                            for (InstanceKey ik :
-                                getInvariantContents(putSymtab, putDu, n, putVal)) {
-                              system.findOrCreateIndexForInstanceKey(ik);
-                              system.newConstraint(defPK, ik);
-                            }
-                            return;
-                          }
 
                           // Make the def point to the put instruction value.
                           PointerKey putValPK = getBuilder().getPointerKeyForLocal(n, putVal);
@@ -7628,6 +7615,62 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   @Override
   public PythonConstraintVisitor makeVisitor(CGNode node) {
     return new PythonConstraintVisitor(this, node);
+  }
+
+  /**
+   * Binds each variable a script holds when its body ends to the field of that name on the script's
+   * object, as the front end writes a function or class the script defines there. An import of the
+   * variable from another module, {@code from m import x} or {@code m.x}, reads that field; a
+   * variable the script assigns, such as {@code model = Net()}, was written nowhere an import
+   * reads, so a call through an imported object reached nothing and an imported tensor reached a
+   * parameter as no tensor (<a href="https://github.com/wala/ML/issues/1243">wala/ML#1243</a>).
+   *
+   * <p>The binding is a constraint, not an instruction: the script's IR is unchanged, so no
+   * assigned value gains a use and no instruction moves. The values are the ones the variables hold
+   * where the body ends, which is what an importer sees once the module has run.
+   *
+   * @param node The node whose constraints are being added.
+   * @param monitor The progress monitor.
+   * @throws CancelException On cancellation.
+   */
+  @Override
+  protected void addNodeValueConstraints(CGNode node, IProgressMonitor monitor)
+      throws CancelException {
+    super.addNodeValueConstraints(node, monitor);
+    if (!isScriptBody(node)) return;
+    IR ir = node.getIR();
+    SSAInstruction[] instructions = ir.getInstructions();
+    if (instructions.length == 0) return;
+    int end = instructions.length - 1;
+    PythonConstraintVisitor visitor = null;
+    for (int vn = 2; vn <= ir.getSymbolTable().getMaxValueNumber(); vn++) {
+      String[] names = ir.getLocalNames(end, vn);
+      if (names == null) continue;
+      for (String name : names) {
+        // A translator temporary is named so that no Python code can spell it.
+        if (name == null || name.contains(" ")) continue;
+        if (visitor == null) visitor = makeVisitor(node);
+        visitor.visitPutInternal(
+            vn,
+            1,
+            false,
+            FieldReference.findOrCreate(
+                PythonTypes.Root, Atom.findOrCreateUnicodeAtom(name), PythonTypes.Root));
+      }
+    }
+  }
+
+  /**
+   * Whether a node is a script's own body, {@code Lscript m.py}, rather than a function or class
+   * nested in it.
+   *
+   * @param node The node.
+   * @return {@code true} iff the node is the body of a script.
+   */
+  private static boolean isScriptBody(CGNode node) {
+    if (!(node.getMethod() instanceof AstMethod)) return false;
+    String type = node.getMethod().getDeclaringClass().getName().toString();
+    return type.startsWith("Lscript ") && type.endsWith("." + PYTHON_FILE_EXTENSION);
   }
 
   public static class PythonInterestingVisitor extends AstInterestingVisitor

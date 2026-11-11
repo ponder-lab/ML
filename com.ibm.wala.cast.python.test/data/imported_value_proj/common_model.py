@@ -42,3 +42,5 @@ ones = tf.ones([2, 4])
 
 scaled = tf.ones([2, 4])
 scaled *= 2
+
+batch = 2
