@@ -17,9 +17,12 @@ import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
@@ -27,6 +30,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.IntSet;
@@ -34,6 +38,7 @@ import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -101,6 +106,12 @@ public record ContainerMutations(
   /** The type name of the builtin a slice, {@code l[i:j]}, is lowered to a call of. */
   private static final String SLICE_BUILTIN = "Lwala/builtin/slice";
 
+  /** The name of the builtin that stores an attribute by a name a program may compute. */
+  private static final String SETATTR_NAME = "setattr";
+
+  /** The name a slice's lowering reads the slice builtin by. */
+  private static final String SLICE_NAME = "slice";
+
   /** The name a {@code del} statement's lowering reads the deletion builtin by. */
   private static final String DELETE_NAME = "__delete__";
 
@@ -154,15 +165,25 @@ public record ContainerMutations(
      * @param adds Whether the mutation may also add an element the analysis does not record.
      */
     void mark(PointerAnalysis<InstanceKey> pa, CGNode node, int vn, boolean adds) {
-      for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))) {
-        TypeReference type = ik.concreteType().getReference();
-        int index = pa.getInstanceKeyMapping().getMappedIndex(ik);
-        if (type.equals(list)) {
-          this.lists.add(index);
-          this.unappended.add(index);
-        }
-        if (adds && isMutable(type)) this.open.add(index);
+      for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))
+        mark(pa, ik, adds);
+    }
+
+    /**
+     * Marks a container.
+     *
+     * @param pa The pointer analysis.
+     * @param ik The container.
+     * @param adds Whether the mutation may also add an element the analysis does not record.
+     */
+    void mark(PointerAnalysis<InstanceKey> pa, InstanceKey ik, boolean adds) {
+      TypeReference type = ik.concreteType().getReference();
+      int index = pa.getInstanceKeyMapping().getMappedIndex(ik);
+      if (type.equals(list)) {
+        this.lists.add(index);
+        this.unappended.add(index);
       }
+      if (adds && isMutable(type)) this.open.add(index);
     }
 
     /**
@@ -455,9 +476,7 @@ public record ContainerMutations(
       Set<String> libraries,
       Set<IMethod> reached,
       Marks marks) {
-    // The values a variable is written, by its name and definer, which the receiver checks below
-    // read for many reads of the same builtin or module: each is a scan of the whole call graph.
-    Map<List<String>, Set<InstanceKey>> writes = new HashMap<>();
+    Program program = new Program(builder, reached);
     for (IClass cls : builder.getClassHierarchy()) {
       Collection<? extends IMethod> methods = cls.getDeclaredMethods();
       if (methods == null) continue;
@@ -481,8 +500,8 @@ public record ContainerMutations(
               && readsName(du.getDef(invoke.getUse(0)), DELETE_NAME)) {
             if (invoke.getNumberOfUses() > 2) {
               if (!deletesByName(symtab, invoke)
-                  && !isBuiltHere(builder, writes, du, du.getDef(invoke.getUse(1))))
-                markReceiver(builder, du, invoke.getUse(1), marks, false);
+                  && !isBuiltHere(program, du, du.getDef(invoke.getUse(1))))
+                markReceiver(program, method, symtab, du, invoke.getUse(1), marks, false);
             } else if (deletesSubscript(method, invoke)) marks.markAll(false);
           }
           if (!(instruction instanceof AstPropertyRead read)
@@ -492,16 +511,16 @@ public record ContainerMutations(
           SSAInstruction receiver = du.getDef(read.getObjectRef());
           // A container the body builds itself is none the analysis allocates, and a function of
           // a library registered as resizing no list resizes none (wala/ML#1182).
-          if (isBuiltHere(builder, writes, du, receiver)
+          if (isBuiltHere(program, du, receiver)
               || isNonResizingLibraryFunction(
                   builder,
                   libraries,
-                  writes,
+                  program.writes,
                   symtab,
                   du,
                   receiver,
                   symtab.getStringValue(read.getMemberRef()))) continue;
-          markReceiver(builder, du, read.getObjectRef(), marks, adds);
+          markReceiver(program, method, symtab, du, read.getObjectRef(), marks, adds);
         }
       }
     }
@@ -509,16 +528,52 @@ public record ContainerMutations(
 
   /**
    * Marks the containers a receiver in a body the call graph does not reach may be: those written
-   * to the variable it reads, or every one when it reads none.
+   * to the variable it reads, those stored under the attribute it reads, none when it is a
+   * parameter of a function nothing names, or every one otherwise (wala/ML#1255).
    *
-   * @param builder The builder.
+   * @param program What the scan reads about the program.
+   * @param method The body's method.
+   * @param symtab The body's symbol table.
    * @param du The body's def-use.
    * @param vn The receiver.
    * @param marks The mutations, which this adds to.
    * @param adds Whether the mutation may also add an element the analysis does not record.
    */
   private static void markReceiver(
-      PropagationCallGraphBuilder builder, DefUse du, int vn, Marks marks, boolean adds) {
+      Program program,
+      IMethod method,
+      SymbolTable symtab,
+      DefUse du,
+      int vn,
+      Marks marks,
+      boolean adds) {
+    markReceiver(program, method, symtab, du, vn, marks, adds, new HashSet<>());
+  }
+
+  /**
+   * Marks the containers a receiver in a body the call graph does not reach may be; see {@link
+   * #markReceiver(Program, IMethod, SymbolTable, DefUse, int, Marks, boolean)}.
+   *
+   * @param program What the scan reads about the program.
+   * @param method The body's method.
+   * @param symtab The body's symbol table.
+   * @param du The body's def-use.
+   * @param vn The receiver.
+   * @param marks The mutations, which this adds to.
+   * @param adds Whether the mutation may also add an element the analysis does not record.
+   * @param fields The field names already marked for this receiver, so a store of one field into
+   *     another ends.
+   */
+  private static void markReceiver(
+      Program program,
+      IMethod method,
+      SymbolTable symtab,
+      DefUse du,
+      int vn,
+      Marks marks,
+      boolean adds,
+      Set<String> fields) {
+    PropagationCallGraphBuilder builder = program.builder;
     SSAInstruction receiver = du.getDef(vn);
     if (receiver instanceof AstLexicalRead lexical) {
       for (Access access : lexical.getAccesses())
@@ -526,8 +581,314 @@ public record ContainerMutations(
           markLexicalWrites(builder, access.variableName(), access.variableDefiner(), marks, adds);
     } else if (receiver instanceof AstGlobalRead global)
       markGlobalWrites(builder, global.getGlobalName(), marks, adds);
+    else if (receiver instanceof AstPropertyRead read
+        && symtab.isStringConstant(read.getMemberRef())
+        && program.readsPlainAttribute(method, du, read)) {
+      // `o.f` may be only a container stored under a field named `f`: one the analysis stores, or
+      // one a body the call graph does not reach stores.
+      String field = symtab.getStringValue(read.getMemberRef());
+      if (!fields.add(field)) return;
+      for (InstanceKey value : program.fieldValues(field))
+        marks.mark(builder.getPointerAnalysis(), value, adds);
+      for (Store store : program.unreachedStores(field))
+        if (!isBuiltHere(program, store.du(), store.du().getDef(store.value())))
+          markReceiver(
+              program,
+              store.method(),
+              store.symtab(),
+              store.du(),
+              store.value(),
+              marks,
+              adds,
+              fields);
+    } else if (receiver == null && symtab.isParameter(vn) && program.isUnnamedFunction(method)) {
+      // A function nothing names is called only from outside the program, with none of its lists.
+    }
     // A parameter, or a value the body computes: it may be any container.
     else marks.markAll(adds);
+  }
+
+  /**
+   * A store of a value under a field name, {@code o.f = v}, in a body the call graph does not
+   * reach.
+   *
+   * @param method The body's method.
+   * @param symtab The body's symbol table.
+   * @param du The body's def-use.
+   * @param value The stored value.
+   */
+  private record Store(IMethod method, SymbolTable symtab, DefUse du, int value) {}
+
+  /**
+   * What the scan of the bodies the call graph does not reach reads about the whole program, each
+   * part read once, when a receiver first needs it.
+   */
+  private static final class Program {
+
+    /** The names of the methods through which Python customizes an attribute's lookup or store. */
+    private static final Set<String> ATTRIBUTE_HOOKS =
+        Set.of("__getattr__", "__getattribute__", "__setattr__");
+
+    /** The builder. */
+    final PropagationCallGraphBuilder builder;
+
+    /** The methods of the call graph's nodes. */
+    final Set<IMethod> reached;
+
+    /**
+     * The values a variable is written, by its name and definer, which the receiver checks read for
+     * many reads of the same builtin or module: each is a scan of the whole call graph.
+     */
+    final Map<List<String>, Set<InstanceKey>> writes = new HashMap<>();
+
+    /** The values the analysis stores under each field name, or {@code null} until read. */
+    private Map<String, Set<InstanceKey>> fields;
+
+    /** The program's classes that define an attribute hook, or {@code null} until read. */
+    private Set<IClass> hooked;
+
+    /** The stores under each field name in unreached bodies, or {@code null} until read. */
+    private Map<String, List<Store>> stores;
+
+    /**
+     * The names the program's bodies read, as variables, globals or string constants, or {@code
+     * null} until read; it holds {@code null} itself when a body cannot be read.
+     */
+    private Set<String> names;
+
+    /** The last segments of the program's own classes' names, or {@code null} until read. */
+    private Set<String> functions;
+
+    /**
+     * Whether a body may store an attribute under a name it computes, through {@code setattr} or an
+     * object's {@code __dict__}.
+     */
+    private boolean dynamicAttributes;
+
+    Program(PropagationCallGraphBuilder builder, Set<IMethod> reached) {
+      this.builder = builder;
+      this.reached = reached;
+    }
+
+    /**
+     * The values the analysis stores under a field name, on any object.
+     *
+     * @param field The field name.
+     * @return The values.
+     */
+    Set<InstanceKey> fieldValues(String field) {
+      readFields();
+      return this.fields.getOrDefault(field, Set.of());
+    }
+
+    /**
+     * The stores under a field name in the bodies the call graph does not reach.
+     *
+     * @param field The field name.
+     * @return The stores.
+     */
+    List<Store> unreachedStores(String field) {
+      readBodies();
+      return this.stores.getOrDefault(field, List.of());
+    }
+
+    /**
+     * Whether the program defines a method of a name, as a function of its own or under a field the
+     * analysis stores, as {@code __radd__ = f} in a class body does.
+     *
+     * @param name The method's name.
+     * @return {@code true} iff it may.
+     */
+    boolean defines(String name) {
+      readBodies();
+      readFields();
+      return this.functions.contains(name) || this.fields.containsKey(name);
+    }
+
+    /**
+     * Whether a body's read of an attribute by name reads it where it is stored: no body stores an
+     * attribute by a computed name, and no class the object may be an instance of customizes the
+     * lookup. Its object may be an instance of the method's class when it is the method's {@code
+     * self}, and of any class otherwise.
+     *
+     * @param method The body's method.
+     * @param du The body's def-use.
+     * @param read The read.
+     * @return {@code true} iff the read is plain.
+     */
+    boolean readsPlainAttribute(IMethod method, DefUse du, AstPropertyRead read) {
+      readBodies();
+      if (this.dynamicAttributes) return false;
+      readFields();
+      if (this.hooked.isEmpty()) return true;
+      IClass owner = selfClass(method, du, read.getObjectRef());
+      if (owner == null) return false;
+      IClassHierarchy cha = this.builder.getClassHierarchy();
+      for (IClass hook : this.hooked)
+        if (cha.isSubclassOf(owner, hook) || cha.isSubclassOf(hook, owner)) return false;
+      return true;
+    }
+
+    /**
+     * The class whose method a body is, when a value is the body's {@code self}: its first
+     * parameter after the function.
+     *
+     * @param method The body's method.
+     * @param du The body's def-use.
+     * @param vn The value.
+     * @return The class, or {@code null}.
+     */
+    private IClass selfClass(IMethod method, DefUse du, int vn) {
+      if (du.getDef(vn) != null || vn != 2) return null;
+      String type = method.getDeclaringClass().getName().toString();
+      int slash = type.lastIndexOf('/');
+      if (slash < 0 || !type.startsWith("Lscript ")) return null;
+      String owner = type.substring(0, slash);
+      if (!owner.contains(".py/")) return null;
+      return this.builder
+          .getClassHierarchy()
+          .lookupClass(
+              TypeReference.findOrCreate(
+                  method.getDeclaringClass().getClassLoader().getReference(), owner));
+    }
+
+    /**
+     * Whether a method is a function a module defines at its top level that no body of the program
+     * names: no body reads a variable or global by its name or holds its name as a string, as an
+     * attribute read, an import, a decorator or {@code getattr} would. Such a function is called
+     * only from outside the program.
+     *
+     * @param method The method.
+     * @return {@code true} iff the method is such a function.
+     */
+    boolean isUnnamedFunction(IMethod method) {
+      // A module-level function's class is named `Lscript <file>.py/<function>`; a method's or a
+      // nested function's has a further segment.
+      String type = method.getDeclaringClass().getName().toString();
+      int file = type.lastIndexOf(".py/");
+      if (!type.startsWith("Lscript ") || file < 0 || type.indexOf('/', file + 4) >= 0)
+        return false;
+      readBodies();
+      return !this.names.contains(null) && !this.names.contains(type.substring(file + 4));
+    }
+
+    /**
+     * Whether a function a body defines is used besides by its definition, which writes it to a
+     * variable, a global, and its module's field of the function's name.
+     *
+     * @param du The body's def-use.
+     * @param allocation The function's allocation.
+     * @param name The function's name.
+     * @return {@code true} iff it has such a use.
+     */
+    private static boolean isUsedBesidesDefined(
+        DefUse du, SSANewInstruction allocation, String name) {
+      for (Iterator<SSAInstruction> uses = du.getUses(allocation.getDef()); uses.hasNext(); ) {
+        SSAInstruction use = uses.next();
+        if (use instanceof AstLexicalWrite || use instanceof AstGlobalWrite) continue;
+        if (use instanceof SSAPutInstruction put
+            && put.getVal() == allocation.getDef()
+            && name.equals(put.getDeclaredField().getName().toString())) continue;
+        return true;
+      }
+      return false;
+    }
+
+    /** Reads the values the analysis stores under each field name, and the hooked classes. */
+    private void readFields() {
+      if (this.fields != null) return;
+      this.fields = new HashMap<>();
+      this.hooked = new HashSet<>();
+      IClassHierarchy cha = this.builder.getClassHierarchy();
+      PointerAnalysis<InstanceKey> pa = this.builder.getPointerAnalysis();
+      for (PointerKey key : pa.getPointerKeys())
+        if (key instanceof InstanceFieldKey field) {
+          String name = field.getField().getName().toString();
+          // A hook a class body assigns, as `__setattr__ = dict.__setitem__` does.
+          if (ATTRIBUTE_HOOKS.contains(name))
+            this.hooked.add(field.getInstanceKey().concreteType());
+          Set<InstanceKey> values = this.fields.computeIfAbsent(name, n -> new HashSet<>());
+          for (InstanceKey value : pa.getPointsToSet(key)) values.add(value);
+        }
+      // A hook a class defines as a method, whose function's class is named under the class's.
+      for (IClass cls : cha) {
+        String type = cls.getName().toString();
+        int slash = type.lastIndexOf('/');
+        if (!type.startsWith("Lscript ")
+            || slash < 0
+            || !ATTRIBUTE_HOOKS.contains(type.substring(slash + 1))) continue;
+        IClass owner =
+            cha.lookupClass(
+                TypeReference.findOrCreate(
+                    cls.getClassLoader().getReference(), type.substring(0, slash)));
+        if (owner != null) this.hooked.add(owner);
+      }
+    }
+
+    /**
+     * Reads, from every body of the program, the names it reads and the last segments of the
+     * program's classes' names, whether it may store an attribute by a computed name, and, from the
+     * bodies the call graph does not reach, their stores under field names.
+     */
+    private void readBodies() {
+      if (this.names != null) return;
+      this.names = new HashSet<>();
+      this.functions = new HashSet<>();
+      this.stores = new HashMap<>();
+      for (IClass cls : this.builder.getClassHierarchy()) {
+        String type = cls.getName().toString();
+        if (type.startsWith("Lscript ")) functions.add(type.substring(type.lastIndexOf('/') + 1));
+        Collection<? extends IMethod> methods = cls.getDeclaredMethods();
+        if (methods == null) continue;
+        for (IMethod method : methods) {
+          if (!(method instanceof AstMethod) || method.isWalaSynthetic()) continue;
+          IR ir;
+          try {
+            ir = this.builder.getAnalysisCache().getIR(method);
+          } catch (RuntimeException e) {
+            LOGGER.log(Level.FINE, e, () -> "Cannot read the IR of " + method + ".");
+            // A body that cannot be read may name any function and store any attribute.
+            this.names.add(null);
+            this.dynamicAttributes = true;
+            continue;
+          }
+          if (ir == null) continue;
+          SymbolTable symtab = ir.getSymbolTable();
+          DefUse du = this.builder.getAnalysisCache().getDefUse(ir);
+          for (int vn = 1; vn <= symtab.getMaxValueNumber(); vn++)
+            if (symtab.isStringConstant(vn)) {
+              String constant = symtab.getStringValue(vn);
+              this.names.add(constant);
+              if ("__dict__".equals(constant)) this.dynamicAttributes = true;
+            }
+          boolean unreached = !this.reached.contains(method);
+          for (SSAInstruction instruction : ir.getInstructions())
+            if (instruction instanceof SSANewInstruction allocation) {
+              // A function passed on as it is defined, as a decorator's argument is, is named by
+              // the use rather than read by its name.
+              String function = allocation.getConcreteType().getName().toString();
+              String name = function.substring(function.lastIndexOf('/') + 1);
+              if (function.startsWith("Lscript ") && isUsedBesidesDefined(du, allocation, name))
+                this.names.add(name);
+            } else if (instruction instanceof AstGlobalRead global) {
+              String name = getBareName(global.getGlobalName());
+              this.names.add(name);
+              if (SETATTR_NAME.equals(name)) this.dynamicAttributes = true;
+            } else if (instruction instanceof AstLexicalRead lexical) {
+              for (Access access : lexical.getAccesses()) {
+                this.names.add(access.variableName());
+                if (SETATTR_NAME.equals(access.variableName())) this.dynamicAttributes = true;
+              }
+            } else if (unreached
+                && instruction instanceof AstPropertyWrite write
+                && symtab.isStringConstant(write.getMemberRef()))
+              this.stores
+                  .computeIfAbsent(
+                      symtab.getStringValue(write.getMemberRef()), n -> new ArrayList<>())
+                  .add(new Store(method, symtab, du, write.getValue()));
+        }
+      }
+    }
   }
 
   /**
@@ -538,21 +899,33 @@ public record ContainerMutations(
    * analysis has (wala/ML#1182). A rebinding of the name in a body the call graph does not reach is
    * not seen, which would take a {@code global} statement rebinding a builtin's name there.
    *
-   * @param builder The builder.
-   * @param writes The values variables are written, by name and definer, filled as read.
+   * <p>A list the body computes from one it builds is built there too (wala/ML#1255): {@code a + b}
+   * and {@code a * n} when {@code a} is, unless the program defines a reflected operator, which may
+   * return any list, and then only when {@code b} is as well; the IR of {@code a += b} is the same,
+   * and its result is {@code a}. A slice read, {@code a[i:j]}, is a new list, unless the program
+   * defines {@code __getitem__}, which may return any, and then only when {@code a} is built there.
+   *
+   * @param program What the scan reads about the program.
    * @param du The body's def-use.
    * @param receiver The instruction defining the receiver, or {@code null}.
    * @return {@code true} iff the body builds the receiver.
    */
-  private static boolean isBuiltHere(
-      PropagationCallGraphBuilder builder,
-      Map<List<String>, Set<InstanceKey>> writes,
-      DefUse du,
-      SSAInstruction receiver) {
+  private static boolean isBuiltHere(Program program, DefUse du, SSAInstruction receiver) {
     if (receiver instanceof SSANewInstruction) return true;
+    if (receiver instanceof SSABinaryOpInstruction binary
+        && (binary.getOperator() == IBinaryOpInstruction.Operator.ADD
+            || binary.getOperator() == IBinaryOpInstruction.Operator.MUL)) {
+      String reflected =
+          binary.getOperator() == IBinaryOpInstruction.Operator.ADD ? "__radd__" : "__rmul__";
+      return isBuiltHere(program, du, du.getDef(binary.getUse(0)))
+          && (!program.defines(reflected) || isBuiltHere(program, du, du.getDef(binary.getUse(1))));
+    }
     if (!(receiver instanceof SSAAbstractInvokeInstruction call) || call.getNumberOfUses() == 0)
       return false;
     SSAInstruction callee = du.getDef(call.getUse(0));
+    if (isSliceRead(call) && readsName(callee, SLICE_NAME))
+      return !program.defines("__getitem__") || isBuiltHere(program, du, du.getDef(call.getUse(1)));
+    PropagationCallGraphBuilder builder = program.builder;
     String name;
     if (callee instanceof AstGlobalRead global) name = getBareName(global.getGlobalName());
     else if (callee instanceof AstLexicalRead lexical
@@ -562,7 +935,7 @@ public record ContainerMutations(
     else return false;
     if (!CONTAINER_BUILTINS.contains(name)) return false;
     // A module may bind the name to a function of its own, which may return any container.
-    for (InstanceKey value : getVariableWrites(builder, writes, name, null))
+    for (InstanceKey value : getVariableWrites(builder, program.writes, name, null))
       if (value.concreteType().getName().toString().startsWith("Lscript ")) return false;
     return true;
   }
