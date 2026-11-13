@@ -418,20 +418,29 @@ public class Util {
    * fallback for a value that has none (<a
    * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
    *
+   * <p>A set that holds a Python scalar's key may be a scalar of unknown value, so its scalar
+   * constants are not its values either: a loop counter from {@code 0} holds {@code 0} and the key
+   * of an {@code int}. They are left out with the key, and the reader takes the same fallback,
+   * where it read the constants alone as the value (<a
+   * href="https://github.com/wala/ML/issues/1252">wala/ML#1252</a>). A constant {@code None} is no
+   * scalar and is kept.
+   *
    * @param pointsToSet The points-to set, possibly {@code null}.
    * @return The set without those keys, or {@code pointsToSet} itself when it has none.
    */
   public static OrdinalSet<InstanceKey> withoutClientOnlyKeys(OrdinalSet<InstanceKey> pointsToSet) {
     if (pointsToSet == null || pointsToSet.isEmpty()) return pointsToSet;
     boolean any = false;
+    boolean scalar = false;
     for (InstanceKey ik : pointsToSet)
       if (isClientOnlyKey(ik)) {
         any = true;
-        break;
+        if (isPythonScalarKey(ik)) scalar = true;
       }
     if (!any) return pointsToSet;
     List<InstanceKey> kept = new ArrayList<>();
-    for (InstanceKey ik : pointsToSet) if (!isClientOnlyKey(ik)) kept.add(ik);
+    for (InstanceKey ik : pointsToSet)
+      if (!isClientOnlyKey(ik) && !(scalar && isScalarConstant(ik))) kept.add(ik);
     return kept.isEmpty()
         ? OrdinalSet.empty()
         : OrdinalSet.toOrdinalSet(kept, pointsToSet.getMapping());
@@ -481,6 +490,20 @@ public class Util {
     } catch (NumberFormatException e) {
       return null;
     }
+  }
+
+  /**
+   * Whether a key is a constant of a Python scalar: a number, a {@code bool} or a string. {@code
+   * None} is not one.
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return {@code true} iff the key is such a constant.
+   */
+  private static boolean isScalarConstant(InstanceKey instanceKey) {
+    return instanceKey instanceof ConstantKey<?> constant
+        && (constant.getValue() instanceof Number
+            || constant.getValue() instanceof Boolean
+            || constant.getValue() instanceof String);
   }
 
   /**
