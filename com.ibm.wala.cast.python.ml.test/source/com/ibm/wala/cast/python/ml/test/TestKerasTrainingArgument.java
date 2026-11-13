@@ -117,15 +117,19 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
   /**
    * A {@code Sequential} called with {@code training=True} passes it to each layer by keyword (<a
    * href="https://github.com/wala/ML/issues/1120">wala/ML#1120</a>), so it binds to a layer's
-   * {@code training} wherever the parameter is, and a layer's {@code mask} keeps its default.
+   * {@code training} wherever the parameter is, and a layer's {@code mask} keeps its default. The
+   * layer's own {@code training} default joins it, since each layer is also called without {@code
+   * training} for a model called without it, until the call context is modeled (<a
+   * href="https://github.com/wala/ML/issues/1249">wala/ML#1249</a>).
    *
    * @throws Exception On analysis failure.
    */
   @Test
   public void testSequential() throws Exception {
     String file = "tf2_test_sequential_training.py";
-    assertEquals(Set.of(Boolean.TRUE), parameterConstants(file, "Block/call", "training"));
-    assertEquals(Set.of(Boolean.TRUE), parameterConstants(file, "Masked/call", "training"));
+    assertEquals(
+        Set.of(Boolean.TRUE, Boolean.FALSE), parameterConstants(file, "Block/call", "training"));
+    assertEquals(Set.of(Boolean.TRUE, "None"), parameterConstants(file, "Masked/call", "training"));
     assertEquals(Set.of("None"), parameterConstants(file, "Masked/call", "mask"));
   }
 
@@ -137,23 +141,22 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testSequentialNoParameter() throws Exception {
-    PythonTensorAnalysisEngine engine =
-        (PythonTensorAnalysisEngine) makeEngine("tf2_test_sequential_training.py");
-    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
-    CallGraph cg = builder.makeCallGraph(builder.getOptions());
-    boolean reached = false;
-    for (CGNode node : cg) {
-      String type = node.getMethod().getDeclaringClass().getName().toString();
-      if (!type.equals("Lscript tf2_test_sequential_training.py/Plain/call")) continue;
-      for (int valueNumber : node.getIR().getParameterValueNumbers()) {
-        String[] names = node.getIR().getLocalNames(0, valueNumber);
-        if (names == null || !Arrays.asList(names).contains("x")) continue;
-        PointerKey input =
-            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
-        reached |= !builder.getPointerAnalysis().getPointsToSet(input).isEmpty();
-      }
-    }
-    assertTrue("The input doesn't reach `Plain.call`.", reached);
+    assertTrue(
+        "The input doesn't reach `Plain.call`.",
+        parameterReached("tf2_test_sequential_training.py", "Plain/call", "x"));
+  }
+
+  /**
+   * A {@code Sequential} called without {@code training} leaves each layer its own {@code training}
+   * default, as Keras does, and the layer's {@code training} arm is still analyzed.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testSequentialAbsent() throws Exception {
+    String file = "tf2_test_sequential_training_absent.py";
+    assertEquals(Set.of(Boolean.FALSE), parameterConstants(file, "Block/call", "training"));
+    assertTrue("The input doesn't reach `scale`.", parameterReached(file, "scale", "x"));
   }
 
   /**
@@ -173,6 +176,34 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
     assertEquals(
         Set.of(Boolean.TRUE, Boolean.FALSE),
         parameterConstants("tf2_test_sequential_training_fit.py", "Block/call", "training"));
+  }
+
+  /**
+   * Whether a parameter of a function points to anything, in some node of the function.
+   *
+   * @param file The Python file.
+   * @param function The function, by the end of its class's name, such as {@code Net/call}.
+   * @param parameter The parameter's name.
+   * @return Whether the parameter's points-to set is non-empty in some node of the function.
+   * @throws Exception On analysis failure.
+   */
+  private boolean parameterReached(String file, String function, String parameter)
+      throws Exception {
+    PythonTensorAnalysisEngine engine = (PythonTensorAnalysisEngine) makeEngine(file);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    for (CGNode node : cg) {
+      String type = node.getMethod().getDeclaringClass().getName().toString();
+      if (!type.equals("Lscript " + file + "/" + function)) continue;
+      for (int valueNumber : node.getIR().getParameterValueNumbers()) {
+        String[] names = node.getIR().getLocalNames(0, valueNumber);
+        if (names == null || !Arrays.asList(names).contains(parameter)) continue;
+        PointerKey key =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
+        if (!builder.getPointerAnalysis().getPointsToSet(key).isEmpty()) return true;
+      }
+    }
+    return false;
   }
 
   /**
