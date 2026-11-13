@@ -168,8 +168,13 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
         this.getArgumentPointsToSet(builder, COLOR_MODE_POSITION, "color_mode");
 
     if (colorModePts == null || colorModePts.isEmpty())
-      // Unspecified; the API default is "rgb".
-      return Collections.singleton(new NumericDim(3));
+      // Unspecified, the API default "rgb"; or supplied with a value the analysis cannot read
+      // (wala/ML#1022).
+      return Collections.singleton(
+          Boolean.FALSE.equals(
+                  this.isArgumentSyntacticallySupplied(builder, COLOR_MODE_POSITION, "color_mode"))
+              ? new NumericDim(3)
+              : UnresolvedDim.INSTANCE);
 
     Set<Object> colorModes = getConstantValues(colorModePts, true);
     if (colorModes == null || colorModes.isEmpty())
@@ -534,8 +539,12 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
         this.getArgumentPointsToSet(builder, CLASS_MODE_POSITION, "class_mode");
 
     if (classModePts == null || classModePts.isEmpty())
-      // Unspecified; the API default is "categorical".
-      return Collections.singleton("categorical");
+      // Unspecified, the API default "categorical"; or supplied with a value the analysis cannot
+      // read (wala/ML#1022).
+      return Boolean.FALSE.equals(
+              this.isArgumentSyntacticallySupplied(builder, CLASS_MODE_POSITION, "class_mode"))
+          ? Collections.singleton("categorical")
+          : null;
 
     return getConstantValues(classModePts, true);
   }

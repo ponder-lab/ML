@@ -69,6 +69,13 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
 
     OrdinalSet<InstanceKey> axisPts = this.getArgumentPointsToSet(builder, 1, "axis");
     Set<Integer> axes; // null means "squeeze every statically size-1 axis".
+    // An empty set is an omitted axis or one supplied with a value the analysis cannot read, which
+    // may name any axes, so the shape is unknown (wala/ML#1022).
+    if ((axisPts == null || axisPts.isEmpty())
+        && !Boolean.FALSE.equals(this.isArgumentSyntacticallySupplied(builder, 1, "axis"))) {
+      LOGGER.fine(() -> "Unreadable axis for " + describe(this.getSource()) + "; returning ⊤.");
+      return null;
+    }
     if (isAbsentOrNone(axisPts)) {
       axes = null;
     } else {

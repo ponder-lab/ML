@@ -1,10 +1,13 @@
 # Test https://github.com/wala/ML/issues/1252: an int that may be a constant or an int of unknown
 # value, or a constant or a tensor's static shape, is no single constant, so a size computed from it
 # is not folded.
+import os
 import sys
+import tempfile
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, save_img
 
 
 def consume_mixed(x):
@@ -69,3 +72,79 @@ def guard(g):
 
 for flag in (True, False):
     assert guard(0 if flag else int(len(sys.argv))).shape == ((2,) if flag else (3,))
+
+
+# A supplied argument whose points-to set reads as empty is not an omitted one (wala/ML#1022).
+flag_env = os.environ.get("MIXED_FLAG") is None
+k = int(os.environ.get("MIXED_K", "1"))
+
+
+def consume_squeeze(t):
+    pass
+
+
+def consume_one_hot_depth(t):
+    pass
+
+
+def consume_one_hot_axis(t):
+    pass
+
+
+def consume_boolean_mask(t):
+    pass
+
+
+squeezed = tf.squeeze(tf.ones([1, 1, 3]), axis=1 if flag_env else k)
+assert squeezed.shape == (1, 3)
+consume_squeeze(squeezed)
+
+by_depth = tf.one_hot(tf.constant([0, 1]), 4 if flag_env else k + 3)
+assert by_depth.shape == (2, 4)
+consume_one_hot_depth(by_depth)
+
+by_axis = tf.one_hot(tf.constant([0, 1]), 4, axis=0 if flag_env else k - 1)
+assert by_axis.shape == (4, 2)
+consume_one_hot_axis(by_axis)
+
+masked = tf.boolean_mask(
+    tf.ones([2, 3, 4]), tf.constant([True, False, True]), axis=1 if flag_env else k
+)
+assert masked.shape == (2, 2, 4)
+consume_boolean_mask(masked)
+
+
+def consume_color_mode_images(images):
+    pass
+
+
+def consume_class_mode_labels(labels):
+    pass
+
+
+# A directory of one image, so that `flow_from_directory` runs.
+image_root = tempfile.mkdtemp()
+os.makedirs(os.path.join(image_root, "a"))
+save_img(os.path.join(image_root, "a", "x.png"), np.zeros((4, 4, 3)))
+# A `str` of unknown value, the other arm of each mode below.
+mode = " rgb ".strip()
+
+by_color_mode = ImageDataGenerator().flow_from_directory(
+    image_root,
+    target_size=(4, 4),
+    batch_size=1,
+    color_mode="grayscale" if flag_env else mode,
+)
+color_mode_images, _ = next(by_color_mode)
+assert color_mode_images.shape == (1, 4, 4, 1)
+consume_color_mode_images(color_mode_images)
+
+by_class_mode = ImageDataGenerator().flow_from_directory(
+    image_root,
+    target_size=(4, 4),
+    batch_size=1,
+    class_mode="sparse" if flag_env else mode,
+)
+_, class_mode_labels = next(by_class_mode)
+assert class_mode_labels.shape == (1,)
+consume_class_mode_labels(class_mode_labels)
