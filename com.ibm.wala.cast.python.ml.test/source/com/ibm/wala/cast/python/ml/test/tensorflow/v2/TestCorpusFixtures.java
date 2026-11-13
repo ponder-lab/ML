@@ -779,6 +779,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * (wala/ML#1016); a reappearance of a rank-1 {@code (batch,)} member here is that constraint
    * regressing.
    *
+   * <p>The {@code one_hot} over the ids, whose depth is a vocabulary size read from a configuration
+   * file the analysis cannot read, is a tensor of an unresolved depth among the locals, where it
+   * read as no tensor (wala/ML#1022).
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -793,7 +797,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "WDEmbedding.call",
         "nlpgnn_full_proj",
         1,
-        12,
+        13,
         Map.of(
             3,
             Set.of(

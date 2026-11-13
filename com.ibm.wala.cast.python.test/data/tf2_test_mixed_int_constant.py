@@ -3,9 +3,11 @@
 # is not folded.
 import os
 import sys
+import tempfile
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, save_img
 
 
 def consume_mixed(x):
@@ -110,3 +112,39 @@ masked = tf.boolean_mask(
 )
 assert masked.shape == (2, 2, 4)
 consume_boolean_mask(masked)
+
+
+def consume_color_mode_images(images):
+    pass
+
+
+def consume_class_mode_labels(labels):
+    pass
+
+
+# A directory of one image, so that `flow_from_directory` runs.
+image_root = tempfile.mkdtemp()
+os.makedirs(os.path.join(image_root, "a"))
+save_img(os.path.join(image_root, "a", "x.png"), np.zeros((4, 4, 3)))
+# A `str` of unknown value, the other arm of each mode below.
+mode = " rgb ".strip()
+
+by_color_mode = ImageDataGenerator().flow_from_directory(
+    image_root,
+    target_size=(4, 4),
+    batch_size=1,
+    color_mode="grayscale" if flag_env else mode,
+)
+color_mode_images, _ = next(by_color_mode)
+assert color_mode_images.shape == (1, 4, 4, 1)
+consume_color_mode_images(color_mode_images)
+
+by_class_mode = ImageDataGenerator().flow_from_directory(
+    image_root,
+    target_size=(4, 4),
+    batch_size=1,
+    class_mode="sparse" if flag_env else mode,
+)
+_, class_mode_labels = next(by_class_mode)
+assert class_mode_labels.shape == (1,)
+consume_class_mode_labels(class_mode_labels)

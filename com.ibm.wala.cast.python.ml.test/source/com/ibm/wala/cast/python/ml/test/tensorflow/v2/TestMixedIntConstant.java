@@ -141,4 +141,38 @@ public class TestMixedIntConstant extends AbstractTensorTest {
                     FLOAT_32,
                     List.of(new NumericDim(2), new NumericDim(3), DynamicDim.INSTANCE)))));
   }
+
+  /**
+   * A {@code flow_from_directory} whose {@code color_mode} is {@code "grayscale"} or a {@code str}
+   * of unknown value, supplied but not read as a constant: an unresolved channel count, rather than
+   * the omitted {@code "rgb"}'s three (wala/ML#1022).
+   */
+  @Test
+  public void testColorMode() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_color_mode_images",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    List.of(
+                        DynamicDim.INSTANCE,
+                        new NumericDim(4),
+                        new NumericDim(4),
+                        UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A {@code flow_from_directory} whose {@code class_mode} is {@code "sparse"} or a {@code str} of
+   * unknown value: labels of unknown shape, rather than the omitted {@code "categorical"}'s
+   * (wala/ML#1022).
+   */
+  @Test
+  public void testClassMode() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_class_mode_labels", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
 }
