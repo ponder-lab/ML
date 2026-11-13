@@ -42,3 +42,13 @@ for flag in (True, False):
     zeros = np.zeros(constant_or_shape)
     assert zeros.shape == ((3,) if flag else (2, 3)) and zeros.dtype == np.float64
     consume_constant_or_shape(zeros)
+
+
+def consume_zeros_of_mixed(m):
+    pass
+
+
+for flag in (True, False):
+    zeros_of_mixed = np.zeros(0 if flag else int(len(sys.argv)))
+    assert zeros_of_mixed.shape == ((0,) if flag else (1,))
+    consume_zeros_of_mixed(zeros_of_mixed)

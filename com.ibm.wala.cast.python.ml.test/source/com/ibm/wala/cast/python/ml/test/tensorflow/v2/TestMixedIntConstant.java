@@ -23,6 +23,10 @@ public class TestMixedIntConstant extends AbstractTensorTest {
   /** An array of {@code float64} whose shape is not known. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT64 = new TensorType(FLOAT_64, null);
 
+  /** A vector of {@code float64} whose one extent is not known. */
+  private static final TensorType TENSOR_UNRESOLVED_FLOAT64 =
+      new TensorType(FLOAT_64, List.of(UnresolvedDim.INSTANCE));
+
   /** A vector whose one extent is not known. */
   private static final TensorType TENSOR_UNRESOLVED_FLOAT32 =
       new TensorType(FLOAT_32, List.of(UnresolvedDim.INSTANCE));
@@ -52,5 +56,14 @@ public class TestMixedIntConstant extends AbstractTensorTest {
   @Test
   public void testConstantOrShape() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_constant_or_shape", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT64)));
+  }
+
+  /**
+   * An allocator's shape that is the constant {@code 0} or an {@code int(...)}, an {@code int} of
+   * unknown value, which allocates rank 1 whatever its value (wala/ML#1159).
+   */
+  @Test
+  public void testZerosOfMixed() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_zeros_of_mixed", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT64)));
   }
 }
