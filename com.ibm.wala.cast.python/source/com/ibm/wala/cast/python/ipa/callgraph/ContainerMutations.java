@@ -371,7 +371,9 @@ public record ContainerMutations(
               builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
           SSAInstruction callee = invoke.getNumberOfUses() > 0 ? du.getDef(invoke.getUse(0)) : null;
           if (calls(targets, DELETE_BUILTIN)) {
-            if (deletesSubscript(node.getMethod(), invoke)) marks.markAll(false);
+            if (invoke.getNumberOfUses() > 2) {
+              if (!deletesByName(symtab, invoke)) marks.mark(pa, node, invoke.getUse(1), false);
+            } else if (deletesSubscript(node.getMethod(), invoke)) marks.markAll(false);
           } else if (calls(targets, SLICE_BUILTIN)) {
             // A slice, `l[i:j]`, read or assigned, is a call of the slice builtin on the list. A
             // read leaves the list as it is (wala/ML#1250).
@@ -471,8 +473,13 @@ public record ContainerMutations(
         for (SSAInstruction instruction : ir.getInstructions()) {
           if (instruction instanceof SSAAbstractInvokeInstruction invoke
               && invoke.getNumberOfUses() > 0
-              && readsName(du.getDef(invoke.getUse(0)), DELETE_NAME)
-              && deletesSubscript(method, invoke)) marks.markAll(false);
+              && readsName(du.getDef(invoke.getUse(0)), DELETE_NAME)) {
+            if (invoke.getNumberOfUses() > 2) {
+              if (!deletesByName(symtab, invoke)
+                  && !isBuiltHere(builder, writes, du, du.getDef(invoke.getUse(1))))
+                markReceiver(builder, du, invoke.getUse(1), marks, false);
+            } else if (deletesSubscript(method, invoke)) marks.markAll(false);
+          }
           if (!(instruction instanceof AstPropertyRead read)
               || !(isRepositioning(symtab, read.getMemberRef())
                   || isAdding(symtab, read.getMemberRef()))) continue;
@@ -488,18 +495,33 @@ public record ContainerMutations(
                   du,
                   receiver,
                   symtab.getStringValue(read.getMemberRef()))) continue;
-          if (receiver instanceof AstLexicalRead lexical) {
-            for (Access access : lexical.getAccesses())
-              if (access.valueNumber() == read.getObjectRef())
-                markLexicalWrites(
-                    builder, access.variableName(), access.variableDefiner(), marks, adds);
-          } else if (receiver instanceof AstGlobalRead global)
-            markGlobalWrites(builder, global.getGlobalName(), marks, adds);
-          // A parameter, or a value the body computes: it may be any container.
-          else marks.markAll(adds);
+          markReceiver(builder, du, read.getObjectRef(), marks, adds);
         }
       }
     }
+  }
+
+  /**
+   * Marks the containers a receiver in a body the call graph does not reach may be: those written
+   * to the variable it reads, or every one when it reads none.
+   *
+   * @param builder The builder.
+   * @param du The body's def-use.
+   * @param vn The receiver.
+   * @param marks The mutations, which this adds to.
+   * @param adds Whether the mutation may also add an element the analysis does not record.
+   */
+  private static void markReceiver(
+      PropagationCallGraphBuilder builder, DefUse du, int vn, Marks marks, boolean adds) {
+    SSAInstruction receiver = du.getDef(vn);
+    if (receiver instanceof AstLexicalRead lexical) {
+      for (Access access : lexical.getAccesses())
+        if (access.valueNumber() == vn)
+          markLexicalWrites(builder, access.variableName(), access.variableDefiner(), marks, adds);
+    } else if (receiver instanceof AstGlobalRead global)
+      markGlobalWrites(builder, global.getGlobalName(), marks, adds);
+    // A parameter, or a value the body computes: it may be any container.
+    else marks.markAll(adds);
   }
 
   /**
@@ -809,9 +831,22 @@ public record ContainerMutations(
   }
 
   /**
-   * Whether a call of the deletion builtin is a subscript {@code del}, as in {@code del l[0]}, read
-   * from the statement's source text, since the front end drops its target. A statement whose text
-   * cannot be read is taken to be one.
+   * Whether a call of the deletion builtin deletes by a name: an attribute, {@code del o.a}, or a
+   * string key, {@code del d["k"]}, neither of which resizes a list. The front end passes a
+   * subscript's or attribute's {@code del} what it deletes from and the key or name (wala/ML#1239).
+   *
+   * @param symtab The symbol table of the call's method.
+   * @param invoke A call of the deletion builtin passing what it deletes from and a key.
+   * @return {@code true} iff the key is a string.
+   */
+  private static boolean deletesByName(SymbolTable symtab, SSAAbstractInvokeInstruction invoke) {
+    return symtab.isStringConstant(invoke.getUse(2));
+  }
+
+  /**
+   * Whether a call of the deletion builtin that passes no container is a subscript {@code del}, as
+   * in {@code del l[0]}, read from the statement's source text, for a front end that drops the
+   * target. A statement whose text cannot be read is taken to be one.
    *
    * @param method The method holding the call.
    * @param invoke The call.

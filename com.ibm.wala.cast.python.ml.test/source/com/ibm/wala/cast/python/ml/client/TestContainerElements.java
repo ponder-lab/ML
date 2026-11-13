@@ -57,6 +57,10 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   /** The fixture of a {@code del} of a name only. */
   private static final String DELETES_NAME = "tf2_test_container_elements_del_name.py";
 
+  private static final String DELETES_KEY = "tf2_test_container_elements_del_key.py";
+
+  private static final String DELETES_UNREACHED = "tf2_test_container_elements_del_unreached.py";
+
   /** Per fixture, its builder. */
   private static final Map<String, PythonSSAPropagationCallGraphBuilder> BUILDERS = new HashMap<>();
 
@@ -510,10 +514,19 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
     assertArity(DELETES, "sink_closure_del", OptionalInt.empty());
   }
 
-  /** A list no {@code del} touches reports none either, since the deleted list is unknown. */
+  /** {@code del sl[1:]}, a slice. */
+  @Test
+  public void testSliceDelete() {
+    assertArity(DELETES, "sink_slice_del", OptionalInt.empty());
+  }
+
+  /**
+   * A list no {@code del} touches keeps its length beside lists one does, since the statement names
+   * what it deletes from (wala/ML#1239).
+   */
   @Test
   public void testUntouchedListBesideDelete() {
-    assertArity(DELETES, "sink_untouched", OptionalInt.empty());
+    assertArity(DELETES, "sink_untouched", OptionalInt.of(2));
   }
 
   /** A tuple, which no {@code del} can shorten, keeps its length beside one. */
@@ -526,6 +539,25 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testNameDeleteKeepsArity() {
     assertArity(DELETES_NAME, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * A {@code del} of an attribute, {@code del o.a}, or by a string key, {@code del d["k"]}, in a
+   * function the call graph reaches or one it does not, resizes no list: a list keeps its length
+   * (wala/ML#1239).
+   */
+  @Test
+  public void testKeyDeleteKeepsArity() {
+    assertArity(DELETES_KEY, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * A {@code del l[0]} of a parameter in a function the call graph does not reach may delete from
+   * any list, so a list reports no length.
+   */
+  @Test
+  public void testUnreachedParameterDelete() {
+    assertArity(DELETES_UNREACHED, "sink_list", OptionalInt.empty());
   }
 
   /**

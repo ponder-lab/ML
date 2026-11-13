@@ -1,6 +1,6 @@
-# Test `ContainerElements` where the program deletes an element with a subscript `del`, whose target
-# the front end drops: no list reports a length. Each sink receives one container; a reported length
-# must be the asserted run-time one.
+# Test `ContainerElements` where the program deletes an element with a subscript `del`: a list it
+# may delete from reports no length, and one it cannot keeps its length (wala/ML#1239). Each sink
+# receives one container; a reported length must be the asserted run-time one.
 import tensorflow as tf
 
 x = tf.ones([2, 3])
@@ -24,6 +24,10 @@ def sink_dict_deep_del(c):
 
 
 def sink_closure_del(c):
+    assert len(c) == 1
+
+
+def sink_slice_del(c):
     assert len(c) == 1
 
 
@@ -94,6 +98,10 @@ def make_closure_del():
 
 sink_closure_del(make_closure_del())
 
-# A list no `del` touches still reports none, since the deleted one is unknown; a tuple is immutable.
+sl = [x, y]
+del sl[1:]
+sink_slice_del(sl)
+
+# A list no `del` touches keeps its length; a tuple is immutable.
 sink_untouched([x, y])
 sink_tuple((x, y))
