@@ -163,7 +163,9 @@ public class BuiltinFunctions {
    * Builds the summary for {@code enumerate}: a freshly-allocated list holding one tuple whose
    * field 0 is an {@code int} index and whose field 1 is an element of the argument. Iterating the
    * result and unpacking each element (the {@code for i, x in enumerate(xs)} idiom) then binds
-   * {@code i} to the index and {@code x} to the input's element.
+   * {@code i} to the index and {@code x} to the input's element. The call-graph builder gives the
+   * index its values in place of the {@code int} allocated here: {@code 0} through {@code n - 1}
+   * over a list or tuple literal of length {@code n}, until the list may grow (wala/ML#1246).
    *
    * <p>Previously {@code enumerate} returned its argument, so iterating it yielded the sequence's
    * elements rather than {@code (index, element)} pairs, and the destructuring read fields 0 and 1

@@ -1163,6 +1163,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     @Override
     public void visitNew(SSANewInstruction instruction) {
+      if (isCountAllocation(instruction)) {
+        getBuilder()
+            .addCountConstraints(
+                getPointerKeyForLocal(instruction.getDef()),
+                getInstanceKeyForAllocation(instruction.getNewSite()),
+                getPointerKeyForLocal(COUNTED_ARGUMENT),
+                isBuiltin(ENUMERATE_BUILTIN),
+                node);
+        return;
+      }
       ConditionalAllocation conditional = conditionalAllocation(instruction);
       if (conditional == null) {
         super.visitNew(instruction);
@@ -1192,8 +1202,32 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     protected boolean contentsAreInvariant(SymbolTable symbolTable, DefUse du, int valueNumber) {
       if (du.getDef(valueNumber) instanceof SSANewInstruction allocation
-          && conditionalAllocation(allocation) != null) return false;
+          && (conditionalAllocation(allocation) != null || isCountAllocation(allocation)))
+        return false;
       return super.contentsAreInvariant(symbolTable, du, valueNumber);
+    }
+
+    /**
+     * Whether an allocation is the {@code int} the {@code enumerate} builtin's summary makes for an
+     * index, or the {@code len} builtin's for its result, whose values the builder supplies instead
+     * (wala/ML#1246); see {@link #addCountConstraints}.
+     *
+     * @param instruction The allocation.
+     * @return {@code true} iff it is such an allocation.
+     */
+    private boolean isCountAllocation(SSANewInstruction instruction) {
+      return instruction.getNewSite().getDeclaredType().equals(PythonTypes.PYTHON_INT)
+          && (isBuiltin(ENUMERATE_BUILTIN) || isBuiltin(LEN_BUILTIN));
+    }
+
+    /**
+     * Whether this node is the summary of a builtin.
+     *
+     * @param builtin The builtin's type.
+     * @return {@code true} iff this node's method is the builtin's.
+     */
+    private boolean isBuiltin(TypeReference builtin) {
+      return node.getMethod().getDeclaringClass().getReference().equals(builtin);
     }
 
     /**
@@ -3463,6 +3497,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
   }
+
+  /** The {@code enumerate} builtin. */
+  private static final TypeReference ENUMERATE_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lwala/builtin/enumerate"));
+
+  /** The {@code len} builtin. */
+  private static final TypeReference LEN_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lwala/builtin/len"));
+
+  /**
+   * The value number of the argument the {@code enumerate} and {@code len} builtins' summaries
+   * count, the first after the function itself.
+   */
+  private static final int COUNTED_ARGUMENT = 2;
 
   /** The {@code round} builtin. */
   private static final TypeReference ROUND_BUILTIN =
@@ -7821,17 +7871,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
-   * Solves, then widens each slice of a list literal that the program may change in a way the
-   * analysis does not record, and solves again, until no slice is left to widen (wala/ML#1250). A
-   * slice trims a literal to its elements in range only while nothing may have grown, shrunk or
-   * reordered the list ({@link SliceResultOperator}), and whether something may is known only once
-   * the call graph is built: the routes include {@code extend} and {@code insert}, a slice
-   * assignment, a call that resolves to no target, and a function the call graph does not reach
-   * ({@link ContainerMutations}). It also revises the {@code training} values Keras's call context
-   * gives layers, which can be read only once the analysis is solved (wala/ML#1249). When nothing
-   * is left to revise, the mutations the last check read are recorded as those of the built call
-   * graph, but only when no solve ran after they were read; otherwise they are read again on first
-   * use.
+   * Solves, then revises what was read off a list literal that the program may change in a way the
+   * analysis does not record, and solves again, until nothing is left to revise: each slice of such
+   * a literal is widened (wala/ML#1250), and each count of one, an {@code enumerate} index or a
+   * {@code len}, may be any {@code int} (wala/ML#1246). A slice trims a literal to its elements in
+   * range, and a count takes its length, only while nothing may have grown, shrunk or reordered the
+   * list ({@link SliceResultOperator}, {@link ContainerCountOperator}), and whether something may
+   * is known only once the call graph is built: the routes include {@code extend} and {@code
+   * insert}, a slice assignment, a call that resolves to no target, and a function the call graph
+   * does not reach ({@link ContainerMutations}). It also revises the {@code training} values
+   * Keras's call context gives layers, which can be read only once the analysis is solved
+   * (wala/ML#1249). When nothing is left to revise, the mutations the last check read are recorded
+   * as those of the built call graph, but only when no solve ran after they were read; otherwise
+   * they are read again on first use.
    *
    * @return The solver.
    */
@@ -7843,7 +7895,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       solves++;
       while (true) {
         // Both checks run every round, so one's revision does not put off the other's.
-        boolean lists = widenChangedLiteralSlices();
+        boolean lists = reviseForChangedLists();
         boolean contexts = reviseTrainingContexts();
         if (!lists && !contexts) break;
         solver.solve(monitor);
@@ -7864,24 +7916,329 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private int scannedMutationsSolves;
 
   /**
-   * Widens each slice of a list literal that the program may change unrecorded and that is not
-   * widened yet; see {@link #makeSolver}.
+   * Widens each slice, and opens each count, of a list literal that the program may change
+   * unrecorded and that is not revised yet; see {@link #makeSolver}.
    *
-   * @return {@code true} iff a slice was widened, so the analysis must be solved again.
+   * @return {@code true} iff something was revised, so the analysis must be solved again.
    */
-  private boolean widenChangedLiteralSlices() {
-    List<LiteralSlice> pending = literalSlices.stream().filter(s -> !s.widened).toList();
-    if (pending.isEmpty()) return false;
+  private boolean reviseForChangedLists() {
+    boolean revised = false;
+    // A count of an argument that holds no container, such as `len` of a value the analysis does
+    // not
+    // model, may be any `int`, as the summary's allocation was.
+    // An index whose call passes a `start` does not count from `0`.
+    for (StartedIndex started : startedIndices)
+      if (!started.opened && mayPassStart(started.node)) {
+        started.opened = true;
+        getSystem().newConstraint(started.result, started.unknown);
+        revised = true;
+      }
+    for (UncountedArgument uncounted : uncountedArguments) {
+      if (uncounted.opened) continue;
+      IntSet argument = getSystem().findOrCreatePointsToSet(uncounted.argument).getValue();
+      if (argument == null || argument.isEmpty()) {
+        uncounted.opened = true;
+        getSystem().newConstraint(uncounted.result, uncounted.unknown);
+        revised = true;
+      }
+    }
+    if (revised) return true;
+    List<LiteralSlice> slices = literalSlices.stream().filter(s -> !s.widened).toList();
+    List<LiteralCount> counts = literalCounts.stream().filter(c -> !c.opened).toList();
+    if (slices.isEmpty() && counts.isEmpty()) return false;
     ContainerMutations mutations = ContainerMutations.compute(this);
     scannedMutations = mutations;
     scannedMutationsSolves = solves;
-    boolean widened = false;
-    for (LiteralSlice slice : pending)
+    for (LiteralSlice slice : slices)
       if (mutations.mayRepositionUnappended(this, slice.literal)) {
         slice.widen();
-        widened = true;
+        revised = true;
       }
-    return widened;
+    for (LiteralCount count : counts)
+      if (mutations.mayRepositionUnappended(this, count.literal)) {
+        count.open();
+        revised = true;
+      }
+    return revised;
+  }
+
+  /**
+   * The literal lists and tuples an {@code enumerate} index or a {@code len} took its values from
+   * (wala/ML#1246), each opened to any {@code int} once the program may change the list unrecorded;
+   * see {@link #makeSolver}.
+   */
+  private final List<LiteralCount> literalCounts = new ArrayList<>();
+
+  /**
+   * Supplies the values of an {@code enumerate} index or a {@code len} result, which their
+   * builtins' summaries allocate as an {@code int} of unknown value, from the container counted
+   * (wala/ML#1246); see {@link ContainerCountOperator}.
+   *
+   * @param result The index or the result.
+   * @param unknown The {@code int} of unknown value the summary allocates, or {@code null}.
+   * @param argument The container counted.
+   * @param indices Whether the values are the indices of the container's elements, as an {@code
+   *     enumerate} index's are, rather than its length.
+   */
+  void addCountConstraints(
+      PointerKey result, InstanceKey unknown, PointerKey argument, boolean indices, CGNode node) {
+    getSystem().newSideEffect(new ContainerCountOperator(result, unknown, indices), argument);
+    if (unknown != null) {
+      uncountedArguments.add(new UncountedArgument(argument, result, unknown));
+      if (indices) startedIndices.add(new StartedIndex(node, result, unknown));
+    }
+  }
+
+  /**
+   * The {@code enumerate} indices whose call may pass a {@code start}, each given any {@code int}
+   * if one does once the analysis is solved (wala/ML#1246); see {@link #makeSolver}.
+   */
+  private final List<StartedIndex> startedIndices = new ArrayList<>();
+
+  /**
+   * An {@code enumerate} index, which counts from {@code 0} only when its call passes no {@code
+   * start}. The summary reads no {@code start}, so the calls of its node are read for one.
+   */
+  private static final class StartedIndex {
+
+    /** The {@code enumerate} summary's node. */
+    private final CGNode node;
+
+    /** The index. */
+    private final PointerKey result;
+
+    /** The {@code int} of unknown value. */
+    private final InstanceKey unknown;
+
+    /** Whether the index was given any {@code int}. */
+    private boolean opened;
+
+    private StartedIndex(CGNode node, PointerKey result, InstanceKey unknown) {
+      this.node = node;
+      this.result = result;
+      this.unknown = unknown;
+    }
+  }
+
+  /**
+   * Whether a call of an {@code enumerate} node may pass a {@code start}: by position, by keyword,
+   * through a starred or a double-starred argument, or by a call this cannot read, such as one a
+   * summary makes.
+   *
+   * @param node The {@code enumerate} summary's node.
+   * @return {@code true} iff a call of the node may pass a {@code start}.
+   */
+  private boolean mayPassStart(CGNode node) {
+    CallGraph cg = getCallGraph();
+    for (Iterator<CGNode> callers = cg.getPredNodes(node); callers.hasNext(); ) {
+      CGNode caller = callers.next();
+      IR ir = caller.getIR();
+      for (Iterator<CallSiteReference> sites = cg.getPossibleSites(caller, node);
+          sites.hasNext(); ) {
+        CallSiteReference site = sites.next();
+        if (ir == null) return true;
+        for (SSAAbstractInvokeInstruction call : ir.getCalls(site))
+          // The function, the iterable and a `start` are the positional arguments.
+          if (!(call instanceof PythonInvokeInstruction invoke)
+              || invoke.getNumberOfPositionalParameters() > 2
+              || invoke.getKeywords().contains("start")
+              // A `**` argument is the keyword the front end names "null".
+              || invoke.getKeywords().contains("null")
+              || invoke.getStarredPositions().length > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The counts whose argument may turn out to hold no container, each given any {@code int} if it
+   * holds none once the analysis is solved (wala/ML#1246); see {@link #makeSolver}.
+   */
+  private final List<UncountedArgument> uncountedArguments = new ArrayList<>();
+
+  /**
+   * The argument of an {@code enumerate} index or a {@code len} result, which gives the count any
+   * {@code int} if it holds no container once the analysis is solved.
+   */
+  private static final class UncountedArgument {
+
+    /** The container counted. */
+    private final PointerKey argument;
+
+    /** The index or the length. */
+    private final PointerKey result;
+
+    /** The {@code int} of unknown value. */
+    private final InstanceKey unknown;
+
+    /** Whether the count was given any {@code int}. */
+    private boolean opened;
+
+    private UncountedArgument(PointerKey argument, PointerKey result, InstanceKey unknown) {
+      this.argument = argument;
+      this.result = result;
+      this.unknown = unknown;
+    }
+  }
+
+  /**
+   * The values of an {@code enumerate} index or a {@code len} result, by the containers the
+   * argument may be (wala/ML#1246). A list or tuple literal of known length {@code n} gives the
+   * constants {@code 0} through {@code n - 1} to an index and {@code n} to a length, until the list
+   * may have grown: once its appended or operation contents fill, as the analysis solves, or once
+   * the scan of the built call graph finds the program may change it otherwise ({@link
+   * #makeSolver}), the values include any {@code int}. Any other container gives any {@code int},
+   * as the summary's allocation did.
+   */
+  private final class ContainerCountOperator extends UnaryOperator<PointsToSetVariable> {
+    private final PointerKey result;
+    private final InstanceKey unknown;
+    private final boolean indices;
+    private final Set<InstanceKey> counted = HashSetFactory.make();
+
+    private ContainerCountOperator(PointerKey result, InstanceKey unknown, boolean indices) {
+      this.result = result;
+      this.unknown = unknown;
+      this.indices = indices;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> count(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds the values a container gives.
+     *
+     * @param container A container the argument may be.
+     */
+    private void count(InstanceKey container) {
+      if (!counted.add(container)) return;
+      int length = literalLength(container);
+      if (length < 0) {
+        if (unknown != null) getSystem().newConstraint(result, unknown);
+        return;
+      }
+      logger.fine(() -> "count of " + container + " of length " + length + " into " + result);
+      if (indices)
+        for (int i = 0; i < length; i++)
+          getSystem()
+              .newConstraint(
+                  result, getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(i), i));
+      else
+        getSystem()
+            .newConstraint(
+                result,
+                getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(length), length));
+      LiteralCount literalCount = new LiteralCount(container, result, unknown);
+      literalCounts.add(literalCount);
+      // A list that grows as the analysis solves, by `append` or an operation, has no fixed length.
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      for (String name : List.of(LIST_APPEND_CONTENTS_FIELD, LIST_OPERATION_CONTENTS_FIELD)) {
+        IField field = resolveRootField(cha, name);
+        if (field == null) continue;
+        getSystem()
+            .newSideEffect(
+                new UnaryOperator<PointsToSetVariable>() {
+                  @Override
+                  public byte evaluate(PointsToSetVariable l, PointsToSetVariable contents) {
+                    if (contents.getValue() != null && !contents.getValue().isEmpty())
+                      literalCount.open();
+                    return NOT_CHANGED;
+                  }
+
+                  @Override
+                  public int hashCode() {
+                    return literalCount.hashCode();
+                  }
+
+                  @Override
+                  public boolean equals(Object o) {
+                    return this == o;
+                  }
+
+                  @Override
+                  public String toString() {
+                    return "growth of " + container + " opening " + result;
+                  }
+                },
+                factory.getPointerKeyForInstanceField(container, field));
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return result.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ContainerCountOperator other
+          && result.equals(other.result)
+          && indices == other.indices;
+    }
+
+    @Override
+    public String toString() {
+      return (indices ? "indices" : "length") + " of the argument into " + result;
+    }
+  }
+
+  /**
+   * A count of a list or tuple literal, which can be opened to any {@code int} once the list may
+   * have changed (wala/ML#1246).
+   */
+  private final class LiteralCount {
+
+    /** The counted literal. */
+    private final InstanceKey literal;
+
+    /** The index or the length. */
+    private final PointerKey result;
+
+    /** The {@code int} of unknown value, or {@code null}. */
+    private final InstanceKey unknown;
+
+    /** Whether the count may be any {@code int}. */
+    private boolean opened;
+
+    private LiteralCount(InstanceKey literal, PointerKey result, InstanceKey unknown) {
+      this.literal = literal;
+      this.result = result;
+      this.unknown = unknown;
+    }
+
+    /** Adds the {@code int} of unknown value to the count. */
+    private void open() {
+      if (opened) return;
+      opened = true;
+      logger.fine(() -> "opening the count of " + literal + " in " + result);
+      if (unknown != null) getSystem().newConstraint(result, unknown);
+    }
+  }
+
+  /**
+   * The length of a list or tuple literal: one program code allocates, whose elements sit at the
+   * constant indices {@code 0} through {@code n - 1}. A list a summary allocates stands in for a
+   * value whose length the summary does not model (`tf.unstack` writes one stand-in piece at a few
+   * constant indices), so its constant writes are not its length (wala/ML#993). A summary's tuple
+   * keeps its length: {@code zip} and {@code enumerate} pairs are fixed.
+   *
+   * @param key A key.
+   * @return The length, or {@code -1} when the key is no such literal.
+   */
+  private int literalLength(InstanceKey key) {
+    if (!(key instanceof AllocationSiteInNode asin)) return -1;
+    IClassHierarchy cha = getClassHierarchy();
+    IClass list = cha.lookupClass(PythonTypes.list);
+    IClass tuple = cha.lookupClass(PythonTypes.tuple);
+    IClass type = key.concreteType();
+    boolean isList = list != null && cha.isSubclassOf(type, list);
+    if (!isList && !(tuple != null && cha.isSubclassOf(type, tuple))) return -1;
+    if (isList && asin.getNode().getMethod().isWalaSynthetic()) return -1;
+    return knownTupleLength(asin);
   }
 
   /**
@@ -8025,21 +8382,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * literal's length, or {@code null} when the key or the bounds do not determine it.
      */
     private int[] literalRange(InstanceKey key) {
-      if (!(key instanceof AllocationSiteInNode asin)) return null;
-      IClassHierarchy cha = getClassHierarchy();
-      IClass list = cha.lookupClass(PythonTypes.list);
-      IClass tuple = cha.lookupClass(PythonTypes.tuple);
-      IClass type = key.concreteType();
-      if (!(list != null && cha.isSubclassOf(type, list))
-          && !(tuple != null && cha.isSubclassOf(type, tuple))) return null;
-      // A list a summary allocates stands in for a value whose length the summary does not model
-      // (`tf.unstack` writes one stand-in piece at a few constant indices), so its constant writes
-      // are not its length, and slicing it as a literal mints a shorter list than the program's
-      // (wala/ML#993). A summary's tuple keeps its length: `zip` and `enumerate` pairs are fixed.
-      if (list != null
-          && cha.isSubclassOf(type, list)
-          && asin.getNode().getMethod().isWalaSynthetic()) return null;
-      int length = knownTupleLength(asin);
+      int length = literalLength(key);
       if (length < 0) return null;
       SSAInstruction inst = caller.getIR().getInstructions()[pc];
       if (!(inst instanceof PythonInvokeInstruction call)

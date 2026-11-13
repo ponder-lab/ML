@@ -76,13 +76,15 @@ def sink_sum_start_keyword(v):
     return v
 
 
-assert sink_len(len([1, 2])) == 2
+# A copy, not a literal, whose length the analysis does not count (wala/ML#1246).
+assert sink_len(len(list([1, 2]))) == 2
 assert sink_int(int("3")) == 3
 assert sink_float(float("0.5")) == 0.5
 assert sink_bool(bool([])) is False
 for i in range(3):
     assert isinstance(sink_range(i), int)
-for j, e in enumerate(["a"]):
+# A copy, not a literal, whose indices the analysis does not count (wala/ML#1246).
+for j, e in enumerate(list(["a"])):
     assert isinstance(sink_enumerate(j), int)
 assert sink_literal(3) == 3
 # A sum's and a round's type follows their arguments.
