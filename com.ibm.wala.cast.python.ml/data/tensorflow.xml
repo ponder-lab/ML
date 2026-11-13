@@ -3913,7 +3913,7 @@
       </class>
       <!-- The distinct Sequential instance type (wala/ML#817). Declares only `__call__`, duplicated from `Model`: the instance-method trampoline resolves the callable's method on the exact receiver class with no superclass walk (wala/ML#833), so a body-less shell left `model(x)` unresolved. `__init__` and `call` are NOT duplicated — their resolution walks the hierarchy chain, so `Model`'s bodies serve — and `super` chains into the canonical `Model`, so a source subclass such as `class M(tf.keras.Sequential)` joins the same hierarchy a `Model` subclass does (wala/ML#118, wala/ML#662). -->
       <class name="Sequential" allocatable="true" super="Ltensorflow/keras/models/Model">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential#call. The model's call is what calls its layers, each on the previous one's output, so a user layer in the list receives its input here and nowhere else (wala/ML#832). The layers in the list's literal positions are called in order, each on its predecessor's result, which is exact for a list written out. A layer the list holds without a position, appended or concatenated in (`+=`, possibly in a loop), or one given to `add`, has no order the points-to sets keep, so it is called on the join of the model's input and every layer's output, kept in `box`: an over-approximation of what it receives, never an omission. The result stays the fresh tensor `SequentialCall` types by folding the list; the layer calls here only give the layers their call-graph edges and their inputs. Positions past the 32 unrolled below are not called (wala/ML#1089), and a layer without a position takes the join rather than its predecessor's output (wala/ML#1090). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential#call. The model's call is what calls its layers, each on the previous one's output, so a user layer in the list receives its input here and nowhere else (wala/ML#832). The layers in the list's literal positions are called in order, each on its predecessor's result, which is exact for a list written out. A layer the list holds without a position, appended or concatenated in (`+=`, possibly in a loop), or one given to `add`, has no order the points-to sets keep, so it is called on the join of the model's input and every layer's output, kept in `box`: an over-approximation of what it receives, never an omission. The result stays the fresh tensor `SequentialCall` types by folding the list; the layer calls here only give the layers their call-graph edges and their inputs. Positions past the 32 unrolled below are not called (wala/ML#1089), and a layer without a position takes the join rather than its predecessor's output (wala/ML#1090). Each layer is called twice. One call passes the model's `training` by keyword, as Keras's `Sequential.call` passes it to a layer whose `call` takes it, so it binds to a layer's `training` wherever that parameter is and to nothing in a layer whose `call` takes none (wala/ML#1120). The other passes no `training`, so the layer keeps its own default: Keras gives a layer that default when the model is called without `training` outside `fit` and the like, and a keyword bound to the model's unpassed, empty `training` would otherwise erase it. A model call gives every layer the same `training`, so the positioned layers form two chains, each layer taking its predecessor's result in the same chain: one without the keyword (`y0`, `y1`, ...), the def-use chain the summary had before, and one with it (`k0`, `k1`, ...). A layer's `training` is therefore the model's joined with the layer's default, an over-approximation until the call context is modeled (wala/ML#1249). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <getfield class="LRoot" field="layers" fieldType="LRoot" ref="self" def="layers"/>
           <new def="box" class="Lobject"/>
@@ -3921,109 +3921,179 @@
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="layers" def="l0"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l0" arg1="inputs" numArgs="2" def="y0"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y0"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l0" arg1="inputs" arg2="training" numArgs="3" keywords="training" def="k0"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k0"/>
           <getfield class="LRoot" field="1" fieldType="LRoot" ref="layers" def="l1"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l1" arg1="y0" numArgs="2" def="y1"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y1"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l1" arg1="k0" arg2="training" numArgs="3" keywords="training" def="k1"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k1"/>
           <getfield class="LRoot" field="2" fieldType="LRoot" ref="layers" def="l2"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l2" arg1="y1" numArgs="2" def="y2"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y2"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l2" arg1="k1" arg2="training" numArgs="3" keywords="training" def="k2"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k2"/>
           <getfield class="LRoot" field="3" fieldType="LRoot" ref="layers" def="l3"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l3" arg1="y2" numArgs="2" def="y3"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y3"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l3" arg1="k2" arg2="training" numArgs="3" keywords="training" def="k3"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k3"/>
           <getfield class="LRoot" field="4" fieldType="LRoot" ref="layers" def="l4"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l4" arg1="y3" numArgs="2" def="y4"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y4"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l4" arg1="k3" arg2="training" numArgs="3" keywords="training" def="k4"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k4"/>
           <getfield class="LRoot" field="5" fieldType="LRoot" ref="layers" def="l5"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l5" arg1="y4" numArgs="2" def="y5"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y5"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l5" arg1="k4" arg2="training" numArgs="3" keywords="training" def="k5"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k5"/>
           <getfield class="LRoot" field="6" fieldType="LRoot" ref="layers" def="l6"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l6" arg1="y5" numArgs="2" def="y6"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y6"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l6" arg1="k5" arg2="training" numArgs="3" keywords="training" def="k6"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k6"/>
           <getfield class="LRoot" field="7" fieldType="LRoot" ref="layers" def="l7"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l7" arg1="y6" numArgs="2" def="y7"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y7"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l7" arg1="k6" arg2="training" numArgs="3" keywords="training" def="k7"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k7"/>
           <getfield class="LRoot" field="8" fieldType="LRoot" ref="layers" def="l8"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l8" arg1="y7" numArgs="2" def="y8"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y8"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l8" arg1="k7" arg2="training" numArgs="3" keywords="training" def="k8"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k8"/>
           <getfield class="LRoot" field="9" fieldType="LRoot" ref="layers" def="l9"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l9" arg1="y8" numArgs="2" def="y9"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y9"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l9" arg1="k8" arg2="training" numArgs="3" keywords="training" def="k9"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k9"/>
           <getfield class="LRoot" field="10" fieldType="LRoot" ref="layers" def="l10"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l10" arg1="y9" numArgs="2" def="y10"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y10"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l10" arg1="k9" arg2="training" numArgs="3" keywords="training" def="k10"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k10"/>
           <getfield class="LRoot" field="11" fieldType="LRoot" ref="layers" def="l11"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l11" arg1="y10" numArgs="2" def="y11"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y11"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l11" arg1="k10" arg2="training" numArgs="3" keywords="training" def="k11"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k11"/>
           <getfield class="LRoot" field="12" fieldType="LRoot" ref="layers" def="l12"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l12" arg1="y11" numArgs="2" def="y12"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y12"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l12" arg1="k11" arg2="training" numArgs="3" keywords="training" def="k12"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k12"/>
           <getfield class="LRoot" field="13" fieldType="LRoot" ref="layers" def="l13"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l13" arg1="y12" numArgs="2" def="y13"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y13"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l13" arg1="k12" arg2="training" numArgs="3" keywords="training" def="k13"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k13"/>
           <getfield class="LRoot" field="14" fieldType="LRoot" ref="layers" def="l14"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l14" arg1="y13" numArgs="2" def="y14"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y14"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l14" arg1="k13" arg2="training" numArgs="3" keywords="training" def="k14"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k14"/>
           <getfield class="LRoot" field="15" fieldType="LRoot" ref="layers" def="l15"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l15" arg1="y14" numArgs="2" def="y15"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y15"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l15" arg1="k14" arg2="training" numArgs="3" keywords="training" def="k15"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k15"/>
           <getfield class="LRoot" field="16" fieldType="LRoot" ref="layers" def="l16"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l16" arg1="y15" numArgs="2" def="y16"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y16"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l16" arg1="k15" arg2="training" numArgs="3" keywords="training" def="k16"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k16"/>
           <getfield class="LRoot" field="17" fieldType="LRoot" ref="layers" def="l17"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l17" arg1="y16" numArgs="2" def="y17"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y17"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l17" arg1="k16" arg2="training" numArgs="3" keywords="training" def="k17"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k17"/>
           <getfield class="LRoot" field="18" fieldType="LRoot" ref="layers" def="l18"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l18" arg1="y17" numArgs="2" def="y18"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y18"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l18" arg1="k17" arg2="training" numArgs="3" keywords="training" def="k18"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k18"/>
           <getfield class="LRoot" field="19" fieldType="LRoot" ref="layers" def="l19"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l19" arg1="y18" numArgs="2" def="y19"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y19"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l19" arg1="k18" arg2="training" numArgs="3" keywords="training" def="k19"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k19"/>
           <getfield class="LRoot" field="20" fieldType="LRoot" ref="layers" def="l20"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l20" arg1="y19" numArgs="2" def="y20"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y20"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l20" arg1="k19" arg2="training" numArgs="3" keywords="training" def="k20"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k20"/>
           <getfield class="LRoot" field="21" fieldType="LRoot" ref="layers" def="l21"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l21" arg1="y20" numArgs="2" def="y21"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y21"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l21" arg1="k20" arg2="training" numArgs="3" keywords="training" def="k21"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k21"/>
           <getfield class="LRoot" field="22" fieldType="LRoot" ref="layers" def="l22"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l22" arg1="y21" numArgs="2" def="y22"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y22"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l22" arg1="k21" arg2="training" numArgs="3" keywords="training" def="k22"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k22"/>
           <getfield class="LRoot" field="23" fieldType="LRoot" ref="layers" def="l23"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l23" arg1="y22" numArgs="2" def="y23"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y23"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l23" arg1="k22" arg2="training" numArgs="3" keywords="training" def="k23"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k23"/>
           <getfield class="LRoot" field="24" fieldType="LRoot" ref="layers" def="l24"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l24" arg1="y23" numArgs="2" def="y24"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y24"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l24" arg1="k23" arg2="training" numArgs="3" keywords="training" def="k24"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k24"/>
           <getfield class="LRoot" field="25" fieldType="LRoot" ref="layers" def="l25"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l25" arg1="y24" numArgs="2" def="y25"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y25"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l25" arg1="k24" arg2="training" numArgs="3" keywords="training" def="k25"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k25"/>
           <getfield class="LRoot" field="26" fieldType="LRoot" ref="layers" def="l26"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l26" arg1="y25" numArgs="2" def="y26"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y26"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l26" arg1="k25" arg2="training" numArgs="3" keywords="training" def="k26"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k26"/>
           <getfield class="LRoot" field="27" fieldType="LRoot" ref="layers" def="l27"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l27" arg1="y26" numArgs="2" def="y27"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y27"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l27" arg1="k26" arg2="training" numArgs="3" keywords="training" def="k27"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k27"/>
           <getfield class="LRoot" field="28" fieldType="LRoot" ref="layers" def="l28"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l28" arg1="y27" numArgs="2" def="y28"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y28"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l28" arg1="k27" arg2="training" numArgs="3" keywords="training" def="k28"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k28"/>
           <getfield class="LRoot" field="29" fieldType="LRoot" ref="layers" def="l29"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l29" arg1="y28" numArgs="2" def="y29"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y29"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l29" arg1="k28" arg2="training" numArgs="3" keywords="training" def="k29"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k29"/>
           <getfield class="LRoot" field="30" fieldType="LRoot" ref="layers" def="l30"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l30" arg1="y29" numArgs="2" def="y30"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y30"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l30" arg1="k29" arg2="training" numArgs="3" keywords="training" def="k30"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k30"/>
           <getfield class="LRoot" field="31" fieldType="LRoot" ref="layers" def="l31"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l31" arg1="y30" numArgs="2" def="y31"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="y31"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="l31" arg1="k30" arg2="training" numArgs="3" keywords="training" def="k31"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="k31"/>
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="box" def="joined"/>
           <getfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="layers" def="appended"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="appended" arg1="joined" numArgs="2" def="appendedOut"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="appendedOut"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="appended" arg1="joined" arg2="training" numArgs="3" keywords="training" def="appendedKeyword"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="appendedKeyword"/>
           <getfield class="LRoot" field="__list_operation_contents__" fieldType="LRoot" ref="layers" def="concatenated"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="concatenated" arg1="joined" numArgs="2" def="concatenatedOut"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="concatenatedOut"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="concatenated" arg1="joined" arg2="training" numArgs="3" keywords="training" def="concatenatedKeyword"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="concatenatedKeyword"/>
           <getfield class="LRoot" field="__added_layers__" fieldType="LRoot" ref="self" def="added"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="added" arg1="joined" numArgs="2" def="addedOut"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="addedOut"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="added" arg1="joined" arg2="training" numArgs="3" keywords="training" def="addedKeyword"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="box" value="addedKeyword"/>
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
