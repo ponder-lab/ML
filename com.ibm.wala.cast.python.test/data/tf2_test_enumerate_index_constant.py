@@ -102,3 +102,12 @@ for position, item in enumerate([edges], 1):
 
 for position, item in enumerate([edges], start=2):
     consume_from_started_keyword(tf.ones([position + 2]))
+
+
+def consume_from_started_double_starred(x):
+    assert x.shape == (5,)
+    assert x.dtype == tf.float32
+
+
+for position, item in enumerate([edges], **{"start": 3}):
+    consume_from_started_double_starred(tf.ones([position + 2]))

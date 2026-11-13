@@ -128,4 +128,16 @@ public class TestEnumerateIndexConstant extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_from_started_keyword", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT32)));
   }
+
+  /** The same, with {@code start} passed through a {@code **} argument. */
+  @Test
+  public void testFromStartedDoubleStarred()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_from_started_double_starred",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT32)));
+  }
 }

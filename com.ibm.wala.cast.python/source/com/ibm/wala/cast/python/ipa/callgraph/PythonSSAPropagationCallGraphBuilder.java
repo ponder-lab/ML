@@ -7481,8 +7481,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
-   * Whether a call of an {@code enumerate} node may pass a {@code start}: by position, by keyword
-   * or through a starred argument, or by a call this cannot read, such as one a summary makes.
+   * Whether a call of an {@code enumerate} node may pass a {@code start}: by position, by keyword,
+   * through a starred or a double-starred argument, or by a call this cannot read, such as one a
+   * summary makes.
    *
    * @param node The {@code enumerate} summary's node.
    * @return {@code true} iff a call of the node may pass a {@code start}.
@@ -7501,6 +7502,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           if (!(call instanceof PythonInvokeInstruction invoke)
               || invoke.getNumberOfPositionalParameters() > 2
               || invoke.getKeywords().contains("start")
+              // A `**` argument is the keyword the front end names "null".
+              || invoke.getKeywords().contains("null")
               || invoke.getStarredPositions().length > 0) return true;
       }
     }
