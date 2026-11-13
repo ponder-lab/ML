@@ -361,7 +361,11 @@ public abstract class PythonAnalysisEngine<T>
     Map<TypeReference, List<MethodReference>> classToFunDoRefs = new HashMap<>();
 
     // Pass 1: Transform methods to function classes
-    for (MethodSummary s : new ArrayList<>(summaries.values())) {
+    // The file's declaration order, which orders the stores pass 2 injects into each constructor,
+    // with each summary as rewritten for its keyword calls (wala/ML#1248).
+    Map<MethodReference, MethodSummary> rewritten = new HashMap<>(summaries);
+    for (MethodSummary declared : xml.getSummaries().values()) {
+      MethodSummary s = rewritten.get(declared.getMethod());
       MethodReference mr = s.getMethod();
       String methodName = mr.getName().toString();
       // `__init__` is transformed like any other method so a summary initializer is dispatchable

@@ -79,10 +79,26 @@ public final class SummaryKeywordCalls {
     }
   }
 
+  /**
+   * The key {@link #read(InputStream)} gives a summarized method: its class's name and its own.
+   *
+   * @param method The method.
+   * @return The method's key.
+   */
   private static String key(MethodReference method) {
     return method.getDeclaringClass().getName() + "." + method.getName();
   }
 
+  /**
+   * A copy of a summary whose keyword calls are Python calls with their keywords and whose {@code
+   * bool} constants have their values.
+   *
+   * @param summary The summary WALA's reader made.
+   * @param extras What the summary's method declares beyond what the reader keeps.
+   * @return The copy.
+   * @throws IllegalStateException If the summary's calls or constants of an unknown type are not
+   *     the ones the method declares.
+   */
   private static MethodSummary rewrite(MethodSummary summary, Extras extras) {
     MethodSummary ret = new MethodSummary(summary.getMethod(), summary.getNumberOfParameters());
     ret.setStatic(summary.isStatic());
@@ -134,6 +150,14 @@ public final class SummaryKeywordCalls {
     return ret;
   }
 
+  /**
+   * A Python call making the same call as an invoke, its last arguments passed by keyword.
+   *
+   * @param invoke The invoke.
+   * @param keywords The keywords, in the order of the arguments they name.
+   * @return The Python call.
+   * @throws IllegalStateException If the invoke has no argument left for the callee.
+   */
   private static PythonInvokeInstruction withKeywords(
       SSAAbstractInvokeInstruction invoke, String[] keywords) {
     int arguments = invoke.getNumberOfPositionalParameters();
@@ -157,6 +181,14 @@ public final class SummaryKeywordCalls {
         keywordParams);
   }
 
+  /**
+   * Reads what each method of a summary file declares beyond what WALA's reader keeps.
+   *
+   * @param xml The summary file, which this closes.
+   * @return Each method's extras, by its {@link #key(MethodReference)}, for the methods that
+   *     declare a keyword call or a {@code bool} constant.
+   * @throws IllegalStateException If the file cannot be read.
+   */
   private static Map<String, Extras> read(InputStream xml) {
     Map<String, Extras> ret = new HashMap<>();
     try (xml) {

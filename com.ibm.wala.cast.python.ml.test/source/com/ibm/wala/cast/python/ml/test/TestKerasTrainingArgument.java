@@ -14,6 +14,7 @@ import com.ibm.wala.ssa.IR;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.IntStream;
 import org.junit.Test;
 
 /**
@@ -78,6 +79,19 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A {@code call} that takes {@code **kwargs} and no {@code training} finds {@code training=True}
+   * among them, as Keras passes it there.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testKeywordArguments() throws Exception {
+    assertEquals(
+        Set.of(Boolean.TRUE),
+        localConstants("tf2_test_training_kwargs.py", "Net/call", "training", false));
+  }
+
+  /**
    * A {@code call} that declares no {@code training} is still called, its input passed, as the
    * keyword binds to nothing there.
    *
@@ -111,6 +125,22 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
    */
   private Set<Object> parameterConstants(String file, String function, String parameter)
       throws Exception {
+    return localConstants(file, function, parameter, true);
+  }
+
+  /**
+   * The constant values a local variable of a function points to, over the function's nodes, each
+   * {@code None} as the string {@code "None"}.
+   *
+   * @param file The Python file.
+   * @param function The function, by the end of its class's name, such as {@code Net/call}.
+   * @param name The variable's name.
+   * @param parameter Whether the variable is a parameter, or else any local of that name.
+   * @return The constants; a member that is not a constant fails the test.
+   * @throws Exception On analysis failure.
+   */
+  private Set<Object> localConstants(String file, String function, String name, boolean parameter)
+      throws Exception {
     PythonTensorAnalysisEngine engine = (PythonTensorAnalysisEngine) makeEngine(file);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     CallGraph cg = builder.makeCallGraph(builder.getOptions());
@@ -120,10 +150,13 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
       String type = node.getMethod().getDeclaringClass().getName().toString();
       if (!type.startsWith("Lscript ") || !type.endsWith("/" + function)) continue;
       IR ir = node.getIR();
-      for (int i = 0; i < ir.getNumberOfParameters(); i++) {
-        int valueNumber = ir.getParameter(i);
+      int[] valueNumbers =
+          parameter
+              ? ir.getParameterValueNumbers()
+              : IntStream.rangeClosed(1, ir.getSymbolTable().getMaxValueNumber()).toArray();
+      for (int valueNumber : valueNumbers) {
         String[] names = ir.getLocalNames(0, valueNumber);
-        if (names == null || !Arrays.asList(names).contains(parameter)) continue;
+        if (names == null || !Arrays.asList(names).contains(name)) continue;
         found = true;
         PointerKey key =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valueNumber);
@@ -134,7 +167,7 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
         }
       }
     }
-    assertFalse(function + " has no parameter " + parameter, !found);
+    assertFalse(function + " has no " + (parameter ? "parameter " : "local ") + name, !found);
     return ret;
   }
 }
