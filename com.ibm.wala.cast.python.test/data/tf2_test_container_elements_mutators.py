@@ -62,6 +62,10 @@ def sink_slice_insert(c):
     assert len(c) == 3
 
 
+def sink_slice_read(c):
+    assert len(c) == 2
+
+
 def sink_attr_append(c):
     assert len(c) == 2
 
@@ -173,6 +177,10 @@ sink_imul(im)
 si = [x, y]
 si[1:1] = [x]
 sink_slice_insert(si)
+
+sr = [x, y]
+part = sr[0:1]
+sink_slice_read(sr)
 
 
 class Holder:
