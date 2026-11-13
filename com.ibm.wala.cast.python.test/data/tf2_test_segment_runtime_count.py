@@ -62,7 +62,8 @@ consume_chosen(chosen)
 
 # A `num_segments` that is a Python `int` of unknown value: a fixed size.
 xs = [1, 2, 3, 4, 5]
-counted = tf.math.unsorted_segment_sum(tf.ones([4, 6]), edges[:, 1], len(xs))
+# A copy, not a literal, whose length the analysis does not count (wala/ML#1246).
+counted = tf.math.unsorted_segment_sum(tf.ones([4, 6]), edges[:, 1], len(list(xs)))
 assert counted.shape == (5, 6)
 consume_counted(counted)
 
