@@ -112,4 +112,20 @@ public class TestEnumerateIndexConstant extends AbstractTensorTest {
     assertTrue("message is not in the call graph", found);
     assertEquals(List.of(0), values);
   }
+
+  /**
+   * An index over a one-element literal that {@code enumerate} starts at {@code 1}, which does not
+   * count from {@code 0}, so it may be any {@code int}.
+   */
+  @Test
+  public void testFromStarted() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_from_started", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT32)));
+  }
+
+  /** The same, with {@code start} passed by keyword. */
+  @Test
+  public void testFromStartedKeyword()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_from_started_keyword", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT32)));
+  }
 }

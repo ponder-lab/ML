@@ -1169,7 +1169,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 getPointerKeyForLocal(instruction.getDef()),
                 getInstanceKeyForAllocation(instruction.getNewSite()),
                 getPointerKeyForLocal(COUNTED_ARGUMENT),
-                isBuiltin(ENUMERATE_BUILTIN));
+                isBuiltin(ENUMERATE_BUILTIN),
+                node);
         return;
       }
       ConditionalAllocation conditional = conditionalAllocation(instruction);
@@ -7386,6 +7387,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     // A count of an argument that holds no container, such as `len` of a value the analysis does
     // not
     // model, may be any `int`, as the summary's allocation was.
+    // An index whose call passes a `start` does not count from `0`.
+    for (StartedIndex started : startedIndices)
+      if (!started.opened && mayPassStart(started.node)) {
+        started.opened = true;
+        getSystem().newConstraint(started.result, started.unknown);
+        revised = true;
+      }
     for (UncountedArgument uncounted : uncountedArguments) {
       if (uncounted.opened) continue;
       IntSet argument = getSystem().findOrCreatePointsToSet(uncounted.argument).getValue();
@@ -7433,9 +7441,70 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    *     enumerate} index's are, rather than its length.
    */
   void addCountConstraints(
-      PointerKey result, InstanceKey unknown, PointerKey argument, boolean indices) {
+      PointerKey result, InstanceKey unknown, PointerKey argument, boolean indices, CGNode node) {
     getSystem().newSideEffect(new ContainerCountOperator(result, unknown, indices), argument);
-    if (unknown != null) uncountedArguments.add(new UncountedArgument(argument, result, unknown));
+    if (unknown != null) {
+      uncountedArguments.add(new UncountedArgument(argument, result, unknown));
+      if (indices) startedIndices.add(new StartedIndex(node, result, unknown));
+    }
+  }
+
+  /**
+   * The {@code enumerate} indices whose call may pass a {@code start}, each given any {@code int}
+   * if one does once the analysis is solved (wala/ML#1246); see {@link #makeSolver}.
+   */
+  private final List<StartedIndex> startedIndices = new ArrayList<>();
+
+  /**
+   * An {@code enumerate} index, which counts from {@code 0} only when its call passes no {@code
+   * start}. The summary reads no {@code start}, so the calls of its node are read for one.
+   */
+  private static final class StartedIndex {
+
+    /** The {@code enumerate} summary's node. */
+    private final CGNode node;
+
+    /** The index. */
+    private final PointerKey result;
+
+    /** The {@code int} of unknown value. */
+    private final InstanceKey unknown;
+
+    /** Whether the index was given any {@code int}. */
+    private boolean opened;
+
+    private StartedIndex(CGNode node, PointerKey result, InstanceKey unknown) {
+      this.node = node;
+      this.result = result;
+      this.unknown = unknown;
+    }
+  }
+
+  /**
+   * Whether a call of an {@code enumerate} node may pass a {@code start}: by position, by keyword
+   * or through a starred argument, or by a call this cannot read, such as one a summary makes.
+   *
+   * @param node The {@code enumerate} summary's node.
+   * @return {@code true} iff a call of the node may pass a {@code start}.
+   */
+  private boolean mayPassStart(CGNode node) {
+    CallGraph cg = getCallGraph();
+    for (Iterator<CGNode> callers = cg.getPredNodes(node); callers.hasNext(); ) {
+      CGNode caller = callers.next();
+      IR ir = caller.getIR();
+      for (Iterator<CallSiteReference> sites = cg.getPossibleSites(caller, node);
+          sites.hasNext(); ) {
+        CallSiteReference site = sites.next();
+        if (ir == null) return true;
+        for (SSAAbstractInvokeInstruction call : ir.getCalls(site))
+          // The function, the iterable and a `start` are the positional arguments.
+          if (!(call instanceof PythonInvokeInstruction invoke)
+              || invoke.getNumberOfPositionalParameters() > 2
+              || invoke.getKeywords().contains("start")
+              || invoke.getStarredPositions().length > 0) return true;
+      }
+    }
+    return false;
   }
 
   /**

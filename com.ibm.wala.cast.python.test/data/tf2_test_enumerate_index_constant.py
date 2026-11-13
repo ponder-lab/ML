@@ -84,3 +84,21 @@ for position, item in enumerate(extended):
 grown = [1.0]
 grown.append(2.0)
 consume_from_appended_len(tf.ones([len(grown)]))
+
+
+def consume_from_started(x):
+    assert x.shape == (3,)
+    assert x.dtype == tf.float32
+
+
+def consume_from_started_keyword(x):
+    assert x.shape == (4,)
+    assert x.dtype == tf.float32
+
+
+# An index from a `start` does not count from `0`.
+for position, item in enumerate([edges], 1):
+    consume_from_started(tf.ones([position + 2]))
+
+for position, item in enumerate([edges], start=2):
+    consume_from_started_keyword(tf.ones([position + 2]))
