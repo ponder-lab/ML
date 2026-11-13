@@ -8,8 +8,12 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
+import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
 
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
 import com.ibm.wala.cast.python.ml.types.NoneType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -18,12 +22,18 @@ import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -816,7 +826,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * gather result, keeps {@code float32}. The arm that multiplies it by an {@code int32} edge
    * weight, {@code if edge_weights == 0: edge_weight = edge_weights[edge_type_idx]}, raises if it
    * runs, and once the index into the list of edge weights is resolved (wala/ML#1246) the parameter
-   * read {@code int32} alone, the dtype that arm imposes (wala/ML#1253).
+   * read {@code int32} alone, the dtype that arm imposes (wala/ML#1253). The other parameters are
+   * pinned as they read.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -848,6 +859,62 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
             8,
             Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The index each graph network's message function is passed, {@code edge_type_idx}, which an
+   * {@code enumerate} over a one-element literal list of adjacency lists gives, points to the
+   * constant {@code 0} alone, as a client reads a scalar parameter's points-to set to decide it has
+   * one value. The program's functions the call graph does not reach resize lists they build, an
+   * attribute no list the analysis has is stored under, and a parameter of a function nothing
+   * names, so no list is marked as possibly resized (wala/ML#1255).
+   *
+   * <p>{@code GraphSAGEConvolution}'s index also points to the unknown {@code int}: an arm its
+   * constant {@code concat} never takes replaces the list and subscripts it as a tuple.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullMessageIndexIsConstant()
+      throws ClassHierarchyException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(
+            PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH,
+            getPathFiles("nlpgnn_full_proj"),
+            NLPGNN_FULL_PROJECT_FILES);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(builder);
+    builder.makeCallGraph(builder.getOptions());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    // The message functions by class, with the index's value number: the function is 1, `self`
+    // 2, and `edge_weights` precedes the index in two of them.
+    Map<String, Integer> indices =
+        Map.of(
+            "GraphAttentionAutoEncoder", 9,
+            "GraphAttentionConvolution", 9,
+            "TextGCNConvolution", 10,
+            "GraphSAGEConvolution", 10);
+    Map<String, Set<Object>> values = new TreeMap<>();
+    for (CGNode node : builder.getCallGraph()) {
+      String signature = node.getMethod().getSignature();
+      for (Map.Entry<String, Integer> index : indices.entrySet()) {
+        if (!signature.contains("." + index.getKey() + ".message_function.do(")) continue;
+        Set<Object> keys = values.computeIfAbsent(index.getKey(), k -> new HashSet<>());
+        for (InstanceKey key :
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, index.getValue())))
+          keys.add(key instanceof ConstantKey<?> constant ? constant.getValue() : "int");
+      }
+    }
+    assertEquals(
+        Map.of(
+            "GraphAttentionAutoEncoder", Set.of(0),
+            "GraphAttentionConvolution", Set.of(0),
+            "TextGCNConvolution", Set.of(0),
+            // TODO: wala/ML#1256: Set.of(0) once the arm `concat` never takes contributes nothing.
+            "GraphSAGEConvolution", Set.of(0, "int")),
+        values);
   }
 
   /**
