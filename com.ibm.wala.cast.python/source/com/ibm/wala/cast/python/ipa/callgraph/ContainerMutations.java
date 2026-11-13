@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,11 +58,21 @@ import java.util.stream.Collectors;
  * @param lists The instance keys, by their index in the pointer analysis's instance key mapping, of
  *     the lists whose positioned elements it may so change.
  * @param allLists Whether it may so change any list's at all.
+ * @param unappended The instance keys, by the same index, of the lists whose positioned elements it
+ *     may so change other than by a call of {@code append} on the list, which the analysis records
+ *     in the list's appended contents as it solves.
+ * @param allUnappended Whether it may so change any list's at all other than by such a call.
  * @param open The instance keys, by the same index, of the lists, dicts and sets it may add an
  *     element to under a key the analysis does not record.
  * @param allOpen Whether it may so add an element to any list, dict or set at all.
  */
-public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, boolean allOpen) {
+public record ContainerMutations(
+    IntSet lists,
+    boolean allLists,
+    IntSet unappended,
+    boolean allUnappended,
+    IntSet open,
+    boolean allOpen) {
 
   private static final Logger LOGGER = Logger.getLogger(ContainerMutations.class.getName());
 
@@ -140,6 +151,12 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
     /** See {@link #allLists}. */
     boolean allLists;
 
+    /** See {@link #unappended}. */
+    final MutableIntSet unappended = IntSetUtil.make();
+
+    /** See {@link #allUnappended}. */
+    boolean allUnappended;
+
     /** See {@link #allOpen}. */
     boolean allOpen;
 
@@ -155,9 +172,26 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
       for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))) {
         TypeReference type = ik.concreteType().getReference();
         int index = pa.getInstanceKeyMapping().getMappedIndex(ik);
-        if (type.equals(list)) this.lists.add(index);
+        if (type.equals(list)) {
+          this.lists.add(index);
+          this.unappended.add(index);
+        }
         if (adds && isMutable(type)) this.open.add(index);
       }
+    }
+
+    /**
+     * Marks the lists a local may point to for a call of {@code append} on it, which the analysis
+     * records in the list's appended contents as it solves, so they are not {@link #unappended}.
+     *
+     * @param pa The pointer analysis.
+     * @param node The local's node.
+     * @param vn The local.
+     */
+    void markAppended(PointerAnalysis<InstanceKey> pa, CGNode node, int vn) {
+      for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))
+        if (ik.concreteType().getReference().equals(list))
+          this.lists.add(pa.getInstanceKeyMapping().getMappedIndex(ik));
     }
 
     /**
@@ -174,7 +208,10 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
       for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))) {
         TypeReference type = ik.concreteType().getReference();
         int index = pa.getInstanceKeyMapping().getMappedIndex(ik);
-        if (type.equals(list)) this.lists.add(index);
+        if (type.equals(list)) {
+          this.lists.add(index);
+          this.unappended.add(index);
+        }
         if (type.equals(dict)) this.open.add(index);
       }
     }
@@ -186,6 +223,7 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
      */
     void markAll(boolean adds) {
       this.allLists = true;
+      this.allUnappended = true;
       if (adds) this.allOpen = true;
     }
   }
@@ -219,8 +257,9 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
    *       l[i] = x}. When the same body also stores the value in the object's append contents, as a
    *       comprehension's body does, the store adds no element the analysis does not see, so it
    *       opens only a dict;
-   *   <li>the list of a slice, read or assigned, which the front end lowers to a call of the slice
-   *       builtin on the list;
+   *   <li>the list of a slice assignment, {@code l[i:j] = m}, which the front end lowers to a call
+   *       of the slice builtin on the list, as it does a slice read, but with the assigned value
+   *       after the bounds ({@link #isSliceRead});
    *   <li>the left operand of a {@code +}, {@code *} or {@code |}, which {@code l += m}, {@code l
    *       *= n} and {@code s |= t} lower to and which mutate a list or set in place. The
    *       non-augmented forms build a new container, so this also takes their left operand, which
@@ -244,7 +283,7 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
    * <p>The front end drops the target of a {@code del} statement, so a subscript {@code del}
    * anywhere, in a reached node or such a body, may mutate any list.
    *
-   * <p>Computed once per builder.
+   * <p>Computed once per builder, once its call graph is built.
    *
    * @param builder The builder.
    * @return The mutations.
@@ -254,6 +293,49 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
       ContainerMutations cached = MUTATIONS.get(builder);
       if (cached != null) return cached;
     }
+    ContainerMutations ret = compute(builder);
+    remember(builder, ret);
+    return ret;
+  }
+
+  /**
+   * Records the mutations of a builder whose call graph is built, so {@link #of} answers with them
+   * rather than scanning again.
+   *
+   * @param builder The builder.
+   * @param mutations Its mutations, computed once its call graph was built.
+   */
+  static void remember(PropagationCallGraphBuilder builder, ContainerMutations mutations) {
+    synchronized (MUTATIONS) {
+      MUTATIONS.put(builder, mutations);
+    }
+  }
+
+  /**
+   * Whether the program may change a list's positioned elements unrecorded other than by a call of
+   * {@code append} on it, which the analysis records in the list's appended contents as it solves;
+   * see {@link #of}.
+   *
+   * @param builder The builder whose pointer analysis maps the list to its index.
+   * @param list A list's instance key.
+   * @return {@code true} iff its positioned elements and appended contents need not be its run-time
+   *     elements.
+   */
+  boolean mayRepositionUnappended(PropagationCallGraphBuilder builder, InstanceKey list) {
+    return allUnappended
+        || unappended.contains(
+            builder.getPointerAnalysis().getInstanceKeyMapping().getMappedIndex(list));
+  }
+
+  /**
+   * Computes the mutations {@link #of} describes from the pointer analysis and the call graph as
+   * they stand, without recording them: the builder computes them between solves, while the
+   * analysis may still grow (wala/ML#1250).
+   *
+   * @param builder The builder.
+   * @return The mutations.
+   */
+  static ContainerMutations compute(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Marks marks = new Marks();
     Set<IMethod> reached = new HashSet<>();
@@ -269,7 +351,8 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
         if (instruction instanceof AstPropertyRead read
             && (isRepositioning(symtab, read.getMemberRef())
                 || isAdding(symtab, read.getMemberRef())))
-          marks.mark(pa, node, read.getObjectRef(), isAdding(symtab, read.getMemberRef()));
+          if (isAppendCall(symtab, du, read)) marks.markAppended(pa, node, read.getObjectRef());
+          else marks.mark(pa, node, read.getObjectRef(), isAdding(symtab, read.getMemberRef()));
         else if (instruction instanceof AstPropertyWrite write
             && !symtab.isConstant(write.getMemberRef())) {
           // `d[k] = t` or `l[i] = t` with a key the analysis may not name, unless the body also
@@ -290,8 +373,10 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
           if (calls(targets, DELETE_BUILTIN)) {
             if (deletesSubscript(node.getMethod(), invoke)) marks.markAll(false);
           } else if (calls(targets, SLICE_BUILTIN)) {
-            // A slice, `l[i:j]`, read or assigned, is a call of the slice builtin on the list.
-            if (invoke.getNumberOfUses() > 1) marks.mark(pa, node, invoke.getUse(1), true);
+            // A slice, `l[i:j]`, read or assigned, is a call of the slice builtin on the list. A
+            // read leaves the list as it is (wala/ML#1250).
+            if (invoke.getNumberOfUses() > 1 && !isSliceRead(invoke))
+              marks.mark(pa, node, invoke.getUse(1), true);
           } else if (callee instanceof AstPropertyRead method
               && isRepositioning(symtab, method.getMemberRef())) {
             // `list.append(l, x)`: the list is an argument, not the receiver.
@@ -304,12 +389,54 @@ public record ContainerMutations(IntSet lists, boolean allLists, IntSet open, bo
       }
     }
     scanUnreachedBodies(builder, reached, marks);
-    ContainerMutations ret =
-        new ContainerMutations(marks.lists, marks.allLists, marks.open, marks.allOpen);
-    synchronized (MUTATIONS) {
-      MUTATIONS.put(builder, ret);
+    return new ContainerMutations(
+        marks.lists,
+        marks.allLists,
+        marks.unappended,
+        marks.allUnappended,
+        marks.open,
+        marks.allOpen);
+  }
+
+  /**
+   * Whether a read of a member is of {@code append}, and every use of what it reads calls it, as
+   * {@code l.append(x)} does: the call the builder models by storing its argument in the list's
+   * appended contents. Any other use, such as passing the method on, may call it where the builder
+   * does not see it.
+   *
+   * @param symtab The symbol table of the read's method.
+   * @param du The def-use of the read's method.
+   * @param read The read.
+   * @return {@code true} iff the read is of {@code append} and only called.
+   */
+  private static boolean isAppendCall(SymbolTable symtab, DefUse du, AstPropertyRead read) {
+    int member = read.getMemberRef();
+    if (!symtab.isStringConstant(member) || !"append".equals(symtab.getStringValue(member)))
+      return false;
+    if (du.getNumberOfUses(read.getDef()) == 0) return false;
+    for (Iterator<SSAInstruction> uses = du.getUses(read.getDef()); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof SSAAbstractInvokeInstruction invoke)
+          || invoke.getNumberOfUses() == 0
+          || invoke.getUse(0) != read.getDef()) return false;
+      for (int i = 1; i < invoke.getNumberOfUses(); i++)
+        if (invoke.getUse(i) == read.getDef()) return false;
     }
-    return ret;
+    return true;
+  }
+
+  /**
+   * Whether a call of the slice builtin reads a slice of a list, {@code l[i:j:k]}, which leaves the
+   * list as it is: the call passes the list and its three bounds, absent ones as {@code None}. A
+   * slice assignment, {@code l[i:j] = m}, passes the assigned value after them, and a subscript by
+   * a tuple, {@code x[i, j:k]}, which no list takes, passes a value per element of the tuple;
+   * either may be taken for a mutation (wala/ML#1250).
+   *
+   * @param invoke A call of the slice builtin.
+   * @return {@code true} iff it is a read of a slice of a list.
+   */
+  private static boolean isSliceRead(SSAAbstractInvokeInstruction invoke) {
+    return invoke.getNumberOfUses() == 5;
   }
 
   /**

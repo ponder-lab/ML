@@ -70,6 +70,7 @@ import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
+import com.ibm.wala.ipa.callgraph.propagation.IPointsToSolver;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.NormalAllocationInNode;
@@ -310,6 +311,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * yields an element of unknown type and keeps the pass-through.
    */
   private Map<TypeReference, TypeReference> freshSliceResultTypes = Collections.emptyMap();
+
+  /**
+   * The slices of list and tuple literals trimmed to the literal's elements in range (wala/ML#993),
+   * each widened to all of them once the program may change the list in a way the analysis does not
+   * record (wala/ML#1250); see {@link #makeSolver}.
+   */
+  private final List<LiteralSlice> literalSlices = new ArrayList<>();
 
   /**
    * Names the element types whose slice results get an allocation of their own (wala/ML#916); see
@@ -7296,6 +7304,93 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Solves, then widens each slice of a list literal that the program may change in a way the
+   * analysis does not record, and solves again, until no slice is left to widen (wala/ML#1250). A
+   * slice trims a literal to its elements in range only while nothing may have grown, shrunk or
+   * reordered the list ({@link SliceResultOperator}), and whether something may is known only once
+   * the call graph is built: the routes include {@code extend} and {@code insert}, a slice
+   * assignment, a call that resolves to no target, and a function the call graph does not reach
+   * ({@link ContainerMutations}). When no slice is left to widen, the mutations the last check read
+   * are those of the built call graph, and are recorded as such.
+   *
+   * @return The solver.
+   */
+  @Override
+  protected IPointsToSolver makeSolver() {
+    IPointsToSolver solver = super.makeSolver();
+    return monitor -> {
+      solver.solve(monitor);
+      while (widenChangedLiteralSlices()) solver.solve(monitor);
+    };
+  }
+
+  /**
+   * Widens each slice of a list literal that the program may change unrecorded and that is not
+   * widened yet; see {@link #makeSolver}.
+   *
+   * @return {@code true} iff a slice was widened, so the analysis must be solved again.
+   */
+  private boolean widenChangedLiteralSlices() {
+    List<LiteralSlice> pending = literalSlices.stream().filter(s -> !s.widened).toList();
+    if (pending.isEmpty()) return false;
+    ContainerMutations mutations = ContainerMutations.compute(this);
+    boolean widened = false;
+    for (LiteralSlice slice : pending)
+      if (mutations.mayRepositionUnappended(this, slice.literal)) {
+        slice.widen();
+        widened = true;
+      }
+    if (!widened) ContainerMutations.remember(this, mutations);
+    return widened;
+  }
+
+  /**
+   * A slice of a list or tuple literal trimmed to the literal's elements in range (wala/ML#993),
+   * which can be widened to all of them (wala/ML#1250).
+   */
+  private final class LiteralSlice {
+
+    /** The sliced literal. */
+    private final InstanceKey literal;
+
+    /** The slice. */
+    private final InstanceKey slice;
+
+    /** The program counter of the slice's call. */
+    private final int pc;
+
+    /** Whether the slice holds all the literal's elements. */
+    private boolean widened;
+
+    private LiteralSlice(InstanceKey literal, InstanceKey slice, int pc) {
+      this.literal = literal;
+      this.slice = slice;
+      this.pc = pc;
+    }
+
+    /**
+     * Flows every element of the literal into the slice's operation contents, whose position is not
+     * known, so every read of the slice, by index or by iteration, may read any of them.
+     */
+    private void widen() {
+      widened = true;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IField contents = resolveRootField(getClassHierarchy(), LIST_OPERATION_CONTENTS_FIELD);
+      if (contents == null) return;
+      logger.fine(() -> "widening the slice " + slice + " of " + literal + " at " + pc);
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForObjectCatalog(slice),
+              getInstanceKeyForConstant(PythonTypes.string, LIST_OPERATION_CONTENTS_FIELD));
+      getSystem()
+          .newSideEffect(
+              new ElementCopyOperator(
+                  literal, factory.getPointerKeyForInstanceField(slice, contents), pc),
+              factory.getPointerKeyForObjectCatalog(literal));
+    }
+  }
+
+  /**
    * The assignment from a {@code slice} call's receiver to its result (wala/ML#916): every key
    * passes through except one of a {@link #freshSliceResultTypes fresh type}, which becomes the
    * fresh allocation of the type it maps to at the call. Equal for the same call, so the constraint
@@ -7439,6 +7534,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IClassHierarchy cha = getClassHierarchy();
       logger.fine(() -> "slice [" + start + ", " + stop + ") of " + from + " at " + pc);
       copyElements(from, slice, start, stop, start, factory, cha);
+      literalSlices.add(new LiteralSlice(from, slice, pc));
       IField contents = resolveRootField(cha, LIST_OPERATION_CONTENTS_FIELD);
       IField appended = resolveRootField(cha, LIST_APPEND_CONTENTS_FIELD);
       if (contents == null || appended == null) return;

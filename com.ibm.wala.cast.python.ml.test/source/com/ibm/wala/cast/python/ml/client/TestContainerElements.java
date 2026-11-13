@@ -384,6 +384,15 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
     assertArity(MUTATORS, "sink_slice_insert", OptionalInt.empty());
   }
 
+  /**
+   * A slice read, {@code l[0:1]}, which leaves the list as it is, so its length stays known
+   * (wala/ML#1250).
+   */
+  @Test
+  public void testSliceRead() {
+    assertArity(MUTATORS, "sink_slice_read", OptionalInt.of(2));
+  }
+
   /** {@code h.items.append(y)}, through an attribute. */
   @Test
   public void testAttributeAppend() {
