@@ -1604,6 +1604,30 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       int i = 0;
       CAstNode[] dels = new CAstNode[arg0.getInternalTargets().size()];
       for (expr e : arg0.getInternalTargets()) {
+        // A subscript target passes its container and its key, `None` for a slice's, and an
+        // attribute target its object and the attribute's name, rather than the value it reads, so
+        // a reader can tell what the statement deletes from (wala/ML#1239).
+        CAstNode owner = null, key = null;
+        if (e instanceof Subscript subscript) {
+          owner = acceptOrNull(subscript.getInternalValue());
+          slice index = subscript.getInternalSlice();
+          key = index instanceof Index ? acceptOrNull(index) : Ast.makeConstant(null);
+        } else if (e instanceof Attribute attribute) {
+          owner = acceptOrNull(attribute.getInternalValue());
+          key = Ast.makeConstant(attribute.getInternalAttr());
+        }
+        if (owner != null) {
+          dels[i++] =
+              notePosition(
+                  Ast.makeNode(
+                      CAstNode.CALL,
+                      Ast.makeNode(CAstNode.VAR, Ast.makeConstant("__delete__")),
+                      Ast.makeNode(CAstNode.EMPTY),
+                      owner,
+                      key),
+                  e);
+          continue;
+        }
         dels[i++] =
             notePosition(
                 Ast.makeNode(
