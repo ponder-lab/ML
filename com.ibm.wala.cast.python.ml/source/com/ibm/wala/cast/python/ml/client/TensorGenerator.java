@@ -3344,9 +3344,10 @@ public abstract class TensorGenerator implements Cloneable {
 
   /**
    * Whether a shape argument is a Python {@code int} of unknown value: its points-to set, read
-   * without the client-only mask, holds only the type-level key of {@code int} (wala/ML#1148). Such
-   * a shape allocates rank 1, whatever its value (wala/ML#1159). Read for a source-anchored
-   * generator only, whose argument value number belongs to its own node's IR.
+   * without the client-only mask, holds the type-level key of {@code int} (wala/ML#1148), and
+   * otherwise only integer constants, as a loop counter does (wala/ML#1252). Such a shape allocates
+   * rank 1, whatever its value (wala/ML#1159). Read for a source-anchored generator only, whose
+   * argument value number belongs to its own node's IR.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param valNum The shape argument's value number in this generator's node.
@@ -3365,10 +3366,14 @@ public abstract class TensorGenerator implements Cloneable {
                     .getHeapModel()
                     .getPointerKeyForLocal(this.getNode(), valNum));
     if (pts == null || pts.isEmpty()) return false;
+    boolean key = false;
     for (InstanceKey ik : pts)
-      if (!(ik instanceof ConcreteTypeKey)
-          || !PythonTypes.PYTHON_INT.equals(ik.concreteType().getReference())) return false;
-    return true;
+      if (ik instanceof ConcreteTypeKey
+          && PythonTypes.PYTHON_INT.equals(ik.concreteType().getReference())) key = true;
+      else if (!(ik instanceof ConstantKey<?> constant
+          && (constant.getValue() instanceof Integer || constant.getValue() instanceof Long)))
+        return false;
+    return key;
   }
 
   /**

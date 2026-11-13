@@ -418,6 +418,13 @@ public class Util {
    * fallback for a value that has none (<a
    * href="https://github.com/wala/ML/issues/1148">wala/ML#1148</a>).
    *
+   * <p>A set that holds such a key may be a value that has none, so its scalar constants are not
+   * its values either: a loop counter from {@code 0} holds {@code 0} and the key of an {@code int},
+   * and {@code 3 if flag else t.shape} holds {@code 3} and the key of a static shape. They are left
+   * out with the key, and the reader takes the same fallback, where it read the constants alone as
+   * the value (<a href="https://github.com/wala/ML/issues/1252">wala/ML#1252</a>). A constant
+   * {@code None} is no scalar and is kept.
+   *
    * @param pointsToSet The points-to set, possibly {@code null}.
    * @return The set without those keys, or {@code pointsToSet} itself when it has none.
    */
@@ -431,7 +438,8 @@ public class Util {
       }
     if (!any) return pointsToSet;
     List<InstanceKey> kept = new ArrayList<>();
-    for (InstanceKey ik : pointsToSet) if (!isClientOnlyKey(ik)) kept.add(ik);
+    for (InstanceKey ik : pointsToSet)
+      if (!isClientOnlyKey(ik) && !isScalarConstant(ik)) kept.add(ik);
     return kept.isEmpty()
         ? OrdinalSet.empty()
         : OrdinalSet.toOrdinalSet(kept, pointsToSet.getMapping());
@@ -452,12 +460,17 @@ public class Util {
   public static InstanceKey onlyKeyWithoutClientOnlyKeys(OrdinalSet<InstanceKey> pointsToSet) {
     if (pointsToSet == null) return null;
     InstanceKey only = null;
+    boolean clientOnly = false;
     for (InstanceKey ik : pointsToSet) {
-      if (isClientOnlyKey(ik)) continue;
+      if (isClientOnlyKey(ik)) {
+        clientOnly = true;
+        continue;
+      }
       if (only != null) return null;
       only = ik;
     }
-    return only;
+    // A scalar constant beside such a key is not the set's only value (wala/ML#1252).
+    return clientOnly && only != null && isScalarConstant(only) ? null : only;
   }
 
   /**
@@ -481,6 +494,20 @@ public class Util {
     } catch (NumberFormatException e) {
       return null;
     }
+  }
+
+  /**
+   * Whether a key is a constant of a Python scalar: a number, a {@code bool} or a string. {@code
+   * None} is not one.
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return {@code true} iff the key is such a constant.
+   */
+  private static boolean isScalarConstant(InstanceKey instanceKey) {
+    return instanceKey instanceof ConstantKey<?> constant
+        && (constant.getValue() instanceof Number
+            || constant.getValue() instanceof Boolean
+            || constant.getValue() instanceof String);
   }
 
   /**

@@ -169,9 +169,9 @@ public class OneHot extends TensorTypeAllocator {
         this.getArgumentPointsToSet(
             builder, this.getDepthParameterPosition(), getDepthParameterName());
 
-    if (depthPTS == null || depthPTS.isEmpty()) {
-      return Collections.emptySet();
-    }
+    // A depth the analysis cannot read is a fixed extent it could not compute (wala/ML#1022), as a
+    // depth whose only member is None is below.
+    if (depthPTS == null) depthPTS = OrdinalSet.empty();
 
     // The depth axis per `depth` member. TensorFlow raises on a None depth, so a None member is a
     // value no execution reaching the call holds (an unbound default overwritten before the call)
@@ -188,12 +188,19 @@ public class OneHot extends TensorTypeAllocator {
     }
     if (depthDims.isEmpty()) depthDims.add(UnresolvedDim.INSTANCE);
 
+    // `null` when the axis may be any position (wala/ML#1022).
     Set<Integer> possibleAxes = this.getPossibleAxes(builder);
 
-    for (int axis : possibleAxes)
-      for (Dimension<?> dim : depthDims) {
-        // For each shape in indices, append the depth as a new dimension.
-        for (List<Dimension<?>> shape : indices) {
+    for (Dimension<?> dim : depthDims)
+      // For each shape in indices, insert the depth as a new dimension.
+      for (List<Dimension<?>> shape : indices) {
+        Set<Integer> axes = possibleAxes;
+        if (axes == null) {
+          axes = HashSetFactory.make();
+          for (int axis = 0; axis < shape.size(); axis++) axes.add(axis);
+          axes.add(AXIS_END);
+        }
+        for (int axis : axes) {
           List<Dimension<?>> newShape = new ArrayList<>(shape);
 
           if (axis == AXIS_END) newShape.add(dim);
@@ -213,6 +220,13 @@ public class OneHot extends TensorTypeAllocator {
     return ret;
   }
 
+  /**
+   * The positions the depth axis may take: the {@code axis} argument's values, the last when it is
+   * omitted, or any, when it is supplied with a value the analysis cannot read (wala/ML#1022).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The positions, {@link #AXIS_END} for the last, or {@code null} for any position.
+   */
   private Set<Integer> getPossibleAxes(PropagationCallGraphBuilder builder) {
     int valNum =
         this.getArgumentValueNumber(
@@ -226,8 +240,13 @@ public class OneHot extends TensorTypeAllocator {
             builder, this.getAxisParameterPosition(), this.getAxisParameterName());
 
     if (axisPTS == null || axisPTS.isEmpty())
-      // Fallback to default.
-      return Set.of(AXIS_END);
+      // An omitted axis is the last; one supplied with a value the analysis cannot read may be any
+      // position (wala/ML#1022).
+      return Boolean.FALSE.equals(
+              this.isArgumentSyntacticallySupplied(
+                  builder, this.getAxisParameterPosition(), this.getAxisParameterName()))
+          ? Set.of(AXIS_END)
+          : null;
 
     for (InstanceKey instanceKey : axisPTS)
       ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
