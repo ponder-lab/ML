@@ -1,8 +1,12 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -15,6 +19,10 @@ import org.junit.Test;
 public class TestSubscriptIntegerIndex extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_subscript_integer_index.py";
+
+  /** A leading axis of unknown extent kept beside the receiver's second, of four. */
+  private static final TensorType TENSOR_UNRESOLVED_4_FLOAT32 =
+      new TensorType(FLOAT_32, List.of(UnresolvedDim.INSTANCE, new NumericDim(4)));
 
   /** A constant index drops its axis. */
   @Test
@@ -64,5 +72,35 @@ public class TestSubscriptIntegerIndex extends AbstractTensorTest {
   @Test
   public void testColumnUnknown() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_column_unknown", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * An index that may be an integer or a float constant, which is not known to be an integer, so
+   * the subscript is read as a slice of the leading axis.
+   *
+   * <p>TODO: <a href="https://github.com/wala/ML/issues/1251">wala/ML#1251</a>: {@link
+   * #TENSOR_4_FLOAT32}, as the run gives.
+   */
+  @Test
+  public void testRowMaybeFloat() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_row_maybe_float", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_4_FLOAT32)));
+  }
+
+  /**
+   * An index that may be an integer or a float of unknown value, read as {@link #testRowMaybeFloat}
+   * reads its index.
+   *
+   * <p>TODO: <a href="https://github.com/wala/ML/issues/1251">wala/ML#1251</a>: {@link
+   * #TENSOR_4_FLOAT32}, as the run gives.
+   */
+  @Test
+  public void testRowMaybeFloatUnknown()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_row_maybe_float_unknown",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNRESOLVED_4_FLOAT32)));
   }
 }
