@@ -20,6 +20,9 @@ public class TestMixedIntConstant extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_mixed_int_constant.py";
 
+  /** An array of {@code float64} whose shape is not known. */
+  private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT64 = new TensorType(FLOAT_64, null);
+
   /** A vector whose one extent is not known. */
   private static final TensorType TENSOR_UNRESOLVED_FLOAT32 =
       new TensorType(FLOAT_32, List.of(UnresolvedDim.INSTANCE));
@@ -40,5 +43,14 @@ public class TestMixedIntConstant extends AbstractTensorTest {
   @Test
   public void testCounter() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_counter", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT32)));
+  }
+
+  /**
+   * The constant {@code 3} on one branch and a tensor's static shape on the other, an allocator's
+   * shape that is no single constant, so its shape is unknown.
+   */
+  @Test
+  public void testConstantOrShape() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_constant_or_shape", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT64)));
   }
 }

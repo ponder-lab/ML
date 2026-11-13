@@ -1,7 +1,9 @@
 # Test https://github.com/wala/ML/issues/1252: an int that may be a constant or an int of unknown
-# value is no single constant, so a size computed from it is not folded.
+# value, or a constant or a tensor's static shape, is no single constant, so a size computed from it
+# is not folded.
 import sys
 
+import numpy as np
 import tensorflow as tf
 
 
@@ -28,3 +30,15 @@ i = 0
 while i < 3:
     consume_counter(tf.ones([i + 2]))
     i += 1
+
+
+def consume_constant_or_shape(m):
+    pass
+
+
+t = tf.ones([2, 3])
+for flag in (True, False):
+    constant_or_shape = 3 if flag else t.shape
+    zeros = np.zeros(constant_or_shape)
+    assert zeros.shape == ((3,) if flag else (2, 3)) and zeros.dtype == np.float64
+    consume_constant_or_shape(zeros)
