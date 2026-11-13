@@ -3802,7 +3802,7 @@
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="constraint" arg1="wt" numArgs="2" def="constrained"/>
           <return value="w"/>
         </method>
-        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x)`, through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` stores the loss and the optimizer on the instance, as Keras does (`self.loss = loss or {}`, `self.optimizer = self._get_optimizer(optimizer)`), so a step that calls `self.loss(...)` or `self.optimizer.apply_gradients(...)` reaches them (wala/ML#1146). Keras keeps the metrics only inside a container, `compiled_metrics`, so `metrics` is not stored. -->
+        <!-- The training, evaluation and prediction entry points (wala/ML#997). `fit` packs `(x, y)` as Keras does and invokes the model's `train_step` with it, read off the instance so that a user override wins by ordinary dispatch; `evaluate` and `predict` do the same through `test_step` and `predict_step`. The default steps unpack the data and run the forward pass, `self(x, training=True)` in `train_step` and `self(x, training=False)` in `test_step` and `predict_step` as Keras's do, `training` passed by keyword (wala/ML#1248), through the callable dispatch that also fires the lazy build, so a model trained only through `fit` has its layers' `call` and their weights' constraints in the call graph. `compile` stores the loss and the optimizer on the instance, as Keras does (`self.loss = loss or {}`, `self.optimizer = self._get_optimizer(optimizer)`), so a step that calls `self.loss(...)` or `self.optimizer.apply_gradients(...)` reaches them (wala/ML#1146). Keras keeps the metrics only inside a container, `compiled_metrics`, so `metrics` is not stored. -->
         <method name="compile" descriptor="()LRoot;" numArgs="10" paramNames="func self optimizer loss metrics loss_weights weighted_metrics run_eagerly steps_per_execution jit_compile">
           <putfield class="LRoot" field="loss" fieldType="LRoot" ref="self" value="loss"/>
           <putfield class="LRoot" field="optimizer" fieldType="LRoot" ref="self" value="optimizer"/>
@@ -3818,7 +3818,8 @@
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="first"/>
           <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="first"/>
           <getfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" def="x"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
+          <constant name="training" type="boolean" value="true"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" arg2="training" numArgs="3" keywords="training" def="pred"/>
           <new def="logs" class="Lobject"/>
           <return value="logs"/>
         </method>
@@ -3831,7 +3832,8 @@
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="first"/>
           <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="first"/>
           <getfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" def="x"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
+          <constant name="training" type="boolean" value="false"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" arg2="training" numArgs="3" keywords="training" def="pred"/>
           <new def="logs" class="Lobject"/>
           <return value="logs"/>
         </method>
@@ -3844,7 +3846,8 @@
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="data" def="first"/>
           <putfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" value="first"/>
           <getfield class="LRoot" field="x" fieldType="LRoot" ref="inputs" def="x"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" numArgs="2" def="pred"/>
+          <constant name="training" type="boolean" value="false"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="self" arg1="x" arg2="training" numArgs="3" keywords="training" def="pred"/>
           <return value="pred"/>
         </method>
         <method name="fit" descriptor="()LRoot;" numArgs="22" paramNames="func self x y batch_size epochs verbose callbacks validation_split validation_data shuffle class_weight sample_weight initial_epoch steps_per_epoch validation_steps validation_batch_size validation_freq max_queue_size workers use_multiprocessing">

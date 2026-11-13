@@ -36,6 +36,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSuper;
+import com.ibm.wala.cast.python.ipa.summaries.SummaryKeywordCalls;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoaderFactory;
@@ -353,13 +354,14 @@ public abstract class PythonAnalysisEngine<T>
     XMLMethodSummaryReader xml = new XMLMethodSummaryReader(openSummaryStream(summary), scope);
 
     Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
+    SummaryKeywordCalls.rewrite(openSummaryStream(summary), summaries);
     BypassSyntheticClassLoader ldr =
         (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
 
     Map<TypeReference, List<MethodReference>> classToFunDoRefs = new HashMap<>();
 
     // Pass 1: Transform methods to function classes
-    for (MethodSummary s : xml.getSummaries().values()) {
+    for (MethodSummary s : new ArrayList<>(summaries.values())) {
       MethodReference mr = s.getMethod();
       String methodName = mr.getName().toString();
       // `__init__` is transformed like any other method so a summary initializer is dispatchable
@@ -384,6 +386,8 @@ public abstract class PythonAnalysisEngine<T>
         for (SSAInstruction inst : s.getStatements())
           if (inst != null) funSummary.addStatement(inst);
         funSummary.setValueNames(s.getValueNames());
+        // A method's constants are its body's too, as a `do` method's are (wala/ML#1248).
+        if (s.getConstants() != null) s.getConstants().forEach(funSummary::addConstant);
         summaries.put(funDoRef, funSummary);
         if (!isInit) summaries.remove(mr);
 
