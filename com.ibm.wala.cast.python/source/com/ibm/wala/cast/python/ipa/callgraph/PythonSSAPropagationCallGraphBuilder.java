@@ -3178,19 +3178,49 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       InstanceKey[][] constParams,
       PointerKey uniqueCatchKey) {
 
+    // Keras's call context (wala/ML#1249): the program's entry runs in none, a node that is no
+    // layer call runs in its caller's, and a layer call resolves its own below.
+    if (caller.equals(getCallGraph().getFakeRootNode()))
+      getSystem().newConstraint(getTrainingContextKey(caller), noneKey());
+    LayerCall layerCall = layerCall(caller, target);
+    if (layerCall == null)
+      getSystem()
+          .newConstraint(
+              getTrainingContextKey(target), assignOperator, getTrainingContextKey(caller));
+
     if (!(instruction instanceof PythonInvokeInstruction)) {
       super.processCallingConstraints(caller, instruction, target, constParams, uniqueCatchKey);
+      if (layerCall != null)
+        resolveTraining(caller, instruction, target, layerCall, null, null, null);
     } else {
       MutableIntSet args = IntSetUtil.make();
 
       // positional parameters
       PythonInvokeInstruction call = (PythonInvokeInstruction) instruction;
       StarArguments star = new StarArguments(caller, call, target, constParams);
+      // A program layer's `training` is bound by the resolution below rather than as passed, unless
+      // a starred argument may bind it, which binds it as passed and resolves it as not passed too.
+      boolean starred =
+          call.getStarredPositions().length > 0 || call.getKeywords().contains("null");
+      int trainingFormal =
+          layerCall != null && !layerCall.summary() && !starred ? layerCall.formal() : -1;
+      PointerKey trainingKey = null;
+      InstanceKey[] trainingConstants = null;
       for (int i = 0; i < call.getNumberOfPositionalParameters(); i++) {
         if (star.bindPositional(i)) continue;
         if (i >= target.getMethod().getNumberOfParameters()) continue;
         PointerKey lval = getPointerKeyForLocal(target, i + 1);
         args.add(i);
+
+        if (layerCall != null && !starred && i + 1 == layerCall.formal()) {
+          if (constParams != null && constParams[i] != null) trainingConstants = constParams[i];
+          else {
+            trainingConstants = implicitArgumentConstants(caller, call.getUse(i));
+            if (trainingConstants == null)
+              trainingKey = getPointerKeyForLocal(caller, call.getUse(i));
+          }
+          if (i + 1 == trainingFormal) continue;
+        }
 
         if (constParams != null && constParams[i] != null) {
           InstanceKey[] ik = constParams[i];
@@ -3294,6 +3324,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       keywords:
       for (String argName : call.getKeywords()) {
         int src = call.getUse(argName);
+        // A layer whose `call` declares no `training` runs its own in the value passed as one.
+        if (layerCall != null
+            && layerCall.formal() < 0
+            && argName.equals(TRAINING_PARAMETER_NAME)) {
+          trainingConstants = implicitArgumentConstants(caller, src);
+          if (trainingConstants == null) trainingKey = getPointerKeyForLocal(caller, src);
+        }
         if (star.bindDoubleStarred(
             argName,
             src,
@@ -3311,6 +3348,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 PointerKey lval = getPointerKeyForLocal(target, i + 1);
                 args.add(i);
                 int p = paramNumber;
+                if (layerCall != null && !starred && i + 1 == layerCall.formal()) {
+                  if (constParams != null && constParams[p] != null)
+                    trainingConstants = constParams[p];
+                  else {
+                    trainingConstants = implicitArgumentConstants(caller, src);
+                    if (trainingConstants == null) trainingKey = getPointerKeyForLocal(caller, src);
+                  }
+                  if (i + 1 == trainingFormal) {
+                    paramNumber++;
+                    continue keywords;
+                  }
+                }
                 if (constParams != null && constParams[p] != null) {
                   InstanceKey[] ik = constParams[p];
                   for (InstanceKey element : ik) {
@@ -3357,7 +3406,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               : 0;
       int last = numParams - trailing;
       int dflts = last - target.getMethod().getNumberOfDefaultParameters();
+      // A program layer's `training` takes its default only through the resolution (wala/ML#1249).
+      PointerKey trainingDefault =
+          layerCall != null && layerCall.formal() - 1 >= dflts && layerCall.formal() - 1 < last
+              ? new StaticFieldKey(
+                  resolveGlobal(defaultsGlobalName(target, layerCall.formal() - 1, "_defaults_")))
+              : null;
       for (int i = dflts; i < last; i++) {
+        if (i + 1 == trainingFormal) continue;
         if (!args.contains(i)) {
           // A synthesized constructor's trailing formal i mirrors `__init__`'s parameter i + 1,
           // and the default globals are written under `__init__`'s entity name, so the lookup
@@ -3389,6 +3445,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                   lval, new ClickDefaultOperator(), new StaticFieldKey(resolveGlobal(clickName)));
         }
       }
+
+      if (layerCall != null)
+        resolveTraining(
+            caller, call, target, layerCall, trainingKey, trainingConstants, trainingDefault);
 
       // return values
       PointerKey rret = getPointerKeyForReturnValue(target);
@@ -7354,6 +7414,463 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The parameter Keras's layer call protocol resolves for a layer's {@code call} (wala/ML#1249).
+   */
+  private static final String TRAINING_PARAMETER_NAME = "training";
+
+  /**
+   * The Keras functions that set the global learning phase, which a layer's {@code training} takes
+   * in place of its default (wala/ML#1249).
+   */
+  private static final Set<String> LEARNING_PHASE_SETTERS =
+      Set.of("set_learning_phase", "learning_phase_scope");
+
+  /**
+   * The {@code training} value of Keras's call context while a node runs (wala/ML#1249): the value
+   * the innermost layer call the node runs inside resolved, which a layer called there without
+   * {@code training}, or with {@code None}, takes in place of its default. {@code None} when no
+   * enclosing layer call has a value.
+   */
+  public static final class TrainingContextKey implements PointerKey {
+
+    /** The node. */
+    private final CGNode node;
+
+    private TrainingContextKey(CGNode node) {
+      this.node = node;
+    }
+
+    /**
+     * The node whose context this is.
+     *
+     * @return The node.
+     */
+    public CGNode getNode() {
+      return this.node;
+    }
+
+    @Override
+    public int hashCode() {
+      return this.node.hashCode() * 4211;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof TrainingContextKey other && this.node.equals(other.node);
+    }
+
+    @Override
+    public String toString() {
+      return "[training context of " + this.node + "]";
+    }
+  }
+
+  /**
+   * The values the program may set as Keras's learning phase (wala/ML#1249), which a layer's {@code
+   * training} takes where it would take its default.
+   */
+  private final PointerKey learningPhase =
+      new PointerKey() {
+        @Override
+        public String toString() {
+          return "[learning phase]";
+        }
+      };
+
+  /**
+   * The edges whose {@code training} resolution is installed (wala/ML#1249), each by its caller,
+   * the call's instruction index and its target.
+   */
+  private final Set<List<Object>> resolvedTrainingEdges = HashSetFactory.make();
+
+  /**
+   * The values passed as {@code training} on a layer call (wala/ML#1249), each checked once the
+   * analysis is solved: one the analysis cannot read may be any value.
+   */
+  private final List<PassedTraining> passedTrainings = new ArrayList<>();
+
+  /** The nodes already read for a call that sets the learning phase (wala/ML#1249). */
+  private final Set<CGNode> learningPhaseScanned = HashSetFactory.make();
+
+  /**
+   * The context key of a node (wala/ML#1249).
+   *
+   * @param node The node.
+   * @return Its {@link TrainingContextKey}.
+   */
+  public PointerKey getTrainingContextKey(CGNode node) {
+    return new TrainingContextKey(node);
+  }
+
+  /**
+   * The learning phase key (wala/ML#1249).
+   *
+   * @return The key holding the values the program may set as Keras's learning phase.
+   */
+  public PointerKey getLearningPhaseKey() {
+    return this.learningPhase;
+  }
+
+  /**
+   * The key of the {@code None} constant.
+   *
+   * @return The key.
+   */
+  private InstanceKey noneKey() {
+    return getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(null), null);
+  }
+
+  /**
+   * A call edge under Keras's layer call protocol (wala/ML#1249): a call of a program layer through
+   * the object, {@code layer(x)}, which runs {@code Layer.__call__}, or a call of a library layer's
+   * summary. A call of {@code layer.call(x)} or {@code super().call(x)} runs {@code call} alone and
+   * is none.
+   *
+   * @param formal The value number of the target's {@code training} parameter, or {@code -1} when
+   *     it declares none.
+   * @param summary Whether the target is a library summary, whose {@code training} parameter has no
+   *     default and whose body reads none, so the resolution goes to its context alone.
+   */
+  private record LayerCall(int formal, boolean summary) {}
+
+  /**
+   * The layer call an edge makes, if it makes one (wala/ML#1249). The edge into a program layer's
+   * {@code call} comes from the trampoline that serves a call of the object, the one that also
+   * builds the layer lazily ({@link PythonInstanceMethodTrampolineTargetSelector}).
+   *
+   * @param caller The caller.
+   * @param target The target.
+   * @return The layer call, or {@code null} when the edge is none.
+   */
+  private LayerCall layerCall(CGNode caller, CGNode target) {
+    String type = target.getMethod().getDeclaringClass().getName().toString();
+    boolean summary =
+        type.startsWith("Ltensorflow/keras/")
+            && (type.endsWith("/" + CALLABLE_METHOD_NAME)
+                || type.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
+    boolean program =
+        !type.startsWith("Ltensorflow/")
+            && type.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+            && caller.getMethod().getDeclaringClass() instanceof PythonInstanceMethodTrampoline
+            && caller.getMethod().getName().toString().endsWith("$object");
+    if (!summary && !program) return null;
+    return new LayerCall(trainingFormal(target), summary);
+  }
+
+  /**
+   * The value number of a node's {@code training} parameter.
+   *
+   * @param node The node.
+   * @return The value number, or {@code -1} when the node declares no such parameter.
+   */
+  private static int trainingFormal(CGNode node) {
+    IR ir = node.getIR();
+    if (ir == null) return -1;
+    for (int vn = 2; vn <= node.getMethod().getNumberOfParameters(); vn++) {
+      String[] names = ir.getLocalNames(0, vn);
+      if (names != null && Arrays.asList(names).contains(TRAINING_PARAMETER_NAME)) return vn;
+    }
+    return -1;
+  }
+
+  /**
+   * The constants an argument holds when its pointer key is implicit, as a constant's is.
+   *
+   * @param caller The caller.
+   * @param use The argument's value number.
+   * @return The constants, or {@code null} when the key is not implicit.
+   */
+  private InstanceKey[] implicitArgumentConstants(CGNode caller, int use) {
+    if (!getSystem().isImplicit(getPointerKeyForLocal(caller, use))) return null;
+    SymbolTable symbolTable = caller.getIR().getSymbolTable();
+    if (!symbolTable.isConstant(use)) return new InstanceKey[0];
+    Object value = symbolTable.getConstantValue(use);
+    return new InstanceKey[] {
+      getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(value), value)
+    };
+  }
+
+  /**
+   * Installs Keras's resolution of a layer's {@code training} on a layer call edge (wala/ML#1249):
+   * an explicit value other than {@code None}; else, for a value passed as {@code None} or not
+   * passed, the caller's context other than {@code None}; else the learning phase the program may
+   * set and the default of the layer's {@code call}, or {@code None} without one. Keras 2.9's
+   * {@code Layer._set_training_mode} resolves it so, and the layer's call runs in the resolved
+   * value as its context. A layer whose {@code call} declares no {@code training} sets its context
+   * to the value passed as {@code training}, {@code None} included, or else keeps its caller's.
+   *
+   * @param caller The caller.
+   * @param call The call.
+   * @param target The layer's node.
+   * @param layerCall The layer call.
+   * @param explicitKey The key of the value passed as {@code training}, or {@code null}.
+   * @param explicitConstants The constants passed as {@code training}, or {@code null}.
+   * @param defaultKey The key of the default of the target's {@code training}, or {@code null}.
+   */
+  private void resolveTraining(
+      CGNode caller,
+      SSAAbstractInvokeInstruction call,
+      CGNode target,
+      LayerCall layerCall,
+      PointerKey explicitKey,
+      InstanceKey[] explicitConstants,
+      PointerKey defaultKey) {
+    if (!resolvedTrainingEdges.add(List.of(caller, call.iIndex(), target))) return;
+    PointerKey context = getTrainingContextKey(target);
+    boolean passed = explicitKey != null || explicitConstants != null;
+    if (layerCall.formal() < 0) {
+      if (explicitConstants != null)
+        for (InstanceKey constant : explicitConstants) getSystem().newConstraint(context, constant);
+      else if (explicitKey != null) getSystem().newConstraint(context, assignOperator, explicitKey);
+      else getSystem().newConstraint(context, assignOperator, getTrainingContextKey(caller));
+      return;
+    }
+    PointerKey resolved =
+        layerCall.summary() ? context : getPointerKeyForLocal(target, layerCall.formal());
+    if (!layerCall.summary()) getSystem().newConstraint(context, assignOperator, resolved);
+    addTrainingResolution(
+        resolved,
+        caller,
+        passed ? explicitKey : null,
+        passed ? explicitConstants : null,
+        defaultKey,
+        passed);
+    if (explicitKey != null)
+      passedTrainings.add(new PassedTraining(explicitKey, resolved, caller, defaultKey));
+  }
+
+  /**
+   * Adds the side effect that resolves a layer's {@code training} into a key (wala/ML#1249); see
+   * {@link #resolveTraining}.
+   *
+   * @param resolved The key the resolved values go to.
+   * @param caller The caller, whose context a value not passed or passed as {@code None} takes.
+   * @param explicitKey The key of the value passed, or {@code null}.
+   * @param explicitConstants The constants passed, or {@code null}.
+   * @param defaultKey The key of the default, or {@code null} for none, which is {@code None}.
+   * @param passed Whether a value is passed.
+   */
+  private void addTrainingResolution(
+      PointerKey resolved,
+      CGNode caller,
+      PointerKey explicitKey,
+      InstanceKey[] explicitConstants,
+      PointerKey defaultKey,
+      boolean passed) {
+    List<PointerKey> inputs = new ArrayList<>();
+    inputs.add(getTrainingContextKey(caller));
+    inputs.add(this.learningPhase);
+    int defaultIndex = -1, explicitIndex = -1;
+    if (defaultKey != null) {
+      defaultIndex = inputs.size();
+      inputs.add(defaultKey);
+    }
+    if (explicitKey != null) {
+      explicitIndex = inputs.size();
+      inputs.add(explicitKey);
+    }
+    getSystem()
+        .newSideEffect(
+            new TrainingResolutionOperator(
+                resolved, passed, explicitConstants, defaultIndex, explicitIndex),
+            inputs.toArray(new PointerKey[0]));
+  }
+
+  /**
+   * Resolves a layer's {@code training} from the value passed, the caller's context, the learning
+   * phase and the default (wala/ML#1249); see {@link #resolveTraining}. Its inputs are the caller's
+   * context, the learning phase, then the default and the value passed when there are such.
+   */
+  private final class TrainingResolutionOperator extends AbstractOperator<PointsToSetVariable> {
+    private final PointerKey resolved;
+    private final boolean passed;
+    private final InstanceKey[] explicitConstants;
+    private final int defaultIndex;
+    private final int explicitIndex;
+
+    private TrainingResolutionOperator(
+        PointerKey resolved,
+        boolean passed,
+        InstanceKey[] explicitConstants,
+        int defaultIndex,
+        int explicitIndex) {
+      this.resolved = resolved;
+      this.passed = passed;
+      this.explicitConstants = explicitConstants;
+      this.defaultIndex = defaultIndex;
+      this.explicitIndex = explicitIndex;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable[] rhs) {
+      InstanceKey none = noneKey();
+      Set<InstanceKey> ret = HashSetFactory.make();
+      boolean unresolved = !this.passed;
+      if (this.explicitConstants != null)
+        for (InstanceKey constant : this.explicitConstants)
+          if (none.equals(constant)) unresolved = true;
+          else ret.add(constant);
+      if (this.explicitIndex >= 0) {
+        for (InstanceKey key : instances(rhs[this.explicitIndex]))
+          if (none.equals(key)) unresolved = true;
+          else ret.add(key);
+      }
+      if (unresolved) {
+        boolean contextNone = false;
+        for (InstanceKey key : instances(rhs[0]))
+          if (none.equals(key)) contextNone = true;
+          else ret.add(key);
+        if (contextNone) {
+          ret.addAll(instances(rhs[1]));
+          if (this.defaultIndex >= 0) ret.addAll(instances(rhs[this.defaultIndex]));
+          else ret.add(none);
+        }
+      }
+      for (InstanceKey key : ret) getSystem().newConstraint(this.resolved, key);
+      return NOT_CHANGED;
+    }
+
+    /**
+     * The instances a variable holds.
+     *
+     * @param variable The variable.
+     * @return Its instances.
+     */
+    private Set<InstanceKey> instances(PointsToSetVariable variable) {
+      Set<InstanceKey> ret = HashSetFactory.make();
+      if (variable.getValue() != null)
+        variable.getValue().foreach(i -> ret.add(getSystem().getInstanceKey(i)));
+      return ret;
+    }
+
+    @Override
+    public int hashCode() {
+      return this.resolved.hashCode() * 7907;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return this == o;
+    }
+
+    @Override
+    public String toString() {
+      return "training resolution into " + this.resolved;
+    }
+  }
+
+  /**
+   * A value passed as {@code training} on a layer call (wala/ML#1249), which may be any value when
+   * the analysis cannot read it.
+   */
+  private static final class PassedTraining {
+
+    /** The value passed. */
+    private final PointerKey passed;
+
+    /** The key the resolved values go to. */
+    private final PointerKey resolved;
+
+    /** The caller. */
+    private final CGNode caller;
+
+    /** The key of the default, or {@code null}. */
+    private final PointerKey defaultKey;
+
+    /** Whether it was read as any value. */
+    private boolean opened;
+
+    private PassedTraining(
+        PointerKey passed, PointerKey resolved, CGNode caller, PointerKey defaultKey) {
+      this.passed = passed;
+      this.resolved = resolved;
+      this.caller = caller;
+      this.defaultKey = defaultKey;
+    }
+  }
+
+  /**
+   * Revises what the {@code training} resolution read once the analysis is solved (wala/ML#1249),
+   * so the analysis solves again:
+   *
+   * <ul>
+   *   <li>A value passed as {@code training} that holds nothing may be any {@code bool}, and may be
+   *       {@code None}, so it also resolves as one not passed.
+   *   <li>A reached node whose context holds nothing may run in any context.
+   *   <li>A call of a reached node that sets the learning phase gives it the values it passes.
+   * </ul>
+   *
+   * @return {@code true} iff something was revised, so the analysis must be solved again.
+   */
+  private boolean reviseTrainingContexts() {
+    boolean revised = false;
+    InstanceKey bool = null;
+    for (PassedTraining passed : passedTrainings) {
+      if (passed.opened) continue;
+      IntSet value = getSystem().findOrCreatePointsToSet(passed.passed).getValue();
+      if (value != null && !value.isEmpty()) continue;
+      passed.opened = true;
+      if (bool == null) bool = getScalarTypeKey(passed.caller, 0, PYTHON_BOOL);
+      if (bool != null) getSystem().newConstraint(passed.resolved, bool);
+      addTrainingResolution(passed.resolved, passed.caller, null, null, passed.defaultKey, false);
+      revised = true;
+    }
+    // A node whose context holds nothing, which an edge that passes no context on may leave it,
+    // may run in any, as may every node it calls; the layer calls it makes then resolve as in one.
+    for (CGNode node : getCallGraph()) {
+      PointerKey context = getTrainingContextKey(node);
+      IntSet value = getSystem().findOrCreatePointsToSet(context).getValue();
+      if (value != null && !value.isEmpty()) continue;
+      if (bool == null) bool = getScalarTypeKey(node, 0, PYTHON_BOOL);
+      if (bool != null) getSystem().newConstraint(context, bool);
+      getSystem().newConstraint(context, noneKey());
+      revised = true;
+    }
+    for (CGNode node : getCallGraph()) {
+      if (!learningPhaseScanned.add(node)) continue;
+      IR ir = node.getIR();
+      if (ir == null) continue;
+      DefUse du = node.getDU();
+      for (SSAInstruction inst : ir.getInstructions())
+        if (inst instanceof PythonInvokeInstruction call
+            && setsLearningPhase(ir.getSymbolTable(), du.getDef(call.getUse(0)))) {
+          int value = -1;
+          if (call.getNumberOfPositionalParameters() > 1) value = call.getUse(1);
+          else if (call.getKeywords().contains("value")) value = call.getUse("value");
+          logger.fine(() -> "Learning phase set by " + call + " in " + node + ".");
+          if (value < 0) continue;
+          InstanceKey[] constants = implicitArgumentConstants(node, value);
+          if (constants != null)
+            for (InstanceKey constant : constants)
+              revised |= getSystem().newConstraint(this.learningPhase, constant);
+          else
+            revised |=
+                getSystem()
+                    .newConstraint(
+                        this.learningPhase, assignOperator, getPointerKeyForLocal(node, value));
+        }
+    }
+    return revised;
+  }
+
+  /**
+   * Whether an instruction reads a function that sets Keras's learning phase off an object, as
+   * {@code tf.keras.backend.set_learning_phase} is read off {@code tf.keras.backend}.
+   *
+   * @param symbolTable The symbol table of the instruction's body.
+   * @param def The instruction defining a call's function.
+   * @return {@code true} iff it reads such a function.
+   */
+  private static boolean setsLearningPhase(SymbolTable symbolTable, SSAInstruction def) {
+    if (def instanceof AstPropertyRead read)
+      return symbolTable.isStringConstant(read.getMemberRef())
+          && LEARNING_PHASE_SETTERS.contains(symbolTable.getStringValue(read.getMemberRef()));
+    if (def instanceof SSAGetInstruction get)
+      return LEARNING_PHASE_SETTERS.contains(get.getDeclaredField().getName().toString());
+    return false;
+  }
+
+  /**
    * Solves, then revises what was read off a list literal that the program may change in a way the
    * analysis does not record, and solves again, until nothing is left to revise: each slice of such
    * a literal is widened (wala/ML#1250), and each count of one, an {@code enumerate} index or a
@@ -7362,8 +7879,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * list ({@link SliceResultOperator}, {@link ContainerCountOperator}), and whether something may
    * is known only once the call graph is built: the routes include {@code extend} and {@code
    * insert}, a slice assignment, a call that resolves to no target, and a function the call graph
-   * does not reach ({@link ContainerMutations}). When nothing is left to revise, the mutations the
-   * last check read are those of the built call graph, and are recorded as such.
+   * does not reach ({@link ContainerMutations}). It also revises the {@code training} values
+   * Keras's call context gives layers, which can be read only once the analysis is solved
+   * (wala/ML#1249). When nothing is left to revise, the mutations the last check read are recorded
+   * as those of the built call graph, but only when no solve ran after they were read; otherwise
+   * they are read again on first use.
    *
    * @return The solver.
    */
@@ -7372,9 +7892,28 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     IPointsToSolver solver = super.makeSolver();
     return monitor -> {
       solver.solve(monitor);
-      while (reviseForChangedLists()) solver.solve(monitor);
+      solves++;
+      while (true) {
+        // Both checks run every round, so one's revision does not put off the other's.
+        boolean lists = reviseForChangedLists();
+        boolean contexts = reviseTrainingContexts();
+        if (!lists && !contexts) break;
+        solver.solve(monitor);
+        solves++;
+      }
+      if (scannedMutations != null && scannedMutationsSolves == solves)
+        ContainerMutations.remember(this, scannedMutations);
     };
   }
+
+  /** How many times the analysis was solved, so a scan read before the last solve is not kept. */
+  private int solves;
+
+  /** The mutations the last check read, or {@code null}. */
+  private ContainerMutations scannedMutations;
+
+  /** The value of {@link #solves} when {@link #scannedMutations} was read. */
+  private int scannedMutationsSolves;
 
   /**
    * Widens each slice, and opens each count, of a list literal that the program may change
@@ -7408,6 +7947,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     List<LiteralCount> counts = literalCounts.stream().filter(c -> !c.opened).toList();
     if (slices.isEmpty() && counts.isEmpty()) return false;
     ContainerMutations mutations = ContainerMutations.compute(this);
+    scannedMutations = mutations;
+    scannedMutationsSolves = solves;
     for (LiteralSlice slice : slices)
       if (mutations.mayRepositionUnappended(this, slice.literal)) {
         slice.widen();
@@ -7418,7 +7959,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         count.open();
         revised = true;
       }
-    if (!revised) ContainerMutations.remember(this, mutations);
     return revised;
   }
 
