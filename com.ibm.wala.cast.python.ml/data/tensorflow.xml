@@ -254,6 +254,8 @@
         <putfield class="LRoot" field="group_by_window" fieldType="LRoot" ref="data_experimental" value="data_experimental_group_by_window"/>
         <new def="data_experimental_bucket_by_sequence_length" class="Ltensorflow/data/experimental_bucket_by_sequence_length"/>
         <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="data_experimental" value="data_experimental_bucket_by_sequence_length"/>
+        <new def="data_experimental_rejection_resample" class="Ltensorflow/data/experimental_rejection_resample"/>
+        <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="data_experimental" value="data_experimental_rejection_resample"/>
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
         <!-- Distinct class type so the factory can dispatch to `TextLineDatasetGenerator` and seed iteration elements as 0-D string tensors (wala/ML#452). -->
         <new def="TextLineDataset" class="Ltensorflow/data/TextLineDataset"/>
@@ -5650,6 +5652,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -5748,6 +5751,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -5842,6 +5846,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -5967,6 +5972,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6107,6 +6113,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6247,6 +6254,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6387,6 +6395,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6533,6 +6542,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6649,7 +6659,7 @@
         </method>
       </class>
       <class name="rejection_resample" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#rejection_resample. The element is `(class, element)`, modeled like `enumerate`'s `(index, element)`: `DatasetRejectionResampleGenerator` types the class an int32 scalar. `class_func` is not called here (wala/ML#1214). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#rejection_resample. The element is `(class, element)`, modeled like `enumerate`'s `(index, element)`: `DatasetRejectionResampleGenerator` types the class an int32 scalar (wala/ML#1214). -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self class_func target_dist initial_dist seed name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
           <!-- The receiver's marker that its element is not mirrored, which this method object carries: an iterator over this dataset then allocates the element (wala/ML#1190). -->
@@ -6659,6 +6669,10 @@
           <new def="enumerate_fn" class="Ltensorflow/data/element_enumerate"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="enumerate_fn" arg1="received" arg2="x" numArgs="3" def="element"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
+          <!-- `class_func` is called on the receiver's element through the receiver's own `map`, as `bucket_by_sequence_length` calls `element_length_func`, so its body is analyzed (wala/ML#1214). -->
+          <getfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="self" def="received_dataset"/>
+          <getfield class="LRoot" field="map" fieldType="LRoot" ref="received_dataset" def="received_map"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="received_map" arg1="class_func" numArgs="2" def="classes"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <new def="rd_skip" class="Ltensorflow/data/skip"/>
@@ -6681,6 +6695,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6804,6 +6819,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -6942,6 +6958,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -7083,6 +7100,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -7223,6 +7241,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -7363,6 +7382,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -7570,6 +7590,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -7684,6 +7705,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="w" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="w"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="w" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="w"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="w" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="w" value="rd_batch"/>
@@ -7818,6 +7840,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="w" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="w"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="w" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="w"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="w" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="w" value="rd_batch"/>
@@ -7952,6 +7975,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -8092,6 +8116,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -8258,6 +8283,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -8412,6 +8438,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8571,6 +8598,29 @@
           <return value="result"/>
         </method>
       </class>
+      <class name="experimental_rejection_resample" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/experimental/rejection_resample. The transformation `apply` hands the dataset to (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self class_func target_dist initial_dist seed">
+          <new def="fn" class="Ltensorflow/data/experimental_rejection_resample_fn"/>
+          <putfield class="LRoot" field="class_func" fieldType="LRoot" ref="fn" value="class_func"/>
+          <putfield class="LRoot" field="target_dist" fieldType="LRoot" ref="fn" value="target_dist"/>
+          <putfield class="LRoot" field="initial_dist" fieldType="LRoot" ref="fn" value="initial_dist"/>
+          <putfield class="LRoot" field="seed" fieldType="LRoot" ref="fn" value="seed"/>
+          <return value="fn"/>
+        </method>
+      </class>
+      <class name="experimental_rejection_resample_fn" allocatable="true">
+        <!-- Calls the dataset's own `rejection_resample` with the arguments the transformation was made with (wala/ML#1214). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
+          <getfield class="LRoot" field="class_func" fieldType="LRoot" ref="self" def="class_func"/>
+          <getfield class="LRoot" field="target_dist" fieldType="LRoot" ref="self" def="target_dist"/>
+          <getfield class="LRoot" field="initial_dist" fieldType="LRoot" ref="self" def="initial_dist"/>
+          <getfield class="LRoot" field="seed" fieldType="LRoot" ref="self" def="seed"/>
+          <getfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="dataset" def="method"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="method" arg1="class_func" arg2="target_dist" arg3="initial_dist" arg4="seed" numArgs="5" def="result"/>
+          <return value="result"/>
+        </method>
+      </class>
       <class name="flat_map" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#flat_map -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self map_func name">
@@ -8630,6 +8680,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8794,6 +8845,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
@@ -8928,6 +8980,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9068,6 +9121,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9211,6 +9265,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9426,6 +9481,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="unbatch" fieldType="LRoot" ref="x" value="rd_unbatch"/>
           <putfield class="LRoot" field="flat_map" fieldType="LRoot" ref="x" value="rd_flat_map"/>
           <putfield class="LRoot" field="interleave" fieldType="LRoot" ref="x" value="rd_interleave"/>
@@ -9535,6 +9591,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9652,6 +9709,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9764,6 +9822,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9878,6 +9937,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -9991,6 +10051,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -10085,6 +10146,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -10203,6 +10265,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -10362,6 +10425,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -10477,6 +10541,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
@@ -10565,6 +10630,7 @@
           <putfield class="LRoot" field="bucket_by_sequence_length" fieldType="LRoot" ref="x" value="rd_bucket_by_sequence_length"/>
           <putfield class="LRoot" field="bucketed_dataset" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="x"/>
           <putfield class="LRoot" field="rejection_resample" fieldType="LRoot" ref="x" value="rd_rejection_resample"/>
+          <putfield class="LRoot" field="resampled_dataset" fieldType="LRoot" ref="rd_rejection_resample" value="x"/>
           <putfield class="LRoot" field="apply" fieldType="LRoot" ref="x" value="rd_apply"/>
           <putfield class="LRoot" field="applied_dataset" fieldType="LRoot" ref="rd_apply" value="x"/>
           <new def="rd_group_by_window" class="Ltensorflow/data/group_by_window"/>
