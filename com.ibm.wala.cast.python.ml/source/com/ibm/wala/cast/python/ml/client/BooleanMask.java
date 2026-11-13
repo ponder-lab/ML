@@ -69,7 +69,12 @@ public class BooleanMask extends PassThroughUnaryTensorGenerator {
     Set<Integer> axes = new HashSet<>();
     OrdinalSet<InstanceKey> axisPts = this.getArgumentPointsToSet(builder, 2, "axis");
     if (axisPts == null || axisPts.isEmpty()) {
-      axes.add(0);
+      // An empty set is an omitted axis or one supplied with a value the analysis cannot read,
+      // which
+      // may be any axis the ranks admit (wala/ML#1022).
+      if (Boolean.FALSE.equals(this.isArgumentSyntacticallySupplied(builder, 2, "axis")))
+        axes.add(0);
+      else axes = null;
     } else {
       for (InstanceKey ik : axisPts) {
         if (!(ik instanceof ConstantKey)) return null;
@@ -81,10 +86,15 @@ public class BooleanMask extends PassThroughUnaryTensorGenerator {
     }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (int axis : axes) {
-      for (List<Dimension<?>> tensor : tensorShapes) {
-        for (List<Dimension<?>> mask : maskShapes) {
-          int maskRank = mask.size();
+    for (List<Dimension<?>> tensor : tensorShapes) {
+      for (List<Dimension<?>> mask : maskShapes) {
+        int maskRank = mask.size();
+        Set<Integer> candidates = axes;
+        if (candidates == null) {
+          candidates = new HashSet<>();
+          for (int axis = 0; axis + maskRank <= tensor.size(); axis++) candidates.add(axis);
+        }
+        for (int axis : candidates) {
           if (axis < 0 || maskRank < 1 || axis + maskRank > tensor.size()) continue;
           List<Dimension<?>> out = new ArrayList<>(tensor.subList(0, axis));
           out.add(DynamicDim.INSTANCE);

@@ -1,6 +1,8 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -74,5 +76,69 @@ public class TestMixedIntConstant extends AbstractTensorTest {
   @Test
   public void testGuarded() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_guarded", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * A {@code squeeze} whose {@code axis} is {@code 1} or an {@code int} of unknown value, supplied
+   * but not read as a constant, so it may name any axes and the shape is unknown rather than every
+   * size-1 axis squeezed, the omitted axis's reading (wala/ML#1022).
+   */
+  @Test
+  public void testSqueezeAxis() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_squeeze", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * A {@code one_hot} whose {@code depth} is {@code 4} or an {@code int} of unknown value: an
+   * unresolved depth, rather than no tensor (wala/ML#1022).
+   */
+  @Test
+  public void testOneHotDepth() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_one_hot_depth",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, List.of(new NumericDim(2), UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * A {@code one_hot} whose {@code axis} is {@code 0} or an {@code int} of unknown value, which may
+   * put the depth at any position, rather than the last, the omitted axis's (wala/ML#1022).
+   */
+  @Test
+  public void testOneHotAxis() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_one_hot_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 2), TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A {@code boolean_mask} whose {@code axis} is {@code 1} or an {@code int} of unknown value,
+   * which may mask any axis the ranks admit, rather than the first, the omitted axis's
+   * (wala/ML#1022).
+   */
+  @Test
+  public void testBooleanMaskAxis() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_boolean_mask",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, List.of(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(4))),
+                new TensorType(
+                    FLOAT_32, List.of(new NumericDim(2), DynamicDim.INSTANCE, new NumericDim(4))),
+                new TensorType(
+                    FLOAT_32,
+                    List.of(new NumericDim(2), new NumericDim(3), DynamicDim.INSTANCE)))));
   }
 }
