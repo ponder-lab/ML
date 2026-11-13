@@ -106,8 +106,17 @@ public record ContainerMutations(
   /** The type name of the builtin a slice, {@code l[i:j]}, is lowered to a call of. */
   private static final String SLICE_BUILTIN = "Lwala/builtin/slice";
 
-  /** The name of the builtin that stores an attribute by a name a program may compute. */
-  private static final String SETATTR_NAME = "setattr";
+  /**
+   * The names of the builtins through which a program may store an attribute by a name it computes:
+   * {@code setattr}, and {@code vars}, whose result is the object's attribute dict.
+   */
+  private static final Set<String> DYNAMIC_ATTRIBUTE_FUNCTIONS = Set.of("setattr", "vars");
+
+  /**
+   * The members whose read lets a program store an attribute by a name it computes: an object's
+   * attribute dict and the attribute store itself, as {@code object.__setattr__} reads it.
+   */
+  private static final Set<String> DYNAMIC_ATTRIBUTE_MEMBERS = Set.of("__dict__", "__setattr__");
 
   /** The name a slice's lowering reads the slice builtin by. */
   private static final String SLICE_NAME = "slice";
@@ -583,11 +592,19 @@ public record ContainerMutations(
       markGlobalWrites(builder, global.getGlobalName(), marks, adds);
     else if (receiver instanceof AstPropertyRead read
         && symtab.isStringConstant(read.getMemberRef())
-        && program.readsPlainAttribute(method, du, read)) {
-      // `o.f` may be only a container stored under a field named `f`: one the analysis stores, or
-      // one a body the call graph does not reach stores.
+        && program.readsPlainAttribute(
+            method, du, read, symtab.getStringValue(read.getMemberRef()))) {
+      // `self.f` may be only a container stored under a field named `f`: one the analysis stores,
+      // or one a body the call graph does not reach stores. Any other value there may have a
+      // method of that name that changes a container it is passed.
       String field = symtab.getStringValue(read.getMemberRef());
       if (!fields.add(field)) return;
+      for (InstanceKey value : program.fieldValues(field))
+        if (!isMutable(value.concreteType().getReference())
+            && !value.concreteType().getName().toString().startsWith("Lscript ")) {
+          marks.markAll(adds);
+          return;
+        }
       for (InstanceKey value : program.fieldValues(field))
         marks.mark(builder.getPointerAnalysis(), value, adds);
       for (Store store : program.unreachedStores(field))
@@ -660,8 +677,9 @@ public record ContainerMutations(
     private Set<String> functions;
 
     /**
-     * Whether a body may store an attribute under a name it computes, through {@code setattr} or an
-     * object's {@code __dict__}.
+     * Whether a body may store an attribute under a name it computes, through {@code setattr},
+     * {@code vars}, an object's {@code __dict__} or a read of {@code __setattr__}, as {@code
+     * object.__setattr__(o, name, v)} is.
      */
     private boolean dynamicAttributes;
 
@@ -706,23 +724,24 @@ public record ContainerMutations(
     }
 
     /**
-     * Whether a body's read of an attribute by name reads it where it is stored: no body stores an
-     * attribute by a computed name, and no class the object may be an instance of customizes the
-     * lookup. Its object may be an instance of the method's class when it is the method's {@code
-     * self}, and of any class otherwise.
+     * Whether a body's read of an attribute of its {@code self} by name reads it where it is
+     * stored: no body stores an attribute by a computed name, no class binds the name to a function
+     * or a descriptor, as a {@code property} or a method does, and no class the object may be an
+     * instance of, the method's class, customizes the lookup.
      *
      * @param method The body's method.
      * @param du The body's def-use.
      * @param read The read.
+     * @param field The read's member.
      * @return {@code true} iff the read is plain.
      */
-    boolean readsPlainAttribute(IMethod method, DefUse du, AstPropertyRead read) {
-      readBodies();
-      if (this.dynamicAttributes) return false;
-      readFields();
-      if (this.hooked.isEmpty()) return true;
+    boolean readsPlainAttribute(IMethod method, DefUse du, AstPropertyRead read, String field) {
       IClass owner = selfClass(method, du, read.getObjectRef());
       if (owner == null) return false;
+      readBodies();
+      if (this.dynamicAttributes || this.functions.contains(field) || defines("__get__"))
+        return false;
+      readFields();
       IClassHierarchy cha = this.builder.getClassHierarchy();
       for (IClass hook : this.hooked)
         if (cha.isSubclassOf(owner, hook) || cha.isSubclassOf(hook, owner)) return false;
@@ -859,7 +878,6 @@ public record ContainerMutations(
             if (symtab.isStringConstant(vn)) {
               String constant = symtab.getStringValue(vn);
               this.names.add(constant);
-              if ("__dict__".equals(constant)) this.dynamicAttributes = true;
             }
           boolean unreached = !this.reached.contains(method);
           for (SSAInstruction instruction : ir.getInstructions())
@@ -873,12 +891,18 @@ public record ContainerMutations(
             } else if (instruction instanceof AstGlobalRead global) {
               String name = getBareName(global.getGlobalName());
               this.names.add(name);
-              if (SETATTR_NAME.equals(name)) this.dynamicAttributes = true;
+              if (DYNAMIC_ATTRIBUTE_FUNCTIONS.contains(name)) this.dynamicAttributes = true;
             } else if (instruction instanceof AstLexicalRead lexical) {
               for (Access access : lexical.getAccesses()) {
                 this.names.add(access.variableName());
-                if (SETATTR_NAME.equals(access.variableName())) this.dynamicAttributes = true;
+                if (DYNAMIC_ATTRIBUTE_FUNCTIONS.contains(access.variableName()))
+                  this.dynamicAttributes = true;
               }
+            } else if (instruction instanceof AstPropertyRead read
+                && symtab.isStringConstant(read.getMemberRef())
+                && DYNAMIC_ATTRIBUTE_MEMBERS.contains(symtab.getStringValue(read.getMemberRef()))) {
+              // `object.__setattr__(o, name, v)` or `o.__dict__[name] = v`.
+              this.dynamicAttributes = true;
             } else if (unreached
                 && instruction instanceof AstPropertyWrite write
                 && symtab.isStringConstant(write.getMemberRef()))

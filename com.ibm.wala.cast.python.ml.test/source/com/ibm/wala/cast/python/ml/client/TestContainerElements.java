@@ -71,6 +71,17 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String UNREACHED_SUM = "tf2_test_container_elements_unreached_sum.py";
 
+  private static final String UNREACHED_PROPERTY =
+      "tf2_test_container_elements_unreached_property.py";
+
+  private static final String UNREACHED_DESCRIPTOR =
+      "tf2_test_container_elements_unreached_descriptor.py";
+
+  private static final String UNREACHED_VARS = "tf2_test_container_elements_unreached_vars.py";
+
+  private static final String UNREACHED_OBJECT_SETATTR =
+      "tf2_test_container_elements_unreached_object_setattr.py";
+
   private static final String UNREACHED_REPEAT = "tf2_test_container_elements_unreached_repeat.py";
 
   private static final String UNREACHED_COPY = "tf2_test_container_elements_unreached_copy.py";
@@ -919,5 +930,41 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedGetAttr() {
     assertArity(UNREACHED_GETATTR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a property returns a global list for
+   * holds it, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedProperty() {
+    assertArity(UNREACHED_PROPERTY, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a descriptor's {@code __get__}
+   * returns a global list for holds it, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedDescriptor() {
+    assertArity(UNREACHED_DESCRIPTOR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute stored through {@code vars} may hold
+   * any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedVars() {
+    assertArity(UNREACHED_VARS, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute stored through {@code
+   * object.__setattr__} may hold any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedObjectSetAttr() {
+    assertArity(UNREACHED_OBJECT_SETATTR, "sink_list", OptionalInt.empty());
   }
 }
