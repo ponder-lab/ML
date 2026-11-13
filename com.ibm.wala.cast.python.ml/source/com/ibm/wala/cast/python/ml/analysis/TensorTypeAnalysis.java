@@ -574,14 +574,14 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * survives tracing. A signature written from the fed dtype turns a working eager call into a
    * failing traced one.
    *
-   * <p>The rewrite is unconditional on the incoming cell, unlike {@link ComputeDTypeCastOp}'s
-   * floating-point-only cast: eager coercion applies to an integral NumPy argument just as it does
-   * to a floating-point one, and the collected dtype is what the runtime computes with in either
-   * case. Under a singleton, a parameter genuinely fed tensors is unaffected in substance, since a
-   * mismatch there raises eagerly and the coercion collected can only be the dtype it already
-   * carries; under a disagreement union the collection is caller-blind, so a tensor-fed member is
-   * cast to every imposed dtype like any other — the union describes the body's ops, not any one
-   * caller's feed.
+   * <p>The rewrite is unconditional on the incoming cell's dtype, unlike {@link
+   * ComputeDTypeCastOp}'s floating-point-only cast: eager coercion applies to an integral NumPy
+   * argument just as it does to a floating-point one, and the collected dtype is what the runtime
+   * computes with in either case. It applies only to an argument TensorFlow converts, though: one
+   * that is no tensor, such as a NumPy array (wala/ML#1253). An argument that is a TensorFlow
+   * tensor keeps its dtype, since a consumer that imposes another raises when it runs, so it is on
+   * a path the run never takes, such as an arm guarded by a test the argument's own value fails. An
+   * argument that may be either is kept as it is and cast as well.
    *
    * <p>Where the consumers disagree, the rewrite is the union over the imposed dtypes rather than a
    * decline to the fed dtype (wala/ML#829): the parameter genuinely is computed at more than one
@@ -605,11 +605,20 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
      */
     private final EnumSet<DType> coerced;
 
-    CoerceDTypeOp(EnumSet<DType> coerced) {
+    /**
+     * Whether this is the edge's transfer into the parameter, which carries the argument's
+     * producing libraries into the parameter's incoming variable, so the node's transfer out of it
+     * can tell a tensor from what TensorFlow converts (wala/ML#1253). The node's transfer blocks
+     * them, as the parameter barrier does.
+     */
+    private final boolean edge;
+
+    CoerceDTypeOp(EnumSet<DType> coerced, boolean edge) {
       // A defensive copy: hashCode/equals derive from the contents, and the caller's set is the
       // live map value — a later mutation of it would change this operator's hash in place inside
       // WALA's hash-keyed fixpoint structures, the wala/ML#753 instability class.
       this.coerced = EnumSet.copyOf(coerced);
+      this.edge = edge;
     }
 
     @Override
@@ -620,10 +629,26 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         // Materializing a null state is itself a change, even from an empty rhs.
         changed = lhs.state == null;
         if (changed) lhs.state = HashSetFactory.make();
-        for (TensorType t : rhs.state)
-          for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
+        // A tensor keeps its dtype; anything else may be converted (wala/ML#1253). A parameter's
+        // or an annotation's origin, or none, does not say which the argument is, so it does both:
+        // only an argument known to be an array is cast alone, and only one known to be a tensor
+        // is kept alone.
+        boolean unknown =
+            rhs.origins.isEmpty()
+                || rhs.origins.contains(TensorOrigin.PARAMETER)
+                || rhs.origins.contains(TensorOrigin.ANNOTATION);
+        boolean tensor =
+            unknown
+                || rhs.origins.contains(TensorOrigin.TENSORFLOW)
+                || rhs.origins.contains(TensorOrigin.KERAS_SYMBOLIC);
+        boolean converted = unknown || rhs.origins.contains(TensorOrigin.NUMPY);
+        for (TensorType t : rhs.state) {
+          if (tensor) changed |= lhs.state.add(t);
+          if (converted) for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
+        }
       }
       changed |= crossMarkers(lhs, rhs); // wala/ML#901: provenance crosses the parameter boundary
+      if (this.edge) changed |= lhs.origins.addAll(rhs.origins);
       return changed ? CHANGED : NOT_CHANGED;
     }
 
@@ -650,12 +675,14 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       // it.
       int bits = 0;
       for (DType d : this.coerced) bits |= 1 << d.ordinal();
-      return 0x828C0E4 + bits;
+      return 0x828C0E4 + 2 * bits + (this.edge ? 1 : 0);
     }
 
     @Override
     public boolean equals(Object o) {
-      return o instanceof CoerceDTypeOp && ((CoerceDTypeOp) o).coerced.equals(this.coerced);
+      return o instanceof CoerceDTypeOp other
+          && other.coerced.equals(this.coerced)
+          && other.edge == this.edge;
     }
 
     @Override
@@ -1484,7 +1511,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             } else if (conv3ds.contains(node)) {
               return new ConvOp(3, node);
             } else if (dtypeCoercions.containsKey(node)) {
-              return new CoerceDTypeOp(dtypeCoercions.get(node));
+              return new CoerceDTypeOp(dtypeCoercions.get(node), false);
             } else if (computeDTypeCasts.contains(node)) {
               return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(node)) {
@@ -1538,7 +1565,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             } else if (refinements.containsKey(dst)) {
               return new RefineShapeOp(refinements.get(dst), dst);
             } else if (dtypeCoercions.containsKey(dst)) {
-              return new CoerceDTypeOp(dtypeCoercions.get(dst));
+              return new CoerceDTypeOp(dtypeCoercions.get(dst), true);
             } else if (computeDTypeCasts.contains(dst)) {
               return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(dst)) {
