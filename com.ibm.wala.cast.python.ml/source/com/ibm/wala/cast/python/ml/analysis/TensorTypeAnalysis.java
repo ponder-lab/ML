@@ -629,14 +629,19 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         // Materializing a null state is itself a change, even from an empty rhs.
         changed = lhs.state == null;
         if (changed) lhs.state = HashSetFactory.make();
-        // A tensor keeps its dtype; anything else may be converted (wala/ML#1253).
+        // A tensor keeps its dtype; anything else may be converted (wala/ML#1253). A parameter's
+        // or an annotation's origin, or none, does not say which the argument is, so it does both:
+        // only an argument known to be an array is cast alone, and only one known to be a tensor
+        // is kept alone.
+        boolean unknown =
+            rhs.origins.isEmpty()
+                || rhs.origins.contains(TensorOrigin.PARAMETER)
+                || rhs.origins.contains(TensorOrigin.ANNOTATION);
         boolean tensor =
-            rhs.origins.contains(TensorOrigin.TENSORFLOW)
+            unknown
+                || rhs.origins.contains(TensorOrigin.TENSORFLOW)
                 || rhs.origins.contains(TensorOrigin.KERAS_SYMBOLIC);
-        boolean converted =
-            !tensor
-                || rhs.origins.contains(TensorOrigin.NUMPY)
-                || rhs.origins.contains(TensorOrigin.PARAMETER);
+        boolean converted = unknown || rhs.origins.contains(TensorOrigin.NUMPY);
         for (TensorType t : rhs.state) {
           if (tensor) changed |= lhs.state.add(t);
           if (converted) for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));

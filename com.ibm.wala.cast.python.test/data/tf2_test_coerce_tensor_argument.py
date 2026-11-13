@@ -21,5 +21,29 @@ def scale_array(x):
     return x * tf.constant([1.0], tf.float32)
 
 
+def scale_relayed(x):
+    if flag:
+        # Never runs: a `float32` tensor times an `int32` one raises.
+        return x * tf.constant([1], tf.int32)
+    return x
+
+
+def relay(t):
+    # The tensor reaches `scale_relayed` through a parameter.
+    return scale_relayed(t)
+
+
+def scale_array_relayed(x):
+    # A NumPy argument is converted to the dtype of the tensor beside it.
+    return x * tf.constant([1.0], tf.float32)
+
+
+def relay_array(a):
+    # The array reaches `scale_array_relayed` through a parameter.
+    return scale_array_relayed(a)
+
+
 assert scale_tensor(tf.ones([2])).dtype == tf.float32
+assert relay(tf.ones([2])).dtype == tf.float32
+assert relay_array(np.ones([2])).dtype == tf.float32
 assert scale_array(np.ones([2])).dtype == tf.float32

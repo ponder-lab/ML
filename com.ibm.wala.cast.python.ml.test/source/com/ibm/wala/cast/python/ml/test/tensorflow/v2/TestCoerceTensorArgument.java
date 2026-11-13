@@ -34,4 +34,26 @@ public class TestCoerceTensorArgument extends AbstractTensorTest {
   public void testArray() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "scale_array", 1, 3, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
+
+  /**
+   * A parameter fed a {@code float32} tensor through another function's parameter, multiplied by an
+   * {@code int32} one on an arm the run does not take, reads both: the argument's origin is the
+   * relaying parameter's, which does not say whether it is a tensor.
+   */
+  @Test
+  public void testRelayedTensor() throws ClassHierarchyException, CancelException, IOException {
+    // TODO: wala/ML#1253: TENSOR_2_FLOAT32 alone once a relay is judged by what was fed.
+    test(FILE, "scale_relayed", 1, 3, Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
+  }
+
+  /**
+   * A parameter fed a {@code float64} array through another function's parameter, multiplied by a
+   * {@code float32} tensor, reads both its fed dtype and the one TensorFlow converts it to, for the
+   * same reason.
+   */
+  @Test
+  public void testRelayedArray() throws ClassHierarchyException, CancelException, IOException {
+    // TODO: wala/ML#1253: TENSOR_2_FLOAT32 alone once a relay is judged by what was fed.
+    test(FILE, "scale_array_relayed", 1, 3, Map.of(2, Set.of(TENSOR_2_FLOAT64, TENSOR_2_FLOAT32)));
+  }
 }
