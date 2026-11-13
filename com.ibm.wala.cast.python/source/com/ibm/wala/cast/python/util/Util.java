@@ -460,12 +460,17 @@ public class Util {
   public static InstanceKey onlyKeyWithoutClientOnlyKeys(OrdinalSet<InstanceKey> pointsToSet) {
     if (pointsToSet == null) return null;
     InstanceKey only = null;
+    boolean clientOnly = false;
     for (InstanceKey ik : pointsToSet) {
-      if (isClientOnlyKey(ik)) continue;
+      if (isClientOnlyKey(ik)) {
+        clientOnly = true;
+        continue;
+      }
       if (only != null) return null;
       only = ik;
     }
-    return only;
+    // A scalar constant beside such a key is not the set's only value (wala/ML#1252).
+    return clientOnly && only != null && isScalarConstant(only) ? null : only;
   }
 
   /**

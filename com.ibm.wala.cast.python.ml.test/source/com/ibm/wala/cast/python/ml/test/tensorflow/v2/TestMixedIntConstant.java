@@ -66,4 +66,13 @@ public class TestMixedIntConstant extends AbstractTensorTest {
   public void testZerosOfMixed() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_zeros_of_mixed", 1, 1, Map.of(2, Set.of(TENSOR_UNRESOLVED_FLOAT64)));
   }
+
+  /**
+   * A guard on a parameter a call passes the constant {@code 0} or an {@code int(...)}, which does
+   * not fold, so both arms reach the consumer.
+   */
+  @Test
+  public void testGuarded() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_guarded", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_3_FLOAT32)));
+  }
 }

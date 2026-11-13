@@ -52,3 +52,20 @@ for flag in (True, False):
     zeros_of_mixed = np.zeros(0 if flag else int(len(sys.argv)))
     assert zeros_of_mixed.shape == ((0,) if flag else (1,))
     consume_zeros_of_mixed(zeros_of_mixed)
+
+
+def consume_guarded(x):
+    pass
+
+
+def guard(g):
+    if g == 0:
+        guarded = tf.ones([2])
+    else:
+        guarded = tf.ones([3])
+    consume_guarded(guarded)
+    return guarded
+
+
+for flag in (True, False):
+    assert guard(0 if flag else int(len(sys.argv))).shape == ((2,) if flag else (3,))
