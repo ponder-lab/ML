@@ -183,9 +183,9 @@ When the PA assignment graph propagates a tensor type into a destination that se
 
 ## Java Testing
 
-- Always run `mvn test` to ensure all Java tests pass before committing changes.
+- Always run `mvn test` to ensure all Java tests pass before pushing changes.
 - Add JUnit test cases for any new functionality or bug fixes implemented in the Java codebase.
-- Ensure that all new and existing JUnit test cases pass successfully before committing changes.
+- Ensure that all new and existing JUnit test cases pass successfully before pushing changes.
 - Use descriptive names for JUnit test methods that clearly indicate the purpose of the test.
 - If you change any of the summary files (e.g., `tensorflow.xml`), ensure that you add or update JUnit test cases to cover the changes made. Also, you must run `mvn clean` to ensure that the changes are correctly reflected in the build for summary (XML) files.
 - When a test would fail because of a known precision/correctness gap, **prefer encoding the *observed* (current, imprecise) behavior in the assertion itself** with a `TODO(<issue>):` comment that names the precise post-fix form. When the fix lands, the actual result changes and the test starts failing with a clear "expected observed-form, got precise-form" diff—that's the cue to update the assertion. For example:
