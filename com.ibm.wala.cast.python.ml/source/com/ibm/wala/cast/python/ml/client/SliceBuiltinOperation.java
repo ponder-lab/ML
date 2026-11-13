@@ -16,6 +16,7 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -688,7 +689,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
   /**
    * Parses the arguments of a {@code slice(receiver, dim0, dim1, ...)} invoke as multi-dim
    * subscript dimensions. Each argument is a {@code slice(lower, upper, step)} object (a {@code
-   * :}-style dimension), an ellipsis, a newaxis, or a constant integer index (which drops an axis).
+   * :}-style dimension), an ellipsis, a newaxis, or an integer index (which drops an axis).
    *
    * <p>Engages multi-dim handling only when at least one argument is a slice object, which is the
    * marker that distinguishes a multi-dim subscript carrying a {@code :} from the single {@code
@@ -726,7 +727,8 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * @param caller The caller {@link CGNode}.
    * @param argVn The argument value number.
    * @return a slice or index {@link SubscriptDim}, or {@code null} when the argument is neither (a
-   *     bare {@code None}/non-constant — i.e. the single {@code [:k]} bound form).
+   *     bare {@code None} or a value not known to be an integer, as in the single {@code [:k]}
+   *     bound form).
    */
   private SubscriptDim classifyDim(PropagationCallGraphBuilder builder, CGNode caller, int argVn) {
     if (argVn <= 0) return null;
@@ -745,9 +747,36 @@ public class SliceBuiltinOperation extends TensorGenerator {
     DimKind special = classifyEllipsisNewaxis(ptsOf(builder, caller, argVn));
     if (special == DimKind.ELLIPSIS) return SubscriptDim.ellipsis();
     if (special == DimKind.NEWAXIS) return SubscriptDim.newaxis();
-    // A constant integer index drops its axis; the index value itself is not needed.
-    if (constInt(builder, caller, argVn) != null) return SubscriptDim.index();
+    // An integer index drops its axis whatever its value, so the value itself is not needed, and an
+    // index with no constant value, such as a loop counter, drops it too (wala/ML#1247).
+    if (constInt(builder, caller, argVn) != null || isIntegerIndex(builder, caller, argVn))
+      return SubscriptDim.index();
     return null;
+  }
+
+  /**
+   * Whether every value a subscript argument may take is an integer: a constant one, or one of
+   * unknown value, whose type-level key the pointer analysis gives it (wala/ML#1148). The points-to
+   * set is read without the client-only mask, which hides that key.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param caller The caller {@link CGNode}.
+   * @param argVn The argument value number.
+   * @return {@code true} iff the argument's points-to set is nonempty and holds only integers.
+   */
+  private static boolean isIntegerIndex(
+      PropagationCallGraphBuilder builder, CGNode caller, int argVn) {
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, argVn);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts)
+      if (ik instanceof ConstantKey<?> constant) {
+        if (!(constant.getValue() instanceof Integer) && !(constant.getValue() instanceof Long))
+          return false;
+      } else if (!(ik instanceof ConcreteTypeKey)
+          || !PythonTypes.PYTHON_INT.equals(ik.concreteType().getReference())) return false;
+    return true;
   }
 
   /**
