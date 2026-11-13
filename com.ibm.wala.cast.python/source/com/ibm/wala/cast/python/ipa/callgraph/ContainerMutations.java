@@ -372,7 +372,13 @@ public record ContainerMutations(
           SSAInstruction callee = invoke.getNumberOfUses() > 0 ? du.getDef(invoke.getUse(0)) : null;
           if (calls(targets, DELETE_BUILTIN)) {
             if (invoke.getNumberOfUses() > 2) {
-              if (!deletesByName(symtab, invoke)) marks.mark(pa, node, invoke.getUse(1), false);
+              if (!deletesByName(symtab, invoke))
+                // A container the analysis does not see, such as one an unmodeled call returns, may
+                // be any list.
+                if (pa.getPointsToSet(
+                        pa.getHeapModel().getPointerKeyForLocal(node, invoke.getUse(1)))
+                    .isEmpty()) marks.markAll(false);
+                else marks.mark(pa, node, invoke.getUse(1), false);
             } else if (deletesSubscript(node.getMethod(), invoke)) marks.markAll(false);
           } else if (calls(targets, SLICE_BUILTIN)) {
             // A slice, `l[i:j]`, read or assigned, is a call of the slice builtin on the list. A

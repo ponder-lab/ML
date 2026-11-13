@@ -61,6 +61,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String DELETES_UNREACHED = "tf2_test_container_elements_del_unreached.py";
 
+  private static final String DELETES_UNMODELED = "tf2_test_container_elements_del_unmodeled.py";
+
   /** Per fixture, its builder. */
   private static final Map<String, PythonSSAPropagationCallGraphBuilder> BUILDERS = new HashMap<>();
 
@@ -558,6 +560,15 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedParameterDelete() {
     assertArity(DELETES_UNREACHED, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * A {@code del} of an element of a list an unmodeled call returns, {@code del
+   * random.choice([xs])[0]}, may delete from any list, so a list reports no length.
+   */
+  @Test
+  public void testUnmodeledContainerDelete() {
+    assertArity(DELETES_UNMODELED, "sink_list", OptionalInt.empty());
   }
 
   /**
