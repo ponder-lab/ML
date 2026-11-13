@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_5_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
 
@@ -808,6 +809,45 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 TensorType.of(INT_32, 6, 128),
                 TensorType.of(INT_32, 2, 4),
                 TensorType.of(INT_32, 2, 10))));
+  }
+
+  /**
+   * {@code GraphSAGEConvolution.message_function}'s {@code edge_source_states}, a {@code float32}
+   * gather result, keeps {@code float32}. The arm that multiplies it by an {@code int32} edge
+   * weight, {@code if edge_weights == 0: edge_weight = edge_weights[edge_type_idx]}, raises if it
+   * runs, and once the index into the list of edge weights is resolved (wala/ML#1246) the parameter
+   * read {@code int32} alone, the dtype that arm imposes (wala/ML#1253).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullGraphSageMessageStates()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType dynamicUnknown = new TensorType(UNKNOWN, Arrays.asList(DynamicDim.INSTANCE));
+    TensorType dynamicInt32 = new TensorType(INT_32, Arrays.asList(DynamicDim.INSTANCE));
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/gnn/GSConv.py",
+        "GraphSAGEConvolution.message_function",
+        "nlpgnn_full_proj",
+        6,
+        10,
+        Map.of(
+            3,
+            Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            4,
+            Set.of(dynamicUnknown, dynamicInt32),
+            5,
+            Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            6,
+            Set.of(dynamicUnknown, dynamicInt32),
+            7,
+            Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            8,
+            Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
