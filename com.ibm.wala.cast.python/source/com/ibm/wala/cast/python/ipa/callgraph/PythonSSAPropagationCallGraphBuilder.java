@@ -7713,7 +7713,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * A value passed as {@code training} on a layer call (wala/ML#1249), which may be any value when
    * the analysis cannot read it.
    */
-  private final class PassedTraining {
+  private static final class PassedTraining {
 
     /** The value passed. */
     private final PointerKey passed;
@@ -7841,7 +7841,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     return monitor -> {
       solver.solve(monitor);
       solves++;
-      while (widenChangedLiteralSlices() | reviseTrainingContexts()) {
+      while (true) {
+        // Both checks run every round, so one's revision does not put off the other's.
+        boolean lists = widenChangedLiteralSlices();
+        boolean contexts = reviseTrainingContexts();
+        if (!lists && !contexts) break;
         solver.solve(monitor);
         solves++;
       }
