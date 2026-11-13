@@ -7439,12 +7439,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   private final List<PassedTraining> passedTrainings = new ArrayList<>();
 
-  /**
-   * The nodes of layer calls (wala/ML#1249), whose context is checked once the analysis is solved:
-   * one with no value may hold any.
-   */
-  private final Set<CGNode> layerCallNodes = HashSetFactory.make();
-
   /** The nodes already read for a call that sets the learning phase (wala/ML#1249). */
   private final Set<CGNode> learningPhaseScanned = HashSetFactory.make();
 
@@ -7572,7 +7566,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       InstanceKey[] explicitConstants,
       PointerKey defaultKey) {
     if (!resolvedTrainingEdges.add(List.of(caller, call.iIndex(), target))) return;
-    layerCallNodes.add(target);
     PointerKey context = getTrainingContextKey(target);
     boolean passed = explicitKey != null || explicitConstants != null;
     if (layerCall.formal() < 0) {
@@ -7753,7 +7746,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * <ul>
    *   <li>A value passed as {@code training} that holds nothing may be any {@code bool}, and may be
    *       {@code None}, so it also resolves as one not passed.
-   *   <li>A layer call whose context holds nothing may run in any context.
+   *   <li>A reached node whose context holds nothing may run in any context.
    *   <li>A call of a reached node that sets the learning phase gives it the values it passes.
    * </ul>
    *
@@ -7772,7 +7765,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       addTrainingResolution(passed.resolved, passed.caller, null, null, passed.defaultKey, false);
       revised = true;
     }
-    for (CGNode node : layerCallNodes) {
+    // A node whose context holds nothing, which an edge that passes no context on may leave it,
+    // may run in any, as may every node it calls; the layer calls it makes then resolve as in one.
+    for (CGNode node : getCallGraph()) {
       PointerKey context = getTrainingContextKey(node);
       IntSet value = getSystem().findOrCreatePointsToSet(context).getValue();
       if (value != null && !value.isEmpty()) continue;

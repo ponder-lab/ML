@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.ibm.wala.cast.python.ipa.callgraph.ContainerMutations;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -310,6 +311,43 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
     assertEquals(
         Set.of(Boolean.TRUE, Boolean.FALSE),
         parameterConstants("tf2_test_sequential_training_fit.py", "Block/call", "training"));
+  }
+
+  /**
+   * A {@code training} value the analysis learns only once it is solved, the learning phase, picks
+   * the method a layer calls, and the method extends a list a slice was taken of. The analysis
+   * solves again to reach it, so the mutations it records for the list are those of the call graph
+   * it finally builds, not those it read before that solve (<a
+   * href="https://github.com/wala/ML/issues/1249">wala/ML#1249</a>).
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testTrainingPicksMutation() throws Exception {
+    String file = "tf2_test_training_picks_mutation.py";
+    PythonTensorAnalysisEngine engine = (PythonTensorAnalysisEngine) makeEngine(file);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    boolean mutating = false;
+    Set<InstanceKey> lists = new HashSet<>();
+    for (CGNode node : cg) {
+      String type = node.getMethod().getDeclaringClass().getName().toString();
+      mutating |= type.equals("Lscript " + file + "/Picker/mutating");
+      if (!type.equals("Lscript " + file + "/consume")) continue;
+      PointerKey items = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2);
+      for (InstanceKey list : builder.getPointerAnalysis().getPointsToSet(items)) lists.add(list);
+    }
+    assertTrue("`Picker.mutating` is not reached.", mutating);
+    assertFalse("No list reaches `consume`.", lists.isEmpty());
+    ContainerMutations mutations = ContainerMutations.of(builder);
+    for (InstanceKey list : lists)
+      assertTrue(
+          list + " is not recorded as extended.",
+          mutations.allUnappended()
+              || mutations
+                  .unappended()
+                  .contains(
+                      builder.getPointerAnalysis().getInstanceKeyMapping().getMappedIndex(list)));
   }
 
   /**
