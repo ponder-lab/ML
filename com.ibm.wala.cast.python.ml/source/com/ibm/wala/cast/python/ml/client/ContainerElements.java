@@ -9,9 +9,9 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.loader.AstMethod;
-import com.ibm.wala.cast.python.ipa.callgraph.ContainerMutations;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
+import com.ibm.wala.cast.python.util.ContainerMutations;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
