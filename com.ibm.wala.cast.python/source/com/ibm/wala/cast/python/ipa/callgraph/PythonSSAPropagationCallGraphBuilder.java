@@ -328,7 +328,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * @param modules The type names of the libraries' modules.
    */
   public void setNonResizingLibraries(Set<String> modules) {
-    if (modules != null) this.nonResizingLibraries = Set.copyOf(modules);
+    if (modules != null) nonResizingLibraries = Set.copyOf(modules);
   }
 
   /**
