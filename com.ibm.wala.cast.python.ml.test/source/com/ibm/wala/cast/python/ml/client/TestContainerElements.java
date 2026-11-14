@@ -61,6 +61,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String DELETES_UNREACHED = "tf2_test_container_elements_del_unreached.py";
 
+  private static final String UNMODELED_LIBRARY =
+      "tf2_test_container_elements_unmodeled_library.py";
+
   private static final String DELETES_UNMODELED = "tf2_test_container_elements_del_unmodeled.py";
 
   /** Per fixture, its builder. */
@@ -478,8 +481,18 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A list a TensorFlow function reads, {@code tf.image.random_crop(t, size)}, keeps its length,
-   * though the call resolves to no target.
+   * A list passed to a TensorFlow function no summary models, {@code tf.strings.join}, reports no
+   * length: the function may change it. Only a function a summary models, as {@code
+   * tf.image.random_crop}, leaves its list arguments as they are (wala/ML#1182).
+   */
+  @Test
+  public void testUnmodeledLibraryArgumentLosesArity() {
+    assertArity(UNMODELED_LIBRARY, "sink_parts", OptionalInt.empty());
+  }
+
+  /**
+   * A list a TensorFlow function reads, {@code tf.image.random_crop(t, size)}, keeps its length:
+   * the call resolves to the function's summary, which changes nothing it is passed (wala/ML#1182).
    */
   @Test
   public void testTensorFlowArgumentKeepsArity() {

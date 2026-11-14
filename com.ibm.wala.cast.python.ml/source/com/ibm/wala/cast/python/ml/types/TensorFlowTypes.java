@@ -2066,6 +2066,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/image/random_crop. */
+  public static final MethodReference RANDOM_CROP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/random_crop")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_CROP_SIGNATURE = "tf.image.random_crop()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/random_flip_left_right. */
   public static final MethodReference RANDOM_FLIP_LEFT_RIGHT =
       MethodReference.findOrCreate(
@@ -3452,6 +3462,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(UNSTACK.getDeclaringClass(), UNSTACK_SIGNATURE),
           Map.entry(MAP_FN_ELEMENT.getDeclaringClass(), MAP_FN_ELEMENT_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(RANDOM_CROP.getDeclaringClass(), RANDOM_CROP_SIGNATURE),
           Map.entry(RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass(), RANDOM_FLIP_LEFT_RIGHT_SIGNATURE),
           Map.entry(ADJUST_CONTRAST.getDeclaringClass(), ADJUST_CONTRAST_SIGNATURE),
           Map.entry(ADJUST_BRIGHTNESS.getDeclaringClass(), ADJUST_BRIGHTNESS_SIGNATURE),

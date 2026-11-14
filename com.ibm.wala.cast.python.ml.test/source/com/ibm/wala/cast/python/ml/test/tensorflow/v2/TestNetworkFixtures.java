@@ -299,6 +299,9 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
+   *     <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
+   *     (wala/ML#1182): the two cropped images and their two flips are typed, each {@code (256,
+   *     256, 3)} {@code float32}.
    */
   @Test
   public void testRandomJitter()
@@ -307,7 +310,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_random_jitter.py",
         "random_jitter",
         2,
-        6,
+        10,
         Map.of(2, Set.of(TENSOR_256_256_3_FLOAT32), 3, Set.of(TENSOR_256_256_3_FLOAT32)));
   }
 
@@ -328,6 +331,8 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
+   *     <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
+   *     (wala/ML#1182): the two cropped images and their two flips are typed.
    */
   @Test
   public void testPix2pixJitterParams()
@@ -336,7 +341,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_pix2pix_load.py",
         "random_jitter",
         2,
-        6,
+        10,
         Map.of(
             2,
             Set.of(
@@ -1119,6 +1124,9 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
+   *     <p>The local count rose from three to six when {@code tf.image.random_crop} was modeled
+   *     (wala/ML#1182): the crop, {@code (2, 256, 256, 3)} {@code float32}, and its two halves are
+   *     typed.
    */
   @Test
   public void testPix2pixCropParams()
@@ -1127,7 +1135,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_pix2pix_load.py",
         "random_crop",
         2,
-        3,
+        6,
         Map.of(
             2,
             Set.of(

@@ -3621,4 +3621,29 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
   }
+
+  /**
+   * {@code tf.image.random_crop} returns a tensor with the shape its {@code size} argument gives
+   * and the dtype of the tensor it crops, passed by position (wala/ML#1182).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRandomCrop() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_random_crop.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_3_FLOAT32)));
+  }
+
+  /**
+   * The same, with {@code value} and {@code size} passed by keyword.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRandomCropKeyword() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_random_crop.py", "consume_keyword", 1, 1, Map.of(2, Set.of(TENSOR_1_2_INT32)));
+  }
 }
