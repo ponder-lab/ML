@@ -12,7 +12,7 @@ def consume(x):
 #
 # At runtime, `tf.RaggedTensor.from_row_starts` rejects a symbolic
 # `KerasTensor` arg — the `try/except` lets the file run to completion
-# per `CLAUDE.md`'s fixture guideline while still letting the static
+# per `AGENTS.md`'s fixture guideline while still letting the static
 # analyzer walk the `from_row_starts` call below.
 try:
     row_starts = tf.keras.Input(shape=(8,), dtype=tf.int64)

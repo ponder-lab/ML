@@ -3019,7 +3019,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         //
         // Receivers with empty PTS are still pinned. Empty PTS occurs when a TF API in the call
         // chain upstream of the `set_shape` site has no XML summary (or the summary doesn't
-        // model its return as a fresh allocation) — see CLAUDE.md, "PTS vs `TensorTypeAnalysis`".
+        // model its return as a fresh allocation) — see AGENTS.md, "PTS vs `TensorTypeAnalysis`".
         // The syntactic `set_shape` pattern itself is strong evidence in the TF source files
         // this analyzer targets, so pinning on empty PTS is correct-on-balance.
         OrdinalSet<InstanceKey> recvPts =
