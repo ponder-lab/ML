@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 This is **Ariadne** — WALA-based static analysis for machine learning code in Python, with a focus on TensorFlow/Keras tensor shape and dtype inference. It is a Maven multi-module project built on [WALA](https://github.com/wala/WALA).
 
@@ -35,7 +35,7 @@ Initial setup (submodules + Jython) is documented in `CONTRIBUTING.md` and is a 
 
 **Test output lives in `com.ibm.wala.cast.python.ml.test/target/surefire-reports/`.** `mvn test`'s stdout is dominated by IR dumps — the `*.txt` surefire files contain the actual assertion failures. For per-method FINE logs, rerun `mvn test -Dsurefire.useFile=false` and the stdout goes to the Maven console (still very large — redirect to a file and grep).
 
-`logging.properties` is set to FINEST at the root logger locally, so any `LOGGER.fine(...)` / `LOGGER.finer(...)` call will show up in a local run. CI uses a restricted `logging.ci.properties`. Write new diagnostic logs at `FINE`/`FINER` directly — don't add `INFO` and demote later.
+`logging.properties` is set to FINEST at the root logger locally, so any `LOGGER.fine(...)` / `LOGGER.finer(...)` call will show up in a local run. CI uses a restricted `logging.ci.properties`. Write new diagnostic logs at `FINE`/`FINER` directly — don't add `INFO` and demote later. To log an exception, pass it to the logger (`LOGGER.log(Level.FINE, message, e)`) rather than appending `e.getMessage()` to the message, so the stack trace is kept.
 
 **For pass/fail runs, use the CI logging config**: `mvn test -Dlogging.config.file=./logging.ci.properties`. FINEST log *formatting* dominates the corpus-test runtime (the whole-project analyses run ~20× faster without it, the full ML-test module in ~2 minutes), and a FINEST full-suite run writes ~9 GB of surefire output, enough to fill a nearly-full disk. Reserve the FINEST default for probe and diagnostic runs of specific tests, and delete their logs after extraction.
 
@@ -86,6 +86,7 @@ PythonTensorAnalysisEngine.performAnalysis()
 - *Manual* (`TensorGenerator(CGNode)`): created by `TensorGenerator.createManualGenerator` during producer delegation, when a value's points-to member is a generic `Ltensorflow/python/framework/ops/Tensor` allocation and the shape must come from the allocating synthetic `do()` node. The anchor is the synthetic node itself; there is no source and usually no invoke, so argument resolution must go through the caller-aware machinery (`getArgumentPointsToSet`/the caller walks). **Trap**: value-number-based operand paths (`getOperandShapes(builder, vn)`-style) pair caller-frame value numbers with the synthetic node's IR and silently resolve garbage for manual anchors — a manual anchor needs its own argument path (see `ElementWiseOperation.getManualShapeResult`, the wala/ML#718 fix). The weight-graph walk (`Model.getWeightShapes`) is the founding precedent: it constructs manual generators per `CGNode` precisely because the PTS substrate cannot see the values.
 - The two dispatch tables must be maintained in tandem: `TensorGeneratorFactory`'s arms serve source-based seeding; `createManualGenerator`'s registry serves producer delegation. An op present in one but not the other works at seeding time yet dead-ends delegation (or vice versa) — the `tf.multiply`/`tf.transpose` gap found during wala/ML#718. New generic-alloc ops must be registered in both.
 - *Delegated* reads are a third case, and the one that catches people: when a generator resolves a value by **delegating** to the generator of the allocation it came from, the delegated read **starts at the allocation and cannot recover the calling frame**. Whatever frame the original query was asked in is gone. So a delegated path must resolve its arguments from the allocating node, never from a value number belonging to the asking node — the same trap as a manual anchor, arrived at from the other direction.
+- *Read an argument through its points-to set.* `getArgumentPointsToSet` resolves an argument at the call site and through the callers. `getArgumentValueNumber` reads the parameters of the generator's own node's IR, so it has no value (`UNDEFINED_PARAMETER_POSITION`) for a position that node doesn't declare, and its value number belongs to that node's frame alone.
 - *Layer-call results are unseeded by design*: a value produced by a user layer call (`q = self.q(x)`) gets no generator from either table — its type must arrive via `TensorTypeAnalysis` dataflow edges from the callee's return through the call trampoline (the forward-result mechanism). A ⊤ layer-call result therefore indicates a broken or unfed return edge, not a missing generator.
 
 - **Declared-contract seeding** (wala/ML#717) — an explicit `model.build(input_shape=(...))` seeds the model's `call` input when its runtime feed doesn't resolve: recognized syntactically (`contractSeedForCallInput`/`explicitBuildContractShapes`, memoized per class), with literal sizes recovered through constant folding and the stored-attribute chases (including same-body writes on non-`self` holder objects).
@@ -163,6 +164,8 @@ The `Map` only checks **parameter** types, not all local tensor variables. To pi
 
 **Tensor type constants** (`TENSOR_20_28_28_FLOAT32`, `TENSOR_NONE_4_FLOAT32`, etc.) are defined in `AbstractTensorTest`. Add new ones as needed when writing a test that expects a not-yet-represented shape.
 
+Give a new test a descriptive name that says what it checks, such as `testUnreachedNamespace`, rather than a number after an existing test's name. When modeling or testing a TensorFlow operation, cover its arguments passed by position, by keyword, and mixed.
+
 ### Python test files
 
 Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When adding a new one:
@@ -223,7 +226,3 @@ Local `mvn release:prepare` is the documented **fallback** only (e.g., the runne
 Issues live on `wala/ML` (the upstream repo), not on the `ponder-lab/ML` fork where development branches are pushed. When referencing issues in commit messages or Javadoc, use `wala/ML#N`. Cross-repo issue dependency features (`blocked_by`, sub-issues) are used — prefer `gh api` for linking them, since the CLI's built-in commands don't cover these.
 
 When linking to code in an issue that references state on a feature branch, **use a commit-SHA permalink to `ponder-lab/ML`**, not a branch link on `wala/ML`/master — the code on the feature branch isn't on upstream master yet.
-
-## Session memory
-
-GEMINI.md at `.gemini/GEMINI.md` is an existing knowledge store that captures Gemini/Claude-learned facts about modeling decisions (e.g., why `tf.constant` needs `read_data` synthetic methods, how to handle aliasing in 1-CFA context). It's worth a read before deep modifications to `tensorflow.xml` or `TensorGenerator`/`TensorGeneratorFactory`.

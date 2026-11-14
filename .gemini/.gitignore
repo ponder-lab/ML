@@ -1,6 +1,4 @@
 # Ignore everything
 *
-# Except preferences file
-!GEMINI.md
 # Except this ignore file
 !.gitignore
