@@ -61,6 +61,12 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String DELETES_UNREACHED = "tf2_test_container_elements_del_unreached.py";
 
+  private static final String UNMODELED_LIBRARY =
+      "tf2_test_container_elements_unmodeled_library.py";
+
+  private static final String UNREACHED_LIBRARY_OBJECT =
+      "tf2_test_container_elements_unreached_library_object.py";
+
   private static final String DELETES_UNMODELED = "tf2_test_container_elements_del_unmodeled.py";
 
   /** Per fixture, its builder. */
@@ -478,8 +484,28 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A list a TensorFlow function reads, {@code tf.image.random_crop(t, size)}, keeps its length,
-   * though the call resolves to no target.
+   * A program's list stored as an attribute of a TensorFlow object, {@code m.items}, and resized in
+   * a function the call graph does not reach, reports no length: only TensorFlow's module itself is
+   * taken to resize no list, not an object of the library (wala/ML#1182).
+   */
+  @Test
+  public void testUnreachedLibraryObjectAttributeLosesArity() {
+    assertArity(UNREACHED_LIBRARY_OBJECT, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * A list passed to a TensorFlow function no summary models, {@code tf.strings.join}, keeps its
+   * length: TensorFlow is registered as a library whose functions resize no list passed to them,
+   * which a summary would override (wala/ML#1182).
+   */
+  @Test
+  public void testUnmodeledLibraryArgumentKeepsArity() {
+    assertArity(UNMODELED_LIBRARY, "sink_parts", OptionalInt.of(2));
+  }
+
+  /**
+   * A list a TensorFlow function reads, {@code tf.image.random_crop(t, size)}, keeps its length:
+   * the call resolves to the function's summary, which changes nothing it is passed (wala/ML#1182).
    */
   @Test
   public void testTensorFlowArgumentKeepsArity() {

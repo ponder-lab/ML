@@ -314,6 +314,34 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private Map<TypeReference, TypeReference> freshSliceResultTypes = Collections.emptyMap();
 
   /**
+   * The type names of the modules of the libraries whose functions resize no Python list passed to
+   * them when no summary models them, such as {@code Ltensorflow}, whose objects' type names begin
+   * with it; see {@link ContainerMutations}. A summary takes precedence: a call that resolves to
+   * one does what its body does (wala/ML#1182). Empty by default, when a call that resolves to no
+   * target may resize any list passed to it.
+   */
+  private Set<String> nonResizingLibraries = Collections.emptySet();
+
+  /**
+   * Names the libraries whose functions resize no list passed to them (wala/ML#1182); see {@link
+   * #nonResizingLibraries}.
+   *
+   * @param modules The type names of the libraries' modules.
+   */
+  public void setNonResizingLibraries(Set<String> modules) {
+    if (modules != null) nonResizingLibraries = Set.copyOf(modules);
+  }
+
+  /**
+   * The libraries whose functions resize no list passed to them; see {@link #nonResizingLibraries}.
+   *
+   * @return The type names of the libraries' modules.
+   */
+  public Set<String> getNonResizingLibraries() {
+    return nonResizingLibraries;
+  }
+
+  /**
    * The slices of list and tuple literals trimmed to the literal's elements in range (wala/ML#993),
    * each widened to all of them once the program may change the list in a way the analysis does not
    * record (wala/ML#1250); see {@link #makeSolver}.
@@ -7947,7 +7975,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     List<LiteralSlice> slices = literalSlices.stream().filter(s -> !s.widened).toList();
     List<LiteralCount> counts = literalCounts.stream().filter(c -> !c.opened).toList();
     if (slices.isEmpty() && counts.isEmpty()) return false;
-    ContainerMutations mutations = ContainerMutations.compute(this);
+    ContainerMutations mutations = ContainerMutations.compute(this, nonResizingLibraries);
     scannedMutations = mutations;
     scannedMutationsSolves = solves;
     for (LiteralSlice slice : slices)

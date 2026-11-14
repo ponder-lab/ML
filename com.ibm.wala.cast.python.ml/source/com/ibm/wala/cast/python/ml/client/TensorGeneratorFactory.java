@@ -178,6 +178,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_CATEGORICAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_CROP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_FLIP_LEFT_RIGHT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
@@ -864,6 +865,8 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(BooleanMask::new, BooleanMask::new);
     if (isType(type, BROADCAST_TO.getDeclaringClass()))
       return anchor.makeGenerator(BroadcastTo::new, BroadcastTo::new);
+    if (isType(type, RANDOM_CROP.getDeclaringClass()))
+      return anchor.makeGenerator(RandomCrop::new, RandomCrop::new);
     // `tf.constant` deliberately has NO node-anchored form: its manual-route resolution belongs
     // to the `read_data` synthetic machinery (wala/ML#380), and a node-anchored `Constant` whose
     // literal-value extraction fails composes ⊥ that shadows that path (six elementwise/value-
