@@ -1106,6 +1106,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             TensorFlowTypes.TENSORFLOW_TYPE.getName().toString(),
             NumpyTypes.NUMPY_TYPE.getName().toString()));
 
+    // A tensor's and an array's `*` is elementwise, so a list times one is no repetition
+    // (wala/ML#960, wala/ML#1259).
+    builder.setTensorLikeLibraries(
+        Set.of(
+            TensorFlowTypes.TENSORFLOW_TYPE.getName().toString(),
+            NumpyTypes.NUMPY_TYPE.getName().toString()));
+
     // A tensor's or an array's slice is an array of the same kind with an allocation of its own,
     // so a generator reading `x[:, :-1]` through the points-to set no longer sees the receiver's
     // pre-slice window (wala/ML#916). numpy.xml puts an array's methods (`astype`, `tolist`,
@@ -5578,6 +5585,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   @Override
   protected Collection<String> getSummaryClassShellSummaries() {
     return List.of("tensorflow.xml");
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Keras's {@code Layer} and {@code Model} summaries, and its layers' {@code __call__} and
+   * {@code call} methods, are declared in its package (wala/ML#994, wala/ML#1249, wala/ML#1259).
+   */
+  @Override
+  protected Set<String> getLayerLibraries() {
+    return Set.of(TensorFlowTypes.KERAS_TYPE.getName().toString());
   }
 
   /**

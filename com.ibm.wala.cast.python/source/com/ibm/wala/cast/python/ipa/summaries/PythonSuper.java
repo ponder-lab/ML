@@ -63,8 +63,22 @@ public class PythonSuper {
 
   private final IMethod superStub;
 
-  public PythonSuper(IClassHierarchy cha) {
+  /**
+   * The type names of the packages of the layer libraries, whose summary class shells are the layer
+   * bases whose {@code __call__} invokes the instance's {@code call} (wala/ML#994).
+   */
+  private final Set<String> layerLibraries;
+
+  /**
+   * Constructs the binding of {@code super()}.
+   *
+   * @param cha The class hierarchy.
+   * @param layerLibraries The type names of the packages of the layer libraries (see {@link
+   *     com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder#setLayerLibraries}).
+   */
+  public PythonSuper(IClassHierarchy cha, Set<String> layerLibraries) {
     this.cha = cha;
+    this.layerLibraries = Set.copyOf(layerLibraries);
     this.superStub =
         new SyntheticMethod(
             AstMethodReference.fnReference(PythonTypes.superfun),
@@ -269,7 +283,7 @@ public class PythonSuper {
           Collection<MethodReference> methodReferences = new ArrayList<>();
           Set<MethodReference> summaryDeclaredMethods = HashSetFactory.make();
           boolean declaresDunderCall = false;
-          boolean reachesKerasBase = false;
+          boolean reachesLayerBase = false;
 
           if (x instanceof IPythonClass) {
             IPythonClass px = (IPythonClass) x;
@@ -283,7 +297,7 @@ public class PythonSuper {
                 ancestor instanceof IPythonClass;
                 ancestor = ancestor.getSuperclass()) {
               boolean shell = ancestor instanceof PythonSummaryShellClass;
-              reachesKerasBase |= shell && isKerasBase(ancestor);
+              reachesLayerBase |= shell && isLayerBase(ancestor);
               for (MethodReference m : ((IPythonClass) ancestor).getMethodReferences()) {
                 if (methodFieldName(m, shell).toString().equals(PythonTypes.CALLABLE_METHOD_NAME))
                   declaresDunderCall = true;
@@ -384,11 +398,11 @@ public class PythonSuper {
 
           // Keras's `Layer.__call__` (which the `Layer` and `Model` summary class shells do not
           // declare) invokes the instance's own `call`, so `super().__call__(...)` from a program
-          // class's `__call__` is the instance's bound `call` (wala/ML#994). This is the Keras
-          // contract only: the binding applies when the chain reaches a Keras summary class shell
-          // (`isKerasBase`), not any library base. A `__call__` an ancestor declares is bound above
-          // and takes precedence.
-          if (!declaresDunderCall && reachesKerasBase) {
+          // class's `__call__` is the instance's bound `call` (wala/ML#994). This is the layer
+          // contract only: the binding applies when the chain reaches a layer library's summary
+          // class shell (`isLayerBase`), not any library base. A `__call__` an ancestor declares is
+          // bound above and takes precedence.
+          if (!declaresDunderCall && reachesLayerBase) {
             int call = v++;
             ctor.addStatement(
                 insts.GetInstruction(
@@ -448,15 +462,17 @@ public class PythonSuper {
   }
 
   /**
-   * Whether a summary class shell is a Keras layer or model base, whose {@code __call__} invokes
-   * the instance's {@code call} (wala/ML#994): a class of the {@code tensorflow/keras} package, the
-   * one the {@code Layer} and {@code Model} summaries are declared in.
+   * Whether a summary class shell is a layer or model base, whose {@code __call__} invokes the
+   * instance's {@code call} (wala/ML#994): a class of a layer library's package ({@link
+   * #layerLibraries}), the one the {@code Layer} and {@code Model} summaries are declared in.
    *
    * @param shell The summary class shell.
-   * @return {@code true} iff it is a Keras class.
+   * @return {@code true} iff it is a class of a layer library.
    */
-  private static boolean isKerasBase(IClass shell) {
-    return shell.getName().toString().startsWith("Ltensorflow/keras/");
+  private boolean isLayerBase(IClass shell) {
+    String name = shell.getName().toString();
+    for (String library : layerLibraries) if (name.startsWith(library + "/")) return true;
+    return false;
   }
 
   private class SuperContextSelector implements ContextSelector {

@@ -11,13 +11,17 @@ import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -90,6 +94,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String UNREACHED_DATACLASS =
       "tf2_test_container_elements_unreached_dataclass.py";
+
+  private static final String TENSOR_LIKE = "tf2_test_container_elements_tensor_like.py";
 
   private static final String UNREACHED_REPEAT = "tf2_test_container_elements_unreached_repeat.py";
 
@@ -254,6 +260,35 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
                 .getPointsToSet(
                     builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2))
                 .isEmpty());
+  }
+
+  /**
+   * The lists and tuples that reach a sink.
+   *
+   * @param file The fixture.
+   * @param sink The sink's name.
+   * @return The lists and tuples in its parameter's points-to set.
+   */
+  private static Set<InstanceKey> receivedLists(String file, String sink) {
+    PythonSSAPropagationCallGraphBuilder builder = builder(file);
+    IClassHierarchy cha = builder.getClassHierarchy();
+    IClass list = cha.lookupClass(PythonTypes.list);
+    IClass tuple = cha.lookupClass(PythonTypes.tuple);
+    boolean reached = false;
+    Set<InstanceKey> ret = new HashSet<>();
+    for (CGNode node : builder.getCallGraph())
+      if (node.getMethod().getDeclaringClass().getName().toString().endsWith("/" + sink)) {
+        reached = true;
+        for (InstanceKey value :
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2)))
+          if (cha.isSubclassOf(value.concreteType(), list)
+              || cha.isSubclassOf(value.concreteType(), tuple)) ret.add(value);
+      }
+    assertTrue("Expecting " + sink + " to be reached.", reached);
+    return ret;
   }
 
   /**
@@ -995,6 +1030,41 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedNamespaceSubclass() {
     assertArity(UNREACHED_NAMESPACE_SUBCLASS, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * A list times an array is the array's multiplication, which makes no list (wala/ML#960,
+   * wala/ML#1259).
+   *
+   * <p>TODO: wala/ML#960; the list literal reaches the list operation before the array does, and
+   * the repetition its rule allows against the operand's empty points-to set is not withdrawn, so
+   * the sink receives the list the operation makes.
+   */
+  @Test(expected = AssertionError.class)
+  public void testArrayTimesList() {
+    assertEquals(Set.of(), receivedLists(TENSOR_LIKE, "sink_array_times_list"));
+  }
+
+  /**
+   * A list times a tensor is the tensor's multiplication, which makes no list (wala/ML#960,
+   * wala/ML#1259).
+   *
+   * <p>TODO: wala/ML#960; the list literal reaches the list operation before the tensor does, and
+   * the repetition its rule allows against the operand's empty points-to set is not withdrawn, so
+   * the sink receives the list the operation makes.
+   */
+  @Test(expected = AssertionError.class)
+  public void testTensorTimesList() {
+    assertEquals(Set.of(), receivedLists(TENSOR_LIKE, "sink_tensor_times_list"));
+  }
+
+  /**
+   * A list times an integer is a repetition, which makes a list (wala/ML#960): the control of
+   * {@link #testArrayTimesList()} and {@link #testTensorTimesList()}.
+   */
+  @Test
+  public void testListTimesInt() {
+    assertFalse(receivedLists(TENSOR_LIKE, "sink_list_times_int").isEmpty());
   }
 
   /**

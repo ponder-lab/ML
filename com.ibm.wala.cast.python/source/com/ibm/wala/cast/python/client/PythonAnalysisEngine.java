@@ -225,6 +225,18 @@ public abstract class PythonAnalysisEngine<T>
   }
 
   /**
+   * The type names of the packages of the layer libraries, whose summaries declare the layer bases
+   * and the layers' {@code __call__} and {@code call} methods (see {@link
+   * PythonSSAPropagationCallGraphBuilder#setLayerLibraries}). Subclasses that model such a library
+   * name its package; the default is empty.
+   *
+   * @return The type names of the packages.
+   */
+  protected Set<String> getLayerLibraries() {
+    return Collections.emptySet();
+  }
+
+  /**
    * The library summary XMLs this engine loads in {@link #addBypassLogic}, read before source
    * translation for the top-level names they model an import of, so a project directory of such a
    * name without an initialization module is not bound as a namespace package in the library's
@@ -1004,7 +1016,9 @@ public abstract class PythonAnalysisEngine<T>
             builder,
             new PythonInstanceKeys(options, cha, interpreter, ZeroXInstanceKeys.ALLOCATIONS)));
 
-    new PythonSuper(cha).handleSuperCalls(builder, options);
+    Set<String> layerLibraries = getLayerLibraries();
+    builder.setLayerLibraries(layerLibraries);
+    new PythonSuper(cha, layerLibraries).handleSuperCalls(builder, options);
 
     return this.builder = builder;
   }

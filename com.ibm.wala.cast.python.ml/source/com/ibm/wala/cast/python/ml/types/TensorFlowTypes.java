@@ -128,6 +128,10 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference TENSORFLOW_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow"));
 
+  /** The package of Keras, whose summaries declare the layer bases and the layers' methods. */
+  public static final TypeReference KERAS_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/keras"));
+
   public static final TypeReference NUMPY_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lnumpy"));
 
