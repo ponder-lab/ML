@@ -3646,4 +3646,24 @@ public class TestShapeOps extends AbstractTensorTest {
   public void testRandomCropKeyword() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_random_crop.py", "consume_keyword", 1, 1, Map.of(2, Set.of(TENSOR_1_2_INT32)));
   }
+
+  /**
+   * A crop read through its producer, as {@code tf.transpose} reads its operand, keeps the shape
+   * and dtype the crop has: {@code (2, 3, 3)} {@code int32} transposed to {@code (3, 3, 2)} {@code
+   * int32}. The read delegates to the crop's node-anchored generator (wala/ML#1182).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testRandomCropThroughProducer()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_random_crop.py",
+        "consume_transposed",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3, 3, 2))));
+  }
 }

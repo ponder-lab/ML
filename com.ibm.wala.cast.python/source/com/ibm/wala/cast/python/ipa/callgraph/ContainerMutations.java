@@ -653,9 +653,9 @@ public record ContainerMutations(
    * Whether a value is a library function whose summary changes no argument it is passed: no
    * statement of its body stores into a parameter or passes one to a call.
    *
-   * <p>The scan runs between the builder's solves, so this only reads: it asks the method target
-   * selector for the function's body as a call of it from the fake root would, and a selector that
-   * cannot answer that leaves the function not exempt.
+   * <p>The scan runs between the builder's solves, so this changes nothing a call of the function
+   * would not: it asks the method target selector for the function's body as a call of it from the
+   * fake root would, and a selector that cannot answer that leaves the function not exempt.
    *
    * @param builder The builder.
    * @param function The value.
