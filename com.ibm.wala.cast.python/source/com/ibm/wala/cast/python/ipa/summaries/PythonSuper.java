@@ -283,7 +283,7 @@ public class PythonSuper {
           Collection<MethodReference> methodReferences = new ArrayList<>();
           Set<MethodReference> summaryDeclaredMethods = HashSetFactory.make();
           boolean declaresDunderCall = false;
-          boolean reachesKerasBase = false;
+          boolean reachesLayerBase = false;
 
           if (x instanceof IPythonClass) {
             IPythonClass px = (IPythonClass) x;
@@ -297,7 +297,7 @@ public class PythonSuper {
                 ancestor instanceof IPythonClass;
                 ancestor = ancestor.getSuperclass()) {
               boolean shell = ancestor instanceof PythonSummaryShellClass;
-              reachesKerasBase |= shell && isLayerBase(ancestor);
+              reachesLayerBase |= shell && isLayerBase(ancestor);
               for (MethodReference m : ((IPythonClass) ancestor).getMethodReferences()) {
                 if (methodFieldName(m, shell).toString().equals(PythonTypes.CALLABLE_METHOD_NAME))
                   declaresDunderCall = true;
@@ -398,11 +398,11 @@ public class PythonSuper {
 
           // Keras's `Layer.__call__` (which the `Layer` and `Model` summary class shells do not
           // declare) invokes the instance's own `call`, so `super().__call__(...)` from a program
-          // class's `__call__` is the instance's bound `call` (wala/ML#994). This is the Keras
-          // contract only: the binding applies when the chain reaches a Keras summary class shell
-          // (`isLayerBase`), not any library base. A `__call__` an ancestor declares is bound above
-          // and takes precedence.
-          if (!declaresDunderCall && reachesKerasBase) {
+          // class's `__call__` is the instance's bound `call` (wala/ML#994). This is the layer
+          // contract only: the binding applies when the chain reaches a layer library's summary
+          // class shell (`isLayerBase`), not any library base. A `__call__` an ancestor declares is
+          // bound above and takes precedence.
+          if (!declaresDunderCall && reachesLayerBase) {
             int call = v++;
             ctor.addStatement(
                 insts.GetInstruction(
