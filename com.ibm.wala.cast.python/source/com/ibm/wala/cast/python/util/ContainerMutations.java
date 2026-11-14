@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ipa.callgraph;
+package com.ibm.wala.cast.python.util;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -12,6 +12,7 @@ import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
@@ -296,7 +297,7 @@ public record ContainerMutations(
    * @param builder The builder.
    * @param mutations Its mutations, computed once its call graph was built.
    */
-  static void remember(PropagationCallGraphBuilder builder, ContainerMutations mutations) {
+  public static void remember(PropagationCallGraphBuilder builder, ContainerMutations mutations) {
     synchronized (MUTATIONS) {
       MUTATIONS.put(builder, mutations);
     }
@@ -312,7 +313,7 @@ public record ContainerMutations(
    * @return {@code true} iff its positioned elements and appended contents need not be its run-time
    *     elements.
    */
-  boolean mayRepositionUnappended(PropagationCallGraphBuilder builder, InstanceKey list) {
+  public boolean mayRepositionUnappended(PropagationCallGraphBuilder builder, InstanceKey list) {
     return allUnappended
         || unappended.contains(
             builder.getPointerAnalysis().getInstanceKeyMapping().getMappedIndex(list));
@@ -328,7 +329,8 @@ public record ContainerMutations(
    *     passed to them unless a summary says otherwise.
    * @return The mutations.
    */
-  static ContainerMutations compute(PropagationCallGraphBuilder builder, Set<String> libraries) {
+  public static ContainerMutations compute(
+      PropagationCallGraphBuilder builder, Set<String> libraries) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Marks marks = new Marks();
     Set<IMethod> reached = new HashSet<>();
