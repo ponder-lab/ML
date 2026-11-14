@@ -24,7 +24,6 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
-import com.ibm.wala.cast.python.ipa.callgraph.ContainerMutations;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
@@ -1102,8 +1101,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // TensorFlow's and NumPy's functions convert a Python list passed to them rather than change
     // it, so an unmodeled one resizes none; a summary that says otherwise takes precedence
     // (wala/ML#1182).
-    ContainerMutations.registerNonResizingLibrary(builder, "Ltensorflow");
-    ContainerMutations.registerNonResizingLibrary(builder, "Lnumpy");
+    builder.setNonResizingLibraries(Set.of("Ltensorflow", "Lnumpy"));
 
     // A tensor's or an array's slice is an array of the same kind with an allocation of its own,
     // so a generator reading `x[:, :-1]` through the points-to set no longer sees the receiver's

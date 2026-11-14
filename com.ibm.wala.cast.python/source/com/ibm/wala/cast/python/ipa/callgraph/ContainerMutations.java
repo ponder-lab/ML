@@ -103,43 +103,6 @@ public record ContainerMutations(
   /** The name a {@code del} statement's lowering reads the deletion builtin by. */
   private static final String DELETE_NAME = "__delete__";
 
-  /**
-   * Per builder, the type names of the modules of the libraries whose functions are taken to resize
-   * no Python list passed to them when no summary models them, as a library client registers them
-   * ({@link #registerNonResizingLibrary}). A summary takes precedence: a call that resolves to one
-   * does what its body does.
-   */
-  private static final Map<PropagationCallGraphBuilder, Set<String>> NON_RESIZING_LIBRARIES =
-      new WeakHashMap<>();
-
-  /**
-   * Registers, for a builder, a library whose functions resize no Python list passed to them unless
-   * a summary says otherwise, as TensorFlow's and NumPy's convert a list rather than change it
-   * (wala/ML#1182).
-   *
-   * @param builder The builder.
-   * @param module The type name of the library's module, such as {@code Ltensorflow}; its objects'
-   *     type names begin with it.
-   */
-  public static void registerNonResizingLibrary(
-      PropagationCallGraphBuilder builder, String module) {
-    synchronized (NON_RESIZING_LIBRARIES) {
-      NON_RESIZING_LIBRARIES.computeIfAbsent(builder, b -> new HashSet<>()).add(module);
-    }
-  }
-
-  /**
-   * The modules of the libraries registered for a builder as resizing no list.
-   *
-   * @param builder The builder.
-   * @return The modules' type names.
-   */
-  private static Set<String> getNonResizingLibraries(PropagationCallGraphBuilder builder) {
-    synchronized (NON_RESIZING_LIBRARIES) {
-      return Set.copyOf(NON_RESIZING_LIBRARIES.getOrDefault(builder, Set.of()));
-    }
-  }
-
   /** The builtins whose call builds a fresh container (wala/ML#1182). */
   private static final Set<String> CONTAINER_BUILTINS = Set.of("list", "dict", "set");
 
@@ -290,8 +253,8 @@ public record ContainerMutations(
    *       rather than summarizes, and so of the method {@code getattr(l, "append")} returns, unless
    *       the callee is a method read off a list, which the repositioning methods govern, or a
    *       function read off a module or object of a library registered as resizing no list ({@link
-   *       #NON_RESIZING_LIBRARIES}). A library function a summary models resolves to its summary,
-   *       which takes precedence.
+   *       PythonSSAPropagationCallGraphBuilder#setNonResizingLibraries}). A library function a
+   *       summary models resolves to its summary, which takes precedence.
    * </ul>
    *
    * A program function the call graph does not reach may still run, as a callback a library summary
@@ -299,8 +262,9 @@ public record ContainerMutations(
    * such a body, the receiver of a repositioning read is a list so mutated when it is a variable of
    * an enclosing frame or a global, read off what that variable is written. A receiver the body
    * builds itself is none the analysis has, and a function read off a module of a library
-   * registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}) mutates nothing
-   * (wala/ML#1182). Any other receiver there may be any list, and so is every list.
+   * registered as resizing no list ({@link
+   * PythonSSAPropagationCallGraphBuilder#setNonResizingLibraries}) mutates nothing (wala/ML#1182).
+   * Any other receiver there may be any list, and so is every list.
    *
    * <p>The front end drops the target of a {@code del} statement, so a subscript {@code del}
    * anywhere, in a reached node or such a body, may mutate any list.
@@ -315,7 +279,12 @@ public record ContainerMutations(
       ContainerMutations cached = MUTATIONS.get(builder);
       if (cached != null) return cached;
     }
-    ContainerMutations ret = compute(builder);
+    ContainerMutations ret =
+        compute(
+            builder,
+            builder instanceof PythonSSAPropagationCallGraphBuilder python
+                ? python.getNonResizingLibraries()
+                : Set.of());
     remember(builder, ret);
     return ret;
   }
@@ -355,9 +324,11 @@ public record ContainerMutations(
    * analysis may still grow (wala/ML#1250).
    *
    * @param builder The builder.
+   * @param libraries The type names of the modules of the libraries whose functions resize no list
+   *     passed to them unless a summary says otherwise.
    * @return The mutations.
    */
-  static ContainerMutations compute(PropagationCallGraphBuilder builder) {
+  static ContainerMutations compute(PropagationCallGraphBuilder builder, Set<String> libraries) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Marks marks = new Marks();
     Set<IMethod> reached = new HashSet<>();
@@ -412,15 +383,13 @@ public record ContainerMutations(
             // `list.append(l, x)`: the list is an argument, not the receiver.
             for (int i = 1; i < invoke.getNumberOfUses(); i++)
               marks.mark(pa, node, invoke.getUse(i), true);
-          } else if (program
-              && targets.isEmpty()
-              && !isNonResizing(pa, node, callee, getNonResizingLibraries(builder)))
+          } else if (program && targets.isEmpty() && !isNonResizing(pa, node, callee, libraries))
             for (int i = 1; i < invoke.getNumberOfUses(); i++)
               marks.mark(pa, node, invoke.getUse(i), true);
         }
       }
     }
-    scanUnreachedBodies(builder, reached, marks);
+    scanUnreachedBodies(builder, libraries, reached, marks);
     return new ContainerMutations(
         marks.lists,
         marks.allLists,
@@ -475,11 +444,15 @@ public record ContainerMutations(
    * Scans the program functions the call graph does not reach; see {@link #of}.
    *
    * @param builder The builder.
+   * @param libraries The type names of the modules of the libraries whose functions resize no list.
    * @param reached The methods of the call graph's nodes.
    * @param marks The mutations, which this adds to.
    */
   private static void scanUnreachedBodies(
-      PropagationCallGraphBuilder builder, Set<IMethod> reached, Marks marks) {
+      PropagationCallGraphBuilder builder,
+      Set<String> libraries,
+      Set<IMethod> reached,
+      Marks marks) {
     // The values a variable is written, by its name and definer, which the receiver checks below
     // read for many reads of the same builtin or module: each is a scan of the whole call graph.
     Map<List<String>, Set<InstanceKey>> writes = new HashMap<>();
@@ -520,6 +493,7 @@ public record ContainerMutations(
           if (isBuiltHere(builder, writes, du, receiver)
               || isNonResizingLibraryFunction(
                   builder,
+                  libraries,
                   writes,
                   symtab,
                   du,
@@ -595,11 +569,13 @@ public record ContainerMutations(
    * Whether a method read in a body the call graph does not reach is a library function that
    * resizes no container: its receiver is a chain of attribute reads, as {@code tf.keras.backend}
    * is, off a variable that every write in the call graph binds to the module of a library
-   * registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}), as {@code import tensorflow
-   * as tf} does (wala/ML#1182). Only the module itself counts: an object of the library, such as a
+   * registered as resizing no list ({@link
+   * PythonSSAPropagationCallGraphBuilder#setNonResizingLibraries}), as {@code import tensorflow as
+   * tf} does (wala/ML#1182). Only the module itself counts: an object of the library, such as a
    * {@code tf.Module}, may hold a program's list as an attribute, which a method may resize.
    *
    * @param builder The builder.
+   * @param libraries The type names of the modules of the libraries whose functions resize no list.
    * @param writes The values variables are written, by name and definer, filled as read.
    * @param symtab The body's symbol table.
    * @param du The body's def-use.
@@ -609,6 +585,7 @@ public record ContainerMutations(
    */
   private static boolean isNonResizingLibraryFunction(
       PropagationCallGraphBuilder builder,
+      Set<String> libraries,
       Map<List<String>, Set<InstanceKey>> writes,
       SymbolTable symtab,
       DefUse du,
@@ -629,7 +606,6 @@ public record ContainerMutations(
     } else return false;
     Set<InstanceKey> modules = getVariableWrites(builder, writes, variable, definer);
     if (modules.isEmpty()) return false;
-    Set<String> libraries = getNonResizingLibraries(builder);
     for (InstanceKey module : modules)
       if (!libraries.contains(module.concreteType().getName().toString())) return false;
     return true;
@@ -821,14 +797,15 @@ public record ContainerMutations(
   /**
    * Whether an unresolved call's callee cannot resize a list passed to it: a method read off a
    * list, which the repositioning methods govern, or a function read off a module or object of a
-   * library registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}), directly or through
-   * attributes, as {@code tf.strings.join} is read off {@code tf}. A library function a summary
-   * models resolves to its summary, so this decides only for one no summary models.
+   * library registered as resizing no list ({@link
+   * PythonSSAPropagationCallGraphBuilder#setNonResizingLibraries}), directly or through attributes,
+   * as {@code tf.strings.join} is read off {@code tf}. A library function a summary models resolves
+   * to its summary, so this decides only for one no summary models.
    *
    * @param pa The pointer analysis.
    * @param node The calling node.
    * @param callee The instruction defining the callee, or {@code null}.
-   * @param libraries The modules of the libraries registered as resizing no list.
+   * @param libraries The type names of the modules of the libraries whose functions resize no list.
    * @return {@code true} iff the callee cannot resize a list.
    */
   private static boolean isNonResizing(
