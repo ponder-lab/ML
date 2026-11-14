@@ -3234,7 +3234,8 @@
           <call class="Ltensorflow/keras/preprocessing/image/directory_iterator_images" name="do" type="virtual" def="images" descriptor="()LRoot;" arg0="images_fn" arg1="directory" arg2="target_size" arg3="color_mode" arg4="classes" arg5="class_mode" numArgs="6"/>
           <new def="labels_fn" class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels"/>
           <call class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels" name="do" type="virtual" def="labels" descriptor="()LRoot;" arg0="labels_fn" arg1="directory" arg2="target_size" arg3="color_mode" arg4="classes" arg5="class_mode" numArgs="6"/>
-          <new def="batch" class="Ltuple"/>
+          <!-- The batch's two positions are its run-time ones, images then labels, so the container query reports them (wala/ML#1265). -->
+          <new def="batch" class="Ltuple" positions="exact"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="batch" value="images"/>
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="batch" value="labels"/>
           <putfield class="LRoot" field="__content__" fieldType="LRoot" ref="x" value="batch"/>

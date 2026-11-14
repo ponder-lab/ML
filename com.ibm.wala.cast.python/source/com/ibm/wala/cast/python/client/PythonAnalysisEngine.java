@@ -36,6 +36,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSuper;
+import com.ibm.wala.cast.python.ipa.summaries.SummaryExactPositions;
 import com.ibm.wala.cast.python.ipa.summaries.SummaryKeywordCalls;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
@@ -361,12 +362,19 @@ public abstract class PythonAnalysisEngine<T>
     return xmlStream;
   }
 
+  /**
+   * The allocations the loaded summaries mark as having exact run-time positions (wala/ML#1265),
+   * gathered as each summary is loaded and passed to the builder.
+   */
+  private final Set<SummaryExactPositions.Allocation> exactPositionAllocations = new HashSet<>();
+
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
     XMLMethodSummaryReader xml = new XMLMethodSummaryReader(openSummaryStream(summary), scope);
 
     Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
     SummaryKeywordCalls.rewrite(openSummaryStream(summary), summaries);
+    exactPositionAllocations.addAll(SummaryExactPositions.read(openSummaryStream(summary)));
     BypassSyntheticClassLoader ldr =
         (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
 
@@ -1002,6 +1010,7 @@ public abstract class PythonAnalysisEngine<T>
     options.setSSAOptions(ssaOptions);
 
     PythonSSAPropagationCallGraphBuilder builder = makeBuilder(cha, options, cache);
+    builder.setExactPositionAllocations(exactPositionAllocations);
 
     AstContextInsensitiveSSAContextInterpreter interpreter =
         new AstContextInsensitiveSSAContextInterpreter(options, cache);

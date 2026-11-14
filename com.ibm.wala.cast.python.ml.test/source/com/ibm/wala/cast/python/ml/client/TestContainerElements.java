@@ -10,6 +10,8 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IClass;
@@ -96,6 +98,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
       "tf2_test_container_elements_unreached_dataclass.py";
 
   private static final String TENSOR_LIKE = "tf2_test_container_elements_tensor_like.py";
+
+  private static final String DIRECTORY_BATCH = "tf2_test_container_elements_directory_batch.py";
 
   private static final String UNREACHED_REPEAT = "tf2_test_container_elements_unreached_repeat.py";
 
@@ -1030,6 +1034,30 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedNamespaceSubclass() {
     assertArity(UNREACHED_NAMESPACE_SUBCLASS, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * A directory iterator's batch, the tuple the {@code flow_from_directory} summary allocates and
+   * marks as having exact positions: two positions, the images and then the labels, as at run time
+   * (wala/ML#1265).
+   */
+  @Test
+  public void testDirectoryBatch() {
+    ContainerElements elements = elements(DIRECTORY_BATCH, "sink_batch");
+    assertEquals(OptionalInt.of(2), elements.getArity());
+    String float32 = FLOAT32.name().toLowerCase();
+    assertEquals(
+        List.of(
+            Set.of(
+                new TensorType(
+                    float32,
+                    List.of(
+                        DynamicDim.INSTANCE,
+                        new NumericDim(112),
+                        new NumericDim(112),
+                        new NumericDim(3)))),
+            Set.of(new TensorType(float32, List.of(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE)))),
+        ElementTypes.positionTypes(analysis(DIRECTORY_BATCH), elements));
   }
 
   /**
