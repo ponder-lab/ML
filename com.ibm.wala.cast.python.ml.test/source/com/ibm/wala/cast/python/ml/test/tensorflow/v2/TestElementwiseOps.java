@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT32;
@@ -1766,6 +1767,102 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 2, 2, 3))));
+  }
+
+  /**
+   * {@code tf.image.flip_left_right} with its image passed by position (<a
+   * href="https://github.com/wala/ML/issues/1262">wala/ML#1262</a>): the result has the {@code (2,
+   * 3, 3)} float32 image's shape and dtype.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFlipLeftRight()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_flips.py",
+        "consume_left_right",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_3_FLOAT32)));
+  }
+
+  /**
+   * The keyword form of {@link #testFlipLeftRight()}, {@code tf.image.flip_left_right(image=c)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFlipLeftRightKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_flips.py",
+        "consume_left_right_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_3_FLOAT32)));
+  }
+
+  /**
+   * {@code tf.image.flip_up_down} with its image passed by position (<a
+   * href="https://github.com/wala/ML/issues/1262">wala/ML#1262</a>): the result has the {@code (4,
+   * 2, 3, 1)} uint8 batch's shape and dtype.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFlipUpDown()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_flips.py",
+        "consume_up_down",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4, 2, 3, 1))));
+  }
+
+  /**
+   * The keyword form of {@link #testFlipUpDown()}, {@code tf.image.flip_up_down(image=batch)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFlipUpDownKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_flips.py",
+        "consume_up_down_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4, 2, 3, 1))));
+  }
+
+  /**
+   * A {@code flip_up_down} of a {@code flip_left_right} (<a
+   * href="https://github.com/wala/ML/issues/1262">wala/ML#1262</a>): the outer flip's image is the
+   * inner flip's result, so the shape and dtype pass through both.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testFlipChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_image_flips.py", "consume_chain", 1, 1, Map.of(2, Set.of(TENSOR_2_3_3_FLOAT32)));
   }
 
   /**

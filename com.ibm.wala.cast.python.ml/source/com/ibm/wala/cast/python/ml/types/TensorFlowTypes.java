@@ -2091,6 +2091,26 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String RANDOM_FLIP_LEFT_RIGHT_SIGNATURE =
       "tf.image.random_flip_left_right()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/image/flip_left_right. */
+  public static final MethodReference FLIP_LEFT_RIGHT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/flip_left_right")),
+          AstMethodReference.fnSelector);
+
+  private static final String FLIP_LEFT_RIGHT_SIGNATURE = "tf.image.flip_left_right()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/image/flip_up_down. */
+  public static final MethodReference FLIP_UP_DOWN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/flip_up_down")),
+          AstMethodReference.fnSelector);
+
+  private static final String FLIP_UP_DOWN_SIGNATURE = "tf.image.flip_up_down()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/adjust_contrast. */
   public static final MethodReference ADJUST_CONTRAST =
       MethodReference.findOrCreate(
@@ -3468,6 +3488,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(RANDOM_CROP.getDeclaringClass(), RANDOM_CROP_SIGNATURE),
           Map.entry(RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass(), RANDOM_FLIP_LEFT_RIGHT_SIGNATURE),
+          Map.entry(FLIP_LEFT_RIGHT.getDeclaringClass(), FLIP_LEFT_RIGHT_SIGNATURE),
+          Map.entry(FLIP_UP_DOWN.getDeclaringClass(), FLIP_UP_DOWN_SIGNATURE),
           Map.entry(ADJUST_CONTRAST.getDeclaringClass(), ADJUST_CONTRAST_SIGNATURE),
           Map.entry(ADJUST_BRIGHTNESS.getDeclaringClass(), ADJUST_BRIGHTNESS_SIGNATURE),
           Map.entry(ADJUST_SATURATION.getDeclaringClass(), ADJUST_SATURATION_SIGNATURE),

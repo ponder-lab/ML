@@ -111,6 +111,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIXED_LEN_FEATURE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLIP_LEFT_RIGHT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLIP_UP_DOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS;
@@ -879,6 +881,8 @@ public class TensorGeneratorFactory {
     if (isType(type, EXTRACT_PATCHES.getDeclaringClass()))
       return anchor.makeGenerator(ExtractPatches::new, ExtractPatches::new);
     if (isType(type, RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass())
+        || isType(type, FLIP_LEFT_RIGHT.getDeclaringClass())
+        || isType(type, FLIP_UP_DOWN.getDeclaringClass())
         || isType(type, ADJUST_CONTRAST.getDeclaringClass())
         || isType(type, ADJUST_BRIGHTNESS.getDeclaringClass())
         || isType(type, ADJUST_SATURATION.getDeclaringClass())

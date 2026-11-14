@@ -297,9 +297,11 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    *
    * <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
    * (wala/ML#1182): the two cropped images, {@code (256, 256, 3)} {@code float32}, are typed, and
-   * so are the two values each meets after the optional flip. The flips themselves have no type,
-   * since no summary models {@code tf.image.flip_left_right}, so each merged value has the crop's
-   * type alone (wala/ML#921).
+   * so are the two values each meets after the optional flip.
+   *
+   * <p>The local count rose from ten to twelve when {@code tf.image.flip_left_right} was modeled
+   * (wala/ML#1262): the two flipped images are typed, with the cropped images' type, as at run
+   * time.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -313,7 +315,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_random_jitter.py",
         "random_jitter",
         2,
-        10,
+        12,
         Map.of(2, Set.of(TENSOR_256_256_3_FLOAT32), 3, Set.of(TENSOR_256_256_3_FLOAT32)));
   }
 
@@ -332,8 +334,11 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    *
    * <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
    * (wala/ML#1182): the two cropped images are typed, and so are the two values each meets after
-   * the optional flip. The flips themselves have no type, since no summary models {@code
-   * tf.image.flip_left_right}, so each merged value has the crop's type alone (wala/ML#921).
+   * the optional flip.
+   *
+   * <p>The local count rose from ten to twelve when {@code tf.image.flip_left_right} was modeled
+   * (wala/ML#1262): the two flipped images are typed, with the cropped images' type, as at run
+   * time.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -347,7 +352,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
         "tf2_test_pix2pix_load.py",
         "random_jitter",
         2,
-        10,
+        12,
         Map.of(
             2,
             Set.of(
