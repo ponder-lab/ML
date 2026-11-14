@@ -164,7 +164,7 @@ The `Map` only checks **parameter** types, not all local tensor variables. To pi
 
 **Tensor type constants** (`TENSOR_20_28_28_FLOAT32`, `TENSOR_NONE_4_FLOAT32`, etc.) are defined in `AbstractTensorTest`. Add new ones as needed when writing a test that expects a not-yet-represented shape.
 
-Give a new test a descriptive name that says what it checks, such as `testUnreachedNamespace`, rather than a number after an existing test's name. Variants of one operation share its prefix, as `testReduceMeanKeepDims` does. When modeling or testing a TensorFlow operation, cover its arguments passed by position, by keyword, and mixed.
+Give a new test a descriptive name that says what it checks, such as `testUnreachedNamespace`, rather than a number after an existing test's name. Variants of one operation share its prefix, as `testConcatenateLayer` and `testConcatenateFunctional` do. When modeling or testing a TensorFlow operation, cover its arguments passed by position, by keyword, and mixed.
 
 ### Python test files
 
