@@ -586,7 +586,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
    * @param callee The method being called.
    * @return {@code true} iff the callee is a summary body.
    */
-  private static boolean isSummaryBody(IMethod callee) {
+  static boolean isSummaryBody(IMethod callee) {
     return callee instanceof SummarizedMethodWithNames
         && !(callee instanceof PythonSummarizedFunction);
   }

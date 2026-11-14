@@ -342,6 +342,71 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The type names of the modules of the libraries whose objects multiply elementwise, such as an
+   * array library's, whose objects' type names begin with it: a list times one of them is that
+   * object's multiplication rather than the list's repetition ({@link ListOperationOperator}).
+   * Empty by default, when a list times any object that is not a list or tuple is a repetition.
+   */
+  private Set<String> tensorLikeLibraries = Collections.emptySet();
+
+  /**
+   * Names the libraries whose objects multiply elementwise; see {@link #tensorLikeLibraries}.
+   *
+   * @param modules The type names of the libraries' modules.
+   */
+  public void setTensorLikeLibraries(Set<String> modules) {
+    if (modules != null) tensorLikeLibraries = Set.copyOf(modules);
+  }
+
+  /**
+   * The libraries whose objects multiply elementwise; see {@link #tensorLikeLibraries}.
+   *
+   * @return The type names of the libraries' modules.
+   */
+  public Set<String> getTensorLikeLibraries() {
+    return tensorLikeLibraries;
+  }
+
+  /**
+   * The type names of the packages of the layer libraries, whose summaries declare the layer bases
+   * and the layers' {@code __call__} and {@code call} methods, such as a deep-learning framework's
+   * layer package, whose classes' type names begin with it. A call of such a summary is a library
+   * layer call ({@link #layerCall}). Empty by default, when no call is one.
+   */
+  private Set<String> layerLibraries = Collections.emptySet();
+
+  /**
+   * Names the layer libraries; see {@link #layerLibraries}.
+   *
+   * @param packages The type names of the libraries' packages.
+   */
+  public void setLayerLibraries(Set<String> packages) {
+    if (packages != null) layerLibraries = Set.copyOf(packages);
+  }
+
+  /**
+   * The layer libraries; see {@link #layerLibraries}.
+   *
+   * @return The type names of the libraries' packages.
+   */
+  public Set<String> getLayerLibraries() {
+    return layerLibraries;
+  }
+
+  /**
+   * Whether a type name is in one of the given modules or packages, which is to say it begins with
+   * one of their type names followed by a {@code /}.
+   *
+   * @param name The type name.
+   * @param modules The type names of the modules or packages.
+   * @return {@code true} iff the type name is in one of them.
+   */
+  private static boolean isIn(String name, Set<String> modules) {
+    for (String module : modules) if (name.startsWith(module + "/")) return true;
+    return false;
+  }
+
+  /**
    * The slices of list and tuple literals trimmed to the literal's elements in range (wala/ML#993),
    * each widened to all of them once the program may change the list in a way the analysis does not
    * record (wala/ML#1250); see {@link #makeSolver}.
@@ -6573,8 +6638,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * <p>The rule: {@code ADD} fires only when the other operand also carries a list or tuple (list
    * plus list); a list beside a tensor or an ndarray is that object's own addition, whose result is
    * no list. {@code MUL} fires only when the other operand carries neither a list or tuple nor a
-   * tensor-like value (a tensor or an ndarray, by their model packages): repetition takes an
-   * integer, and a list times a tensor is the tensor's multiplication.
+   * tensor-like value (an object of a library {@link #setTensorLikeLibraries} names): repetition
+   * takes an integer, and a list times a tensor is the tensor's multiplication.
    *
    * <p>A key declined because the other operand has not met the rule yet is kept pending and
    * retried when that operand's set changes. The converse is the monotone limit: a repetition
@@ -6702,10 +6767,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           || cha.isSubclassOf(type, cha.lookupClass(PythonTypes.tuple));
     }
 
-    /** A tensor or an ndarray, by the model packages that declare them. */
+    /** An object of a library whose objects multiply elementwise ({@link #tensorLikeLibraries}). */
     private boolean isTensorLike(InstanceKey key) {
-      String name = key.concreteType().getName().toString();
-      return name.startsWith("Ltensorflow/") || name.startsWith("Lnumpy/");
+      return isIn(key.concreteType().getName().toString(), tensorLikeLibraries);
     }
 
     /**
@@ -7563,9 +7627,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private record LayerCall(int formal, boolean summary) {}
 
   /**
-   * The layer call an edge makes, if it makes one (wala/ML#1249). The edge into a program layer's
-   * {@code call} comes from the trampoline that serves a call of the object, the one that also
-   * builds the layer lazily ({@link PythonInstanceMethodTrampolineTargetSelector}).
+   * The layer call an edge makes, if it makes one (wala/ML#1249). A library layer's is a call of a
+   * {@code __call__} or {@code call} summary of a layer library ({@link #setLayerLibraries}). The
+   * edge into a program layer's {@code call}, a method no summary declares, comes from the
+   * trampoline that serves a call of the object, the one that also builds the layer lazily ({@link
+   * PythonInstanceMethodTrampolineTargetSelector}).
    *
    * @param caller The caller.
    * @param target The target.
@@ -7574,11 +7640,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private LayerCall layerCall(CGNode caller, CGNode target) {
     String type = target.getMethod().getDeclaringClass().getName().toString();
     boolean summary =
-        type.startsWith("Ltensorflow/keras/")
+        isIn(type, layerLibraries)
             && (type.endsWith("/" + CALLABLE_METHOD_NAME)
                 || type.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
     boolean program =
-        !type.startsWith("Ltensorflow/")
+        !TrampolineReceiverContextSelector.isSummaryBody(target.getMethod())
             && type.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
             && caller.getMethod().getDeclaringClass() instanceof PythonInstanceMethodTrampoline
             && caller.getMethod().getName().toString().endsWith("$object");
