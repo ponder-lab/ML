@@ -4,12 +4,13 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
- * A generator for the shape-and-dtype-preserving {@code tf.image} augmentation ops ({@code
- * random_flip_left_right} and the {@code adjust_contrast}/{@code adjust_brightness}/{@code
- * adjust_saturation}/{@code adjust_hue} family): each returns a fresh tensor of the same shape and
- * dtype as its image argument, with every other argument a scalar. One class serves all five op
- * types, the {@link ElementWiseOperation} precedent for a shared generator over several dispatch
- * keys. See wala/ML#792.
+ * A generator for the shape-and-dtype-preserving {@code tf.image} ops ({@code
+ * random_flip_left_right}, the deterministic {@code flip_left_right} and {@code flip_up_down}, and
+ * the {@code adjust_contrast}/{@code adjust_brightness}/{@code adjust_saturation}/{@code
+ * adjust_hue} family): each returns a fresh tensor of the same shape and dtype as its image
+ * argument, with every other argument a scalar. One class serves all seven op types, the {@link
+ * ElementWiseOperation} precedent for a shared generator over several dispatch keys. See
+ * wala/ML#792 and wala/ML#1262.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
