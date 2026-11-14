@@ -1101,7 +1101,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // TensorFlow's and NumPy's functions convert a Python list passed to them rather than change
     // it, so an unmodeled one resizes none; a summary that says otherwise takes precedence
     // (wala/ML#1182).
-    builder.setNonResizingLibraries(Set.of("Ltensorflow", "Lnumpy"));
+    builder.setNonResizingLibraries(
+        Set.of(
+            TensorFlowTypes.TENSORFLOW_TYPE.getName().toString(),
+            NumpyTypes.NUMPY_TYPE.getName().toString()));
 
     // A tensor's or an array's slice is an array of the same kind with an allocation of its own,
     // so a generator reading `x[:, :-1]` through the points-to set no longer sees the receiver's
