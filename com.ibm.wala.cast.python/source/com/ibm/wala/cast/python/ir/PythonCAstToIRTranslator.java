@@ -251,7 +251,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     // Every base, in declaration order: a base the unit defines by its registered name, a missing
     // base by the summary class shell it matches, so the constructor can bind the methods of all
     // of them in method resolution order rather than along the one superclass (wala/ML#1006).
+    // A base that resolves to neither is recorded by name, since the analysis has none of its
+    // methods, its initializer among them (wala/ML#1255).
     List<TypeName> bases = new ArrayList<>();
+    Set<String> unresolved = new HashSet<>();
     for (CAstType t : cls.getSupertypes()) {
       TypeName base;
       if (t instanceof MissingType) {
@@ -259,7 +262,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             TypeName.findOrCreate("L" + ((MissingType) t).qualifiedName().replace('.', '/'));
         base = loader.lookupClass(shell) != null ? shell : null;
       } else base = walaTypeNames.get(t);
-      if (base != null && !bases.contains(base)) bases.add(base);
+      if (base == null) unresolved.add(t.getName());
+      else if (!bases.contains(base)) bases.add(base);
     }
     ((PythonLoader) loader)
         .defineType(
@@ -269,7 +273,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             cls.getSupertypes().stream()
                 .filter(t -> t instanceof MissingType)
                 .collect(Collectors.toSet()),
-            bases);
+            bases,
+            unresolved);
 
     return true;
   }

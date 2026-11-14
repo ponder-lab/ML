@@ -13,6 +13,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
@@ -32,15 +33,18 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -664,6 +668,12 @@ public record ContainerMutations(
     /** The program's classes that define an attribute hook, or {@code null} until read. */
     private Set<IClass> hooked;
 
+    /** Each class's ancestors along its declared bases, itself among them, as read. */
+    private final Map<IClass, Set<IClass>> ancestors = new HashMap<>();
+
+    /** Whether each method's class may take an attribute from an unresolved base, as read. */
+    private final Map<IClass, Boolean> unresolvedOwners = new HashMap<>();
+
     /** The stores under each field name in unreached bodies, or {@code null} until read. */
     private Map<String, List<Store>> stores;
 
@@ -745,7 +755,70 @@ public record ContainerMutations(
       IClassHierarchy cha = this.builder.getClassHierarchy();
       for (IClass hook : this.hooked)
         if (cha.isSubclassOf(owner, hook) || cha.isSubclassOf(hook, owner)) return false;
-      return true;
+      return !reachesUnresolvedBase(owner);
+    }
+
+    /**
+     * Whether an object a method's {@code self} may be has a class with a base the analysis does
+     * not resolve ({@link IPythonClass#getUnresolvedBaseNames()}): the method's class or one of its
+     * ancestors, or a class below it or one of that class's ancestors. Such a base's initializer or
+     * methods may store an attribute where the analysis sees no store, as {@code
+     * types.SimpleNamespace}'s initializer stores its keywords. A base a summary class shell models
+     * is trusted to model what it stores; a store it leaves out is a gap in that summary
+     * (wala/ML#1255).
+     *
+     * @param owner The method's class.
+     * @return {@code true} iff such a class may supply the object's attributes.
+     */
+    private boolean reachesUnresolvedBase(IClass owner) {
+      Boolean cached = this.unresolvedOwners.get(owner);
+      if (cached != null) return cached;
+      boolean ret = hasUnresolvedAncestor(owner);
+      for (IClass cls : this.builder.getClassHierarchy())
+        if (!ret && cls != owner && ancestorsOf(cls).contains(owner))
+          ret = hasUnresolvedAncestor(cls);
+      this.unresolvedOwners.put(owner, ret);
+      return ret;
+    }
+
+    /**
+     * Whether a class or one of its ancestors declares a base the analysis does not resolve.
+     *
+     * @param cls The class.
+     * @return {@code true} iff one does.
+     */
+    private boolean hasUnresolvedAncestor(IClass cls) {
+      for (IClass ancestor : ancestorsOf(cls))
+        if (ancestor instanceof IPythonClass python && !python.getUnresolvedBaseNames().isEmpty())
+          return true;
+      return false;
+    }
+
+    /**
+     * A class and its ancestors along the bases it declares, every one of them, not only the single
+     * superclass the class hierarchy records.
+     *
+     * @param cls The class.
+     * @return The class and its ancestors.
+     */
+    private Set<IClass> ancestorsOf(IClass cls) {
+      Set<IClass> ret = this.ancestors.get(cls);
+      if (ret != null) return ret;
+      ret = new HashSet<>();
+      IClassHierarchy cha = this.builder.getClassHierarchy();
+      Deque<IClass> work = new ArrayDeque<>(List.of(cls));
+      while (!work.isEmpty()) {
+        IClass current = work.pop();
+        if (!ret.add(current) || !(current instanceof IPythonClass python)) continue;
+        for (TypeName base : python.getBaseTypeNames()) {
+          IClass resolved =
+              cha.lookupClass(
+                  TypeReference.findOrCreate(current.getClassLoader().getReference(), base));
+          if (resolved != null) work.push(resolved);
+        }
+      }
+      this.ancestors.put(cls, ret);
+      return ret;
     }
 
     /**

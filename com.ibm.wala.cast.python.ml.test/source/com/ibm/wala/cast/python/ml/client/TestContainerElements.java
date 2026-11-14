@@ -82,6 +82,15 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   private static final String UNREACHED_OBJECT_SETATTR =
       "tf2_test_container_elements_unreached_object_setattr.py";
 
+  private static final String UNREACHED_NAMESPACE =
+      "tf2_test_container_elements_unreached_namespace.py";
+
+  private static final String UNREACHED_NAMESPACE_SUBCLASS =
+      "tf2_test_container_elements_unreached_namespace_subclass.py";
+
+  private static final String UNREACHED_DATACLASS =
+      "tf2_test_container_elements_unreached_dataclass.py";
+
   private static final String UNREACHED_REPEAT = "tf2_test_container_elements_unreached_repeat.py";
 
   private static final String UNREACHED_COPY = "tf2_test_container_elements_unreached_copy.py";
@@ -966,5 +975,38 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedObjectSetAttr() {
     assertArity(UNREACHED_OBJECT_SETATTR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of an object whose class has a base
+   * no summary models, {@code types.SimpleNamespace}, whose initializer stores the list where the
+   * analysis sees no store, may be any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedNamespace() {
+    assertArity(UNREACHED_NAMESPACE, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of an object whose class has no base
+   * but a subclass of which adds {@code types.SimpleNamespace} may be any list, so no list reports
+   * a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedNamespaceSubclass() {
+    assertArity(UNREACHED_NAMESPACE_SUBCLASS, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a dataclass's generated initializer
+   * stores is a list the analysis does not see stored, since the front end drops a class's
+   * decorators, so the list reads as its literal's length though the run grows it.
+   *
+   * <p>TODO: wala/ML#1260; once the front end translates a class's decorators, no list reports a
+   * length, {@code OptionalInt.empty()}.
+   */
+  @Test
+  public void testUnreachedDataclass() {
+    assertArity(UNREACHED_DATACLASS, "sink_list", OptionalInt.of(2));
   }
 }
