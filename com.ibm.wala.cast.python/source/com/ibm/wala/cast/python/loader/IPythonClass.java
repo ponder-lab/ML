@@ -34,4 +34,17 @@ public interface IPythonClass extends IClass {
         ? java.util.Collections.emptyList()
         : java.util.Collections.singletonList(superclass.getName());
   }
+
+  /**
+   * The names of the bases this class declares that resolve to no class of this unit and no summary
+   * class shell, and so are missing from {@link #getBaseTypeNames()}: a library class no summary
+   * models, such as {@code types.SimpleNamespace}, or a base whose name mis-resolves. Their
+   * methods, an initializer among them, are not in the analysis. A class whose bases were not
+   * recorded answers with none.
+   *
+   * @return The unresolved bases' names, as the class statement writes them.
+   */
+  default java.util.Set<String> getUnresolvedBaseNames() {
+    return java.util.Collections.emptySet();
+  }
 }

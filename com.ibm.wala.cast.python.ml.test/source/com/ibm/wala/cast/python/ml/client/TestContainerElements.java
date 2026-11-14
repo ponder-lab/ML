@@ -69,6 +69,62 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String DELETES_UNMODELED = "tf2_test_container_elements_del_unmodeled.py";
 
+  private static final String UNREACHED_SUM = "tf2_test_container_elements_unreached_sum.py";
+
+  private static final String UNREACHED_PROPERTY =
+      "tf2_test_container_elements_unreached_property.py";
+
+  private static final String UNREACHED_DESCRIPTOR =
+      "tf2_test_container_elements_unreached_descriptor.py";
+
+  private static final String UNREACHED_VARS = "tf2_test_container_elements_unreached_vars.py";
+
+  private static final String UNREACHED_OBJECT_SETATTR =
+      "tf2_test_container_elements_unreached_object_setattr.py";
+
+  private static final String UNREACHED_NAMESPACE =
+      "tf2_test_container_elements_unreached_namespace.py";
+
+  private static final String UNREACHED_NAMESPACE_SUBCLASS =
+      "tf2_test_container_elements_unreached_namespace_subclass.py";
+
+  private static final String UNREACHED_DATACLASS =
+      "tf2_test_container_elements_unreached_dataclass.py";
+
+  private static final String UNREACHED_REPEAT = "tf2_test_container_elements_unreached_repeat.py";
+
+  private static final String UNREACHED_COPY = "tf2_test_container_elements_unreached_copy.py";
+
+  private static final String UNREACHED_FIELD = "tf2_test_container_elements_unreached_field.py";
+
+  private static final String UNREACHED_UNNAMED =
+      "tf2_test_container_elements_unreached_unnamed.py";
+
+  private static final String UNREACHED_AUGMENTED =
+      "tf2_test_container_elements_unreached_augmented.py";
+
+  private static final String UNREACHED_REFLECTED =
+      "tf2_test_container_elements_unreached_reflected.py";
+
+  private static final String UNREACHED_GETITEM =
+      "tf2_test_container_elements_unreached_getitem.py";
+
+  private static final String UNREACHED_STORED = "tf2_test_container_elements_unreached_stored.py";
+
+  private static final String UNREACHED_HOOKED = "tf2_test_container_elements_unreached_hooked.py";
+
+  private static final String UNREACHED_SETATTR =
+      "tf2_test_container_elements_unreached_setattr.py";
+
+  private static final String UNREACHED_CLASS_ATTRIBUTE =
+      "tf2_test_container_elements_unreached_class_attribute.py";
+
+  private static final String UNREACHED_DECORATED =
+      "tf2_test_container_elements_unreached_decorated.py";
+
+  private static final String UNREACHED_GETATTR =
+      "tf2_test_container_elements_unreached_getattr.py";
+
   /** Per fixture, its builder. */
   private static final Map<String, PythonSSAPropagationCallGraphBuilder> BUILDERS = new HashMap<>();
 
@@ -580,8 +636,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A {@code del l[0]} of a parameter in a function the call graph does not reach may delete from
-   * any list, so a list reports no length.
+   * A {@code del l[0]} of a parameter in a function the call graph does not reach, but the program
+   * names, may delete from any list, so a list reports no length.
    */
   @Test
   public void testUnreachedParameterDelete() {
@@ -756,5 +812,201 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
     ContainerElements elements = elements(SETS, "sink_updated");
     assertFalse(elements.isComplete());
     assertTrue(elements.mayHoldNone());
+  }
+
+  /**
+   * In a function the call graph does not reach: A sum of a list the body builds, {@code list(a) +
+   * [1]}, is a new list, so a list keeps its length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedSum() {
+    assertArity(UNREACHED_SUM, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: A repetition of a list the body builds, {@code [1]
+   * * n}, is a new list, so a list keeps its length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedRepeat() {
+    assertArity(UNREACHED_REPEAT, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: A slice copy, {@code a[:]}, is a new list where no
+   * class defines {@code __getitem__}, so a list keeps its length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedCopy() {
+    assertArity(UNREACHED_COPY, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute the body stores a list it builds
+   * under, {@code self.items}, holds no list the analysis has, beside a class whose {@code
+   * __setattr__} stores into its items, so a list keeps its length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedField() {
+    assertArity(UNREACHED_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: A parameter of a function nothing names holds no
+   * list the analysis has, so a list keeps its length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedUnnamedFunction() {
+    assertArity(UNREACHED_UNNAMED, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An augmented sum, {@code a += b}, is its
+   * parameter, which may be any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedAugmented() {
+    assertArity(UNREACHED_AUGMENTED, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: A sum whose right operand defines {@code __radd__}
+   * may be any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedReflected() {
+    assertArity(UNREACHED_REFLECTED, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: A slice of an object whose class defines {@code
+   * __getitem__} may be any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedGetItem() {
+    assertArity(UNREACHED_GETITEM, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a body the call graph does not reach
+   * stores a global list under holds it, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedStored() {
+    assertArity(UNREACHED_STORED, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of an object whose class defines
+   * {@code __getattr__} may be any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedHooked() {
+    assertArity(UNREACHED_HOOKED, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute, where the program stores one by a
+   * computed name, may hold any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedSetAttr() {
+    assertArity(UNREACHED_SETATTR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a class body stores a list under
+   * holds it, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedClassAttribute() {
+    assertArity(UNREACHED_CLASS_ATTRIBUTE, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: A parameter of a function a decorator names may
+   * hold any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedDecorated() {
+    assertArity(UNREACHED_DECORATED, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: A parameter of a function a string names may hold
+   * any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedGetAttr() {
+    assertArity(UNREACHED_GETATTR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a property returns a global list for
+   * holds it, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedProperty() {
+    assertArity(UNREACHED_PROPERTY, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a descriptor's {@code __get__}
+   * returns a global list for holds it, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedDescriptor() {
+    assertArity(UNREACHED_DESCRIPTOR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute stored through {@code vars} may hold
+   * any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedVars() {
+    assertArity(UNREACHED_VARS, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute stored through {@code
+   * object.__setattr__} may hold any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedObjectSetAttr() {
+    assertArity(UNREACHED_OBJECT_SETATTR, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of an object whose class has a base
+   * no summary models, {@code types.SimpleNamespace}, whose initializer stores the list where the
+   * analysis sees no store, may be any list, so no list reports a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedNamespace() {
+    assertArity(UNREACHED_NAMESPACE, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of an object whose class has no base
+   * but a subclass of which adds {@code types.SimpleNamespace} may be any list, so no list reports
+   * a length (wala/ML#1255).
+   */
+  @Test
+  public void testUnreachedNamespaceSubclass() {
+    assertArity(UNREACHED_NAMESPACE_SUBCLASS, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute a dataclass's generated initializer
+   * stores is a list the analysis does not see stored, since the front end drops a class's
+   * decorators, so the list reads as its literal's length though the run grows it.
+   *
+   * <p>TODO: wala/ML#1260; once the front end translates a class's decorators, no list reports a
+   * length, {@code OptionalInt.empty()}.
+   */
+  @Test
+  public void testUnreachedDataclass() {
+    assertArity(UNREACHED_DATACLASS, "sink_list", OptionalInt.of(2));
   }
 }

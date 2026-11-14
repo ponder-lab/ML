@@ -491,6 +491,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     /** The bases as declared, in order; see {@link IPythonClass#getBaseTypeNames()}. */
     private final java.util.List<TypeName> baseNames;
 
+    /** The bases that resolve to no class; see {@link IPythonClass#getUnresolvedBaseNames()}. */
+    private final Set<String> unresolvedBaseNames;
+
     public PythonClass(
         TypeName name,
         TypeName superName,
@@ -505,7 +508,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
           missingTypes,
           superName == null
               ? java.util.Collections.emptyList()
-              : java.util.Collections.singletonList(superName));
+              : java.util.Collections.singletonList(superName),
+          java.util.Collections.emptySet());
     }
 
     public PythonClass(
@@ -514,9 +518,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
         IClassLoader loader,
         Position sourcePosition,
         Set<CAstType> missingTypes,
-        java.util.List<TypeName> baseNames) {
+        java.util.List<TypeName> baseNames,
+        Set<String> unresolvedBaseNames) {
       super(name, superName, loader, sourcePosition);
       this.baseNames = java.util.List.copyOf(baseNames);
+      this.unresolvedBaseNames = Set.copyOf(unresolvedBaseNames);
       missingTypeNames = missingTypes.stream().map(t -> t.getName()).collect(Collectors.toSet());
       if (name.toString().lastIndexOf('/') > 0) {
         String maybeOuterName = name.toString().substring(0, name.toString().lastIndexOf('/'));
@@ -532,6 +538,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
     public Set<String> getMissingTypeNames() {
       return missingTypeNames;
+    }
+
+    @Override
+    public Set<String> getUnresolvedBaseNames() {
+      return unresolvedBaseNames;
     }
 
     @Override
@@ -1042,14 +1053,18 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * @param sourcePosition Its position.
    * @param missingTypes Its bases the unit does not define.
    * @param bases Its bases as declared, resolved to classes of this unit or summary shells.
+   * @param unresolvedBases The names of its bases that resolve to neither (wala/ML#1255).
    */
   public void defineType(
       TypeName cls,
       TypeName parent,
       Position sourcePosition,
       Set<CAstType> missingTypes,
-      java.util.List<TypeName> bases) {
-    types.put(cls, new PythonClass(cls, parent, this, sourcePosition, missingTypes, bases));
+      java.util.List<TypeName> bases,
+      Set<String> unresolvedBases) {
+    types.put(
+        cls,
+        new PythonClass(cls, parent, this, sourcePosition, missingTypes, bases, unresolvedBases));
   }
 
   /** The callables whose result Python transforms on a read through an instance. */
