@@ -2337,20 +2337,21 @@ public class TensorGeneratorFactory {
 
   /**
    * The generator of the value a tuple literal holds at a constant index, where the literal reaches
-   * the reading node as a parameter: the join, over every tuple literal in the parameter's
-   * points-to set, of {@link #literalElementGenerator} read in the literal's allocating node. A
-   * literal is immutable, so its own write at the index is the element whichever caller passed it.
+   * the reading node as a parameter or as a call's result: the join, over every tuple literal in
+   * the value's points-to set, of {@link #literalElementGenerator} read in the literal's allocating
+   * node. A literal is immutable, so its own write at the index is the element whichever caller
+   * passed it or callee returned it (wala/ML#1261).
    *
    * @param source The read's {@link PointsToSetVariable}, anchoring a join.
-   * @param node The node reading the parameter.
-   * @param objRef The parameter's value number.
+   * @param node The node reading the parameter or the call's result.
+   * @param objRef The value number of the parameter or the call's result.
    * @param index The constant index read.
    * @param builder The propagation call graph builder.
    * @param visited The sources already being dispatched.
    * @return The join of the literals' element generators, or {@code null} unless every member of
-   *     the parameter's points-to set is a tuple literal whose element at the index has a
-   *     generator: a member of another kind, or an element with none, is typed only through the
-   *     heap, and a join omitting it would type the read as the other members alone.
+   *     the value's points-to set is a tuple literal whose element at the index has a generator: a
+   *     member of another kind, or an element with none, is typed only through the heap, and a join
+   *     omitting it would type the read as the other members alone.
    */
   private static TensorGenerator passedLiteralElementGenerator(
       PointsToSetVariable source,
@@ -3908,8 +3909,10 @@ public class TensorGeneratorFactory {
                 literalElementGenerator(node, objRef, listIndex, builder, visited);
             if (literal != null) return literal;
             // The same read of a parameter the literal was passed to, as a model's `call` unpacks
-            // the tuple its caller built.
-            if (node.getDU().getDef(objRef) == null) {
+            // the tuple its caller built, or of a call's result the literal was returned as, as
+            // `a, b = crop(x)` unpacks the `return s[0], s[1]` of its callee (wala/ML#1261).
+            SSAInstruction objDef = node.getDU().getDef(objRef);
+            if (objDef == null || objDef instanceof SSAAbstractInvokeInstruction) {
               TensorGenerator passed =
                   passedLiteralElementGenerator(source, node, objRef, listIndex, builder, visited);
               if (passed != null) return passed;

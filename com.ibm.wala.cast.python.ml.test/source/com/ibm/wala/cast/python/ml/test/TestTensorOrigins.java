@@ -226,7 +226,14 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
 
     MethodOrigins buildGraph = methodOrigins.get(".Cora.build_graph.do(");
     assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(buildGraph.parameters()));
-    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 6L), census(buildGraph.locals()));
+    // The `j` of `enumerate(nodes)` is an element of `ids`, the `content[:, 0]` that `load_content`
+    // returns in a tuple and the driver unpacks, now typed through the returned literal
+    // (wala/ML#1261). With `np.genfromtxt` unmodeled, the slice of its result falls back to the
+    // TensorFlow origin, so `j` reads as a TensorFlow tensor of unknown type.
+    // TODO: wala/ML#1263; once `np.genfromtxt` is modeled, `j` is NumPy, so the census is NUMPY=7.
+    assertEquals(
+        Map.of(EnumSet.of(TensorOrigin.NUMPY), 6L, EnumSet.of(TensorOrigin.TENSORFLOW), 1L),
+        census(buildGraph.locals()));
   }
 
   /**
