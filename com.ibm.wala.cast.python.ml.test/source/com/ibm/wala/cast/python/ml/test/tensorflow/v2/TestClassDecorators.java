@@ -65,6 +65,17 @@ public class TestClassDecorators extends AbstractTensorTest {
   }
 
   /**
+   * Two classes under the same bare summary decorator keep their own class objects: only {@code
+   * Point} is constructed, so {@code Unused}'s method is not reached. The decorator's applications
+   * once shared one node, which bound each name to both classes.
+   */
+  @Test(expected = AssertionError.class)
+  public void testBareDecoratorKeepsClassesApart()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_unused", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 5))));
+  }
+
+  /**
    * {@code tf.keras.utils.register_keras_serializable(...)}, which its summary returns the class
    * from, so the class keeps its methods.
    */
@@ -78,6 +89,32 @@ public class TestClassDecorators extends AbstractTensorTest {
   public void testMetaclassClassReached()
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume_abstract", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 7))));
+  }
+
+  /**
+   * A decorator that returns a wrapper function: the name is bound to the wrapper, which constructs
+   * the class. A zero-argument {@code super()} in the class's own initializer should read the
+   * class, as Python's {@code __class__} cell does, so the base's initializer is reached. The front
+   * end reads it through the class's name, which holds the wrapper, so the base is not found.
+   *
+   * <p>TODO: wala/ML#1266; once {@code super()} reads the class itself, flip to a plain
+   * {@code @Test} reading {@code (8,)} float32.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSuperReadsTheClass()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_super", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
+  }
+
+  /**
+   * A decorator neither the program nor a summary defines resolves no callee, so the class's name
+   * is bound to nothing and the class is not constructed. That is a modeling gap in the decorator's
+   * library, filled by a summary for it as {@code dataclass} has, not by the front end.
+   */
+  @Test(expected = AssertionError.class)
+  public void testUnmodeledDecoratorUnbinds()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_unmodeled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 9))));
   }
 
   /**

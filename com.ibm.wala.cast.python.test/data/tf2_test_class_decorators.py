@@ -2,6 +2,7 @@
 # (wala/ML#1260): the class object is passed to each decorator, innermost first, and the class's
 # name is bound to what the outermost returns.
 import abc
+import typing
 from dataclasses import dataclass
 
 import tensorflow as tf
@@ -31,6 +32,18 @@ def consume_serializable(x):
 
 def consume_abstract(x):
     assert x.shape == (7,)
+
+
+def consume_super(x):
+    assert x.shape == (8,)
+
+
+def consume_unmodeled(x):
+    assert x.shape == (9,)
+
+
+def consume_unused(x):
+    raise AssertionError("never constructed")
 
 
 def register(cls):
@@ -84,6 +97,15 @@ class Point:
         consume_dataclass(x)
 
 
+# The same bare decorator as `Point`'s, on a class the program never constructs.
+@dataclass
+class Unused:
+    label: str
+
+    def show(self, x):
+        consume_unused(x)
+
+
 @tf.keras.utils.register_keras_serializable(package="decorators")
 class Serializable:
     def get_config(self):
@@ -98,10 +120,38 @@ class Abstract(metaclass=abc.ABCMeta):
         consume_abstract(x)
 
 
+def wrap(cls):
+    def make(x):
+        return cls(x)
+
+    return make
+
+
+class Base:
+    def __init__(self, x):
+        consume_super(x)
+
+
+# The name is bound to `make`, but `super()` in the class's methods is the class's own (wala/ML#1266).
+@wrap
+class Child(Base):
+    def __init__(self, x):
+        super().__init__(x)
+
+
+# `typing.final` has no summary, so the class's name is bound to nothing.
+@typing.final
+class Unmodeled:
+    def __init__(self, x):
+        consume_unmodeled(x)
+
+
 Registered(tf.ones([2]))
 Replaced(tf.ones([3]))
 Stacked(tf.ones([4]))
 Point("p").show(tf.ones([5]))
 Serializable().apply(tf.ones([6]))
 Abstract().run(tf.ones([7]))
+Child(tf.ones([8]))
+Unmodeled(tf.ones([9]))
 assert REGISTRY == {"Registered": Registered, "Stand": Stand}

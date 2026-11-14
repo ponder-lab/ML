@@ -1337,8 +1337,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     }
 
     // The class's name is bound to the class object passed through its decorators, innermost first,
-    // as for a function, and only once the class is built (wala/ML#1260). The members above are the
-    // class object's own, whatever a decorator returns.
+    // as for a function, and only once the class is built (wala/ML#1260): its local binding and the
+    // module's field, which an import reads. The members above are the class object's own, and the
+    // composed global keeps the class object itself: the translator reads a base through it when it
+    // copies the base's members onto a subclass, and those members are the class's own.
+    doGlobalWrite(code, fnName, PythonTypes.Root, v);
     int bound = v;
     DynamicAnnotatableEntity decorated = parserEntity(n, DynamicAnnotatableEntity.class);
     if (decorated != null)
@@ -1350,7 +1353,6 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     int boundValue = bound;
 
     doLocalWrite(code, n.getType().getName(), type, boundValue);
-    doGlobalWrite(code, fnName, PythonTypes.Root, boundValue);
 
     code.cfg()
         .unknownInstructions(

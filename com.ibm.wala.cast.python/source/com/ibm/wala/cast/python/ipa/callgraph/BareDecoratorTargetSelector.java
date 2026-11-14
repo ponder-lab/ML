@@ -79,6 +79,17 @@ public class BareDecoratorTargetSelector implements MethodTargetSelector {
   }
 
   /**
+   * Whether a method is the adapter this selector synthesizes for a summary decorator.
+   *
+   * @param method The method.
+   * @return {@code true} iff the method is a bare decorator's adapter.
+   */
+  public static boolean isAdapter(IMethod method) {
+    return method instanceof PythonSummarizedFunction
+        && method.getName().toString().equals(ADAPTER_METHOD_NAME);
+  }
+
+  /**
    * Synthesizes the adapter for a summary decorator's class: given the decorator {@code d} and the
    * function {@code f}, it returns {@code d()(f)}.
    *

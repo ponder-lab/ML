@@ -513,6 +513,15 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
           () -> "Keying summary " + callee + " handed a function object on caller: " + caller);
       return new CallerSiteContext(caller, site);
     }
+    // The calls a bare decorator's adapter makes are keyed on the adapter's node, one per decorated
+    // definition. Keyed on the adapter's site alone, one decorator node served every application,
+    // so the classes or functions that one summary decorator applies to merged in it, and each
+    // decorated name was bound to all of them (wala/ML#1260).
+    if (BareDecoratorTargetSelector.isAdapter(caller.getMethod())
+        && !chainsThroughCallerSites(caller, callee)) {
+      LOGGER.fine(() -> "Keying " + callee + " on the bare decorator adapter node: " + caller);
+      return new CallerSiteContext(caller, site);
+    }
     // A summary body called from a summary node keyed on its calling node, as the rule above keys
     // one, is keyed on that node in turn. Keyed on the site alone, one callee node served every
     // such node, and the arguments they pass merged in it: `tf.map_fn` produces the element it
