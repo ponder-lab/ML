@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- dataclasses model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="dataclasses" allocatable="true">
+      <method name="import" static="true" descriptor="()Ldataclasses;">
+        <new def="x" class="Ldataclasses"/>
+        <new def="dataclass" class="Ldataclasses/functions/dataclass"/>
+        <putfield class="LRoot" field="dataclass" fieldType="LRoot" ref="x" value="dataclass"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="dataclasses/functions">
+      <!-- https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass -->
+      <!-- `dataclass(*, init=True, repr=True, eq=True, order=False, unsafe_hash=False, frozen=False)` returns a decorator that adds generated methods to the class it decorates and returns that class itself (wala/ML#1260). The generated methods are not modeled here; what matters is that the decorated class keeps its own class object. A bare `@dataclass` is applied as this factory's call followed by the application. -->
+      <class name="dataclass" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="decorator" class="Ldataclasses/functions/dataclass_decorator"/>
+          <return value="decorator"/>
+        </method>
+      </class>
+      <!-- The decorator `dataclass(...)` returns: applied to a class, it returns the class. -->
+      <class name="dataclass_decorator" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self cls">
+          <return value="cls"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>

@@ -24,6 +24,7 @@ import com.ibm.wala.cast.ir.translator.AstTranslator;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorCallSiteReference;
+import com.ibm.wala.cast.python.loader.ClassKeywordsEntity;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
@@ -274,9 +275,22 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 .filter(t -> t instanceof MissingType)
                 .collect(Collectors.toSet()),
             bases,
-            unresolved);
+            unresolved,
+            classKeywords(type));
 
     return true;
+  }
+
+  /**
+   * The keywords a class statement passes, as the parser's entity behind the given one records them
+   * (wala/ML#1260).
+   *
+   * @param type The class entity.
+   * @return The keywords and their values' names; empty when the parser recorded none.
+   */
+  private static Map<String, String> classKeywords(CAstEntity type) {
+    ClassKeywordsEntity keyworded = parserEntity(type, ClassKeywordsEntity.class);
+    return keyworded == null ? Collections.emptyMap() : keyworded.classKeywords();
   }
 
   /**
@@ -547,6 +561,38 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     //		}
   }
 
+  /**
+   * Applies a decorator to a function or class object, as Python applies it: the decorator's value
+   * is called with the object, and the call's result is the decorated object.
+   *
+   * @param context The context of the code applying the decorator.
+   * @param decorator The decorator expression the parser hands over: a bare decorator ({@code @d})
+   *     as its callee expression, a parenthesized one as its call.
+   * @param result The value number the decorated object is defined in.
+   * @param decorated The value number of the object the decorator is applied to.
+   */
+  private void applyDecorator(WalkContext context, CAstNode decorator, int result, int decorated) {
+    visit(decorator, context, this);
+    int pos = context.cfg().getCurrentInstruction();
+    // Only a bare decorator applies its own value (wala/ML#188).
+    CallSiteReference site =
+        decorator.getKind() == CAstNode.CALL
+            ? new DynamicCallSiteReference(PythonTypes.CodeBody, pos)
+            : new BareDecoratorCallSiteReference(PythonTypes.CodeBody, pos);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    Pair<String, Integer>[] keywordParams = new Pair[0];
+    context
+        .cfg()
+        .addInstruction(
+            new PythonInvokeInstruction(
+                context.cfg().getCurrentInstruction(),
+                result,
+                context.currentScope().allocateTempValue(),
+                site,
+                new int[] {context.getValue(decorator), decorated},
+                keywordParams));
+  }
+
   @Override
   protected void doMaterializeFunction(
       CAstNode node, WalkContext context, int result, int exception, CAstEntity fn) {
@@ -571,30 +617,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       if (((DynamicAnnotatableEntity) fn).dynamicAnnotations().iterator().hasNext()) {
         ((DynamicAnnotatableEntity) fn)
             .dynamicAnnotations()
-            .forEach(
-                a -> {
-                  visit(a, context, this);
-                  int pos = context.cfg().getCurrentInstruction();
-                  // The parser hands a bare decorator (`@d`) over as its callee expression and a
-                  // parenthesized one as its call; only the bare one applies its own value
-                  // (wala/ML#188).
-                  CallSiteReference site =
-                      a.getKind() == CAstNode.CALL
-                          ? new DynamicCallSiteReference(PythonTypes.CodeBody, pos)
-                          : new BareDecoratorCallSiteReference(PythonTypes.CodeBody, pos);
-                  @SuppressWarnings({"unchecked", "rawtypes"})
-                  Pair<String, Integer>[] keywordParams = new Pair[0];
-                  context
-                      .cfg()
-                      .addInstruction(
-                          new PythonInvokeInstruction(
-                              context.cfg().getCurrentInstruction(),
-                              result,
-                              context.currentScope().allocateTempValue(),
-                              site,
-                              new int[] {context.getValue(a), result},
-                              keywordParams));
-                });
+            .forEach(a -> applyDecorator(context, a, result, result));
       }
     }
 
@@ -693,8 +716,20 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    * @return The declaration, or {@code null} when no entity on the chain is one.
    */
   static StarFormalDeclaration starFormals(CAstEntity n) {
+    return parserEntity(n, StarFormalDeclaration.class);
+  }
+
+  /**
+   * The parser's own entity behind the given one, as the given kind; see {@link #starFormals}.
+   *
+   * @param n The entity.
+   * @param kind The interface the parser's entity declares.
+   * @param <T> The interface.
+   * @return The entity as that kind, or {@code null} when no entity on the chain is one.
+   */
+  static <T> T parserEntity(CAstEntity n, Class<T> kind) {
     for (CAstEntity e = n; e != null; e = e.getOriginal()) {
-      if (e instanceof StarFormalDeclaration declaration) return declaration;
+      if (kind.isInstance(e)) return kind.cast(e);
       if (e.getOriginal() == e) break;
     }
     return null;
@@ -1178,9 +1213,6 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         .addInstruction(
             Python.instructionFactory().NewInstruction(idx, v, NewSiteReference.make(idx, type)));
 
-    doLocalWrite(code, n.getType().getName(), type, v);
-    doGlobalWrite(code, fnName, PythonTypes.Root, v);
-
     if (!this.entity2ExposedNames.containsKey(context.top())) {
       this.entity2ExposedNames.put(context.top(), HashSetFactory.make());
     }
@@ -1304,6 +1336,22 @@ public class PythonCAstToIRTranslator extends AstTranslator {
               });
     }
 
+    // The class's name is bound to the class object passed through its decorators, innermost first,
+    // as for a function, and only once the class is built (wala/ML#1260). The members above are the
+    // class object's own, whatever a decorator returns.
+    int bound = v;
+    DynamicAnnotatableEntity decorated = parserEntity(n, DynamicAnnotatableEntity.class);
+    if (decorated != null)
+      for (CAstNode decorator : decorated.dynamicAnnotations()) {
+        int applied = code.currentScope().allocateTempValue();
+        applyDecorator(code, decorator, applied, bound);
+        bound = applied;
+      }
+    int boundValue = bound;
+
+    doLocalWrite(code, n.getType().getName(), type, boundValue);
+    doGlobalWrite(code, fnName, PythonTypes.Root, boundValue);
+
     code.cfg()
         .unknownInstructions(
             () -> {
@@ -1315,7 +1363,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
               code.cfg()
                   .addInstruction(
                       Python.instructionFactory()
-                          .PutInstruction(code.cfg().getCurrentInstruction(), 1, v, fnField));
+                          .PutInstruction(
+                              code.cfg().getCurrentInstruction(), 1, boundValue, fnField));
             });
   }
 

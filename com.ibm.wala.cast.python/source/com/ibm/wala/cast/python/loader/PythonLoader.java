@@ -494,6 +494,9 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     /** The bases that resolve to no class; see {@link IPythonClass#getUnresolvedBaseNames()}. */
     private final Set<String> unresolvedBaseNames;
 
+    /** The class statement's keywords; see {@link IPythonClass#getKeywords()}. */
+    private final Map<String, String> keywords;
+
     public PythonClass(
         TypeName name,
         TypeName superName,
@@ -509,7 +512,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
           superName == null
               ? java.util.Collections.emptyList()
               : java.util.Collections.singletonList(superName),
-          java.util.Collections.emptySet());
+          java.util.Collections.emptySet(),
+          java.util.Collections.emptyMap());
     }
 
     public PythonClass(
@@ -519,10 +523,13 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
         Position sourcePosition,
         Set<CAstType> missingTypes,
         java.util.List<TypeName> baseNames,
-        Set<String> unresolvedBaseNames) {
+        Set<String> unresolvedBaseNames,
+        Map<String, String> keywords) {
       super(name, superName, loader, sourcePosition);
       this.baseNames = java.util.List.copyOf(baseNames);
       this.unresolvedBaseNames = Set.copyOf(unresolvedBaseNames);
+      this.keywords =
+          java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(keywords));
       missingTypeNames = missingTypes.stream().map(t -> t.getName()).collect(Collectors.toSet());
       if (name.toString().lastIndexOf('/') > 0) {
         String maybeOuterName = name.toString().substring(0, name.toString().lastIndexOf('/'));
@@ -543,6 +550,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     @Override
     public Set<String> getUnresolvedBaseNames() {
       return unresolvedBaseNames;
+    }
+
+    @Override
+    public Map<String, String> getKeywords() {
+      return keywords;
     }
 
     @Override
@@ -1054,6 +1066,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * @param missingTypes Its bases the unit does not define.
    * @param bases Its bases as declared, resolved to classes of this unit or summary shells.
    * @param unresolvedBases The names of its bases that resolve to neither (wala/ML#1255).
+   * @param keywords Its class statement's keywords and their values' names (wala/ML#1260).
    */
   public void defineType(
       TypeName cls,
@@ -1061,10 +1074,12 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       Position sourcePosition,
       Set<CAstType> missingTypes,
       java.util.List<TypeName> bases,
-      Set<String> unresolvedBases) {
+      Set<String> unresolvedBases,
+      Map<String, String> keywords) {
     types.put(
         cls,
-        new PythonClass(cls, parent, this, sourcePosition, missingTypes, bases, unresolvedBases));
+        new PythonClass(
+            cls, parent, this, sourcePosition, missingTypes, bases, unresolvedBases, keywords));
   }
 
   /** The callables whose result Python transforms on a read through an instance. */

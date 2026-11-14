@@ -155,6 +155,8 @@
         <putfield class="LRoot" field="serialize_keras_object" fieldType="LRoot" ref="utils" value="serialize_ko"/>
         <new def="deserialize_ko" class="Ltensorflow/keras/utils/deserialize_keras_object"/>
         <putfield class="LRoot" field="deserialize_keras_object" fieldType="LRoot" ref="utils" value="deserialize_ko"/>
+        <new def="register_ks" class="Ltensorflow/keras/utils/register_keras_serializable"/>
+        <putfield class="LRoot" field="register_keras_serializable" fieldType="LRoot" ref="utils" value="register_ks"/>
         <new def="ser_fn" class="Ltensorflow/keras/serialization/serialize"/>
         <new def="deser_fn" class="Ltensorflow/keras/serialization/deserialize"/>
         <new def="get_fn" class="Ltensorflow/keras/serialization/get"/>
@@ -4208,6 +4210,19 @@
       <class name="deserialize_keras_object" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self identifier module_objects custom_objects printable_module_name">
           <return value="identifier"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/utils/register_keras_serializable (wala/ML#1260): `register_keras_serializable(package, name)` returns a decorator that registers the class it decorates under its name and returns that class itself. The registry is not modeled; what matters is that the decorated class keeps its own class object. -->
+      <class name="register_keras_serializable" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self package name">
+          <new def="decorator" class="Ltensorflow/keras/utils/register_keras_serializable_decorator"/>
+          <return value="decorator"/>
+        </method>
+      </class>
+      <!-- The decorator `register_keras_serializable(...)` returns: applied to a class, it returns the class. -->
+      <class name="register_keras_serializable_decorator" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self arg">
+          <return value="arg"/>
         </method>
       </class>
     </package>

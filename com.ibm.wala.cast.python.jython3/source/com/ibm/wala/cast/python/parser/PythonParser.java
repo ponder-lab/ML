@@ -25,6 +25,7 @@ import com.ibm.wala.cast.ir.translator.AbstractScriptEntity;
 import com.ibm.wala.cast.ir.translator.TranslatorToCAst;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
+import com.ibm.wala.cast.python.loader.ClassKeywordsEntity;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -1300,6 +1301,46 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       return e.getText();
     }
 
+    /**
+     * A class entity that hands its decorators over in application order, as a function's does, and
+     * carries its class statement's keywords (wala/ML#1260).
+     */
+    private abstract class PythonClassEntity extends AbstractClassEntity
+        implements DynamicAnnotatableEntity, ClassKeywordsEntity {
+
+      /** The decorators to apply to the class object, innermost first. */
+      private final java.util.List<CAstNode> appliedDecorators;
+
+      /** The class statement's keywords; see {@link ClassKeywordsEntity#classKeywords()}. */
+      private final Map<String, String> keywords;
+
+      /**
+       * Creates the entity.
+       *
+       * @param type The class's type.
+       * @param appliedDecorators The decorators to apply, innermost first.
+       * @param keywords The class statement's keywords and their values' names.
+       */
+      PythonClassEntity(
+          CAstType.Class type,
+          java.util.List<CAstNode> appliedDecorators,
+          Map<String, String> keywords) {
+        super(type);
+        this.appliedDecorators = java.util.List.copyOf(appliedDecorators);
+        this.keywords = java.util.Collections.unmodifiableMap(keywords);
+      }
+
+      @Override
+      public Iterable<CAstNode> dynamicAnnotations() {
+        return appliedDecorators;
+      }
+
+      @Override
+      public Map<String, String> classKeywords() {
+        return keywords;
+      }
+    }
+
     @Override
     public CAstNode visitClassDef(ClassDef arg0) throws Exception {
       WalkContext parent = this.context;
@@ -1354,8 +1395,17 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       // which positional NamedTuple/dataclass construction relies on (wala/ML#579).
       Collection<CAstEntity> members = new java.util.LinkedHashSet<>();
 
+      // A class's decorators and keywords are evaluated where the class statement is, before its
+      // body (wala/ML#1260).
+      java.util.List<CAstNode> classDecorators = decorators(arg0.getInternalDecorator_list());
+      Map<String, String> classKeywords = new java.util.LinkedHashMap<>();
+      if (arg0.getInternalKeywords() != null)
+        for (keyword k : arg0.getInternalKeywords())
+          if (k.getInternalArg() != null)
+            classKeywords.put(k.getInternalArg(), dottedName(k.getInternalValue()));
+
       CAstEntity clse =
-          new AbstractClassEntity(cls) {
+          new PythonClassEntity(cls, appliedDecorators(classDecorators), classKeywords) {
 
             @Override
             public int getKind() {
