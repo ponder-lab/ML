@@ -1,0 +1,28 @@
+{
+  "types": [
+    {
+      "module": "append_loop.py",
+      "function": "append_then_loop",
+      "variable": "data",
+      "dtype": "int64",
+      "shape": "n",
+      "attribution": "The pickle holds a rank-1 int64 array."
+    },
+    {
+      "module": "append_loop.py",
+      "function": "append_twice",
+      "variable": "data",
+      "dtype": "int64",
+      "shape": "n",
+      "attribution": "The pickle holds a rank-1 int64 array."
+    },
+    {
+      "module": "append_loop.py",
+      "function": "loop_only",
+      "variable": "data",
+      "dtype": "int64",
+      "shape": "n",
+      "attribution": "The pickle holds a rank-1 int64 array."
+    }
+  ]
+}
