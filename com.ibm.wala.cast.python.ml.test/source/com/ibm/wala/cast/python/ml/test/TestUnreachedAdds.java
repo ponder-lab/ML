@@ -194,14 +194,15 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * An unreached {@code tf.backend.update}, which is not {@code tf.keras.backend.update}, may add
-   * to any dict.
+   * An unreached {@code tf.backend.update}, a TensorFlow function no summary models, adds to no
+   * dict: TensorFlow is registered as a library whose functions resize no container passed to them
+   * unless a summary says otherwise (wala/ML#1182).
    *
    * @throws Exception if the fixture cannot be analyzed.
    */
   @Test
-  public void testUnlistedLibraryReceiver() throws Exception {
-    assertFalse(consumed("tf2_test_unreached_adds_library_unlisted.py").isComplete());
+  public void testUnmodeledLibraryReceiver() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_library_unlisted.py").isComplete());
   }
 
   /**

@@ -1,6 +1,6 @@
 # Test `ContainerElements` where a list is passed to a TensorFlow function no summary models,
-# `tf.strings.join`: the list reports no length, since without a summary the analysis cannot tell
-# that the function leaves it as it is (wala/ML#1182).
+# `tf.strings.join`: TensorFlow is registered as a library whose functions resize no list passed to
+# them, so the list keeps its length (wala/ML#1182).
 import tensorflow as tf
 
 

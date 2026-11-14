@@ -481,14 +481,13 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A list passed to a TensorFlow function no summary models, {@code tf.strings.join}, reports no
-   * length, since without a summary the analysis cannot tell that the function leaves it as it is.
-   * A function a summary models, as {@code tf.image.random_crop}, keeps its list arguments' lengths
-   * (wala/ML#1182).
+   * A list passed to a TensorFlow function no summary models, {@code tf.strings.join}, keeps its
+   * length: TensorFlow is registered as a library whose functions resize no list passed to them,
+   * which a summary would override (wala/ML#1182).
    */
   @Test
-  public void testUnmodeledLibraryArgumentLosesArity() {
-    assertArity(UNMODELED_LIBRARY, "sink_parts", OptionalInt.empty());
+  public void testUnmodeledLibraryArgumentKeepsArity() {
+    assertArity(UNMODELED_LIBRARY, "sink_parts", OptionalInt.of(2));
   }
 
   /**

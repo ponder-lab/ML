@@ -13,34 +13,26 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
-import com.ibm.wala.cast.types.AstMethodReference;
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
-import com.ibm.wala.shrike.shrikeBT.IInvokeInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
-import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
-import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -50,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -110,6 +103,25 @@ public record ContainerMutations(
 
   /** The name a {@code del} statement's lowering reads the deletion builtin by. */
   private static final String DELETE_NAME = "__delete__";
+
+  /**
+   * The type-name prefixes of the libraries whose functions are taken to resize no Python list
+   * passed to them when no summary models them, as a library client registers them ({@link
+   * #registerNonResizingLibrary}). A summary takes precedence: a call that resolves to one does
+   * what its body does.
+   */
+  private static final Set<String> NON_RESIZING_LIBRARIES = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Registers a library whose functions resize no Python list passed to them unless a summary says
+   * otherwise, as TensorFlow's and NumPy's convert a list rather than change it (wala/ML#1182).
+   *
+   * @param typeNamePrefix The prefix of the type names of the library's modules and objects, such
+   *     as {@code Ltensorflow}.
+   */
+  public static void registerNonResizingLibrary(String typeNamePrefix) {
+    NON_RESIZING_LIBRARIES.add(typeNamePrefix);
+  }
 
   /** The builtins whose call builds a fresh container (wala/ML#1182). */
   private static final Set<String> CONTAINER_BUILTINS = Set.of("list", "dict", "set");
@@ -259,18 +271,19 @@ public record ContainerMutations(
    *   <li>an argument of a call in program code that resolves to no target, such as one of {@code
    *       heapq.heappush}, {@code operator.iadd} or {@code getattr}, which the front end imports
    *       rather than summarizes, and so of the method {@code getattr(l, "append")} returns, unless
-   *       the callee is a method read off a list, which the repositioning methods govern. A library
-   *       function a summary models resolves to its summary, so only an unmodeled one marks its
-   *       arguments.
+   *       the callee is a method read off a list, which the repositioning methods govern, or a
+   *       function read off a module or object of a library registered as resizing no list ({@link
+   *       #NON_RESIZING_LIBRARIES}). A library function a summary models resolves to its summary,
+   *       which takes precedence.
    * </ul>
    *
    * A program function the call graph does not reach may still run, as a callback a library summary
    * does not call, such as a {@code key} of {@code sorted} or a function {@code map} applies. In
    * such a body, the receiver of a repositioning read is a list so mutated when it is a variable of
    * an enclosing frame or a global, read off what that variable is written. A receiver the body
-   * builds itself is none the analysis has, and a library function whose summary changes no
-   * argument mutates nothing (wala/ML#1182). Any other receiver there may be any list, and so is
-   * every list.
+   * builds itself is none the analysis has, and a function read off a module of a library
+   * registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}) mutates nothing
+   * (wala/ML#1182). Any other receiver there may be any list, and so is every list.
    *
    * <p>The front end drops the target of a {@code del} statement, so a subscript {@code del}
    * anywhere, in a reached node or such a body, may mutate any list.
@@ -451,8 +464,6 @@ public record ContainerMutations(
     // The values a variable is written, by its name and definer, which the receiver checks below
     // read for many reads of the same builtin or module: each is a scan of the whole call graph.
     Map<List<String>, Set<InstanceKey>> writes = new HashMap<>();
-    // The values the analysis stores under each field of each object, read once when needed.
-    Map<InstanceKey, Map<String, Set<InstanceKey>>> fields = new HashMap<>();
     for (IClass cls : builder.getClassHierarchy()) {
       Collection<? extends IMethod> methods = cls.getDeclaredMethods();
       if (methods == null) continue;
@@ -485,13 +496,12 @@ public record ContainerMutations(
                   || isAdding(symtab, read.getMemberRef()))) continue;
           boolean adds = isAdding(symtab, read.getMemberRef());
           SSAInstruction receiver = du.getDef(read.getObjectRef());
-          // A container the body builds itself is none the analysis allocates, and a library
-          // function so named whose summary changes no argument resizes none (wala/ML#1182).
+          // A container the body builds itself is none the analysis allocates, and a function of
+          // a library registered as resizing no list resizes none (wala/ML#1182).
           if (isBuiltHere(builder, writes, du, receiver)
               || isNonResizingLibraryFunction(
                   builder,
                   writes,
-                  fields,
                   symtab,
                   du,
                   receiver,
@@ -565,13 +575,12 @@ public record ContainerMutations(
   /**
    * Whether a method read in a body the call graph does not reach is a library function that
    * resizes no container: its receiver is a chain of attribute reads, as {@code tf.keras.backend}
-   * is, off a variable the call graph's nodes write, and every value the analysis stores under that
-   * chain and the method's name, on every value written, is a library function whose summary
-   * changes no argument it is passed, as {@code tf.keras.backend.update}'s is (wala/ML#1182).
+   * is, off a variable that every write in the call graph binds to a module or object of a library
+   * registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}), as {@code import tensorflow
+   * as tf} does (wala/ML#1182).
    *
    * @param builder The builder.
    * @param writes The values variables are written, by name and definer, filled as read.
-   * @param fields The values stored under each field of each object, filled when first read.
    * @param symtab The body's symbol table.
    * @param du The body's def-use.
    * @param receiver The instruction defining the receiver, or {@code null}.
@@ -581,21 +590,14 @@ public record ContainerMutations(
   private static boolean isNonResizingLibraryFunction(
       PropagationCallGraphBuilder builder,
       Map<List<String>, Set<InstanceKey>> writes,
-      Map<InstanceKey, Map<String, Set<InstanceKey>>> fields,
       SymbolTable symtab,
       DefUse du,
       SSAInstruction receiver,
       String method) {
-    // The attributes read off the root variable, outermost first, then the method.
-    List<String> attributes = new ArrayList<>();
-    attributes.add(method);
     SSAInstruction current = receiver;
     Set<SSAInstruction> seen = new HashSet<>();
-    while (current instanceof AstPropertyRead read && seen.add(current)) {
-      if (!symtab.isStringConstant(read.getMemberRef())) return false;
-      attributes.add(0, symtab.getStringValue(read.getMemberRef()));
+    while (current instanceof AstPropertyRead read && seen.add(current))
       current = du.getDef(read.getObjectRef());
-    }
     String variable;
     String definer;
     if (current instanceof AstGlobalRead global) {
@@ -605,104 +607,22 @@ public record ContainerMutations(
       variable = lexical.getAccess(0).variableName();
       definer = lexical.getAccess(0).variableDefiner();
     } else return false;
-    Set<InstanceKey> values = getVariableWrites(builder, writes, variable, definer);
-    for (String attribute : attributes) {
-      if (values.isEmpty()) return false;
-      Set<InstanceKey> next = new HashSet<>();
-      for (InstanceKey owner : values)
-        next.addAll(getFieldValues(builder, fields, owner, attribute));
-      values = next;
-    }
-    if (values.isEmpty()) return false;
-    for (InstanceKey function : values) if (!changesNoArgument(builder, function)) return false;
+    Set<InstanceKey> modules = getVariableWrites(builder, writes, variable, definer);
+    if (modules.isEmpty()) return false;
+    for (InstanceKey module : modules)
+      if (!isNonResizingLibrary(module.concreteType().getName().toString())) return false;
     return true;
   }
 
   /**
-   * The values the analysis stores under a field of an object.
+   * Whether a type name is one of a library registered as resizing no list.
    *
-   * @param builder The builder.
-   * @param fields The values stored under each field of each object, filled when first read.
-   * @param owner The object.
-   * @param field The field's name.
-   * @return The values.
+   * @param typeName The type name.
+   * @return {@code true} iff it starts with a registered prefix.
    */
-  private static Set<InstanceKey> getFieldValues(
-      PropagationCallGraphBuilder builder,
-      Map<InstanceKey, Map<String, Set<InstanceKey>>> fields,
-      InstanceKey owner,
-      String field) {
-    if (fields.isEmpty()) {
-      PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-      for (PointerKey key : pa.getPointerKeys())
-        if (key instanceof InstanceFieldKey instanceField) {
-          Set<InstanceKey> values =
-              fields
-                  .computeIfAbsent(instanceField.getInstanceKey(), k -> new HashMap<>())
-                  .computeIfAbsent(
-                      instanceField.getField().getName().toString(), n -> new HashSet<>());
-          for (InstanceKey value : pa.getPointsToSet(key)) values.add(value);
-        }
-      // An empty map would be read again for every receiver.
-      fields.putIfAbsent(null, Map.of());
-    }
-    return fields.getOrDefault(owner, Map.of()).getOrDefault(field, Set.of());
-  }
-
-  /**
-   * Whether a value is a library function whose summary changes no argument it is passed: no
-   * statement of its body stores into a parameter or passes one to a call.
-   *
-   * <p>The scan runs between the builder's solves, so this changes nothing a call of the function
-   * would not: it asks the method target selector for the function's body as a call of it from the
-   * fake root would, and a selector that cannot answer that leaves the function not exempt.
-   *
-   * @param builder The builder.
-   * @param function The value.
-   * @return {@code true} iff it is such a function.
-   */
-  private static boolean changesNoArgument(
-      PropagationCallGraphBuilder builder, InstanceKey function) {
-    IClass type = function.concreteType();
-    if (type.getName().toString().startsWith("Lscript ")) return false;
-    // A summary's body is attached by the method target selector, as for a call of the function,
-    // not declared on its class.
-    IMethod body;
-    IR ir;
-    try {
-      body =
-          builder
-              .getOptions()
-              .getMethodTargetSelector()
-              .getCalleeTarget(
-                  builder.getCallGraph().getFakeRootNode(),
-                  CallSiteReference.make(
-                      0,
-                      MethodReference.findOrCreate(
-                          type.getReference(), AstMethodReference.fnSelector),
-                      IInvokeInstruction.Dispatch.VIRTUAL),
-                  type);
-      if (body == null || !body.isWalaSynthetic()) return false;
-      LOGGER.fine(
-          () -> "The summary of " + type.getName() + " is " + body.getClass().getName() + ".");
-      ir = builder.getAnalysisCache().getIR(body);
-    } catch (RuntimeException e) {
-      LOGGER.log(Level.FINE, e, () -> "Cannot read the summary of " + type.getName() + ".");
-      return false;
-    }
-    if (ir == null) return false;
-    SymbolTable symtab = ir.getSymbolTable();
-    for (SSAInstruction instruction : ir.getInstructions()) {
-      if (instruction instanceof SSAPutInstruction put
-          && !put.isStatic()
-          && symtab.isParameter(put.getRef())) return false;
-      if (instruction instanceof AstPropertyWrite write && symtab.isParameter(write.getObjectRef()))
-        return false;
-      if (instruction instanceof SSAAbstractInvokeInstruction invoke)
-        for (int i = 1; i < invoke.getNumberOfUses(); i++)
-          if (symtab.isParameter(invoke.getUse(i))) return false;
-    }
-    return true;
+  private static boolean isNonResizingLibrary(String typeName) {
+    for (String library : NON_RESIZING_LIBRARIES) if (typeName.startsWith(library)) return true;
+    return false;
   }
 
   /**
@@ -890,8 +810,10 @@ public record ContainerMutations(
 
   /**
    * Whether an unresolved call's callee cannot resize a list passed to it: a method read off a
-   * list, which the repositioning methods govern. A library function a summary models resolves to
-   * its summary, so an unresolved one is unmodeled and may change what it is passed.
+   * list, which the repositioning methods govern, or a function read off a module or object of a
+   * library registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}), directly or through
+   * attributes, as {@code tf.strings.join} is read off {@code tf}. A library function a summary
+   * models resolves to its summary, so this decides only for one no summary models.
    *
    * @param pa The pointer analysis.
    * @param node The calling node.
@@ -900,10 +822,18 @@ public record ContainerMutations(
    */
   private static boolean isNonResizing(
       PointerAnalysis<InstanceKey> pa, CGNode node, SSAInstruction callee) {
-    if (!(callee instanceof AstPropertyRead read)) return false;
-    for (InstanceKey owner :
-        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef())))
-      if (owner.concreteType().getReference().equals(list)) return true;
+    // The owner may be an attribute of a module, `tf.strings`, which the analysis allocates as a
+    // plain object or not at all: read up the chain of attribute reads for a library's allocation.
+    DefUse du = node.getDU();
+    Set<SSAInstruction> seen = new HashSet<>();
+    for (SSAInstruction current = callee;
+        current instanceof AstPropertyRead read && seen.add(current);
+        current = du.getDef(read.getObjectRef()))
+      for (InstanceKey owner :
+          pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef()))) {
+        if (current == callee && owner.concreteType().getReference().equals(list)) return true;
+        if (isNonResizingLibrary(owner.concreteType().getName().toString())) return true;
+      }
     return false;
   }
 

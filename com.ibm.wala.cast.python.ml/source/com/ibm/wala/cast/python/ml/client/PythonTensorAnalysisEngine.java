@@ -24,6 +24,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.ContainerMutations;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
@@ -1469,6 +1470,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   public static final String REPLAY_FILTER_VARIABLE = "ARIADNE_REPLAY_FILTER";
 
   private static final Logger LOGGER = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
+
+  static {
+    // TensorFlow's and NumPy's functions convert a Python list passed to them rather than change
+    // it, so an unmodeled one resizes none; a summary that says otherwise takes precedence
+    // (wala/ML#1182).
+    ContainerMutations.registerNonResizingLibrary("Ltensorflow");
+    ContainerMutations.registerNonResizingLibrary("Lnumpy");
+  }
 
   private static final MethodReference conv2d =
       MethodReference.findOrCreate(

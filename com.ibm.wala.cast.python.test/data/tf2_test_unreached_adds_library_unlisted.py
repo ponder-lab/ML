@@ -1,5 +1,6 @@
-# A function the call graph does not reach may still run. Its `tf.backend.update` is no TensorFlow
-# function the analysis knows to resize nothing, so it may add an element to any dict.
+# A function the call graph does not reach may still run. Its `tf.backend.update` is a TensorFlow
+# function no summary models, and TensorFlow is registered as a library whose functions resize no
+# container passed to them, so it adds to no dict (wala/ML#1182).
 import tensorflow as tf
 
 
