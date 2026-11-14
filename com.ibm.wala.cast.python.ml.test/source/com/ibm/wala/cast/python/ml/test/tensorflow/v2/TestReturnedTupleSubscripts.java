@@ -12,7 +12,8 @@ import org.junit.Test;
  * href="https://github.com/wala/ML/issues/1261">wala/ML#1261</a>). A subscript has an empty
  * points-to set, so an unpacked element is typed by the returned literal's element write, read in
  * the callee that allocates it. Each element is divided in its own function and the quotient passed
- * to its own consumer.
+ * to its own consumer. The two elements differ in shape and dtype, so each test witnesses its
+ * index.
  */
 public class TestReturnedTupleSubscripts extends AbstractTensorTest {
 
@@ -31,17 +32,20 @@ public class TestReturnedTupleSubscripts extends AbstractTensorTest {
     test(FILE, "consume_first", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
-  /** The second element unpacked, read at index {@code 1}. */
+  /**
+   * The second element unpacked, a subscript of another tensor: its own shape and dtype, so a read
+   * of the first element's write, or a join of both, fails.
+   */
   @Test
   public void testUnpackedSecond() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "normalize_second", 1, 2, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test(FILE, "normalize_second", 1, 2, Map.of(2, Set.of(TENSOR_4_INT32)));
   }
 
   /** The quotient of the second element unpacked. */
   @Test
   public void testUnpackedSecondQuotient()
       throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_second", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test(FILE, "consume_second", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
   }
 
   /** A single subscript returned, not in a tuple: typed before wala/ML#1261 too. */
