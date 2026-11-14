@@ -46,6 +46,10 @@ def consume_unused(x):
     raise AssertionError("never constructed")
 
 
+def consume_swapped(x):
+    assert x.shape == (10,)
+
+
 def register(cls):
     REGISTRY[cls.__name__] = cls
     return cls
@@ -139,6 +143,26 @@ class Child(Base):
         super().__init__(x)
 
 
+class Swapped:
+    def __init__(self, x):
+        consume_swapped(x)
+
+
+def swap(cls):
+    return Swapped
+
+
+@swap
+class Original:
+    def __init__(self, x):
+        pass
+
+
+# A function body reads the module-level name, bound to what the decorator returns.
+def construct_in_function():
+    Original(tf.ones([10]))
+
+
 # `typing.final` has no summary, so the class's name is bound to nothing.
 @typing.final
 class Unmodeled:
@@ -154,4 +178,5 @@ Serializable().apply(tf.ones([6]))
 Abstract().run(tf.ones([7]))
 Child(tf.ones([8]))
 Unmodeled(tf.ones([9]))
+construct_in_function()
 assert REGISTRY == {"Registered": Registered, "Stand": Stand}

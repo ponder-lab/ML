@@ -47,6 +47,17 @@ public class TestClassDecorators extends AbstractTensorTest {
   }
 
   /**
+   * A decorator that returns another class, with the class constructed in a function body: the
+   * body's read of the module-level name sees what the decorator returned, as a module-level read
+   * does.
+   */
+  @Test
+  public void testReplacedInFunction()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_swapped", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 10))));
+  }
+
+  /**
    * Two decorators: the inner one, which returns another class, applies first, and the outer one,
    * which returns what it is given, second, so the name is bound to the inner one's class.
    */
