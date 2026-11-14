@@ -270,15 +270,15 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
 
   /**
    * A {@code Sequential}'s layer whose {@code call} takes no {@code training} is still called with
-   * its input.
+   * its input, and is given no {@code training}.
    *
    * @throws Exception On analysis failure.
    */
   @Test
   public void testSequentialNoParameter() throws Exception {
-    assertTrue(
-        "The input doesn't reach `Plain.call`.",
-        parameterReached("tf2_test_sequential_training.py", "Plain/call", "x"));
+    String file = "tf2_test_sequential_training.py";
+    assertTrue("The input doesn't reach `Plain.call`.", parameterReached(file, "Plain/call", "x"));
+    assertFalse("`Plain.call` has a `training`.", parameterReached(file, "Plain/call", "training"));
   }
 
   /**
