@@ -482,8 +482,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   /**
    * A list passed to a TensorFlow function no summary models, {@code tf.strings.join}, reports no
-   * length: the function may change it. Only a function a summary models, as {@code
-   * tf.image.random_crop}, leaves its list arguments as they are (wala/ML#1182).
+   * length, since without a summary the analysis cannot tell that the function leaves it as it is.
+   * A function a summary models, as {@code tf.image.random_crop}, keeps its list arguments' lengths
+   * (wala/ML#1182).
    */
   @Test
   public void testUnmodeledLibraryArgumentLosesArity() {

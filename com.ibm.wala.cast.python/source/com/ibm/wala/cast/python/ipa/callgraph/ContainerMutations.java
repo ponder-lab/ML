@@ -653,6 +653,10 @@ public record ContainerMutations(
    * Whether a value is a library function whose summary changes no argument it is passed: no
    * statement of its body stores into a parameter or passes one to a call.
    *
+   * <p>The scan runs between the builder's solves, so this only reads: it asks the method target
+   * selector for the function's body as a call of it from the fake root would, and a selector that
+   * cannot answer that leaves the function not exempt.
+   *
    * @param builder The builder.
    * @param function The value.
    * @return {@code true} iff it is such a function.
@@ -663,24 +667,27 @@ public record ContainerMutations(
     if (type.getName().toString().startsWith("Lscript ")) return false;
     // A summary's body is attached by the method target selector, as for a call of the function,
     // not declared on its class.
-    IMethod body =
-        builder
-            .getOptions()
-            .getMethodTargetSelector()
-            .getCalleeTarget(
-                builder.getCallGraph().getFakeRootNode(),
-                CallSiteReference.make(
-                    0,
-                    MethodReference.findOrCreate(
-                        type.getReference(), AstMethodReference.fnSelector),
-                    IInvokeInstruction.Dispatch.VIRTUAL),
-                type);
-    if (body == null || !body.isWalaSynthetic()) return false;
+    IMethod body;
     IR ir;
     try {
+      body =
+          builder
+              .getOptions()
+              .getMethodTargetSelector()
+              .getCalleeTarget(
+                  builder.getCallGraph().getFakeRootNode(),
+                  CallSiteReference.make(
+                      0,
+                      MethodReference.findOrCreate(
+                          type.getReference(), AstMethodReference.fnSelector),
+                      IInvokeInstruction.Dispatch.VIRTUAL),
+                  type);
+      if (body == null || !body.isWalaSynthetic()) return false;
+      LOGGER.fine(
+          () -> "The summary of " + type.getName() + " is " + body.getClass().getName() + ".");
       ir = builder.getAnalysisCache().getIR(body);
     } catch (RuntimeException e) {
-      LOGGER.log(Level.FINE, e, () -> "Cannot read the summary of " + body + ".");
+      LOGGER.log(Level.FINE, e, () -> "Cannot read the summary of " + type.getName() + ".");
       return false;
     }
     if (ir == null) return false;

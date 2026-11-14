@@ -295,13 +295,15 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * typed (wala/ML#1074): the guard {@code tf.random.uniform(()) > 0.5} is a scalar {@code bool}
    * tensor, as at run time.
    *
+   * <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
+   * (wala/ML#1182): the two cropped images, {@code (256, 256, 3)} {@code float32}, are typed, and
+   * so are the two values each meets after the optional flip. The flips themselves have no type,
+   * since no summary models {@code tf.image.flip_left_right}.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
-   *     <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
-   *     (wala/ML#1182): the two cropped images and their two flips are typed, each {@code (256,
-   *     256, 3)} {@code float32}.
    */
   @Test
   public void testRandomJitter()
@@ -327,12 +329,15 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * typed (wala/ML#1074): the guard {@code tf.random.uniform(()) > 0.5} is a scalar {@code bool}
    * tensor, as at run time.
    *
+   * <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
+   * (wala/ML#1182): the two cropped images are typed, and so are the two values each meets after
+   * the optional flip. The flips themselves have no type, since no summary models {@code
+   * tf.image.flip_left_right}.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
-   *     <p>The local count rose from six to ten when {@code tf.image.random_crop} was modeled
-   *     (wala/ML#1182): the two cropped images and their two flips are typed.
    */
   @Test
   public void testPix2pixJitterParams()
@@ -1120,13 +1125,14 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * rank-preserving {@code resize} pass-through, so rank 3 float32 with dynamic extents survives
    * one more hop before the stack-and-crop.
    *
+   * <p>The local count rose from three to six when {@code tf.image.random_crop} was modeled
+   * (wala/ML#1182): the crop, {@code (2, 256, 256, 3)} {@code float32}, and its two halves are
+   * typed.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
-   *     <p>The local count rose from three to six when {@code tf.image.random_crop} was modeled
-   *     (wala/ML#1182): the crop, {@code (2, 256, 256, 3)} {@code float32}, and its two halves are
-   *     typed.
    */
   @Test
   public void testPix2pixCropParams()
