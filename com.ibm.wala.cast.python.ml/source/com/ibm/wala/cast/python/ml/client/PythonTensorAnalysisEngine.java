@@ -1099,6 +1099,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache2) {
     PythonSSAPropagationCallGraphBuilder builder = super.getCallGraphBuilder(cha, options, cache2);
 
+    // TensorFlow's and NumPy's functions convert a Python list passed to them rather than change
+    // it, so an unmodeled one resizes none; a summary that says otherwise takes precedence
+    // (wala/ML#1182).
+    ContainerMutations.registerNonResizingLibrary(builder, "Ltensorflow");
+    ContainerMutations.registerNonResizingLibrary(builder, "Lnumpy");
+
     // A tensor's or an array's slice is an array of the same kind with an allocation of its own,
     // so a generator reading `x[:, :-1]` through the points-to set no longer sees the receiver's
     // pre-slice window (wala/ML#916). numpy.xml puts an array's methods (`astype`, `tolist`,
@@ -1470,14 +1476,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   public static final String REPLAY_FILTER_VARIABLE = "ARIADNE_REPLAY_FILTER";
 
   private static final Logger LOGGER = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
-
-  static {
-    // TensorFlow's and NumPy's functions convert a Python list passed to them rather than change
-    // it, so an unmodeled one resizes none; a summary that says otherwise takes precedence
-    // (wala/ML#1182).
-    ContainerMutations.registerNonResizingLibrary("Ltensorflow");
-    ContainerMutations.registerNonResizingLibrary("Lnumpy");
-  }
 
   private static final MethodReference conv2d =
       MethodReference.findOrCreate(

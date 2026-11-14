@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -105,22 +104,40 @@ public record ContainerMutations(
   private static final String DELETE_NAME = "__delete__";
 
   /**
-   * The type-name prefixes of the libraries whose functions are taken to resize no Python list
-   * passed to them when no summary models them, as a library client registers them ({@link
-   * #registerNonResizingLibrary}). A summary takes precedence: a call that resolves to one does
-   * what its body does.
+   * Per builder, the type names of the modules of the libraries whose functions are taken to resize
+   * no Python list passed to them when no summary models them, as a library client registers them
+   * ({@link #registerNonResizingLibrary}). A summary takes precedence: a call that resolves to one
+   * does what its body does.
    */
-  private static final Set<String> NON_RESIZING_LIBRARIES = ConcurrentHashMap.newKeySet();
+  private static final Map<PropagationCallGraphBuilder, Set<String>> NON_RESIZING_LIBRARIES =
+      new WeakHashMap<>();
 
   /**
-   * Registers a library whose functions resize no Python list passed to them unless a summary says
-   * otherwise, as TensorFlow's and NumPy's convert a list rather than change it (wala/ML#1182).
+   * Registers, for a builder, a library whose functions resize no Python list passed to them unless
+   * a summary says otherwise, as TensorFlow's and NumPy's convert a list rather than change it
+   * (wala/ML#1182).
    *
-   * @param typeNamePrefix The prefix of the type names of the library's modules and objects, such
-   *     as {@code Ltensorflow}.
+   * @param builder The builder.
+   * @param module The type name of the library's module, such as {@code Ltensorflow}; its objects'
+   *     type names begin with it.
    */
-  public static void registerNonResizingLibrary(String typeNamePrefix) {
-    NON_RESIZING_LIBRARIES.add(typeNamePrefix);
+  public static void registerNonResizingLibrary(
+      PropagationCallGraphBuilder builder, String module) {
+    synchronized (NON_RESIZING_LIBRARIES) {
+      NON_RESIZING_LIBRARIES.computeIfAbsent(builder, b -> new HashSet<>()).add(module);
+    }
+  }
+
+  /**
+   * The modules of the libraries registered for a builder as resizing no list.
+   *
+   * @param builder The builder.
+   * @return The modules' type names.
+   */
+  private static Set<String> getNonResizingLibraries(PropagationCallGraphBuilder builder) {
+    synchronized (NON_RESIZING_LIBRARIES) {
+      return Set.copyOf(NON_RESIZING_LIBRARIES.getOrDefault(builder, Set.of()));
+    }
   }
 
   /** The builtins whose call builds a fresh container (wala/ML#1182). */
@@ -395,7 +412,9 @@ public record ContainerMutations(
             // `list.append(l, x)`: the list is an argument, not the receiver.
             for (int i = 1; i < invoke.getNumberOfUses(); i++)
               marks.mark(pa, node, invoke.getUse(i), true);
-          } else if (program && targets.isEmpty() && !isNonResizing(pa, node, callee))
+          } else if (program
+              && targets.isEmpty()
+              && !isNonResizing(pa, node, callee, getNonResizingLibraries(builder)))
             for (int i = 1; i < invoke.getNumberOfUses(); i++)
               marks.mark(pa, node, invoke.getUse(i), true);
         }
@@ -575,9 +594,10 @@ public record ContainerMutations(
   /**
    * Whether a method read in a body the call graph does not reach is a library function that
    * resizes no container: its receiver is a chain of attribute reads, as {@code tf.keras.backend}
-   * is, off a variable that every write in the call graph binds to a module or object of a library
+   * is, off a variable that every write in the call graph binds to the module of a library
    * registered as resizing no list ({@link #NON_RESIZING_LIBRARIES}), as {@code import tensorflow
-   * as tf} does (wala/ML#1182).
+   * as tf} does (wala/ML#1182). Only the module itself counts: an object of the library, such as a
+   * {@code tf.Module}, may hold a program's list as an attribute, which a method may resize.
    *
    * @param builder The builder.
    * @param writes The values variables are written, by name and definer, filled as read.
@@ -609,20 +629,10 @@ public record ContainerMutations(
     } else return false;
     Set<InstanceKey> modules = getVariableWrites(builder, writes, variable, definer);
     if (modules.isEmpty()) return false;
+    Set<String> libraries = getNonResizingLibraries(builder);
     for (InstanceKey module : modules)
-      if (!isNonResizingLibrary(module.concreteType().getName().toString())) return false;
+      if (!libraries.contains(module.concreteType().getName().toString())) return false;
     return true;
-  }
-
-  /**
-   * Whether a type name is one of a library registered as resizing no list.
-   *
-   * @param typeName The type name.
-   * @return {@code true} iff it starts with a registered prefix.
-   */
-  private static boolean isNonResizingLibrary(String typeName) {
-    for (String library : NON_RESIZING_LIBRARIES) if (typeName.startsWith(library)) return true;
-    return false;
   }
 
   /**
@@ -818,10 +828,11 @@ public record ContainerMutations(
    * @param pa The pointer analysis.
    * @param node The calling node.
    * @param callee The instruction defining the callee, or {@code null}.
+   * @param libraries The modules of the libraries registered as resizing no list.
    * @return {@code true} iff the callee cannot resize a list.
    */
   private static boolean isNonResizing(
-      PointerAnalysis<InstanceKey> pa, CGNode node, SSAInstruction callee) {
+      PointerAnalysis<InstanceKey> pa, CGNode node, SSAInstruction callee, Set<String> libraries) {
     // The owner may be an attribute of a module, `tf.strings`, which the analysis allocates as a
     // plain object or not at all: read up the chain of attribute reads for a library's allocation.
     DefUse du = node.getDU();
@@ -832,7 +843,8 @@ public record ContainerMutations(
       for (InstanceKey owner :
           pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef()))) {
         if (current == callee && owner.concreteType().getReference().equals(list)) return true;
-        if (isNonResizingLibrary(owner.concreteType().getName().toString())) return true;
+        String type = owner.concreteType().getName().toString();
+        for (String library : libraries) if (type.startsWith(library)) return true;
       }
     return false;
   }

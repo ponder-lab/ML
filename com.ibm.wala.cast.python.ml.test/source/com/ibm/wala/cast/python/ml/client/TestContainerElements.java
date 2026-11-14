@@ -64,6 +64,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   private static final String UNMODELED_LIBRARY =
       "tf2_test_container_elements_unmodeled_library.py";
 
+  private static final String UNREACHED_LIBRARY_OBJECT =
+      "tf2_test_container_elements_unreached_library_object.py";
+
   private static final String DELETES_UNMODELED = "tf2_test_container_elements_del_unmodeled.py";
 
   /** Per fixture, its builder. */
@@ -478,6 +481,16 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testListOfEnumerate() {
     assertArity(MUTATORS, "sink_enumerate_list", OptionalInt.empty());
+  }
+
+  /**
+   * A program's list stored as an attribute of a TensorFlow object, {@code m.items}, and resized in
+   * a function the call graph does not reach, reports no length: only TensorFlow's module itself is
+   * taken to resize no list, not an object of the library (wala/ML#1182).
+   */
+  @Test
+  public void testUnreachedLibraryObjectAttributeLosesArity() {
+    assertArity(UNREACHED_LIBRARY_OBJECT, "sink_list", OptionalInt.empty());
   }
 
   /**
