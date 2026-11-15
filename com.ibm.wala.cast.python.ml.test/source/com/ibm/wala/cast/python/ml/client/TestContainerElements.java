@@ -115,6 +115,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   private static final String UNREACHED_RELATED_FIELD =
       "tf2_test_container_elements_unreached_related_field.py";
 
+  private static final String UNREACHED_NESTED_FIELD =
+      "tf2_test_container_elements_unreached_nested_field.py";
+
   private static final String UNREACHED_UNNAMED =
       "tf2_test_container_elements_unreached_unnamed.py";
 
@@ -916,6 +919,16 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedRelatedField() {
     assertArity(UNREACHED_RELATED_FIELD, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of the first parameter of a function
+   * nested in another function, which may be any object, may hold a list a class stores under its
+   * name, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedNestedField() {
+    assertArity(UNREACHED_NESTED_FIELD, "sink_list", OptionalInt.empty());
   }
 
   /**

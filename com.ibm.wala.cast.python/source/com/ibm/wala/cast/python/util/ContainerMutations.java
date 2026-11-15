@@ -14,6 +14,8 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
@@ -713,8 +715,12 @@ public record ContainerMutations(
      * or a base, whose class body may store the field, or an object whose class the analysis does
      * not tell.
      *
+     * <p>Only a method of a class a class statement declares is scoped. The first parameter of a
+     * function nested in another function may be any object, so for one the values are read on
+     * every object.
+     *
      * @param field The field name.
-     * @param owner The method's class.
+     * @param owner The class or function the body is nested in.
      * @return The values.
      */
     Set<InstanceKey> fieldValues(String field, IClass owner) {
@@ -723,27 +729,30 @@ public record ContainerMutations(
       for (Map.Entry<InstanceKey, Set<InstanceKey>> holder :
           this.holders.getOrDefault(field, Map.of()).entrySet()) {
         IClass cls = holderClass(holder.getKey());
-        if (cls == null || ancestorsOf(cls).contains(owner) || ancestorsOf(owner).contains(cls))
-          ret.addAll(holder.getValue());
+        if (!(owner instanceof PythonClass)
+            || cls == null
+            || ancestorsOf(cls).contains(owner)
+            || ancestorsOf(owner).contains(cls)) ret.addAll(holder.getValue());
       }
       return ret;
     }
 
     /**
-     * The program class of an object a field is stored on: its own type when that is a program
-     * class, as a class object's is, or the class whose synthesized constructor allocates it, as an
-     * instance's is, whose own type is {@code object}.
+     * The class a class statement declares of an object a field is stored on: the object's own type
+     * when that is such a class, as a class object's is, or, for an object whose own type is {@code
+     * object}, as an instance's is, the class whose synthesized constructor allocates it.
      *
      * @param holder The object.
      * @return The class, or {@code null} when the analysis does not tell it.
      */
     private static IClass holderClass(InstanceKey holder) {
       IClass type = holder.concreteType();
-      if (type != null && type.getName().toString().startsWith("Lscript ")) return type;
-      if (holder instanceof AllocationSiteInNode allocation) {
-        IClass allocator = allocation.getNode().getMethod().getDeclaringClass();
-        if (allocator.getName().toString().startsWith("Lscript ")) return allocator;
-      }
+      if (type instanceof PythonClass) return type;
+      if (type != null
+          && type.getReference().equals(PythonTypes.object)
+          && holder instanceof AllocationSiteInNode allocation
+          && allocation.getNode().getMethod().getDeclaringClass() instanceof PythonClass allocator)
+        return allocator;
       return null;
     }
 
