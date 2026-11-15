@@ -13,19 +13,25 @@
     </class>
     <package name="dataclasses/functions">
       <!-- https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass -->
-      <!-- `dataclass(*, init=True, repr=True, eq=True, order=False, unsafe_hash=False, frozen=False)` returns a decorator that adds generated methods to the class it decorates and returns that class itself (wala/ML#1260). The generated methods are not modeled here; what matters is that the decorated class keeps its own class object. A bare `@dataclass` is applied as this factory's call followed by the application. -->
+      <!-- `dataclass(*, init=True, repr=True, eq=True, order=False, unsafe_hash=False, frozen=False)` returns a decorator that adds generated methods to the class it decorates and returns that class itself (wala/ML#1260). Of the generated methods, the initializer is modeled, through the attribute the decorator sets (wala/ML#205). A bare `@dataclass` is applied as this factory's call followed by the application. -->
       <class name="dataclass" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="decorator" class="Ldataclasses/functions/dataclass_decorator"/>
           <return value="decorator"/>
         </method>
       </class>
-      <!-- The decorator `dataclass(...)` returns: applied to a class, it returns the class. -->
+      <!-- The decorator `dataclass(...)` returns: applied to a class, it sets the class's `__dataclass_fields__`, as Python's does, and returns the class. A constructor call of a class carrying that attribute binds its arguments to the class's annotated fields, the initializer the decorator generates (`PythonSSAPropagationCallGraphBuilder.DataclassOperator`, wala/ML#205). -->
       <class name="dataclass_decorator" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self cls">
+          <new def="fields" class="Ldataclasses/Fields"/>
+          <putfield class="LRoot" field="__dataclass_fields__" fieldType="LRoot" ref="cls" value="fields"/>
           <return value="cls"/>
         </method>
       </class>
+    </package>
+    <package name="dataclasses">
+      <!-- The value of a dataclass's `__dataclass_fields__`. -->
+      <class name="Fields" allocatable="true"></class>
     </package>
   </classloader>
 </summary-spec>
