@@ -497,6 +497,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     /** The class statement's keywords; see {@link IPythonClass#getKeywords()}. */
     private final Map<String, String> keywords;
 
+    /**
+     * The fields declared with an annotation; see {@link IPythonClass#getAnnotatedFieldNames()}.
+     */
+    private final java.util.List<String> annotatedFieldNames = new ArrayList<>();
+
     public PythonClass(
         TypeName name,
         TypeName superName,
@@ -555,6 +560,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     @Override
     public Map<String, String> getKeywords() {
       return keywords;
+    }
+
+    @Override
+    public java.util.List<String> getAnnotatedFieldNames() {
+      return java.util.Collections.unmodifiableList(annotatedFieldNames);
     }
 
     @Override
@@ -1130,7 +1140,19 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   }
 
   public void defineField(TypeName cls, CAstEntity field) {
+    defineField(cls, field, false);
+  }
+
+  /**
+   * Defines a class-body field.
+   *
+   * @param cls The class.
+   * @param field The field.
+   * @param annotated Whether the class body declares it with an annotation (wala/ML#205).
+   */
+  public void defineField(TypeName cls, CAstEntity field, boolean annotated) {
     assert types.containsKey(cls);
+    if (annotated) ((PythonClass) types.get(cls)).annotatedFieldNames.add(field.getName());
     if (bindsOnRead(field.getAST()))
       ((PythonClass) types.get(cls)).boundOnRead.add(Atom.findOrCreateUnicodeAtom(field.getName()));
     ((PythonClass) types.get(cls))

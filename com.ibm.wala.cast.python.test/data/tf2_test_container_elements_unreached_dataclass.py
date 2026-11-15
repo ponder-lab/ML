@@ -1,5 +1,5 @@
 # Test `ContainerElements` where a function the call graph does not reach resizes an attribute a dataclass's generated `__init__` stores (wala/ML#1255).
-# The front end drops a class's decorators, so the analysis sees no store of the global list under `self.items`.
+# The dataclass's generated initializer stores the global list under `self.items` (wala/ML#205).
 import dataclasses
 import threading
 

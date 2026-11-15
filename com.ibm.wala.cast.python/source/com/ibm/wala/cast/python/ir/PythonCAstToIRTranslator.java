@@ -24,6 +24,7 @@ import com.ibm.wala.cast.ir.translator.AstTranslator;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorCallSiteReference;
+import com.ibm.wala.cast.python.loader.AnnotatedFieldEntity;
 import com.ibm.wala.cast.python.loader.ClassKeywordsEntity;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.PythonLoader;
@@ -381,7 +382,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   @Override
   protected void defineField(CAstEntity topEntity, WalkContext context, CAstEntity fieldEntity) {
-    ((PythonLoader) loader).defineField(walaTypeNames.get(topEntity.getType()), fieldEntity);
+    ((PythonLoader) loader)
+        .defineField(
+            walaTypeNames.get(topEntity.getType()),
+            fieldEntity,
+            parserEntity(fieldEntity, AnnotatedFieldEntity.class) != null);
   }
 
   /*

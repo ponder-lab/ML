@@ -43,6 +43,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
@@ -1717,6 +1718,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processTextRead(inst);
       processDictMethod(inst);
       processNamedTupleConstruction(inst);
+      processDataclassConstruction(inst);
       processElementMirror(inst);
       processMapSpread(inst);
       processElementDeclared(inst);
@@ -1934,6 +1936,46 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       NamedTupleOperator operator =
           getBuilder()
           .new NamedTupleOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              positionalArguments,
+              keywordArguments);
+      int calleeVn = inst.getUse(0);
+      PointerKey calleeKey = getPointerKeyForLocal(calleeVn);
+      if (contentsAreInvariant(symtab, du, calleeVn) || system.isImplicit(calleeKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+          operator.construct(key);
+        return;
+      }
+      system.newSideEffect(operator, calleeKey);
+    }
+
+    /**
+     * Runs a dataclass's generated initializer where a call's callee may be a dataclass, by a side
+     * effect on the callee's points-to set; see {@link DataclassOperator} (wala/ML#205). A callee
+     * whose keys are invariant or implicitly represented is read directly, as for a namedtuple.
+     *
+     * @param inst The call.
+     */
+    private void processDataclassConstruction(PythonInvokeInstruction inst) {
+      if (!inst.hasDef()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int starred = inst.firstStarredPosition();
+      int positional =
+          starred >= 1
+              ? Math.min(starred, inst.getNumberOfPositionalParameters())
+              : inst.getNumberOfPositionalParameters();
+      Object[] positionalArguments = new Object[Math.max(0, positional - 1)];
+      for (int i = 1; i < positional; i++)
+        positionalArguments[i - 1] = argumentValue(symtab, inst.getUse(i));
+      Map<String, Object> keywordArguments = new LinkedHashMap<>();
+      if (inst.getKeywords() != null)
+        for (String keyword : inst.getKeywords())
+          keywordArguments.put(keyword, argumentValue(symtab, inst.getUse(keyword)));
+      DataclassOperator operator =
+          getBuilder()
+          .new DataclassOperator(
               node,
               inst.iIndex(),
               getPointerKeyForLocal(inst.getDef()),
@@ -5264,6 +5306,182 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "namedtuple construction at " + node + "@" + pc;
+    }
+  }
+
+  /**
+   * The attribute {@code @dataclass} sets on the class it decorates, as the {@code dataclasses}
+   * summary models it (wala/ML#205).
+   */
+  private static final String DATACLASS_FIELDS_ATTRIBUTE = "__dataclass_fields__";
+
+  /**
+   * Runs the initializer {@code @dataclass} generates (<a
+   * href="https://github.com/wala/ML/issues/205">wala/ML#205</a>) at a call whose callee is a class
+   * carrying {@value #DATACLASS_FIELDS_ATTRIBUTE}, which the {@code dataclasses} summary sets on
+   * the class it decorates. Each positional argument is bound on the instances the call returns to
+   * the annotated field at its position, in declaration order, and each keyword argument to the
+   * annotated field of its name. A field the call does not pass keeps its class-body default, which
+   * an instance reads through its class. The fields of a dataclass base are not prepended, and an
+   * {@code init=False} or {@code kw_only} field is bound as any other. Equal for the same call, so
+   * the propagation system keeps one per call site.
+   */
+  public final class DataclassOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final Object[] positionalArguments;
+    private final Map<String, Object> keywordArguments;
+    private final Set<InstanceKey> classes = HashSetFactory.make();
+
+    private DataclassOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        Object[] positionalArguments,
+        Map<String, Object> keywordArguments) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.positionalArguments = positionalArguments;
+      this.keywordArguments = keywordArguments;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null)
+        rhs.getValue().foreach(i -> construct(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Binds the arguments once the class a key the callee may be is found to carry the attribute.
+     *
+     * @param classObject A key the callee may be.
+     */
+    void construct(InstanceKey classObject) {
+      if (!(classObject.concreteType() instanceof IPythonClass cls)
+          || cls.getAnnotatedFieldNames().isEmpty()
+          || !classes.add(classObject)) return;
+      IField marker = resolveRootField(getClassHierarchy(), DATACLASS_FIELDS_ATTRIBUTE);
+      if (marker == null) return;
+      PointerKey markerKey = getPointerKeyForInstanceField(classObject, marker);
+      if (markerKey == null) return;
+      getSystem().newSideEffect(new MarkedOperator(classObject, cls), markerKey);
+    }
+
+    /** Binds the arguments to the call's instances once the class carries the attribute. */
+    private final class MarkedOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey classObject;
+      private final IPythonClass cls;
+      private boolean bound;
+
+      private MarkedOperator(InstanceKey classObject, IPythonClass cls) {
+        this.classObject = classObject;
+        this.cls = cls;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (bound || rhs.getValue() == null || rhs.getValue().isEmpty()) return NOT_CHANGED;
+        bound = true;
+        getSystem().newSideEffect(new InstancesOperator(classObject, cls), resultKey);
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return (node.hashCode() * 31 + pc) * 31 + classObject.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return this == o;
+      }
+
+      @Override
+      public String toString() {
+        return "dataclass " + cls + " at " + node + "@" + pc;
+      }
+    }
+
+    /** Binds the arguments to each instance of the class the call returns. */
+    private final class InstancesOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey classObject;
+      private final IPythonClass cls;
+      private final Set<InstanceKey> instances = HashSetFactory.make();
+
+      private InstancesOperator(InstanceKey classObject, IPythonClass cls) {
+        this.classObject = classObject;
+        this.cls = cls;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (rhs.getValue() != null)
+          rhs.getValue().foreach(i -> bind(getSystem().getInstanceKey(i)));
+        return NOT_CHANGED;
+      }
+
+      /**
+       * Binds the arguments to an instance the call returns, if the class's constructor allocates
+       * it: an instance's own type is {@code object}, and its allocating node is the class's
+       * synthesized constructor.
+       *
+       * @param instance The instance.
+       */
+      private void bind(InstanceKey instance) {
+        if (!(instance instanceof AllocationSiteInNode allocation)
+            || !allocation.getNode().getMethod().getDeclaringClass().equals(cls)
+            || !instances.add(instance)) return;
+        List<String> names = cls.getAnnotatedFieldNames();
+        for (int i = 0; i < positionalArguments.length && i < names.size(); i++)
+          bindField(instance, names.get(i), positionalArguments[i]);
+        for (Map.Entry<String, Object> keyword : keywordArguments.entrySet())
+          if (names.contains(keyword.getKey()))
+            bindField(instance, keyword.getKey(), keyword.getValue());
+      }
+
+      /** Binds an argument's value to a field of the instance. */
+      private void bindField(InstanceKey instance, String name, Object argument) {
+        IField field = resolveRootField(getClassHierarchy(), name);
+        if (field == null || argument == null) return;
+        PointerKey target = getPointerKeyForInstanceField(instance, field);
+        if (target == null) return;
+        if (argument instanceof InstanceKey[] keys)
+          for (InstanceKey key : keys) getSystem().newConstraint(target, key);
+        else getSystem().newConstraint(target, assignOperator, (PointerKey) argument);
+      }
+
+      @Override
+      public int hashCode() {
+        return (node.hashCode() * 31 + pc) * 31 + classObject.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return this == o;
+      }
+
+      @Override
+      public String toString() {
+        return "dataclass initializer of " + cls + " at " + node + "@" + pc;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DataclassOperator other && other.node.equals(node) && other.pc == pc;
+    }
+
+    @Override
+    public String toString() {
+      return "dataclass construction at " + node + "@" + pc;
     }
   }
 

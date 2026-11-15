@@ -999,15 +999,11 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   /**
    * In a function the call graph does not reach: An attribute a dataclass's generated initializer
-   * stores is a list the analysis does not see stored. The class's decorator is applied
-   * (wala/ML#1260), but the {@code dataclasses} summary returns the class without the initializer
-   * it generates, so the list reads as its literal's length though the run grows it.
-   *
-   * <p>TODO: wala/ML#205; once a dataclass's generated initializer is modeled, no list reports a
-   * length, {@code OptionalInt.empty()}.
+   * stores is a list the run grows, and the analysis sees the store, since the initializer is
+   * modeled (wala/ML#205), so no list reports a length.
    */
   @Test
   public void testUnreachedDataclass() {
-    assertArity(UNREACHED_DATACLASS, "sink_list", OptionalInt.of(2));
+    assertArity(UNREACHED_DATACLASS, "sink_list", OptionalInt.empty());
   }
 }

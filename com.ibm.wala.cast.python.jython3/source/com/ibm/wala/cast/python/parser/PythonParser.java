@@ -25,6 +25,7 @@ import com.ibm.wala.cast.ir.translator.AbstractScriptEntity;
 import com.ibm.wala.cast.ir.translator.TranslatorToCAst;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
+import com.ibm.wala.cast.python.loader.AnnotatedFieldEntity;
 import com.ibm.wala.cast.python.loader.ClassKeywordsEntity;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
@@ -881,6 +882,31 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     private int assign = 0;
 
+    /** A class-body field declared with an annotation (wala/ML#205). */
+    private abstract class AnnotatedClassField extends AbstractFieldEntity
+        implements AnnotatedFieldEntity {
+
+      /**
+       * Creates the field.
+       *
+       * @param name The field's name.
+       * @param declaringClass The class entity whose body declares it.
+       * @param position The declaration's position.
+       * @param namePosition The name's position.
+       */
+      AnnotatedClassField(
+          String name, CAstEntity declaringClass, Position position, Position namePosition) {
+        super(
+            name,
+            PythonCAstToIRTranslator.Any,
+            Collections.emptySet(),
+            false,
+            declaringClass,
+            position,
+            namePosition);
+      }
+    }
+
     /**
      * Translates a PEP-526 annotated assignment {@code target: annotation [= value]}. In a class
      * body this declares a field (the {@code NamedTuple}/dataclass case, <a
@@ -911,14 +937,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         final CAstNode fieldAst = value != null ? v : Ast.makeNode(CAstNode.EMPTY);
         context.addScopedEntity(
             null,
-            new AbstractFieldEntity(
-                target.getText(),
-                PythonCAstToIRTranslator.Any,
-                Collections.emptySet(),
-                false,
-                context.entity(),
-                makePosition(target),
-                makePosition(target)) {
+            new AnnotatedClassField(
+                target.getText(), context.entity(), makePosition(target), makePosition(target)) {
               @Override
               public CAstNode getAST() {
                 return fieldAst;

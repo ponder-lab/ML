@@ -59,4 +59,17 @@ public interface IPythonClass extends IClass {
   default java.util.Map<String, String> getKeywords() {
     return java.util.Collections.emptyMap();
   }
+
+  /**
+   * The names of the fields this class's body declares with an annotation, {@code name: T} or
+   * {@code name: T = value}, in declaration order: the parameters, after {@code self}, of the
+   * initializer {@code @dataclass} generates (<a
+   * href="https://github.com/wala/ML/issues/205">wala/ML#205</a>). A class whose fields were not
+   * recorded answers with none.
+   *
+   * @return The annotated fields' names.
+   */
+  default java.util.List<String> getAnnotatedFieldNames() {
+    return java.util.Collections.emptyList();
+  }
 }
