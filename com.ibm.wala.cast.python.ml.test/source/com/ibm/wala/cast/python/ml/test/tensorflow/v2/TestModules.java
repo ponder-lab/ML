@@ -1593,7 +1593,8 @@ public class TestModules extends AbstractTensorTest {
   /**
    * Test https://github.com/wala/ML/issues/211.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#211 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/211; remove {@code expected = AssertionError.class}
+   * once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testModule75()

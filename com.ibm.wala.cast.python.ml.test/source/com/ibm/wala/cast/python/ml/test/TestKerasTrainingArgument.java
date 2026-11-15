@@ -298,11 +298,10 @@ public class TestKerasTrainingArgument extends TestPythonMLCallGraphShape {
    * A {@code Sequential} trained with {@code fit} and run with {@code predict} passes its layer the
    * {@code training} value each step passes it: {@code True}, then {@code False}.
    *
-   * <p>TODO: Expect this to pass once <a
-   * href="https://github.com/wala/ML/issues/833">wala/ML#833</a> is fixed. A {@code Sequential}'s
-   * summary declares only {@code __call__} and {@code add}, and an instance call resolves its
-   * method on the exact receiver class, so {@code fit} and {@code predict}, which {@code Model}
-   * declares, resolve nothing on it and the layer is never called.
+   * <p>TODO: https://github.com/wala/ML/issues/833; expect this to pass once it is fixed. A {@code
+   * Sequential}'s summary declares only {@code __call__} and {@code add}, and an instance call
+   * resolves its method on the exact receiver class, so {@code fit} and {@code predict}, which
+   * {@code Model} declares, resolve nothing on it and the layer is never called.
    *
    * @throws Exception On analysis failure.
    */

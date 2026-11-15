@@ -87,7 +87,8 @@ public class TestDatasetDictElement extends AbstractTensorTest {
    * holds the component in one field for the whole program, so the read is also typed with the
    * {@code float32} cast the later update writes.
    *
-   * <p>TODO: Only the source's {@code int32} once https://github.com/wala/ML/issues/1096 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1096; only the source's {@code int32} once it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testMappedReadBeforeUpdate()
@@ -101,8 +102,9 @@ public class TestDatasetDictElement extends AbstractTensorTest {
    * call writes, not its source's {@code int32}. The update writes into the {@code dict} the
    * function is given (wala/ML#1088), which holds the element's own entries (wala/ML#164).
    *
-   * <p>TODO: wala/ML#1205: the update replaces the entry, so expect the {@code float32} cast alone;
-   * the flow-insensitive heap reads the entry's {@code int32} source beside it.
+   * <p>TODO: https://github.com/wala/ML/issues/1205; the update replaces the entry, so expect the
+   * {@code float32} cast alone; the flow-insensitive heap reads the entry's {@code int32} source
+   * beside it.
    */
   @Test
   public void testMappedUpdated() throws ClassHierarchyException, CancelException, IOException {

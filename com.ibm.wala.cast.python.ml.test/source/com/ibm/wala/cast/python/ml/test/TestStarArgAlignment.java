@@ -122,8 +122,8 @@ public class TestStarArgAlignment extends TestPythonMLCallGraphShape {
    * points-to set) because an unpack of statically-unknown length cannot be aligned to a specific
    * parameter.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/751">wala/ML#751</a>; flip this assertion
-   * to expect an empty points-to set for {@code b} once the binding degrades past the unpack.
+   * <p>TODO: https://github.com/wala/ML/issues/751; flip this assertion to expect an empty
+   * points-to set for {@code b} once the binding degrades past the unpack.
    *
    * @throws Exception On analysis error.
    */

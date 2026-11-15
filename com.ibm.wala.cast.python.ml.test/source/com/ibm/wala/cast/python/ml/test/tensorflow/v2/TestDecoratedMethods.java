@@ -89,9 +89,8 @@ public class TestDecoratedMethods extends AbstractTensorTest {
    * call-string-keyed, so one {@code step} node serves both lexical parents and each sink receives
    * the cross-sibling union rather than its own shape (runtime truth here: {@code (2, 2) float32}).
    *
-   * <p>TODO: Expect exactly {@code (2, 2) float32} once <a
-   * href="https://github.com/wala/ML/issues/685">wala/ML#685</a> keys closure callees on the
-   * dispatched function object, the closure analogue of wala/ML#679.
+   * <p>TODO: https://github.com/wala/ML/issues/685; expect exactly {@code (2, 2) float32} once it
+   * keys closure callees on the dispatched function object, the closure analogue of wala/ML#679.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -120,9 +119,8 @@ public class TestDecoratedMethods extends AbstractTensorTest {
    * Sibling half of {@link #testSamenameDeepA()} (wala/ML#678): runtime truth is {@code (3, 3)
    * float32}; the extra member is the wala/ML#685 cross-sibling closure union.
    *
-   * <p>TODO: Expect exactly {@code (3, 3) float32} once <a
-   * href="https://github.com/wala/ML/issues/685">wala/ML#685</a> keys closure callees on the
-   * dispatched function object.
+   * <p>TODO: https://github.com/wala/ML/issues/685; expect exactly {@code (3, 3) float32} once it
+   * keys closure callees on the dispatched function object.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -167,10 +165,10 @@ public class TestDecoratedMethods extends AbstractTensorTest {
    * call-site argument's {@code (3,)} int32. So the sound type of {@code g}'s parameter is the set
    * {@code {(None,), (3,)}} int32.
    *
-   * <p>TODO: this pins the current behavior. Ariadne does not consume {@code input_signature}, so
-   * it produces only the argument-derived {@code (3,)} element and misses the signature-derived
-   * {@code (None,)} one; the sound result is the set {@code {(None,), (3,)}} int32. Tracked by <a
-   * href="https://github.com/wala/ML/issues/638">wala/ML#638</a>.
+   * <p>TODO: https://github.com/wala/ML/issues/638; this pins the current behavior. Ariadne does
+   * not consume {@code input_signature}, so it produces only the argument-derived {@code (3,)}
+   * element and misses the signature-derived {@code (None,)} one; the sound result is the set
+   * {@code {(None,), (3,)}} int32.
    */
   @Test
   public void testDecoratedCallDepthInputSig()
@@ -391,7 +389,8 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   /**
    * Test https://github.com/wala/ML/issues/190.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#190 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/190; remove {@code expected = AssertionError.class}
+   * once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod3() throws ClassHierarchyException, CancelException, IOException {
@@ -437,7 +436,8 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   /**
    * Test https://github.com/wala/ML/issues/190.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#190 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/190; remove {@code expected = AssertionError.class}
+   * once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod10() throws ClassHierarchyException, CancelException, IOException {
@@ -461,7 +461,8 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   /**
    * Test https://github.com/wala/ML/issues/190.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#190 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/190; remove {@code expected = AssertionError.class}
+   * once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod13() throws ClassHierarchyException, CancelException, IOException {

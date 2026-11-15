@@ -28,9 +28,9 @@ public class TestConstantFolding extends AbstractTensorTest {
    * The comparison {@code 1 < 2} is a bool, so its tensor is bool. It isn't folded, so its tensor
    * reads as unknown.
    *
-   * <p>TODO: The comparison's result has no instance key, so {@code tf.constant} reads no value
-   * from it. Flip to a plain {@code @Test} once a binary operation's result has one (<a
-   * href="https://github.com/wala/ML/issues/805">wala/ML#805</a>).
+   * <p>TODO: https://github.com/wala/ML/issues/805; the comparison's result has no instance key, so
+   * {@code tf.constant} reads no value from it. Flip to a plain {@code @Test} once a binary
+   * operation's result has one.
    */
   @Test(expected = AssertionError.class)
   public void testComparison() throws Exception {

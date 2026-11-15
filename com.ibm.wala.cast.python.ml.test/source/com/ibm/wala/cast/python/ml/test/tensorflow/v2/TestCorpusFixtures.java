@@ -154,9 +154,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * layout is excluded as the wala/ML#678 trigger — with the wala/ML#685 cross-sibling closure
    * union as the pinned imprecision.
    *
-   * <p>TODO: Expect each sibling's own shape once <a
-   * href="https://github.com/wala/ML/issues/685">wala/ML#685</a> keys closure callees on the
-   * dispatched function object.
+   * <p>TODO: https://github.com/wala/ML/issues/685; expect each sibling's own shape once it keys
+   * closure callees on the dispatched function object.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -912,7 +911,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
             "GraphAttentionAutoEncoder", Set.of(0),
             "GraphAttentionConvolution", Set.of(0),
             "TextGCNConvolution", Set.of(0),
-            // TODO: wala/ML#1256: Set.of(0) once the arm `concat` never takes contributes nothing.
+            // TODO: https://github.com/wala/ML/issues/1256; Set.of(0) once the arm `concat` never
+            // takes contributes nothing.
             "GraphSAGEConvolution", Set.of(0, "int")),
         values);
   }
@@ -978,9 +978,9 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    *     floors at ⊤ under wala/ML#788 and the elementwise seed composes honestly, where before
    *     wala/ML#787 the same union arrived via cross-caller leakage through the shared {@code
    *     slice} builtin frame.
-   *     <p>TODO: Expect {@code (2, 50, 64)} float32 for the {@code tf.add} return when <a
-   *     href="https://github.com/wala/ML/issues/790">wala/ML#790</a> broadcasts a resolved operand
-   *     shape past an unknown one instead of degrading to ⊤.
+   *     <p>TODO: https://github.com/wala/ML/issues/790; expect {@code (2, 50, 64)} float32 for the
+   *     {@code tf.add} return when it broadcasts a resolved operand shape past an unknown one
+   *     instead of degrading to ⊤.
    */
   @Test
   public void testMusicTransformerPositionEmbedding()

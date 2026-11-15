@@ -41,9 +41,8 @@ public class TestMergedCallers extends AbstractTensorTest {
    * One caller passes a slice and the other a dataset batch: the layer's output holds both callers'
    * shapes.
    *
-   * <p>TODO: A dataset batch has no element for the generators to read, so the batch caller is
-   * typed only through a fallback walk (<a href="https://github.com/wala/ML/issues/1010">wala/ML
-   * #1010</a>).
+   * <p>TODO: https://github.com/wala/ML/issues/1010; a dataset batch has no element for the
+   * generators to read, so the batch caller is typed only through a fallback walk.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.

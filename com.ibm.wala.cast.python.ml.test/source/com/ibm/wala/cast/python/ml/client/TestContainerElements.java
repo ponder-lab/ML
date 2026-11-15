@@ -1118,8 +1118,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * cell's {@code state_size}, a list of one {@code (2, 3) float32} tensor here. Those are not
    * modeled, so no list reaches the cell (wala/ML#1265).
    *
-   * <p>TODO: wala/ML#1267; once the zero states are modeled, the cell receives a list of length 1
-   * whose position is {@code (2, 3) float32}.
+   * <p>TODO: https://github.com/wala/ML/issues/1267; once the zero states are modeled, the cell
+   * receives a list of length 1 whose position is {@code (2, 3) float32}.
    */
   @Test
   public void testRnnStatesUnpassed() {
@@ -1130,9 +1130,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * A list times an array is the array's multiplication, which makes no list (wala/ML#960,
    * wala/ML#1259).
    *
-   * <p>TODO: wala/ML#960; the list literal reaches the list operation before the array does, and
-   * the repetition its rule allows against the operand's empty points-to set is not withdrawn, so
-   * the sink receives the list the operation makes.
+   * <p>TODO: https://github.com/wala/ML/issues/960; the list literal reaches the list operation
+   * before the array does, and the repetition its rule allows against the operand's empty points-to
+   * set is not withdrawn, so the sink receives the list the operation makes.
    */
   @Test(expected = AssertionError.class)
   public void testArrayTimesList() {
@@ -1143,9 +1143,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * A list times a tensor is the tensor's multiplication, which makes no list (wala/ML#960,
    * wala/ML#1259).
    *
-   * <p>TODO: wala/ML#960; the list literal reaches the list operation before the tensor does, and
-   * the repetition its rule allows against the operand's empty points-to set is not withdrawn, so
-   * the sink receives the list the operation makes.
+   * <p>TODO: https://github.com/wala/ML/issues/960; the list literal reaches the list operation
+   * before the tensor does, and the repetition its rule allows against the operand's empty
+   * points-to set is not withdrawn, so the sink receives the list the operation makes.
    */
   @Test(expected = AssertionError.class)
   public void testTensorTimesList() {
@@ -1166,8 +1166,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * stores is a list the analysis does not see stored, since the front end drops a class's
    * decorators, so the list reads as its literal's length though the run grows it.
    *
-   * <p>TODO: wala/ML#1260; once the front end translates a class's decorators, no list reports a
-   * length, {@code OptionalInt.empty()}.
+   * <p>TODO: https://github.com/wala/ML/issues/1260; once the front end translates a class's
+   * decorators, no list reports a length, {@code OptionalInt.empty()}.
    */
   @Test
   public void testUnreachedDataclass() {

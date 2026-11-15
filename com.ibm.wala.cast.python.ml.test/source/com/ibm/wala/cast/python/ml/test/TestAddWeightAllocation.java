@@ -26,8 +26,8 @@ public class TestAddWeightAllocation extends TestPythonMLCallGraphShape {
    * The weight reaching {@code weight_sink} is allocated as a tensor by the {@code add_weight}
    * summary, not as a variable.
    *
-   * <p>TODO: Expect {@code Ltensorflow/python/ops/variables/Variable} once <a
-   * href="https://github.com/wala/ML/issues/1068">wala/ML#1068</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1068; expect {@code
+   * Ltensorflow/python/ops/variables/Variable} once it is fixed.
    *
    * @throws Exception On analysis failure.
    */

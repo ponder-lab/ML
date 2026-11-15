@@ -47,8 +47,8 @@ public class TestSidecarSlice extends AbstractTensorTest {
    * dtype, and the return value's join of every creator reads that seed. Before wala/ML#1008 the
    * arm was unmodeled and contributed nothing.
    *
-   * <p>TODO: wala/ML#1264: drop the unknown member once the join no longer reads a creator whose
-   * dtype only the dataflow types.
+   * <p>TODO: https://github.com/wala/ML/issues/1264; drop the unknown member once the join no
+   * longer reads a creator whose dtype only the dataflow types.
    */
   @Test
   public void testSidecarSequence()
@@ -78,8 +78,8 @@ public class TestSidecarSlice extends AbstractTensorTest {
    * dtype, and the return value's join of every creator reads that seed. Before wala/ML#1008 the
    * arm was unmodeled and contributed nothing.
    *
-   * <p>TODO: wala/ML#1264: drop the unknown member once the join no longer reads a creator whose
-   * dtype only the dataflow types.
+   * <p>TODO: https://github.com/wala/ML/issues/1264; drop the unknown member once the join no
+   * longer reads a creator whose dtype only the dataflow types.
    */
   @Test
   public void testSidecarBatch()
@@ -108,8 +108,8 @@ public class TestSidecarSlice extends AbstractTensorTest {
    * dtype, and the return value's join of every creator reads that seed. Before wala/ML#1008 the
    * arm was unmodeled and contributed nothing.
    *
-   * <p>TODO: wala/ML#1264: drop the unknown member once the join no longer reads a creator whose
-   * dtype only the dataflow types.
+   * <p>TODO: https://github.com/wala/ML/issues/1264; drop the unknown member once the join no
+   * longer reads a creator whose dtype only the dataflow types.
    */
   @Test
   public void testSidecarSliceCarriesTheFedDtypeAlone()

@@ -470,8 +470,9 @@ public class TestMisc extends AbstractTensorTest {
    * The front end now skips folding it, so the constant builds and types {@code consume}'s
    * parameter to complex64. The shape is unknown (⊤) rather than {@code (2,)}: skipping the fold
    * leaves the list elements non-constant, so the size isn't recovered (the integer-valued {@link
-   * #testConstantComplex64()} still gets {@code (2,)}). TODO: recover the shape, tracked by <a
-   * href="https://github.com/wala/ML/issues/644">wala/ML#644</a>.
+   * #testConstantComplex64()} still gets {@code (2,)}).
+   *
+   * <p>TODO: https://github.com/wala/ML/issues/644; recover the shape.
    */
   @Test
   public void testComplexLiteralEntrypoint()
@@ -1012,7 +1013,8 @@ public class TestMisc extends AbstractTensorTest {
    * (None, 4)}, asserted in the fixture. Nothing reads the declaration today, so the parameter is
    * rankless.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/810; remove the expected {@link AssertionError} once
+   * it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1041,7 +1043,8 @@ public class TestMisc extends AbstractTensorTest {
    * declaring the same {@code (None, 4)}, which reads {@code (None, 4)}: the pair separates what
    * the declaration decides from what the caller supplied.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/810; remove the expected {@link AssertionError} once
+   * it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1064,7 +1067,8 @@ public class TestMisc extends AbstractTensorTest {
    * {@code g3}, which declares the same {@code (None, 4)} and sees {@code (None, 4)} inside its
    * body (wala/ML#810).
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#810 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/810; remove the expected {@link AssertionError} once
+   * it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1100,7 +1104,8 @@ public class TestMisc extends AbstractTensorTest {
    * <p>Paired with {@link #testInputSignatureSidecarAnnotationApplied()}, which pins that the
    * annotation itself is applied to the value before the hand-off.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#915 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/915; remove the expected {@link AssertionError} once
+   * it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

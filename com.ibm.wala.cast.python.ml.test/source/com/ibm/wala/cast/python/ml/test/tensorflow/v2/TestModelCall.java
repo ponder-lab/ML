@@ -442,7 +442,8 @@ public class TestModelCall extends AbstractTensorTest {
    * https://github.com/wala/WALA/discussions/1417#discussioncomment-10085680. This should fail due
    * to https://github.com/wala/ML/issues/207.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#207 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/207; remove {@code expected = AssertionError.class}
+   * once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testModelCall5()
@@ -3258,8 +3259,8 @@ public class TestModelCall extends AbstractTensorTest {
    * receives only the activation's {@code (2, 5, 4) float32}; the analysis adds the pad's own
    * {@code (2, 7, 4)}.
    *
-   * <p>TODO: Expect {@code (2, 5, 4) float32} alone once <a
-   * href="https://github.com/wala/ML/issues/1073">wala/ML#1073</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1073; expect {@code (2, 5, 4) float32} alone once it
+   * is fixed.
    */
   @Test
   public void testLayerLoopFeedsLayerItsOwnOutput()

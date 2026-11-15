@@ -137,8 +137,10 @@ public class TestCrossModuleBaseOrder extends AbstractTensorTest {
    * initialised and Python refuses the program. Dependency-ordered translation cannot put both
    * modules first, so it falls back to the given order and one of the two bases resolves late. This
    * arm is the standing test of the premise the ordering rests on: it fails while cycles are
-   * unorderable, and would pass only if a cycle were resolved some other way. TODO: a documented
-   * limit of wala/ML#944's fix, reachable only through a base import deferred into a function.
+   * unorderable, and would pass only if a cycle were resolved some other way.
+   *
+   * <p>TODO: https://github.com/wala/ML/issues/944; a documented limit of its fix, reachable only
+   * through a base import deferred into a function.
    */
   @Test(expected = AssertionError.class)
   public void testCyclicBaseDependencyFallsBackToTheGivenOrder()

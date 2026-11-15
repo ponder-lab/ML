@@ -38,8 +38,8 @@ public class TestDatasetElementCycles extends AbstractTensorTest {
   /**
    * A member of the element of a {@code batch} applied three times in a loop to its own result.
    *
-   * <p>TODO: Typed as batched once, {@code (2, 4)}, beside the unbatched {@code (4,)}, as on
-   * master, until https://github.com/wala/ML/issues/1197 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1197; typed as batched once, {@code (2, 4)}, beside
+   * the unbatched {@code (4,)}, as on master, until it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.

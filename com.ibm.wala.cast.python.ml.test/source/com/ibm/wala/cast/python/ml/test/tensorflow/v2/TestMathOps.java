@@ -103,9 +103,9 @@ public class TestMathOps extends AbstractTensorTest {
    * by <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a>; parameter types pin
    * precisely.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/543">wala/ML#543</a>; the post-fix
-   * local-tensor count of 9 captures every intermediate runtime-shape tensor flowing through the
-   * body. Tighten once the body-level imprecision is addressed.
+   * <p>TODO: https://github.com/wala/ML/issues/543; the post-fix local-tensor count of 9 captures
+   * every intermediate runtime-shape tensor flowing through the body. Tighten once the body-level
+   * imprecision is addressed.
    */
   @Test
   public void testTakeAlongAxis()
@@ -278,10 +278,10 @@ public class TestMathOps extends AbstractTensorTest {
    * with dtype inherited from {@code x} (float32). Without the catch, analysis aborts and this test
    * fails &mdash; this is the direct regression guard for this PR's localized-tolerance fix.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>; the runtime answer is
-   * (2, 3) of float32. When the helper learns to recognize {@code tf.shape(y)} as a shape arg
-   * (rather than treating it as an unmodeled runtime tensor), tighten this assertion from {@link
-   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code TENSOR_2_3_FLOAT32}.
+   * <p>TODO: https://github.com/wala/ML/issues/473; the runtime answer is (2, 3) of float32. When
+   * the helper learns to recognize {@code tf.shape(y)} as a shape arg (rather than treating it as
+   * an unmodeled runtime tensor), tighten this assertion from {@link #TENSOR_UNKNOWN_SHAPE_FLOAT32}
+   * to {@code TENSOR_2_3_FLOAT32}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -793,9 +793,9 @@ public class TestMathOps extends AbstractTensorTest {
    * pass_through alias with the dedicated routing (this PR's earlier review fix) made the override
    * actually fire, so the assertion now sees the ⊤ output the override emits.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a>; once the axis-aware
-   * composer lands as a follow-up, tighten this from {@code TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code
-   * (1, 3)} float32 (the precise insert-at-axis result).
+   * <p>TODO: https://github.com/wala/ML/issues/481; once the axis-aware composer lands as a
+   * follow-up, tighten this from {@code TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code (1, 3)} float32
+   * (the precise insert-at-axis result).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -1229,9 +1229,9 @@ public class TestMathOps extends AbstractTensorTest {
    * {@code (2, 3)} float32. The runtime broadcast result is {@code (2, 3)}; the static analysis
    * unions the two operand shapes to {@code {(3,), (2, 3)}}, which is sound but imprecise.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/482">wala/ML#482</a>; once broadcast-shape
-   * composition lands, tighten this assertion from the union {@code {TENSOR_3_FLOAT32,
-   * TENSOR_2_3_FLOAT32}} to the precise {@code TENSOR_2_3_FLOAT32}.
+   * <p>TODO: https://github.com/wala/ML/issues/482; once broadcast-shape composition lands, tighten
+   * this assertion from the union {@code {TENSOR_3_FLOAT32, TENSOR_2_3_FLOAT32}} to the precise
+   * {@code TENSOR_2_3_FLOAT32}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.

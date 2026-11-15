@@ -1172,14 +1172,13 @@ public class TestConstructors extends AbstractTensorTest {
    * "Batch shape argument for tf.eye() should be a list of dimensions." (which previously aborted
    * the whole analysis). The dtype stays float32.
    *
-   * <p>TODO: the {@code batch_shape} value here is content-dependent (it comes from {@code
-   * json.loads}), so recovering it is the user-annotation problem tracked by <a
-   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>, the same recovery path the
-   * allocator shape floor points at. Orthogonally, a structurally-inferable tensor {@code
-   * batch_shape} (e.g. {@code tf.shape(x)}, whose rank, and often values, are statically known) can
-   * be recovered without an annotation; that is tracked by <a
-   * href="https://github.com/wala/ML/issues/619">wala/ML#619</a>. The already-recoverable
-   * known-rank case is guarded by {@link #testEyeDynamicBatch()}.
+   * <p>TODO: https://github.com/wala/ML/issues/370; the {@code batch_shape} value here is
+   * content-dependent (it comes from {@code json.loads}), so recovering it is the user-annotation
+   * problem that issue tracks, the same recovery path the allocator shape floor points at.
+   * Orthogonally, a structurally-inferable tensor {@code batch_shape} (e.g. {@code tf.shape(x)},
+   * whose rank, and often values, are statically known) can be recovered without an annotation;
+   * that is tracked by <a href="https://github.com/wala/ML/issues/619">wala/ML#619</a>. The
+   * already-recoverable known-rank case is guarded by {@link #testEyeDynamicBatch()}.
    */
   @Test
   public void testEyeUnresolvableBatchShape()
@@ -1268,10 +1267,10 @@ public class TestConstructors extends AbstractTensorTest {
    * for soundness. The assertion encodes the observed result with a TODO pointing at the precision
    * improvement that would narrow it.
    *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/475">wala/ML#475</a> is fixed and
-   * {@code Linspace.getDefaultShapes} computes the precise output shape from {@code
-   * start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
-   * Set.of(TENSOR_2_5_FLOAT32)} (a new constant).
+   * <p>TODO: https://github.com/wala/ML/issues/475; once it is fixed and {@code
+   * Linspace.getDefaultShapes} computes the precise output shape from {@code start.shape[:axis] +
+   * (num,) + start.shape[axis:]}, narrow the assertion to {@code Set.of(TENSOR_2_5_FLOAT32)} (a new
+   * constant).
    *
    * <p>Companion to {@link #testLinspace()} (covering the absent-axis branch).
    *
@@ -1515,9 +1514,9 @@ public class TestConstructors extends AbstractTensorTest {
    * href="https://github.com/wala/ML/issues/797">wala/ML#797</a>): the row-select subscript
    * inherits the base array's {@code float64} dtype.
    *
-   * <p>TODO: The pinned {@code (3,)} shape is the scalar-index row-select result; the length-4 list
-   * index actually selects four rows, so the runtime shape is {@code (4, 3)}. Flip when <a
-   * href="https://github.com/wala/ML/issues/798">wala/ML#798</a> lands.
+   * <p>TODO: https://github.com/wala/ML/issues/798; the pinned {@code (3,)} shape is the
+   * scalar-index row-select result; the length-4 list index actually selects four rows, so the
+   * runtime shape is {@code (4, 3)}. Flip when it lands.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1717,9 +1716,9 @@ public class TestConstructors extends AbstractTensorTest {
    * arithmetic and list concatenation from being typed as tensors, wala/ML#653) and neither operand
    * has any, their producers minting no allocation site at all.
    *
-   * <p>TODO: Flip to a positive guard when <a
-   * href="https://github.com/wala/ML/issues/805">wala/ML#805</a> lands (binary-operator results
-   * mint no {@code InstanceKey}), which supplies exactly the operand evidence the gate looks for.
+   * <p>TODO: https://github.com/wala/ML/issues/805; flip to a positive guard when it lands
+   * (binary-operator results mint no {@code InstanceKey}), which supplies exactly the operand
+   * evidence the gate looks for.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1767,8 +1766,8 @@ public class TestConstructors extends AbstractTensorTest {
    * flowing. The unpacked and sliced probes pass and guard the working hops; the listed, dynamic,
    * and rearrayed probes are expected failures pinning the frontier.
    *
-   * <p>TODO: Flip the expected-failure probes to positive guards when the remaining chain hops land
-   * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   * <p>TODO: https://github.com/wala/ML/issues/796; flip the expected-failure probes to positive
+   * guards when the remaining chain hops land.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1799,9 +1798,9 @@ public class TestConstructors extends AbstractTensorTest {
    * slice and loses this value, so this test failing while the tensor slice tests pass means that
    * edge is gone.
    *
-   * <p>TODO: Flip to a positive guard when the remaining wala/ML#796 residuals land (the reader
-   * shape walk's spurious scalar member and the consume-side dtype drop; see the issue's diagnosis
-   * comments).
+   * <p>TODO: https://github.com/wala/ML/issues/796; flip to a positive guard when its remaining
+   * residuals land (the reader shape walk's spurious scalar member and the consume-side dtype drop;
+   * see the issue's diagnosis comments).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

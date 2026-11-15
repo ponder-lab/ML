@@ -375,7 +375,8 @@ public class TestRaggedTensors extends AbstractTensorTest {
   /**
    * Test non-uniform inner dimensions.
    *
-   * <p>TODO: Remove expected assertion error once https://github.com/wala/ML/issues/350 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/350; remove expected assertion error once it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testRaggedConstant17() throws ClassHierarchyException, CancelException, IOException {
@@ -758,12 +759,11 @@ public class TestRaggedTensors extends AbstractTensorTest {
    * even though the values are inline &mdash; floors both the shape and the dtype to ⊤ rather than
    * aborting with "Empty points-to set".
    *
-   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
-   * static result floors both axes to ⊤ because {@code json.loads} is unmodeled. This is a modeling
-   * gap, not a content-dependent (opaque) value, tracked by <a
-   * href="https://github.com/wala/ML/issues/536">wala/ML#536</a> (model {@code json.loads} for
-   * compile-time-constant string inputs). ⊤ is the correct floor until then; it is not on the
-   * input-signature eval path.
+   * <p>TODO: https://github.com/wala/ML/issues/536; the runtime tensor is {@code (2, None)} {@code
+   * int32} (asserted in the fixture); the static result floors both axes to ⊤ because {@code
+   * json.loads} is unmodeled. This is a modeling gap, not a content-dependent (opaque) value: the
+   * issue models {@code json.loads} for compile-time-constant string inputs. ⊤ is the correct floor
+   * until then; it is not on the input-signature eval path.
    */
   @Test
   public void testRaggedConstantUnresolvable()
@@ -784,13 +784,12 @@ public class TestRaggedTensors extends AbstractTensorTest {
    * than aborting the whole analysis with "Expected a list or tuple". Complements {@link
    * #testRaggedConstantUnresolvable()}, which exercises the empty-points-to-set floor.
    *
-   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture). The
-   * dtype floor is inherent until numpy dtype-promotion is modeled (<a
-   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>): an {@code np.ndarray} element's
+   * <p>TODO: https://github.com/wala/ML/issues/626 and https://github.com/wala/ML/issues/652; the
+   * runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture). The dtype floor is
+   * inherent until numpy dtype-promotion is modeled (wala/ML#626): an {@code np.ndarray} element's
    * dtype is soundly ⊤ (numpy promotes {@code int} to {@code int64}, not {@code int32}), so the
    * union floors to ⊤. The shape floor reflects the unmodeled ragged rank over a tensor row;
-   * delegating the element to its producer generator would recover the shape (<a
-   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   * delegating the element to its producer generator would recover the shape (wala/ML#652).
    */
   @Test
   public void testRaggedConstantUnresolvableElement()
@@ -815,10 +814,10 @@ public class TestRaggedTensors extends AbstractTensorTest {
    * floor is not the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the
    * {@code np.ndarray} element precedes any confirmable scalar.
    *
-   * <p>TODO: The runtime shape is {@code (2, None)} (asserted in the fixture); the static shape
-   * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
-   * Delegating the element to its producer generator would recover the shape (<a
-   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   * <p>TODO: https://github.com/wala/ML/issues/652; the runtime shape is {@code (2, None)}
+   * (asserted in the fixture); the static shape floors to ⊤ over the {@code np.ndarray} row (the
+   * unmodeled ragged rank over a tensor element). Delegating the element to its producer generator
+   * would recover the shape.
    *
    * <p>The {@code numpy.array} producer registration (wala/ML#625) adds the ⊤ {@code int64} member:
    * the {@code np.ndarray} row's own type (numpy's integer default) joins the union through the

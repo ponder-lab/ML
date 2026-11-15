@@ -140,7 +140,7 @@ public class TestSequentialLayerCall extends AbstractTensorTest {
    * A layer at a literal position past the summary's unroll is not called, so its {@code call} is
    * not in the call graph.
    *
-   * <p>TODO: Called once https://github.com/wala/ML/issues/1089 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1089; called once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testPastUnroll() throws ClassHierarchyException, CancelException, IOException {

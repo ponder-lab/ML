@@ -494,7 +494,7 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
    * expected here are those three less the parameter, derived rather than measured with the
    * parameter untyped.
    *
-   * <p>TODO: Not a tensor once https://github.com/wala/ML/issues/1093 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1093; not a tensor once it is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testTrainerStepDictBatch()

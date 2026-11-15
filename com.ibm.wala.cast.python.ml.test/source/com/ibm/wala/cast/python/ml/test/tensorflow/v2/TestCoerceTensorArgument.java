@@ -42,7 +42,8 @@ public class TestCoerceTensorArgument extends AbstractTensorTest {
    */
   @Test
   public void testRelayedTensor() throws ClassHierarchyException, CancelException, IOException {
-    // TODO: wala/ML#1253: TENSOR_2_FLOAT32 alone once a relay is judged by what was fed.
+    // TODO: https://github.com/wala/ML/issues/1253; TENSOR_2_FLOAT32 alone once a relay is judged
+    // by what was fed.
     test(FILE, "scale_relayed", 1, 3, Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
   }
 
@@ -53,7 +54,8 @@ public class TestCoerceTensorArgument extends AbstractTensorTest {
    */
   @Test
   public void testRelayedArray() throws ClassHierarchyException, CancelException, IOException {
-    // TODO: wala/ML#1253: TENSOR_2_FLOAT32 alone once a relay is judged by what was fed.
+    // TODO: https://github.com/wala/ML/issues/1253; TENSOR_2_FLOAT32 alone once a relay is judged
+    // by what was fed.
     test(FILE, "scale_array_relayed", 1, 3, Map.of(2, Set.of(TENSOR_2_FLOAT64, TENSOR_2_FLOAT32)));
   }
 }

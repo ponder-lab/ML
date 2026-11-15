@@ -22,8 +22,8 @@ public class TestNestMapStructure extends TestPythonMLCallGraphShape {
    * {@code tf.nest} has no summary, so {@code map_structure} has no target and the function passed
    * to it gets no node, while the function making the call does.
    *
-   * <p>TODO: Expect a node for {@code to_numpy} once <a
-   * href="https://github.com/wala/ML/issues/1067">wala/ML#1067</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1067; expect a node for {@code to_numpy} once it is
+   * fixed.
    *
    * @throws Exception On analysis failure.
    */

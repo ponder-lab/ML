@@ -142,8 +142,8 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
    * paired with each dtype. At run time {@code key_dependent_sink} receives {@code (2, 3, 1)
    * float32}, among them.
    *
-   * <p>TODO: Expect {@code (2, 3, 1) float32} alone once <a
-   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1077; expect {@code (2, 3, 1) float32} alone once it
+   * is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -177,8 +177,8 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
    * with each dtype. At run time {@code stacked_sink} receives {@code (1, 2, 3, 1) float32}, among
    * them.
    *
-   * <p>TODO: Expect {@code (1, 2, 3, 1) float32} alone once <a
-   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1077; expect {@code (1, 2, 3, 1) float32} alone once
+   * it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -304,9 +304,9 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
    * comprehension over a dataset element's dict and once with another tensor: each call's result
    * has its own argument's type, neither dropped for the other.
    *
-   * <p>TODO: The key read's result holds every key's value, since {@code tf.identity} reads its
-   * operand's points-to set, which the per-key read does not reach, until
-   * https://github.com/wala/ML/issues/1077 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1077; the key read's result holds every key's value,
+   * since {@code tf.identity} reads its operand's points-to set, which the per-key read does not
+   * reach, until it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
