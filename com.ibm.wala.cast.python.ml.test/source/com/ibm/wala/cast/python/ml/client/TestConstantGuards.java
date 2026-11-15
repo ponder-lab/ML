@@ -111,6 +111,18 @@ public class TestConstantGuards extends TestPythonMLCallGraphShape {
     return ret;
   }
 
+  /** {@code training}'s value number in {@code Net.call(self, inputs, training, eval)}. */
+  private static final int TRAINING = 4;
+
+  /** {@code eval}'s value number in {@code Net.call(self, inputs, training, eval)}. */
+  private static final int EVAL = 5;
+
+  /** The first parameter's value number in a function, after the function itself. */
+  private static final int FIRST = 2;
+
+  /** {@code index}'s value number in a {@code message(state, index)} function. */
+  private static final int INDEX = 3;
+
   /** The class of an {@code int} the analysis has no constant for. */
   private static final String INT = "Lint";
 
@@ -123,8 +135,8 @@ public class TestConstantGuards extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testArgumentGuardOperands() {
-    assertEquals(Set.of("true"), readings("Net/call", 4));
-    assertEquals(Set.of("null"), readings("Net/call", 5));
+    assertEquals(Set.of("true"), readings("Net/call", TRAINING));
+    assertEquals(Set.of("null"), readings("Net/call", EVAL));
   }
 
   /**
@@ -132,19 +144,19 @@ public class TestConstantGuards extends TestPythonMLCallGraphShape {
    * the {@code Dense} layer's tensor. The arms that never run return a tuple and a softmax tensor
    * beside it.
    *
-   * <p>TODO: wala/ML#1187; once an arm a decided guard never takes carries no value out, {@code
-   * consume} receives the one tensor, {@code Map.of(TENSOR, 1)}.
+   * <p>TODO: https://github.com/wala/ML/issues/1187; once an arm a decided guard never takes
+   * carries no value out, {@code consume} receives the one tensor, {@code Map.of(TENSOR, 1)}.
    */
   @Test
   public void testArgumentGuardResult() {
-    assertEquals(Map.of("Ltuple", 1, TENSOR, 2), classCounts("consume", 2));
+    assertEquals(Map.of("Ltuple", 1, TENSOR, 2), classCounts("consume", FIRST));
   }
 
   /** A guard's operand a field decides: {@code self.concat} is {@code True}, its default. */
   @Test
   public void testFieldGuardOperand() {
-    assertEquals(Set.of("true"), readings("flag_full", 2));
-    assertEquals(Set.of("true"), readings("flag_noassign", 2));
+    assertEquals(Set.of("true"), readings("flag_full", FIRST));
+    assertEquals(Set.of("true"), readings("flag_noassign", FIRST));
   }
 
   /**
@@ -152,35 +164,36 @@ public class TestConstantGuards extends TestPythonMLCallGraphShape {
    * assigns to the list the result of a call that subscripts it: the index is {@code 0} at run
    * time.
    *
-   * <p>TODO: wala/ML#1256; once neither route below reaches the index, it is {@code Set.of("0")}.
+   * <p>TODO: https://github.com/wala/ML/issues/1256; once neither route below reaches the index, it
+   * is {@code Set.of("0")}.
    */
   @Test
   public void testFieldGuardBothRoutes() {
-    assertEquals(Set.of("0", INT), readings("message_full", 3));
+    assertEquals(Set.of("0", INT), readings("message_full", INDEX));
   }
 
   /**
    * As {@link #testFieldGuardBothRoutes}, but the arm only calls the function: the callee's slice
    * read is taken for a possible slice store, so the list counts as resized.
    *
-   * <p>TODO: wala/ML#1256 and wala/ML#1130; once a slice read no longer marks a list as resized,
-   * the index is {@code Set.of("0")}.
+   * <p>TODO: https://github.com/wala/ML/issues/1256 and https://github.com/wala/ML/issues/1130;
+   * once a slice read no longer marks a list as resized, the index is {@code Set.of("0")}.
    */
   @Test
   public void testFieldGuardCallRoute() {
-    assertEquals(Set.of("0", INT), readings("message_noassign", 3));
+    assertEquals(Set.of("0", INT), readings("message_noassign", INDEX));
   }
 
   /**
    * As {@link #testFieldGuardBothRoutes}, but the callee does not subscript: the arm's assignment
    * reaches the loop, so the index iterates a value that is no literal.
    *
-   * <p>TODO: wala/ML#1256; once an arm a decided guard never takes carries no value out, the index
-   * is {@code Set.of("0")}.
+   * <p>TODO: https://github.com/wala/ML/issues/1256; once an arm a decided guard never takes
+   * carries no value out, the index is {@code Set.of("0")}.
    */
   @Test
   public void testFieldGuardMergeRoute() {
-    assertEquals(Set.of("0", INT), readings("message_nosub", 3));
+    assertEquals(Set.of("0", INT), readings("message_nosub", INDEX));
   }
 
   /**
@@ -189,7 +202,7 @@ public class TestConstantGuards extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testFieldGuardControls() {
-    assertEquals(Set.of("0"), readings("message_bind", 3));
-    assertEquals(Set.of("0"), readings("message_none", 3));
+    assertEquals(Set.of("0"), readings("message_bind", INDEX));
+    assertEquals(Set.of("0"), readings("message_none", INDEX));
   }
 }

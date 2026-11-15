@@ -6,6 +6,7 @@ import tensorflow as tf
 def consume(y_pred):
     assert not isinstance(y_pred, tuple)
     assert y_pred.shape == (2, 4)
+    assert y_pred.dtype == tf.float32
 
 
 class Net(tf.keras.Model):
