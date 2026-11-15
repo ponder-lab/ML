@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -9,9 +10,12 @@ import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import java.io.File;
@@ -77,13 +81,13 @@ public class TestClassDecorators extends AbstractTensorTest {
 
   /**
    * Two classes under the same bare summary decorator keep their own class objects: only {@code
-   * Point} is constructed, so {@code Unused}'s method is not reached. The decorator's applications
-   * once shared one node, which bound each name to both classes.
+   * Point} is constructed, so {@code Unused}'s initializer, and the consumer it calls, are not
+   * reached. The decorator's applications once shared one node, which bound each name to both
+   * classes.
    */
-  @Test(expected = AssertionError.class)
-  public void testBareDecoratorKeepsClassesApart()
-      throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_unused", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 5))));
+  @Test
+  public void testBareDecoratorKeepsClassesApart() throws Exception {
+    assertFalse("consume_unused is not reached.", reached("consume_unused"));
   }
 
   /**
@@ -108,13 +112,14 @@ public class TestClassDecorators extends AbstractTensorTest {
    * class, as Python's {@code __class__} cell does, so the base's initializer is reached. The front
    * end reads it through the class's name, which holds the wrapper, so the base is not found.
    *
-   * <p>TODO: wala/ML#1266; once {@code super()} reads the class itself, flip to a plain
-   * {@code @Test} reading {@code (8,)} float32.
+   * <p>TODO: wala/ML#1266; this pins today's reading, the consumer the base's initializer calls not
+   * reached. Once {@code super()} reads the class itself, it is reached with a {@code (8,)} float32
+   * tensor: replace the assertion with {@code test(FILE, "consume_super", 1, 1, Map.of(2,
+   * Set.of(TensorType.of(FLOAT_32, 8))))}.
    */
-  @Test(expected = AssertionError.class)
-  public void testSuperReadsTheClass()
-      throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_super", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))));
+  @Test
+  public void testSuperReadsTheClass() throws Exception {
+    assertFalse("consume_super is not reached.", reached("consume_super"));
   }
 
   /**
@@ -123,14 +128,14 @@ public class TestClassDecorators extends AbstractTensorTest {
    * the decorator returns the class, so its initializer passes the consumer a {@code (9,)} float32
    * tensor.
    *
-   * <p>TODO: wala/ML#1260; once a class under a decorator nothing models stays reachable (design A
-   * or B of this change's open question), flip to a plain {@code @Test} reading {@code (9,)}
-   * float32.
+   * <p>TODO: wala/ML#1260; this pins today's reading, the consumer not reached. Once a class under
+   * a decorator nothing models stays reachable (design A or B of this change's open question), it
+   * is reached with a {@code (9,)} float32 tensor: replace the assertion with {@code test(FILE,
+   * "consume_unmodeled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 9))))}.
    */
-  @Test(expected = AssertionError.class)
-  public void testUnmodeledDecoratorUnbinds()
-      throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_unmodeled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 9))));
+  @Test
+  public void testUnmodeledDecoratorUnbinds() throws Exception {
+    assertFalse("consume_unmodeled is not reached.", reached("consume_unmodeled"));
   }
 
   /**
@@ -146,6 +151,25 @@ public class TestClassDecorators extends AbstractTensorTest {
     IClassHierarchy cha = builder.getClassHierarchy();
     assertEquals(Map.of("metaclass", "abc.ABCMeta"), keywords(cha, "Abstract"));
     assertTrue(keywords(cha, "Registered").isEmpty());
+  }
+
+  /**
+   * Whether the fixture's call graph has a node for a function of the fixture.
+   *
+   * @param function The function's name.
+   * @return {@code true} iff it has one.
+   * @throws Exception On analysis failure.
+   */
+  private boolean reached(String function) throws Exception {
+    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FILE);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph callGraph = builder.makeCallGraph(builder.getOptions());
+    MethodReference method =
+        MethodReference.findOrCreate(
+            TypeReference.findOrCreate(
+                PythonTypes.pythonLoader, "Lscript " + FILE + "/" + function),
+            AstMethodReference.fnSelector);
+    return !callGraph.getNodes(method).isEmpty();
   }
 
   /**
