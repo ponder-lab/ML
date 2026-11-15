@@ -109,6 +109,12 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String UNREACHED_FIELD = "tf2_test_container_elements_unreached_field.py";
 
+  private static final String UNREACHED_UNRELATED_FIELD =
+      "tf2_test_container_elements_unreached_unrelated_field.py";
+
+  private static final String UNREACHED_RELATED_FIELD =
+      "tf2_test_container_elements_unreached_related_field.py";
+
   private static final String UNREACHED_UNNAMED =
       "tf2_test_container_elements_unreached_unnamed.py";
 
@@ -890,6 +896,26 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedField() {
     assertArity(UNREACHED_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name only an unrelated
+   * class stores a tensor holds no list the analysis has, so a list keeps its length
+   * (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedUnrelatedField() {
+    assertArity(UNREACHED_UNRELATED_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name a subclass stores a
+   * tensor may be that tensor, whose method may change any list, so no list reports a length
+   * (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedRelatedField() {
+    assertArity(UNREACHED_RELATED_FIELD, "sink_list", OptionalInt.empty());
   }
 
   /**

@@ -18,6 +18,7 @@ import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -598,19 +599,21 @@ public record ContainerMutations(
         && symtab.isStringConstant(read.getMemberRef())
         && program.readsPlainAttribute(
             method, du, read, symtab.getStringValue(read.getMemberRef()))) {
-      // `self.f` may be only a container stored under a field named `f`: one the analysis stores,
-      // or one a body the call graph does not reach stores. Any other value there may have a
-      // method of that name that changes a container it is passed.
+      // `self.f` may be only a container stored under a field named `f` on an object `self` may
+      // be: one the analysis stores, or one a body the call graph does not reach stores. Any other
+      // value there may have a method of that name that changes a container it is passed. A value
+      // stored under `f` on an object of an unrelated class is none of these (wala/ML#1268).
       String field = symtab.getStringValue(read.getMemberRef());
       if (!fields.add(field)) return;
-      for (InstanceKey value : program.fieldValues(field))
+      Set<InstanceKey> values =
+          program.fieldValues(field, program.selfClass(method, du, read.getObjectRef()));
+      for (InstanceKey value : values)
         if (!isMutable(value.concreteType().getReference())
             && !value.concreteType().getName().toString().startsWith("Lscript ")) {
           marks.markAll(adds);
           return;
         }
-      for (InstanceKey value : program.fieldValues(field))
-        marks.mark(builder.getPointerAnalysis(), value, adds);
+      for (InstanceKey value : values) marks.mark(builder.getPointerAnalysis(), value, adds);
       for (Store store : program.unreachedStores(field))
         if (!isBuiltHere(program, store.du(), store.du().getDef(store.value())))
           markReceiver(
@@ -665,6 +668,12 @@ public record ContainerMutations(
     /** The values the analysis stores under each field name, or {@code null} until read. */
     private Map<String, Set<InstanceKey>> fields;
 
+    /**
+     * The values the analysis stores under each field name, by the object it stores them on, or
+     * {@code null} until read.
+     */
+    private Map<String, Map<InstanceKey, Set<InstanceKey>>> holders;
+
     /** The program's classes that define an attribute hook, or {@code null} until read. */
     private Set<IClass> hooked;
 
@@ -699,14 +708,43 @@ public record ContainerMutations(
     }
 
     /**
-     * The values the analysis stores under a field name, on any object.
+     * The values the analysis stores under a field name on an object a method's {@code self} may be
+     * (wala/ML#1268): an object whose class is the method's class or related to it, as a subclass
+     * or a base, whose class body may store the field, or an object whose class the analysis does
+     * not tell.
      *
      * @param field The field name.
+     * @param owner The method's class.
      * @return The values.
      */
-    Set<InstanceKey> fieldValues(String field) {
+    Set<InstanceKey> fieldValues(String field, IClass owner) {
       readFields();
-      return this.fields.getOrDefault(field, Set.of());
+      Set<InstanceKey> ret = new HashSet<>();
+      for (Map.Entry<InstanceKey, Set<InstanceKey>> holder :
+          this.holders.getOrDefault(field, Map.of()).entrySet()) {
+        IClass cls = holderClass(holder.getKey());
+        if (cls == null || ancestorsOf(cls).contains(owner) || ancestorsOf(owner).contains(cls))
+          ret.addAll(holder.getValue());
+      }
+      return ret;
+    }
+
+    /**
+     * The program class of an object a field is stored on: its own type when that is a program
+     * class, as a class object's is, or the class whose synthesized constructor allocates it, as an
+     * instance's is, whose own type is {@code object}.
+     *
+     * @param holder The object.
+     * @return The class, or {@code null} when the analysis does not tell it.
+     */
+    private static IClass holderClass(InstanceKey holder) {
+      IClass type = holder.concreteType();
+      if (type != null && type.getName().toString().startsWith("Lscript ")) return type;
+      if (holder instanceof AllocationSiteInNode allocation) {
+        IClass allocator = allocation.getNode().getMethod().getDeclaringClass();
+        if (allocator.getName().toString().startsWith("Lscript ")) return allocator;
+      }
+      return null;
     }
 
     /**
@@ -890,6 +928,7 @@ public record ContainerMutations(
     private void readFields() {
       if (this.fields != null) return;
       this.fields = new HashMap<>();
+      this.holders = new HashMap<>();
       this.hooked = new HashSet<>();
       IClassHierarchy cha = this.builder.getClassHierarchy();
       PointerAnalysis<InstanceKey> pa = this.builder.getPointerAnalysis();
@@ -900,7 +939,14 @@ public record ContainerMutations(
           if (ATTRIBUTE_HOOKS.contains(name))
             this.hooked.add(field.getInstanceKey().concreteType());
           Set<InstanceKey> values = this.fields.computeIfAbsent(name, n -> new HashSet<>());
-          for (InstanceKey value : pa.getPointsToSet(key)) values.add(value);
+          Set<InstanceKey> held =
+              this.holders
+                  .computeIfAbsent(name, n -> new HashMap<>())
+                  .computeIfAbsent(field.getInstanceKey(), h -> new HashSet<>());
+          for (InstanceKey value : pa.getPointsToSet(key)) {
+            values.add(value);
+            held.add(value);
+          }
         }
       // A hook a class defines as a method, whose function's class is named under the class's.
       for (IClass cls : cha) {
