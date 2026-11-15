@@ -607,8 +607,8 @@ public record ContainerMutations(
       // stored under `f` on an object of an unrelated class is none of these (wala/ML#1268).
       String field = symtab.getStringValue(read.getMemberRef());
       if (!fields.add(field)) return;
-      Set<InstanceKey> values =
-          program.fieldValues(field, program.selfClass(method, du, read.getObjectRef()));
+      IClass owner = program.selfClass(method, du, read.getObjectRef());
+      Set<InstanceKey> values = program.fieldValues(field, owner);
       for (InstanceKey value : values)
         if (!isMutable(value.concreteType().getReference())
             && !value.concreteType().getName().toString().startsWith("Lscript ")) {
@@ -616,7 +616,7 @@ public record ContainerMutations(
           return;
         }
       for (InstanceKey value : values) marks.mark(builder.getPointerAnalysis(), value, adds);
-      for (Store store : program.unreachedStores(field))
+      for (Store store : program.unreachedStores(field, owner))
         if (!isBuiltHere(program, store.du(), store.du().getDef(store.value())))
           markReceiver(
               program,
@@ -641,9 +641,10 @@ public record ContainerMutations(
    * @param method The body's method.
    * @param symtab The body's symbol table.
    * @param du The body's def-use.
+   * @param object The object stored on.
    * @param value The stored value.
    */
-  private record Store(IMethod method, SymbolTable symtab, DefUse du, int value) {}
+  private record Store(IMethod method, SymbolTable symtab, DefUse du, int object, int value) {}
 
   /**
    * What the scan of the bodies the call graph does not reach reads about the whole program, each
@@ -757,14 +758,43 @@ public record ContainerMutations(
     }
 
     /**
-     * The stores under a field name in the bodies the call graph does not reach.
+     * The stores under a field name in the bodies the call graph does not reach on an object a
+     * method's {@code self} may be (wala/ML#1268): every store, unless both the method and the
+     * storing body are methods of classes class statements declare and the store is on the storing
+     * body's own {@code self}, which then must be an instance of a class both classes are ancestors
+     * of, itself among them.
      *
      * @param field The field name.
+     * @param owner The class or function the reading body is nested in.
      * @return The stores.
      */
-    List<Store> unreachedStores(String field) {
+    List<Store> unreachedStores(String field, IClass owner) {
       readBodies();
-      return this.stores.getOrDefault(field, List.of());
+      List<Store> ret = new ArrayList<>();
+      for (Store store : this.stores.getOrDefault(field, List.of())) {
+        IClass storer = selfClass(store.method(), store.du(), store.object());
+        if (!(owner instanceof PythonClass)
+            || !(storer instanceof PythonClass)
+            || mayShareInstance(storer, owner)) ret.add(store);
+      }
+      return ret;
+    }
+
+    /**
+     * Whether an object may be an instance of two classes: one is an ancestor of the other, or a
+     * class of the program has both among its ancestors.
+     *
+     * @param a A class.
+     * @param b Another class.
+     * @return {@code true} iff an object may be an instance of both.
+     */
+    private boolean mayShareInstance(IClass a, IClass b) {
+      if (ancestorsOf(a).contains(b) || ancestorsOf(b).contains(a)) return true;
+      for (IClass cls : this.builder.getClassHierarchy()) {
+        Set<IClass> ancestors = ancestorsOf(cls);
+        if (ancestors.contains(a) && ancestors.contains(b)) return true;
+      }
+      return false;
     }
 
     /**
@@ -1037,7 +1067,7 @@ public record ContainerMutations(
               this.stores
                   .computeIfAbsent(
                       symtab.getStringValue(write.getMemberRef()), n -> new ArrayList<>())
-                  .add(new Store(method, symtab, du, write.getValue()));
+                  .add(new Store(method, symtab, du, write.getObjectRef(), write.getValue()));
         }
       }
     }

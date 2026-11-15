@@ -118,6 +118,15 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   private static final String UNREACHED_NESTED_FIELD =
       "tf2_test_container_elements_unreached_nested_field.py";
 
+  private static final String UNREACHED_LAYER_FIELD =
+      "tf2_test_container_elements_unreached_layer_field.py";
+
+  private static final String UNREACHED_UNRELATED_STORE =
+      "tf2_test_container_elements_unreached_unrelated_store.py";
+
+  private static final String UNREACHED_SHARED_STORE =
+      "tf2_test_container_elements_unreached_shared_store.py";
+
   private static final String UNREACHED_UNNAMED =
       "tf2_test_container_elements_unreached_unnamed.py";
 
@@ -929,6 +938,36 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedNestedField() {
     assertArity(UNREACHED_NESTED_FIELD, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name only an unrelated
+   * Keras layer stores a tensor holds no list the analysis has, so a list keeps its length. The
+   * layer's instance is told apart by the constructor that allocates it (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedLayerField() {
+    assertArity(UNREACHED_LAYER_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name only an unreached
+   * method of an unrelated class stores a value a call returns holds no list the analysis has, so a
+   * list keeps its length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedUnrelatedStore() {
+    assertArity(UNREACHED_UNRELATED_STORE, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name an unreached method
+   * of another class stores a value a call returns may hold that value when a class has both
+   * classes as bases, and the value may be any list, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedSharedStore() {
+    assertArity(UNREACHED_SHARED_STORE, "sink_list", OptionalInt.empty());
   }
 
   /**
