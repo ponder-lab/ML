@@ -112,10 +112,10 @@ public class TestClassDecorators extends AbstractTensorTest {
    * class, as Python's {@code __class__} cell does, so the base's initializer is reached. The front
    * end reads it through the class's name, which holds the wrapper, so the base is not found.
    *
-   * <p>TODO: wala/ML#1266; this pins today's reading, the consumer the base's initializer calls not
-   * reached. Once {@code super()} reads the class itself, it is reached with a {@code (8,)} float32
-   * tensor: replace the assertion with {@code test(FILE, "consume_super", 1, 1, Map.of(2,
-   * Set.of(TensorType.of(FLOAT_32, 8))))}.
+   * <p>TODO: https://github.com/wala/ML/issues/1266; this pins today's reading, the consumer the
+   * base's initializer calls not reached. Once {@code super()} reads the class itself, it is
+   * reached with a {@code (8,)} float32 tensor: replace the assertion with {@code test(FILE,
+   * "consume_super", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 8))))}.
    */
   @Test
   public void testSuperReadsTheClass() throws Exception {
@@ -128,10 +128,11 @@ public class TestClassDecorators extends AbstractTensorTest {
    * the decorator returns the class, so its initializer passes the consumer a {@code (9,)} float32
    * tensor.
    *
-   * <p>TODO: wala/ML#1260; this pins today's reading, the consumer not reached. Once a class under
-   * a decorator nothing models stays reachable (design A or B of this change's open question), it
-   * is reached with a {@code (9,)} float32 tensor: replace the assertion with {@code test(FILE,
-   * "consume_unmodeled", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 9))))}.
+   * <p>TODO: https://github.com/wala/ML/issues/1260; this pins today's reading, the consumer not
+   * reached. Once a class under a decorator nothing models stays reachable (design A or B of this
+   * change's open question), it is reached with a {@code (9,)} float32 tensor: replace the
+   * assertion with {@code test(FILE, "consume_unmodeled", 1, 1, Map.of(2,
+   * Set.of(TensorType.of(FLOAT_32, 9))))}.
    */
   @Test
   public void testUnmodeledDecoratorUnbinds() throws Exception {

@@ -1003,8 +1003,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    * (wala/ML#1260), but the {@code dataclasses} summary returns the class without the initializer
    * it generates, so the list reads as its literal's length though the run grows it.
    *
-   * <p>TODO: wala/ML#205; once a dataclass's generated initializer is modeled, no list reports a
-   * length, {@code OptionalInt.empty()}.
+   * <p>TODO: https://github.com/wala/ML/issues/205; once a dataclass's generated initializer is
+   * modeled, no list reports a length, {@code OptionalInt.empty()}.
    */
   @Test
   public void testUnreachedDataclass() {
