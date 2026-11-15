@@ -813,6 +813,25 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The summary class whose call makes a list of its argument (wala/ML#1265), or {@code null} when
+   * no client names one; see {@link #setListWrap}.
+   */
+  private TypeReference listWrapType;
+
+  /**
+   * Names the class of list wrapping (wala/ML#1265): a call {@code wrap(x)} whose callee is an
+   * instance of {@code wrap} returns {@code x} itself where {@code x} is a list or tuple, and
+   * otherwise a fresh one-element list holding {@code x} ({@link ListWrapKey}); {@code None} adds
+   * nothing. Keras's {@code RNN} makes the state list it hands its cell from an initial state this
+   * way.
+   *
+   * @param wrap The summary class whose call wraps.
+   */
+  public void setListWrap(TypeReference wrap) {
+    this.listWrapType = wrap;
+  }
+
+  /**
    * Names the class of {@code map}'s spreading (wala/ML#164): a call {@code spread(element, holder,
    * legacy, argument, r_1, ..., r_max, dataset)} whose callee is an instance of {@code spread}
    * spreads each key of {@code element} as {@code tf.data} does. An exact tuple of {@code n}
@@ -1814,6 +1833,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processMapSpread(inst);
       processElementDeclared(inst);
       processElementSupervised(inst);
+      processListWrap(inst);
     }
 
     /**
@@ -1997,6 +2017,39 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               getPointerKeyForLocal(inst.getUse(2)),
               markers)
           .start();
+    }
+
+    /**
+     * Wraps a call's argument in a list where its callee is the list wrap class (wala/ML#1265); see
+     * {@link #setListWrap}. The summary allocates the callee itself, so its keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processListWrap(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.listWrapType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 2) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      boolean wrap = false;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.listWrapType)) wrap = true;
+      if (!wrap) return;
+      int argumentVn = inst.getUse(1);
+      PointerKey argumentKey = getPointerKeyForLocal(argumentVn);
+      PointerKey resultKey = getPointerKeyForLocal(inst.getDef());
+      if (contentsAreInvariant(symtab, du, argumentVn) || system.isImplicit(argumentKey)) {
+        ListWrapOperator operator =
+            builder.new ListWrapOperator(node, inst.iIndex(), resultKey, null);
+        for (InstanceKey key : getInvariantContents(symtab, du, node, argumentVn))
+          operator.add(key);
+        return;
+      }
+      system.newSideEffect(
+          builder.new ListWrapOperator(node, inst.iIndex(), resultKey, argumentKey), argumentKey);
     }
 
     /**
@@ -4068,6 +4121,171 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "element mirror call at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * The one-element list a list wrap call makes of an argument that is no list or tuple
+   * (wala/ML#1265); see {@link #setListWrap}. Its one position is its run-time one, so a container
+   * query reports its length. Keyed by the call, so a call node makes one.
+   */
+  public static final class ListWrapKey extends AllocationSiteInNode {
+    private ListWrapKey(CGNode node, NewSiteReference site, IClass type) {
+      super(node, site, type);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ListWrapKey other
+          && getNode().equals(other.getNode())
+          && getSite().equals(other.getSite());
+    }
+
+    @Override
+    public int hashCode() {
+      return getNode().hashCode() * 31 + getSite().hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return "ListWrap[" + getSite() + " in " + getNode() + "]";
+    }
+  }
+
+  /**
+   * Whether a list wrap call wraps a key its argument may be in a fresh list (wala/ML#1265): any
+   * key but a list, a tuple and {@code None}; see {@link #setListWrap}.
+   *
+   * @param key A key the argument may be.
+   * @return {@code true} iff the key is the element of the call's one-element list.
+   */
+  private static boolean isWrapped(InstanceKey key) {
+    if (isNoneConstant(key) || key.concreteType() == null) return false;
+    TypeReference type = key.concreteType().getReference();
+    return !type.equals(PythonTypes.list)
+        && !type.equals(PythonTypes.tuple)
+        && !type.equals(NAMED_TUPLE_INSTANCE);
+  }
+
+  /**
+   * Wraps a list wrap call's argument as its keys arrive (wala/ML#1265); see {@link #setListWrap}.
+   * A list or tuple is a result itself. The first other key makes the one-element list, and the
+   * argument then flows into its position through a {@link WrappedFilter}, an edge of the pointer
+   * analysis's flow graph, so a dataflow over that graph reaches the position. Equal for the same
+   * call, so the propagation system keeps one per call site.
+   */
+  private final class ListWrapOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+
+    /**
+     * The argument, or {@code null} when its keys are represented implicitly, which are then added
+     * to the position directly.
+     */
+    private final PointerKey argumentKey;
+
+    /** The list holding the argument's other keys, once one arrives, else {@code null}. */
+    private ListWrapKey wrap;
+
+    /** The field of the list's one position. */
+    private IField position;
+
+    private ListWrapOperator(CGNode node, int pc, PointerKey resultKey, PointerKey argumentKey) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.argumentKey = argumentKey;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> add(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Adds a key the argument may be.
+     *
+     * @param key A key the argument may be.
+     */
+    void add(InstanceKey key) {
+      if (isNoneConstant(key) || key.concreteType() == null) return;
+      if (!isWrapped(key)) {
+        getSystem().newConstraint(resultKey, key);
+        return;
+      }
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      if (wrap == null) {
+        IClassHierarchy cha = getClassHierarchy();
+        IClass listClass = cha.lookupClass(PythonTypes.list);
+        IField field = resolveRootField(cha, "0");
+        if (listClass == null || field == null) return;
+        wrap = new ListWrapKey(node, NewSiteReference.make(pc, PythonTypes.list), listClass);
+        position = field;
+        logger.fine(() -> "Wrapping the argument of the call at " + pc + " in " + node + ".");
+        getSystem()
+            .newConstraint(
+                factory.getPointerKeyForObjectCatalog(wrap),
+                getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(0), 0));
+        getSystem().newConstraint(resultKey, wrap);
+        if (argumentKey != null)
+          getSystem()
+              .newConstraint(
+                  factory.getPointerKeyForInstanceField(wrap, position),
+                  new WrappedFilter(),
+                  argumentKey);
+      }
+      if (argumentKey == null)
+        getSystem().newConstraint(factory.getPointerKeyForInstanceField(wrap, position), key);
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ListWrapOperator other && node.equals(other.node) && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "list wrap at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Passes the keys a list wrap call wraps (wala/ML#1265), and no list, tuple or {@code None}; see
+   * {@link #isWrapped}.
+   */
+  private final class WrappedFilter extends UnaryOperator<PointsToSetVariable> {
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      MutableIntSet out = IntSetUtil.make();
+      rhs.getValue()
+          .foreach(
+              i -> {
+                if (isWrapped(getSystem().getInstanceKey(i))) out.add(i);
+              });
+      return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(this);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this;
+    }
+
+    @Override
+    public String toString() {
+      return "list wrap filter";
     }
   }
 

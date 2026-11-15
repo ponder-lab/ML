@@ -101,6 +101,8 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String DIRECTORY_BATCH = "tf2_test_container_elements_directory_batch.py";
 
+  private static final String RNN_STATES = "tf2_test_container_elements_rnn_states.py";
+
   private static final String UNREACHED_REPEAT = "tf2_test_container_elements_unreached_repeat.py";
 
   private static final String UNREACHED_COPY = "tf2_test_container_elements_unreached_copy.py";
@@ -1058,6 +1060,70 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
                         new NumericDim(3)))),
             Set.of(new TensorType(float32, List.of(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE)))),
         ElementTypes.positionTypes(analysis(DIRECTORY_BATCH), elements));
+  }
+
+  /**
+   * The state list a Keras {@code RNN} hands its cell from one tensor: a list of one position, the
+   * tensor, as at run time (wala/ML#1265).
+   */
+  @Test
+  public void testRnnStatesTensor() {
+    ContainerElements elements = elements(RNN_STATES, "sink_tensor");
+    assertEquals(OptionalInt.of(1), elements.getArity());
+    assertEquals(
+        List.of(Set.of(F32_2_3)), ElementTypes.positionTypes(analysis(RNN_STATES), elements));
+  }
+
+  /**
+   * The state list a Keras {@code RNN} hands its cell from a tuple: the tuple's two positions, not
+   * a list holding the tuple (wala/ML#1265).
+   */
+  @Test
+  public void testRnnStatesTuple() {
+    ContainerElements elements = elements(RNN_STATES, "sink_tuple");
+    assertEquals(OptionalInt.of(2), elements.getArity());
+    assertEquals(
+        List.of(Set.of(F32_2_3), Set.of(TensorType.of(FLOAT32, 2, 4))),
+        ElementTypes.positionTypes(analysis(RNN_STATES), elements));
+  }
+
+  /**
+   * The state list a Keras {@code RNN} hands its cell from a list: the list's two positions
+   * (wala/ML#1265).
+   */
+  @Test
+  public void testRnnStatesList() {
+    ContainerElements elements = elements(RNN_STATES, "sink_list");
+    assertEquals(OptionalInt.of(2), elements.getArity());
+    assertEquals(
+        List.of(Set.of(F32_2_3), Set.of(TensorType.of(FLOAT32, 2, 4))),
+        ElementTypes.positionTypes(analysis(RNN_STATES), elements));
+  }
+
+  /**
+   * The state lists a Keras {@code RNN} hands its cell from an initial state that may be a tensor
+   * or a tuple: two containers, each of its own length, the tensor's list of one and the tuple of
+   * two (wala/ML#1265).
+   */
+  @Test
+  public void testRnnStatesMixed() {
+    Set<OptionalInt> arities = new HashSet<>();
+    for (InstanceKey container : receivedLists(RNN_STATES, "sink_mixed"))
+      arities.add(ContainerElements.of(builder(RNN_STATES), container).getArity());
+    assertEquals(Set.of(OptionalInt.of(1), OptionalInt.of(2)), arities);
+  }
+
+  /**
+   * A Keras {@code RNN} given no initial state hands its cell the zero states it makes from the
+   * cell's {@code state_size}, a list of one {@code (2, 3) float32} tensor here. Those are not
+   * modeled, so no list reaches the cell (wala/ML#1265).
+   *
+   * <p>TODO: wala/ML#1267; once the zero states are modeled, the cell receives a list of length 1
+   * whose position is {@code (2, 3) float32}.
+   */
+  @Test
+  public void testRnnStatesUnpassed() {
+    assertEquals(Set.of(), receivedLists(RNN_STATES, "sink_unpassed"));
   }
 
   /**

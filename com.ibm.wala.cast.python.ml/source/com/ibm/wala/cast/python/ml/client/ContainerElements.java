@@ -11,6 +11,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ListWrapKey;
 import com.ibm.wala.cast.python.ipa.summaries.SummaryExactPositions;
 import com.ibm.wala.cast.python.util.ContainerMutations;
 import com.ibm.wala.classLoader.IField;
@@ -58,8 +59,9 @@ import java.util.TreeSet;
  * mutate unrecorded (see {@link ContainerMutations#of}). A list or tuple a library summary or an
  * operator model allocates reports none: its catalog holds the model's placeholder slots, not its
  * run-time elements. The exception is a container its summary marks as having exact positions,
- * which reports as a program display does (wala/ML#1265; see {@link SummaryExactPositions}). Every
- * other container reports no length.
+ * which reports as a program display does (wala/ML#1265; see {@link SummaryExactPositions}), and
+ * the one-element list the builder makes where a summary wraps a value in a list ({@link
+ * ListWrapKey}). Every other container reports no length.
  */
 final class ContainerElements {
 
@@ -280,9 +282,10 @@ final class ContainerElements {
   /**
    * Whether a container's catalog holds its run-time positions: a display program code allocates
    * ({@link #isProgramDisplay}), or a container a summary allocates and marks as having exact
-   * positions (wala/ML#1265; see {@link SummaryExactPositions}). A dataset element's structure
-   * copies the positions of the structure it was built from (wala/ML#1190), so its catalog holds
-   * run-time positions exactly when its source's does.
+   * positions (wala/ML#1265; see {@link SummaryExactPositions}), or the one-element list the
+   * builder makes where a summary wraps a value in a list ({@link ListWrapKey}). A dataset
+   * element's structure copies the positions of the structure it was built from (wala/ML#1190), so
+   * its catalog holds run-time positions exactly when its source's does.
    *
    * @param builder The builder, which holds the summaries' marks.
    * @param container The container.
@@ -292,7 +295,7 @@ final class ContainerElements {
       PropagationCallGraphBuilder builder, InstanceKey container) {
     if (container instanceof ElementMirrorKey mirror && !mirror.isLeaf())
       return hasRunTimePositions(builder, mirror.getSource());
-    if (isProgramDisplay(container)) return true;
+    if (isProgramDisplay(container) || container instanceof ListWrapKey) return true;
     return container instanceof AllocationSiteInNode asin
         && builder instanceof PythonSSAPropagationCallGraphBuilder python
         && SummaryExactPositions.allocates(
