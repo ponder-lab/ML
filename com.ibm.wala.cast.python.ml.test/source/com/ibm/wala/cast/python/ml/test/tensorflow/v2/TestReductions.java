@@ -646,8 +646,8 @@ public class TestReductions extends AbstractTensorTest {
    * href="https://github.com/wala/ML/issues/480">wala/ML#480</a> is fixed, both destructured
    * elements receive the aggregate union of per-element types.
    *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
-   * assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise {@code values} dtype).
+   * <p>TODO: https://github.com/wala/ML/issues/480; once it lands, narrow the assertion to {@code
+   * Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise {@code values} dtype).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -670,8 +670,8 @@ public class TestReductions extends AbstractTensorTest {
    * tf.math.top_k}'s tuple result. Same wala/ML#480-driven imprecision: the assertion captures the
    * observed aggregate union with a TODO to narrow once the per-index dispatch is fixed.
    *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
-   * assertion to {@code Set.of(TENSOR_INT32_UNKNOWN_SHAPE)} (precise {@code indices} dtype).
+   * <p>TODO: https://github.com/wala/ML/issues/480; once it lands, narrow the assertion to {@code
+   * Set.of(TENSOR_INT32_UNKNOWN_SHAPE)} (precise {@code indices} dtype).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.

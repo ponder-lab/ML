@@ -78,8 +78,7 @@ public class TestSubscriptIntegerIndex extends AbstractTensorTest {
    * An index that may be an integer or a float constant, which is not known to be an integer, so
    * the subscript is read as a slice of the leading axis.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/1251">wala/ML#1251</a>: {@link
-   * #TENSOR_4_FLOAT32}, as the run gives.
+   * <p>TODO: https://github.com/wala/ML/issues/1251; {@link #TENSOR_4_FLOAT32}, as the run gives.
    */
   @Test
   public void testRowMaybeFloat() throws ClassHierarchyException, CancelException, IOException {
@@ -90,8 +89,7 @@ public class TestSubscriptIntegerIndex extends AbstractTensorTest {
    * An index that may be an integer or a float of unknown value, read as {@link #testRowMaybeFloat}
    * reads its index.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/1251">wala/ML#1251</a>: {@link
-   * #TENSOR_4_FLOAT32}, as the run gives.
+   * <p>TODO: https://github.com/wala/ML/issues/1251; {@link #TENSOR_4_FLOAT32}, as the run gives.
    */
   @Test
   public void testRowMaybeFloatUnknown()

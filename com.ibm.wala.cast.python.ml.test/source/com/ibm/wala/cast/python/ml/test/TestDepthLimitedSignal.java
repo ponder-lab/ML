@@ -97,9 +97,9 @@ public class TestDepthLimitedSignal extends TestPythonMLCallGraphShape {
    * values that remain are unsaturated, which the paired assertion distinguishes from an absence of
    * ⊤ — the same fixed-point shape {@link #testEmptyAtFixedPoint} pins at the model-forward depth.
    *
-   * <p>TODO: this subject no longer exercises the signal's firing arm; a fixture whose fixed point
-   * genuinely sits above the default depth is needed to restore that positive guard. Tracked by
-   * wala/ML#831.
+   * <p>TODO: https://github.com/wala/ML/issues/831; this subject no longer exercises the signal's
+   * firing arm; a fixture whose fixed point genuinely sits above the default depth is needed to
+   * restore that positive guard.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.

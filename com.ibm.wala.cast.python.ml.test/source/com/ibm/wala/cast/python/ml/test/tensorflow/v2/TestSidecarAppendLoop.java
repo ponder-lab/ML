@@ -36,8 +36,8 @@ public class TestSidecarAppendLoop extends AbstractTensorTest {
    * the dataflow, and the annotation's refinement of such a seed covers one binding's objects, not
    * the two the loop's result may hold.
    *
-   * <p>TODO: wala/ML#1264: drop the unknown member once the caller's seed no longer reads a creator
-   * whose dtype only the dataflow types.
+   * <p>TODO: https://github.com/wala/ML/issues/1264; drop the unknown member once the caller's seed
+   * no longer reads a creator whose dtype only the dataflow types.
    */
   @Test
   public void testAppendThenLoop()

@@ -518,8 +518,8 @@ public class TestBranchComparisons extends AbstractTensorTest {
    * at run time but tests no tensor here: the element's points-to set holds no tensor allocation,
    * so the comparison is not added to the dataflow graph. The first condition is the loop's own.
    *
-   * <p>TODO: Expect a scalar {@code bool} for the second condition once <a
-   * href="https://github.com/wala/ML/issues/1086">wala/ML#1086</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1086; expect a scalar {@code bool} for the second
+   * condition once it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.

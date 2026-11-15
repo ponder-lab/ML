@@ -94,8 +94,7 @@ public class TestPhiArmFeasibility extends AbstractTensorTest {
    * as a disjunction of its links, so the guard folds to true and the live arm is dropped as dead,
    * leaving the {@code (2, 6)} of the arm that does not run.
    *
-   * <p>TODO: Expect {@code (2,)} once <a
-   * href="https://github.com/wala/ML/issues/1079">wala/ML#1079</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1079; expect {@code (2,)} once it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

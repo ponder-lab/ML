@@ -1517,9 +1517,9 @@ public class TestShapeOps extends AbstractTensorTest {
    * is currently the imprecise {@code (⊤) of float32} (the opaque-shape-operand unknown-rank pin,
    * wala/ML#703) rather than the precise {@code (2, 3) float32}.
    *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): tighten the parameter
-   * type to {@link #TENSOR_2_3_FLOAT32} when the helper learns to resolve {@code tf.shape(y)}'s
-   * shape leaves precisely.
+   * <p>TODO: https://github.com/wala/ML/issues/473; tighten the parameter type to {@link
+   * #TENSOR_2_3_FLOAT32} when the helper learns to resolve {@code tf.shape(y)}'s shape leaves
+   * precisely.
    */
   @Test
   public void testReshapeRuntimeShape()

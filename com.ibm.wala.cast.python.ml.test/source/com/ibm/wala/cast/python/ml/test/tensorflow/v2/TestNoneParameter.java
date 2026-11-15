@@ -138,7 +138,7 @@ public class TestNoneParameter extends AbstractTensorTest {
    * A {@code None} inside a starred argument: a call with a starred argument at or before the
    * parameter decides nothing, so the parameter has no {@code None} member.
    *
-   * <p>TODO: Known gap, tracked by https://github.com/wala/ML/issues/1040.
+   * <p>TODO: https://github.com/wala/ML/issues/1040; known gap.
    */
   @Test
   public void testStarredNoneUndecided()

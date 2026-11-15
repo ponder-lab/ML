@@ -87,7 +87,7 @@ public class TestZip extends AbstractTensorTest {
    * but a tensor's rows are typed by the iteration hooks of {@code TensorGeneratorFactory}, which
    * see through {@code reversed(y)} alone, so the loop variable reaches no tensor.
    *
-   * <p>TODO: Blocked on <a href="https://github.com/wala/ML/issues/1102">wala/ML#1102</a>.
+   * <p>TODO: https://github.com/wala/ML/issues/1102.
    */
   @Test(expected = AssertionError.class)
   public void testListOfTensor() throws ClassHierarchyException, CancelException, IOException {

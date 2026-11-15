@@ -156,15 +156,15 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * (256, 1)}), confirming the old {@code (None, 100)} was the noise shape leaking through, not the
    * discriminator output.
    *
-   * <p>TODO: tighten to {@code {(256, 1) float32, (96, 1) float32}}. The output node <em>is</em>
-   * reachable now (the {@code outputs} construction argument points at the {@code Dense(1)} call),
-   * but that {@code DenseCall} returns {@code null} shapes here because its input — the {@code
-   * Flatten} of a {@code Conv2D} chain — isn't shape-tracked; recovering {@code (batch, 1)} needs
-   * {@code DenseCall} output-shape inference through chained layer calls (tracked by <a
-   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>), which in turn needs {@code
-   * Conv2D}/{@code Flatten} output-shape modeling. Concrete batch dims 256/96 come from {@code
-   * train_step}'s {@code images} parameter, per {@link #testGanTutorial}. (wala/ML#537 fixed the
-   * unsound mis-propagation; this residual precision is wala/ML#358's domain.)
+   * <p>TODO: https://github.com/wala/ML/issues/358; tighten to {@code {(256, 1) float32, (96, 1)
+   * float32}}. The output node <em>is</em> reachable now (the {@code outputs} construction argument
+   * points at the {@code Dense(1)} call), but that {@code DenseCall} returns {@code null} shapes
+   * here because its input — the {@code Flatten} of a {@code Conv2D} chain — isn't shape-tracked;
+   * recovering {@code (batch, 1)} needs {@code DenseCall} output-shape inference through chained
+   * layer calls, which in turn needs {@code Conv2D}/{@code Flatten} output-shape modeling. Concrete
+   * batch dims 256/96 come from {@code train_step}'s {@code images} parameter, per {@link
+   * #testGanTutorial}. (wala/ML#537 fixed the unsound mis-propagation; this residual precision is
+   * wala/ML#358's domain.)
    */
   @Test
   public void testGanTutorialGeneratorLoss()
@@ -2016,8 +2016,10 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * (an unresolvable input no longer stops the trace-back, and {@code GlobalAveragePooling1D} is
    * modeled — see {@link #testGap1dWeights()}), but it still yields no weight shapes here: the
    * pooling input is the vendored transformer's forward output, whose shape is the wala/ML#570
-   * residual. TODO: expect the concrete weight-shape union once <a
-   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a> is fixed.
+   * residual.
+   *
+   * <p>TODO: https://github.com/wala/ML/issues/570; expect the concrete weight-shape union once it
+   * is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

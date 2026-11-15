@@ -257,8 +257,8 @@ public class TestTensorFlowApis extends TestPythonMLCallGraphShape {
    * the import to {@code special} rather than {@code scipy}, so the chain's root, the global {@code
    * scipy}, has an empty points-to set, and an empty root is not named by its spelling.
    *
-   * <p>TODO: name {@code scipy.special.expit} once the front end binds {@code import a.b} to {@code
-   * a}: https://github.com/wala/ML/issues/1140.
+   * <p>TODO: https://github.com/wala/ML/issues/1140; name {@code scipy.special.expit} once the
+   * front end binds {@code import a.b} to {@code a}.
    */
   @Test
   public void testScipyExpit() {

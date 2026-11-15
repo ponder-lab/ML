@@ -38,8 +38,8 @@ public class TestListSliceGrowth extends AbstractTensorTest {
   /**
    * A list grown by {@code extend}.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/1070">wala/ML#1070</a>: once {@code extend}
-   * is modeled as {@code append} is, {@link #TENSOR_6_3_FLOAT32}.
+   * <p>TODO: https://github.com/wala/ML/issues/1070; once {@code extend} is modeled as {@code
+   * append} is, {@link #TENSOR_6_3_FLOAT32}.
    */
   @Test
   public void testExtended() throws ClassHierarchyException, CancelException, IOException {
@@ -56,8 +56,8 @@ public class TestListSliceGrowth extends AbstractTensorTest {
    * A list grown by {@code +=}, whose result holds none of the elements it adds, so its slice has
    * neither a shape nor a dtype.
    *
-   * <p>TODO: <a href="https://github.com/wala/ML/issues/1069">wala/ML#1069</a>: once the result
-   * holds them, {@link #TENSOR_UNKNOWN_SHAPE_FLOAT32}.
+   * <p>TODO: https://github.com/wala/ML/issues/1069; once the result holds them, {@link
+   * #TENSOR_UNKNOWN_SHAPE_FLOAT32}.
    */
   @Test
   public void testAugmented() throws ClassHierarchyException, CancelException, IOException {

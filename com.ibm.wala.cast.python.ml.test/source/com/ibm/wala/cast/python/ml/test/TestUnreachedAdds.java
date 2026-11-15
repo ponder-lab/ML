@@ -209,8 +209,8 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
    * An unreached {@code counts.update} on a dict built by the {@code dict} builtin leaves a list
    * elsewhere complete, though another function defines a {@code dict} of its own inside it.
    *
-   * <p>TODO: The nested definition makes the builtin look rebound everywhere until
-   * https://github.com/wala/ML/issues/1196 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1196; the nested definition makes the builtin look
+   * rebound everywhere until it is fixed.
    *
    * @throws Exception if the fixture cannot be analyzed.
    */

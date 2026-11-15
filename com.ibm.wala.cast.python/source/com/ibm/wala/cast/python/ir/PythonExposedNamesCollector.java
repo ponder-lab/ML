@@ -35,9 +35,9 @@ import java.util.Set;
  * subclass in WALA's package would split that package across bundles for a client loading each jar
  * as its own bundle.
  *
- * <p>TODO: Temporary. Remove this class, and {@link PythonCAstToIRTranslator}'s {@code translate}
- * override, once the WALA release Ariadne builds on lets a front end handle the node kinds it adds
- * (wala/ML#1066).
+ * <p>TODO: https://github.com/wala/ML/issues/1066; temporary. Remove this class, and {@link
+ * PythonCAstToIRTranslator}'s {@code translate} override, once the WALA release Ariadne builds on
+ * lets a front end handle the node kinds it adds.
  */
 public class PythonExposedNamesCollector
     extends CAstVisitor<PythonExposedNamesCollector.EntityContext> {

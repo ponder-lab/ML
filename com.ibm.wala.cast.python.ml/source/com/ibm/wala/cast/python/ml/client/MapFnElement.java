@@ -78,7 +78,7 @@ public class MapFnElement extends PassThroughUnaryTensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // TODO: Type the structure's components (https://github.com/wala/ML/issues/1092).
+    // TODO: https://github.com/wala/ML/issues/1092; type the structure's components.
     if (this.elemsIsStructure(builder)) return Collections.emptySet();
 
     Set<List<Dimension<?>>> inputShapes = super.getDefaultShapes(builder);

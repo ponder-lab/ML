@@ -75,7 +75,8 @@ public class TestBuiltinLayerSubclassApply extends AbstractTensorTest {
    * super().__init__(n)}: {@code Dense}'s transform of the input. The size is not read through the
    * {@code super().__init__} call, and an unread size gives the input's own shape.
    *
-   * <p>TODO: Flip to a plain {@code @Test} once https://github.com/wala/ML/issues/1112 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1112; flip to a plain {@code @Test} once it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testInitPassingSize() throws ClassHierarchyException, CancelException, IOException {

@@ -370,9 +370,8 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * b}, {@code from conv.dense import make} binds the module Python binds, {@code
    * a/conv/dense.py}'s {@code (3,)}.
    *
-   * <p>TODO: Both modules are named {@code conv/dense.py}, and the import binds the shadowed {@code
-   * b/conv/dense.py}'s {@code (4, 4)} instead (<a
-   * href="https://github.com/wala/ML/issues/168">wala/ML#168</a>).
+   * <p>TODO: https://github.com/wala/ML/issues/168; both modules are named {@code conv/dense.py},
+   * and the import binds the shadowed {@code b/conv/dense.py}'s {@code (4, 4)} instead.
    */
   @Test(expected = AssertionError.class)
   public void testSiblingEntriesBindTheFirstEntrysModule() throws Exception {
@@ -409,13 +408,13 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * conv} has no {@code __init__.py} and {@code src/conv} has one, {@code from conv.dense import
    * make} binds {@code src/conv/dense.py}'s {@code (4, 4)}.
    *
-   * <p>TODO: Each script is named against the first entry containing it, the root, so the root's
-   * module is named {@code conv/dense.py} and {@code src}'s {@code src/conv/dense.py}. The import
-   * finds the root's by that name, whatever kind of package holds it, and binds its {@code (3,)}
-   * instead (<a href="https://github.com/wala/ML/issues/168">wala/ML#168</a>). This test cannot yet
-   * tell ranking by package kind from a name collision: a rule naming each script against the most
-   * specific entry containing it names both modules {@code conv/dense.py}, and the test then passes
-   * because the collision binds {@code src/conv/dense.py}.
+   * <p>TODO: https://github.com/wala/ML/issues/168; each script is named against the first entry
+   * containing it, the root, so the root's module is named {@code conv/dense.py} and {@code src}'s
+   * {@code src/conv/dense.py}. The import finds the root's by that name, whatever kind of package
+   * holds it, and binds its {@code (3,)} instead. This test cannot yet tell ranking by package kind
+   * from a name collision: a rule naming each script against the most specific entry containing it
+   * names both modules {@code conv/dense.py}, and the test then passes because the collision binds
+   * {@code src/conv/dense.py}.
    */
   @Test(expected = AssertionError.class)
   public void testRegularPackageOutranksEarlierNamespacePortion() throws Exception {
@@ -434,9 +433,9 @@ public class TestRelativeImportResolution extends TestPythonMLCallGraphShape {
    * inside it: {@code import pkg.sub} reaches {@code take} through the package's initializers, so
    * {@code consume_taken} gets the {@code (4, 5)} tensor.
    *
-   * <p>TODO: Each script is named against the first entry containing it, the root, so the package
-   * is {@code src/pkg/...} and {@code import pkg.sub} never reaches it (<a
-   * href="https://github.com/wala/ML/issues/984">wala/ML#984</a>).
+   * <p>TODO: https://github.com/wala/ML/issues/984; each script is named against the first entry
+   * containing it, the root, so the package is {@code src/pkg/...} and {@code import pkg.sub} never
+   * reaches it.
    */
   @Test(expected = AssertionError.class)
   public void testNestedEntriesRootFirstReachThePackage() throws Exception {

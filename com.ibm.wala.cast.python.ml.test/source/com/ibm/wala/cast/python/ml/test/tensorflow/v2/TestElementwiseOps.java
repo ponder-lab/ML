@@ -1474,7 +1474,8 @@ public class TestElementwiseOps extends AbstractTensorTest {
    * report about wala/ML#805 rather than about subscript resolution: the only difference between
    * them is the operator.
    *
-   * <p>TODO: Remove the expected {@link AssertionError} once wala/ML#805 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/805; remove the expected {@link AssertionError} once
+   * it is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2680,8 +2681,7 @@ public class TestElementwiseOps extends AbstractTensorTest {
    * An identity test {@code x is b} on two tensors is a Python {@code bool}, but the front end
    * lowers {@code is} as {@code ==}, so it is typed as the broadcast comparison here.
    *
-   * <p>TODO: Expect no tensor once <a
-   * href="https://github.com/wala/ML/issues/1078">wala/ML#1078</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1078; expect no tensor once it is fixed.
    */
   @Test
   public void testComparisonOperatorIdentityOfTensors()

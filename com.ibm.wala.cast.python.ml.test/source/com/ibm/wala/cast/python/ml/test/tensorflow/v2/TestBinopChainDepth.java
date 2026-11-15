@@ -27,8 +27,7 @@ import org.junit.Test;
  * stack cannot shrink instead, since at 128 KB the thread overflows loading classes before the
  * analysis starts, which the check on the overflow's frames rejects.
  *
- * <p>TODO: Expect the analysis to complete once <a
- * href="https://github.com/wala/ML/issues/982">wala/ML#982</a> is fixed.
+ * <p>TODO: https://github.com/wala/ML/issues/982; expect the analysis to complete once it is fixed.
  */
 public class TestBinopChainDepth extends AbstractTensorTest {
 

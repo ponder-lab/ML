@@ -23,8 +23,8 @@ public class TestDictComprehensionJoin extends AbstractTensorTest {
    * two of the four types are pairs no key has, such as the {@code "audios"} shape with the {@code
    * "ids"} dtype. At run time {@code audios_sink} receives {@code (2, 3, 1) float32}.
    *
-   * <p>TODO: Expect {@code (2, 3, 1) float32} alone once <a
-   * href="https://github.com/wala/ML/issues/1077">wala/ML#1077</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1077; expect {@code (2, 3, 1) float32} alone once it
+   * is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

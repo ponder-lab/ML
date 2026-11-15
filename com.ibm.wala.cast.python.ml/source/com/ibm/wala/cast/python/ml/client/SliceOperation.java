@@ -24,10 +24,10 @@ import java.util.logging.Logger;
 /**
  * Modeling of Python slice operations (e.g., tensor[..., None]).
  *
- * <p>TODO(<a href="https://github.com/wala/ML/issues/484">wala/ML#484</a>): orphan flagged by the
- * dispatch-coverage meta-test (wala/ML#470). Recommended action is wire-up — the modeling logic
- * here (newaxis-handling for {@code tensor[..., None]}) is substantive and worth landing. When
- * wired, drop {@link DispatchExempt} below.
+ * <p>TODO: https://github.com/wala/ML/issues/484; orphan flagged by the dispatch-coverage meta-test
+ * (wala/ML#470). Recommended action is wire-up — the modeling logic here (newaxis-handling for
+ * {@code tensor[..., None]}) is substantive and worth landing. When wired, drop {@link
+ * DispatchExempt} below.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */

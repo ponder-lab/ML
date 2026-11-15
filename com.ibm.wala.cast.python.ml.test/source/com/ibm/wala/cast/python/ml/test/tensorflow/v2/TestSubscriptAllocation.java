@@ -81,7 +81,8 @@ public class TestSubscriptAllocation extends AbstractTensorTest {
   /**
    * {@code a[None]} on an array.
    *
-   * <p>TODO: Typed as one row, {@code (2,)}, until https://github.com/wala/ML/issues/1192 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1192; typed as one row, {@code (2,)}, until it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testNoneAlone() throws ClassHierarchyException, CancelException, IOException {
@@ -91,7 +92,8 @@ public class TestSubscriptAllocation extends AbstractTensorTest {
   /**
    * {@code a[0, 1]} on an array: a scalar of the array's dtype.
    *
-   * <p>TODO: Typed as one row, {@code (2,)}, until https://github.com/wala/ML/issues/1192 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1192; typed as one row, {@code (2,)}, until it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testIntegerPair() throws ClassHierarchyException, CancelException, IOException {
@@ -101,8 +103,8 @@ public class TestSubscriptAllocation extends AbstractTensorTest {
   /**
    * {@code a[[0, 2]]} on an array: the rows a list selects.
    *
-   * <p>TODO: The leading axis reads as unresolved until https://github.com/wala/ML/issues/798 is
-   * fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/798; the leading axis reads as unresolved until it
+   * is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testFancy() throws ClassHierarchyException, CancelException, IOException {
@@ -136,7 +138,8 @@ public class TestSubscriptAllocation extends AbstractTensorTest {
   /**
    * {@code t[0, 1]} on a tensor: a rank-0 tensor.
    *
-   * <p>TODO: Typed as one row, {@code (2,)}, until https://github.com/wala/ML/issues/1192 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1192; typed as one row, {@code (2,)}, until it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testTensorIntegerPair() throws ClassHierarchyException, CancelException, IOException {

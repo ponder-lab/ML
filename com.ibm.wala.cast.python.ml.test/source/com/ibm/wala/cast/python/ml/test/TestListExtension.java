@@ -65,9 +65,8 @@ public class TestListExtension extends TestPythonMLCallGraphShape {
    * A list extended with {@code +=} holds the tuple under the operation-contents field, but its
    * catalog does not name that field, so a walk over the catalog finds no element.
    *
-   * <p>TODO: Expect the catalog to name {@link
-   * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD} once <a
-   * href="https://github.com/wala/ML/issues/1069">wala/ML#1069</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1069; expect the catalog to name {@link
+   * PythonSSAPropagationCallGraphBuilder#LIST_OPERATION_CONTENTS_FIELD} once it is fixed.
    *
    * @throws Exception On analysis failure.
    */
@@ -89,8 +88,8 @@ public class TestListExtension extends TestPythonMLCallGraphShape {
    * A list extended with {@code extend} holds nothing: {@code extend} is not modeled, so neither
    * contents field holds the tuple and the catalog is empty.
    *
-   * <p>TODO: Expect the tuple, under a cataloged field, once <a
-   * href="https://github.com/wala/ML/issues/1070">wala/ML#1070</a> is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1070; expect the tuple, under a cataloged field,
+   * once it is fixed.
    *
    * @throws Exception On analysis failure.
    */

@@ -1032,9 +1032,8 @@ public class TestDatasets extends AbstractTensorTest {
    * the generator body's opacity. The dict-structured form (wala/ML#615) delivers, but the tuple
    * form observes a scalar-shaped unknown-dtype element, so the declaration is currently lost.
    *
-   * <p>TODO: Flip to a positive test when <a
-   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a> delivers the tuple-form
-   * per-component dtypes.
+   * <p>TODO: https://github.com/wala/ML/issues/776; flip to a positive test when it delivers the
+   * tuple-form per-component dtypes.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1713,7 +1712,7 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         // The interpreter evaluates the concatenated shape expression to the concrete
         // (2, 3, 16); the opaque-shape-operand unknown-rank pin (wala/ML#703) rides along in the
-        // union. TODO(https://github.com/wala/ML/issues/703): drop the ⊤ member once the pin
+        // union. TODO: https://github.com/wala/ML/issues/703; drop the ⊤ member once the pin
         // defers to interpreter-resolved shape operands.
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16))));
   }
@@ -1751,8 +1750,8 @@ public class TestDatasets extends AbstractTensorTest {
    * default and both overrides, batched to one member per surviving size. The runtime value is the
    * later store's {@code (2, 30)}; the union is the documented conservative degradation.
    *
-   * <p>TODO: An order-aware same-body chase could pick the dominating later store; see <a
-   * href="https://github.com/wala/ML/issues/769">wala/ML#769</a>.
+   * <p>TODO: https://github.com/wala/ML/issues/769; an order-aware same-body chase could pick the
+   * dominating later store.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2448,7 +2447,7 @@ public class TestDatasets extends AbstractTensorTest {
    * field 1 of a destructuring whose field 0 rebinds the parameter being destructured. The corpus
    * shape of {@link TestTupleBinding#testRebindingDestructure}.
    *
-   * <p>TODO: Blocked by wala/ML#819.
+   * <p>TODO: https://github.com/wala/ML/issues/819.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

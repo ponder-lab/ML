@@ -104,7 +104,8 @@ public class TestAliasedSubmoduleImport extends AbstractTensorTest {
    * reaches the attribute's method, (7, 7), not the submodule's, (9, 9). The loader binds the name
    * to the submodule whenever a file of that name exists, so the parameter reads (9, 9).
    *
-   * <p>TODO: Flip to a plain {@code @Test} when wala/ML#1019 is fixed.
+   * <p>TODO: https://github.com/wala/ML/issues/1019; flip to a plain {@code @Test} when it is
+   * fixed.
    */
   @Test(expected = AssertionError.class)
   public void testPackageAttributeShadowsSubmodule()

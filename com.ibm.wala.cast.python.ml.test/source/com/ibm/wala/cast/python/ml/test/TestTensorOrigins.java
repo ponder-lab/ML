@@ -230,7 +230,8 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
     // returns in a tuple and the driver unpacks, now typed through the returned literal
     // (wala/ML#1261). With `np.genfromtxt` unmodeled, the slice of its result falls back to the
     // TensorFlow origin, so `j` reads as a TensorFlow tensor of unknown type.
-    // TODO: wala/ML#1263; once `np.genfromtxt` is modeled, `j` is NumPy, so the census is NUMPY=7.
+    // TODO: https://github.com/wala/ML/issues/1263; once `np.genfromtxt` is modeled, `j` is NumPy,
+    // so the census is NUMPY=7.
     assertEquals(
         Map.of(EnumSet.of(TensorOrigin.NUMPY), 6L, EnumSet.of(TensorOrigin.TENSORFLOW), 1L),
         census(buildGraph.locals()));
