@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
@@ -79,5 +80,18 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
     assertFalse(
         "The analysis clears its memoized class axes.",
         FlowFromDirectoryGenerator.hasClassAxes(builder));
+  }
+
+  /**
+   * The memoized readings of a dataset element's mirrored leaves are released with the other
+   * per-builder memos when the analysis ends.
+   */
+  @Test
+  public void testAnalysisReleasesLeafReadings() throws Exception {
+    PythonSSAPropagationCallGraphBuilder builder = this.analyze("tf2_test_dataset_leaf_reads.py");
+    assertTrue("The analysis reads a leaf.", TensorGeneratorFactory.leafReads(builder) > 0);
+    assertFalse(
+        "The analysis clears its memoized leaf readings.",
+        TensorGeneratorFactory.hasLeafReadings(builder));
   }
 }

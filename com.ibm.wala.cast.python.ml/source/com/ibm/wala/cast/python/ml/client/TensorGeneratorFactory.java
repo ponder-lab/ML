@@ -340,10 +340,12 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -1745,26 +1747,173 @@ public class TensorGeneratorFactory {
     List<TensorGenerator> parts = new ArrayList<>();
     for (ElementMirrorKey leaf : leaves) {
       if (python.isElementMirrorCutoff(leaf)) parts.add(new DatasetElementGenerator(source, null));
-      List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
-      if (datasets.isEmpty()) continue;
-      List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
-      // The whole element is read over the spread datasets too, so a transformation of a receiver
-      // that may be several datasets reads each one's element on its own (wala/ML#1207), and
-      // where each one's element is a tensor, which a leaf at the root is (wala/ML#997).
-      DatasetIteratorElementGenerator element =
-          new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
-      for (List<Object> path : python.getElementMirrorPaths(leaf)) {
-        if (path.isEmpty()) {
-          parts.add(element);
+      LeafReading reading = leafReading(leaf, python);
+      if (reading == null) continue;
+      for (PathReading path : reading.paths()) {
+        if (path.path().isEmpty()) {
+          parts.add(reading.element().copy());
           continue;
         }
-        DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
         // A single index reads the element's tuple position, as a subscript of the element does.
-        if ((path.size() == 1 && path.get(0) instanceof Integer) || at.resolvesPath(builder, path))
-          parts.add(new DatasetTupleElementGenerator(source, at, path));
+        if (path.isIndex() || path.resolves())
+          parts.add(
+              new DatasetTupleElementGenerator(
+                  source, (DatasetIteratorElementGenerator) path.at().copy(), path.path()));
       }
     }
     return new MirroredLeaves(parts, only);
+  }
+
+  /**
+   * How a mirrored leaf is read (wala/ML#1190): the datasets its element belongs to, the whole
+   * element over them, and its element at each path the mirror recorded for it. It depends on the
+   * leaf alone, since the call graph and the pointer analysis are final when generators run.
+   *
+   * @param datasets The datasets ({@link #mirroredDatasets}), never empty.
+   * @param element The whole element, read over the spread datasets where each one's is a tensor.
+   * @param paths The element at each path, in the mirror's order.
+   */
+  private record LeafReading(
+      List<TensorGenerator> datasets,
+      DatasetIteratorElementGenerator element,
+      List<PathReading> paths) {}
+
+  /**
+   * A mirrored leaf's element at one of its paths.
+   *
+   * @param path The path, empty for the whole element.
+   * @param at The element at the path ({@link #leafElementAt}), or {@code null} for an empty path.
+   * @param resolves Whether {@code at} resolves the path, read only for a path that is neither
+   *     empty nor a single index, and {@code false} for those.
+   */
+  private record PathReading(
+      List<Object> path, DatasetIteratorElementGenerator at, boolean resolves) {
+
+    /**
+     * Whether the path is a single index, which reads the element's tuple position.
+     *
+     * @return {@code true} iff it is.
+     */
+    boolean isIndex() {
+      return this.path.size() == 1 && this.path.get(0) instanceof Integer;
+    }
+  }
+
+  /**
+   * How a mirrored leaf is read, memoized per builder while an analysis resolves for it, as a
+   * dispatch is. Every value holding the leaf reads it the same way, and a dispatch reads each
+   * value's leaves before its memo, so unmemoized, each read of a value spread the leaf's datasets
+   * and read their structures at each path again: a whole-project analysis spent hours collecting
+   * its dataflow sources on it (wala/ML#1269). A reading during which a dispatch reached a source
+   * the thread is resolving holds for that path only ({@link DispatchPath}), so it is not memoized.
+   *
+   * @param leaf The leaf.
+   * @param builder The builder.
+   * @return The reading, or {@code null} when the leaf belongs to no dataset.
+   */
+  private static LeafReading leafReading(
+      ElementMirrorKey leaf, PythonSSAPropagationCallGraphBuilder builder) {
+    Map<ElementMirrorKey, Optional<LeafReading>> readings =
+        UNMEMOIZED_WALKS.get() == 0 && WorklistTypeResolver.active(builder) != null
+            ? leafReadings(builder)
+            : null;
+    if (readings != null) {
+      Optional<LeafReading> memoized = readings.get(leaf);
+      if (memoized != null) return memoized.orElse(null);
+    }
+    long mark = DispatchPath.reachedOnThread();
+    LeafReading reading = readLeaf(leaf, builder);
+    if (readings != null && DispatchPath.reachedOnThread() == mark)
+      readings.putIfAbsent(leaf, Optional.ofNullable(reading));
+    return reading;
+  }
+
+  /**
+   * Reads a mirrored leaf ({@link #leafReading}).
+   *
+   * @param leaf The leaf.
+   * @param builder The builder.
+   * @return The reading, or {@code null} when the leaf belongs to no dataset.
+   */
+  private static LeafReading readLeaf(
+      ElementMirrorKey leaf, PythonSSAPropagationCallGraphBuilder builder) {
+    List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
+    if (datasets.isEmpty()) return null;
+    List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
+    // The whole element is read over the spread datasets too, so a transformation of a receiver
+    // that may be several datasets reads each one's element on its own (wala/ML#1207), and where
+    // each one's element is a tensor, which a leaf at the root is (wala/ML#997).
+    DatasetIteratorElementGenerator element =
+        new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
+    List<PathReading> paths = new ArrayList<>();
+    for (List<Object> path : builder.getElementMirrorPaths(leaf)) {
+      if (path.isEmpty()) {
+        paths.add(new PathReading(path, null, false));
+        continue;
+      }
+      DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
+      PathReading reading = new PathReading(path, at, false);
+      paths.add(
+          reading.isIndex() ? reading : new PathReading(path, at, at.resolvesPath(builder, path)));
+    }
+    synchronized (LEAF_READS) {
+      LEAF_READS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
+    return new LeafReading(datasets, element, paths);
+  }
+
+  /**
+   * The memoized leaf readings per builder ({@link #leafReading}), an empty {@link Optional} for a
+   * leaf that belongs to no dataset. Each value holds the builder's call-graph nodes, which keep
+   * the weak key reachable, so {@link TensorGenerator#clearCaches} removes the entry.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<ElementMirrorKey, Optional<LeafReading>>>
+      LEAF_READINGS = new WeakHashMap<>();
+
+  /**
+   * The memoized leaf readings of a builder.
+   *
+   * @param builder The builder.
+   * @return Its readings.
+   */
+  private static Map<ElementMirrorKey, Optional<LeafReading>> leafReadings(
+      PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_READINGS) {
+      return LEAF_READINGS.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+  }
+
+  /**
+   * Whether a builder has memoized leaf readings, for tests of their release.
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasLeafReadings(PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_READINGS) {
+      return LEAF_READINGS.containsKey(builder);
+    }
+  }
+
+  /**
+   * How many leaf readings were computed per builder, for tests that a leaf is read once. The
+   * counts hold nothing of the builder, so its entry expires with it.
+   */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> LEAF_READS =
+      new WeakHashMap<>();
+
+  /**
+   * How many leaf readings were computed for a builder.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long leafReads(PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_READS) {
+      AtomicLong reads = LEAF_READS.get(builder);
+      return reads == null ? 0 : reads.get();
+    }
   }
 
   /**
@@ -1782,23 +1931,22 @@ public class TensorGeneratorFactory {
     Set<TensorType> ret = HashSetFactory.make();
     if (!(builder instanceof PythonSSAPropagationCallGraphBuilder python)) return ret;
     if (python.isElementMirrorCutoff(leaf)) ret.add(new TensorType(DType.UNKNOWN, null));
-    List<TensorGenerator> datasets = mirroredDatasets(leaf, builder);
-    if (datasets.isEmpty()) return ret;
-    List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
-    // The whole element is read over the spread datasets, where each one's element is a tensor,
-    // as in mirroredLeaves (wala/ML#1207, wala/ML#997).
-    DatasetIteratorElementGenerator element =
-        new DatasetIteratorElementGenerator(leaf.getNode(), overTensorReturns(spread, builder));
-    for (List<Object> path : python.getElementMirrorPaths(leaf)) {
-      if (path.isEmpty()) {
-        ret.addAll(element.getTensorTypes(builder));
+    LeafReading reading = leafReading(leaf, python);
+    if (reading == null) return ret;
+    for (PathReading path : reading.paths()) {
+      if (path.path().isEmpty()) {
+        ret.addAll(reading.element().copy().getTensorTypes(builder));
         continue;
       }
-      DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
       // A single index reads the element's tuple position, as a subscript of the element does.
-      if (path.size() == 1 && path.get(0) instanceof Integer index)
-        ret.addAll(at.getTensorTypesForIndex(builder, index));
-      else if (at.resolvesPath(builder, path)) ret.addAll(at.getTensorTypesForPath(builder, path));
+      if (path.isIndex())
+        ret.addAll(
+            ((DatasetIteratorElementGenerator) path.at().copy())
+                .getTensorTypesForIndex(builder, (Integer) path.path().get(0)));
+      else if (path.resolves())
+        ret.addAll(
+            ((DatasetIteratorElementGenerator) path.at().copy())
+                .getTensorTypesForPath(builder, path.path()));
     }
     return ret;
   }
@@ -3384,13 +3532,16 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * Drops a builder's memoized dispatches.
+   * Drops a builder's memoized dispatches and leaf readings.
    *
    * @param builder The builder.
    */
   static void clearDispatches(PropagationCallGraphBuilder builder) {
     synchronized (DISPATCHES) {
       DISPATCHES.remove(builder);
+    }
+    synchronized (LEAF_READINGS) {
+      LEAF_READINGS.remove(builder);
     }
   }
 
