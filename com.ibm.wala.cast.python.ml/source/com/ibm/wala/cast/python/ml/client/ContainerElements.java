@@ -11,6 +11,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
+import com.ibm.wala.cast.python.ipa.summaries.SummaryExactPositions;
 import com.ibm.wala.cast.python.util.ContainerMutations;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -56,7 +57,9 @@ import java.util.TreeSet;
  * produced by list concatenation or repetition), and, for a list, that nothing in the program may
  * mutate unrecorded (see {@link ContainerMutations#of}). A list or tuple a library summary or an
  * operator model allocates reports none: its catalog holds the model's placeholder slots, not its
- * run-time elements. Every other container reports no length.
+ * run-time elements. The exception is a container its summary marks as having exact positions,
+ * which reports as a program display does (wala/ML#1265; see {@link SummaryExactPositions}). Every
+ * other container reports no length.
  */
 final class ContainerElements {
 
@@ -138,8 +141,9 @@ final class ContainerElements {
         // instance, which is no element (wala/ML#603).
       }
 
-    // Only a display program code allocates has its run-time elements in its catalog.
-    if (!isProgramDisplay(container)) unpositioned = true;
+    // Only a display program code allocates, or a container a summary marks as exact, has its
+    // run-time elements in its catalog.
+    if (!hasRunTimePositions(builder, container)) unpositioned = true;
 
     // A container the program may mutate in a way the analysis does not record in its elements.
     if (ContainerMutations.isMutable(type)) {
@@ -274,6 +278,28 @@ final class ContainerElements {
   }
 
   /**
+   * Whether a container's catalog holds its run-time positions: a display program code allocates
+   * ({@link #isProgramDisplay}), or a container a summary allocates and marks as having exact
+   * positions (wala/ML#1265; see {@link SummaryExactPositions}). A dataset element's structure
+   * copies the positions of the structure it was built from (wala/ML#1190), so its catalog holds
+   * run-time positions exactly when its source's does.
+   *
+   * @param builder The builder, which holds the summaries' marks.
+   * @param container The container.
+   * @return {@code true} iff the container's catalog holds its run-time positions.
+   */
+  private static boolean hasRunTimePositions(
+      PropagationCallGraphBuilder builder, InstanceKey container) {
+    if (container instanceof ElementMirrorKey mirror && !mirror.isLeaf())
+      return hasRunTimePositions(builder, mirror.getSource());
+    if (isProgramDisplay(container)) return true;
+    return container instanceof AllocationSiteInNode asin
+        && builder instanceof PythonSSAPropagationCallGraphBuilder python
+        && SummaryExactPositions.allocates(
+            python.getExactPositionAllocations(), asin.getNode(), asin.getSite());
+  }
+
+  /**
    * Whether a container is a list or tuple display that program code allocates: an allocation site
    * in a node whose method is program code ({@link AstMethod}, not a summary), at a {@code new} of
    * that node's IR. An operator model's allocation keyed at another instruction, such as a call or
@@ -283,10 +309,6 @@ final class ContainerElements {
    * @return {@code true} iff the container is such a display.
    */
   private static boolean isProgramDisplay(InstanceKey container) {
-    // A dataset element's structure copies the positions of the structure it was built from
-    // (wala/ML#1190), so its catalog holds run-time elements exactly when its source's does.
-    if (container instanceof ElementMirrorKey mirror && !mirror.isLeaf())
-      return isProgramDisplay(mirror.getSource());
     if (!(container instanceof AllocationSiteInNode asin)) return false;
     CGNode node = asin.getNode();
     if (!(node.getMethod() instanceof AstMethod) || node.getMethod().isWalaSynthetic())

@@ -41,6 +41,7 @@ import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
+import com.ibm.wala.cast.python.ipa.summaries.SummaryExactPositions;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.StarFormalDeclaration;
@@ -339,6 +340,33 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    */
   public Set<String> getNonResizingLibraries() {
     return nonResizingLibraries;
+  }
+
+  /**
+   * The lists and tuples summaries allocate with exact run-time positions, as the summaries mark
+   * them (wala/ML#1265); see {@link SummaryExactPositions}. Empty by default, when every container
+   * a summary allocates has placeholder positions.
+   */
+  private Set<SummaryExactPositions.Allocation> exactPositionAllocations = Collections.emptySet();
+
+  /**
+   * Names the summary allocations whose positions are the run-time ones; see {@link
+   * #exactPositionAllocations}.
+   *
+   * @param allocations The marked allocations.
+   */
+  public void setExactPositionAllocations(Set<SummaryExactPositions.Allocation> allocations) {
+    if (allocations != null) exactPositionAllocations = Set.copyOf(allocations);
+  }
+
+  /**
+   * The summary allocations whose positions are the run-time ones; see {@link
+   * #exactPositionAllocations}.
+   *
+   * @return The marked allocations.
+   */
+  public Set<SummaryExactPositions.Allocation> getExactPositionAllocations() {
+    return exactPositionAllocations;
   }
 
   /**
