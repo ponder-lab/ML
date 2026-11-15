@@ -1717,6 +1717,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processTextRead(inst);
       processDictMethod(inst);
       processNamedTupleConstruction(inst);
+      processClassDecoratorApplication(inst);
       processElementMirror(inst);
       processMapSpread(inst);
       processElementDeclared(inst);
@@ -1947,6 +1948,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         return;
       }
       system.newSideEffect(operator, calleeKey);
+    }
+
+    /**
+     * Keeps a decorated class's class object in what the decorator's application returns, beside
+     * whatever the decorator returns itself (wala/ML#1260). A decorator no summary or program
+     * function models resolves no callee, and without the class object its application would bind
+     * the class's name to nothing; a decorator that returns another object leaves the name both.
+     *
+     * @param inst The call.
+     */
+    private void processClassDecoratorApplication(PythonInvokeInstruction inst) {
+      if (!(inst.getCallSite() instanceof ClassDecoratorSite)
+          || !inst.hasDef()
+          || inst.getNumberOfUses() < 2) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int classVn = inst.getUse(1);
+      PointerKey result = getPointerKeyForLocal(inst.getDef());
+      PointerKey classKey = getPointerKeyForLocal(classVn);
+      if (contentsAreInvariant(symtab, du, classVn) || system.isImplicit(classKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, classVn))
+          system.newConstraint(result, key);
+        return;
+      }
+      system.newConstraint(result, assignOperator, classKey);
     }
 
     /**
