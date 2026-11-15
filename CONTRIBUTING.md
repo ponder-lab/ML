@@ -217,4 +217,8 @@ When the PA assignment graph propagates a tensor type into a destination that se
 
 	Without the `TODO` keyword a suppressed failure is indistinguishable from an intentional positive negative-assertion (see `testDecoratedMethod9`), and IDE task-list/`grep TODO` tooling will not surface it as temporary. The only legitimate exception is when the `AssertionError` is itself the expected positive outcome (e.g., "this function doesn't exist, so the test should fail"); those should be documented in the Javadoc as intentional.
 
+	When more than one fixed result would be acceptable, use the observed-behavior form, not the fallback: assert what the analysis reads now (often ⊤), with a `TODO` naming the issue and the readings acceptable once it's fixed. An expected failure can name only one of them, and it stays green on any change, including a fix that gives the wrong answer or a regression to ⊥.
+
+- When you close an issue, search the tests for the `TODO`s that name it and update them: narrow the observed-form assertion, or remove `expected = AssertionError.class`.
+
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
