@@ -32,7 +32,11 @@ def consume_label(y):
 def main():
     features = tf.ones([4, 3])
     labels = tf.zeros([4], dtype=tf.int32)
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels)).batch(2)
+    dataset = (
+        tf.data.Dataset.from_tensor_slices((features, labels))
+        .map(lambda f, l: (f * 2.0, l))
+        .batch(2)
+    )
     for x, y in dataset:
         a = relay1(x)
         b = relay_label(y)

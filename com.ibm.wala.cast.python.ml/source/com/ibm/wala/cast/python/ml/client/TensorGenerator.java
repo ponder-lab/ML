@@ -647,6 +647,7 @@ public abstract class TensorGenerator implements Cloneable {
     BLOCK_FEASIBILITIES.remove(builder);
     PASSED_COMPREHENSION_READS.remove(builder);
     TensorGeneratorFactory.clearDispatches(builder);
+    DatasetMapGenerator.clearMappedComponents(builder);
     FlowFromDirectoryGenerator.clearClassAxes(builder);
   }
 

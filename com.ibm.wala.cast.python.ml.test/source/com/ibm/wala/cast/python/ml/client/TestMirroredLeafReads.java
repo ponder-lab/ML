@@ -31,7 +31,7 @@ public class TestMirroredLeafReads extends AbstractTensorTest {
 
   private static final String FILE = "tf2_test_dataset_leaf_reads.py";
 
-  /** The members of a batched pair, relayed through three functions, keep their types. */
+  /** The members of a mapped, batched pair, relayed through three functions, keep their types. */
   @Test
   public void testRelayedFeatures() throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
@@ -105,6 +105,8 @@ public class TestMirroredLeafReads extends AbstractTensorTest {
       }
       assertTrue("The fixture has values holding mirrored leaves.", values > 1);
       assertTrue("The readings were memoized.", TensorGeneratorFactory.hasLeafReadings(builder));
+      assertTrue(
+          "The mapped components were memoized.", DatasetMapGenerator.hasMappedComponents(builder));
     } finally {
       WorklistTypeResolver.uninstall(builder, false);
       TensorGenerator.clearCaches(builder);

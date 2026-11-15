@@ -83,8 +83,8 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * The memoized readings of a dataset element's mirrored leaves are released with the other
-   * per-builder memos when the analysis ends.
+   * The memoized readings of a dataset element's mirrored leaves, and the memoized components of a
+   * mapped dataset's element, are released with the other per-builder memos when the analysis ends.
    */
   @Test
   public void testAnalysisReleasesLeafReadings() throws Exception {
@@ -93,5 +93,8 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
     assertFalse(
         "The analysis clears its memoized leaf readings.",
         TensorGeneratorFactory.hasLeafReadings(builder));
+    assertFalse(
+        "The analysis clears its memoized mapped components.",
+        DatasetMapGenerator.hasMappedComponents(builder));
   }
 }
