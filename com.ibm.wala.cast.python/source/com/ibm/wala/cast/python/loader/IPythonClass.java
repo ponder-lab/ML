@@ -47,4 +47,16 @@ public interface IPythonClass extends IClass {
   default java.util.Set<String> getUnresolvedBaseNames() {
     return java.util.Collections.emptySet();
   }
+
+  /**
+   * The keywords this class's statement passes, such as {@code metaclass=}, each mapped to the
+   * dotted name of its value as the statement writes it (<a
+   * href="https://github.com/wala/ML/issues/1260">wala/ML#1260</a>). A class whose keywords were
+   * not recorded answers with none.
+   *
+   * @return The keywords and their values' names, in source order.
+   */
+  default java.util.Map<String, String> getKeywords() {
+    return java.util.Collections.emptyMap();
+  }
 }

@@ -128,6 +128,7 @@ public abstract class PythonAnalysisEngine<T>
         "abseil.xml",
         "copy.xml",
         "collections.xml",
+        "dataclasses.xml",
         "tqdm.xml",
         "time.xml",
         "random.xml",
