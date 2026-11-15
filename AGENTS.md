@@ -178,16 +178,10 @@ Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When addin
 
 ### Issue-blocked tests
 
-A test documents a known failure, tracked by issue #N, in either of two equally accepted forms:
+A test that documents a known failure follows the "Java Testing" section of `CONTRIBUTING.md`: prefer asserting today's observed reading, with a `TODO` naming the issue, and use `@Test(expected = AssertionError.class)` only as that section's fallback. Two cases from this repository show why:
 
-- **An expected failure.** The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`) asserts the type expected once the issue is fixed. When the issue is resolved, flip the annotation to plain `@Test`.
-- **A pin of today's wrong reading.** A plain `@Test` asserts what the analysis reads now (see `TestSidecarSlice#testSidecarSequence`). When the issue is resolved, change the expectation to the fixed type.
-
-Either way, include a `TODO:` line naming the issue, removed when the test is flipped; a pin's `TODO` also names the type expected once it is fixed. Without it, an expected failure is indistinguishable from an intentional negative assertion (as in `testDecoratedMethod9`), and a pin of a wrong reading is indistinguishable from a correct one.
-
-**Closing an issue means searching the tests for `TODO`s that name it and flipping them.** wala/ML#164 was closed with its `TODO` still in `testDataset28`, so the test kept pinning the bug the issue tracked.
-
-**When more than one fixed result would be acceptable, pin today's reading instead.** Use a plain `@Test` that asserts what the analysis reads now (often ⊤), with a `TODO: wala/ML#N` line naming the issue and the type expected once fixed. An expected failure stays green on any change, including a fix that gives the wrong answer or a regression to ⊥, while a positive pin goes red on every change and forces whoever moves it to write the new expectation. `TestUnknownRankGaps` was the precedent: wala/ML#1158's fix could give `52` or `Unresolved`, and both were correct.
+- wala/ML#164 was closed with its `TODO` still in `testDataset28`, so the test kept pinning the bug the issue tracked. Closing an issue includes the search for its `TODO`s.
+- `TestUnknownRankGaps` pins today's reading because wala/ML#1158's fix could give `52` or `Unresolved`, and both were correct. An expected failure would have stayed green on either, and on a wrong answer too.
 
 ## What HFR Computes and What Ariadne Computes
 
