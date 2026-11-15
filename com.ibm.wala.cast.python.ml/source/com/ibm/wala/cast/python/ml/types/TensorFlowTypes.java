@@ -1978,6 +1978,14 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RNN_STEP_SIGNATURE = "tf.keras.layers.RNN step";
 
+  /**
+   * The {@code RNN} summary's internal class whose call makes the state list the layer hands its
+   * cell from an initial state (wala/ML#1265); bound on no module.
+   */
+  public static final TypeReference RNN_STATES =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/rnn_states"));
+
   /** The {@code RNN} summary's internal sequence op (wala/ML#973); bound on no module. */
   public static final MethodReference RNN_SEQUENCE =
       MethodReference.findOrCreate(

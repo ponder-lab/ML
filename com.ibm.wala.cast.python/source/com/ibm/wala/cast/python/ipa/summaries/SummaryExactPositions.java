@@ -37,7 +37,10 @@ public final class SummaryExactPositions {
   private static final String EXACT = "exact";
 
   /**
-   * A summary's allocation of a container with exact positions.
+   * A summary's allocation of a container with exact positions. Its ordinal finds the allocation in
+   * the method's IR only because WALA's summary reader keeps a method's statements in the file's
+   * order, so the {@code n}th {@code <new>} of a class in the file is the {@code n}th allocation of
+   * that class in the IR.
    *
    * @param method The summarized method, as its class's name and its own, {@code Lpkg/cls.name}.
    * @param allocated The name of the class it allocates.

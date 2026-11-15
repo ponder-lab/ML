@@ -2871,6 +2871,13 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="rnn_states" allocatable="true">
+        <!-- Internal to the `RNN` summary (wala/ML#1265): a call of this makes the state list the layer hands its cell from its initial state, as Keras does: a list or tuple is the list itself, and anything else, as one tensor, is the one element of a fresh list, whose one position the container query reports. The builder makes the result (`setListWrap`); the body reads a field nothing writes, so it contributes nothing itself. An initial state not passed, or `None`, makes no list, since the zero states Keras makes from the cell's `state_size` are not modeled. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self initial_state">
+          <getfield class="LRoot" field="wrapped" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
       <class name="rnn_sequence" allocatable="true">
         <!-- Internal to the `RNN` summary (wala/ML#973): the layer's output from the cell's step output, with the input's time axis reinserted when the layer's `return_sequences` is true; paired with the `RnnSequence` generator. Not bound on any module. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self step inputs layer">
@@ -5078,13 +5085,13 @@
         </method>
       </class>
       <class name="RNN" allocatable="true" super="Ltensorflow/keras/layers/Layer">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/RNN (wala/ML#973). The call invokes the cell once, on a fresh step tensor (`rnn_step`: the input without its time axis) and the initial state wrapped in a list, as the layer does per step; the result is a fresh sequence tensor (`rnn_sequence`: the cell output's dtype, with the time axis reinserted when `return_sequences` is true), never the cell's step output passed through, which would carry the step's rank. The result is `[output, new_state]`, the `return_state=True` form: a summary cannot choose the bare output that `return_state=False` returns, so that form stays unmodeled. Batch-major inputs only. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/RNN (wala/ML#973). The call invokes the cell once, on a fresh step tensor (`rnn_step`: the input without its time axis) and the state list Keras makes of the initial state (`rnn_states`, wala/ML#1265), as the layer does per step; the result is a fresh sequence tensor (`rnn_sequence`: the cell output's dtype, with the time axis reinserted when `return_sequences` is true), never the cell's step output passed through, which would carry the step's rank. The result is `[output, new_state]`, the `return_state=True` form: a summary cannot choose the bare output that `return_state=False` returns, so that form stays unmodeled. Batch-major inputs only. -->
         <method name="__call__" descriptor="()LRoot;" numArgs="7" paramNames="func self inputs initial_state mask training constants">
           <getfield class="LRoot" field="cell" fieldType="LRoot" ref="self" def="cell"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_step"/>
           <call class="Ltensorflow/functions/rnn_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="inputs" numArgs="2" def="step"/>
-          <new def="states" class="Llist"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="states" value="initial_state"/>
+          <new def="states_op" class="Ltensorflow/functions/rnn_states"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="states_op" arg1="initial_state" numArgs="2" def="states"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="cell" arg1="step" arg2="states" numArgs="3" def="cell_out"/>
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="cell_out" def="step_out"/>
           <getfield class="LRoot" field="1" fieldType="LRoot" ref="cell_out" def="new_state"/>
@@ -5099,8 +5106,8 @@
           <getfield class="LRoot" field="cell" fieldType="LRoot" ref="self" def="cell"/>
           <new def="step_op" class="Ltensorflow/functions/rnn_step"/>
           <call class="Ltensorflow/functions/rnn_step" name="do" descriptor="()LRoot;" type="virtual" arg0="step_op" arg1="inputs" numArgs="2" def="step"/>
-          <new def="states" class="Llist"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="states" value="initial_state"/>
+          <new def="states_op" class="Ltensorflow/functions/rnn_states"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="states_op" arg1="initial_state" numArgs="2" def="states"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="cell" arg1="step" arg2="states" numArgs="3" def="cell_out"/>
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="cell_out" def="step_out"/>
           <getfield class="LRoot" field="1" fieldType="LRoot" ref="cell_out" def="new_state"/>

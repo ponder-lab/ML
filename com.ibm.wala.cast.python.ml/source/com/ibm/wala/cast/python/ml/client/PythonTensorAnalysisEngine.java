@@ -1169,6 +1169,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // of the datasets they are given (wala/ML#1215).
     builder.setElementJoin(TensorFlowTypes.DATASET_ELEMENT_JOIN);
 
+    // A Keras `RNN` hands its cell its initial state as a list: a list or tuple is the list itself,
+    // and anything else is the one element of a fresh list (wala/ML#1265).
+    builder.setListWrap(TensorFlowTypes.RNN_STATES);
+
     // A dataset built from a generator mirrors the structure it declares, and a call declaring none
     // marks its element as not mirrored (wala/ML#164).
     builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");
