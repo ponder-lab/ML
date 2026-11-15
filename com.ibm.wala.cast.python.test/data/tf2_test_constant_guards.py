@@ -1,4 +1,5 @@
-# Probe (wala/ML#1187, wala/ML#1256): constant guards decided by an argument and by a field.
+# Test constant guards whose arm never runs: one an argument decides (wala/ML#1187) and one a field decides (wala/ML#1256).
+# Each `Conv`-shaped class's dead arm reaches the code after it by a different route, or by none.
 import tensorflow as tf
 
 
@@ -41,27 +42,27 @@ def add_loop_nosub(edges, n):
 
 
 def flag_full(f):
-    pass
+    assert f is True
 
 
 def flag_noassign(f):
-    pass
+    assert f is True
 
 
 def message_full(state, index):
-    pass
+    assert index == 0
 
 
 def message_noassign(state, index):
-    pass
+    assert index == 0
 
 
 def message_nosub(state, index):
-    pass
+    assert index == 0
 
 
 def message_none(state, index):
-    pass
+    assert index == 0
 
 
 class Full:
@@ -100,7 +101,7 @@ class NoSub:
 
 
 def message_bind(state, index):
-    pass
+    assert index == 0
 
 
 class BindOnly:
