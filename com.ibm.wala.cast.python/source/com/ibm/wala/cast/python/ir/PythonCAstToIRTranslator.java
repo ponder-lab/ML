@@ -23,7 +23,9 @@ import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.ir.translator.AstTranslator;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
+import com.ibm.wala.cast.python.ipa.callgraph.BareClassDecoratorCallSiteReference;
 import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorCallSiteReference;
+import com.ibm.wala.cast.python.ipa.callgraph.ClassDecoratorCallSiteReference;
 import com.ibm.wala.cast.python.loader.ClassKeywordsEntity;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.loader.PythonLoader;
@@ -570,15 +572,22 @@ public class PythonCAstToIRTranslator extends AstTranslator {
    *     as its callee expression, a parenthesized one as its call.
    * @param result The value number the decorated object is defined in.
    * @param decorated The value number of the object the decorator is applied to.
+   * @param toClass Whether the object is a class, whose application site is marked as such.
    */
-  private void applyDecorator(WalkContext context, CAstNode decorator, int result, int decorated) {
+  private void applyDecorator(
+      WalkContext context, CAstNode decorator, int result, int decorated, boolean toClass) {
     visit(decorator, context, this);
     int pos = context.cfg().getCurrentInstruction();
     // Only a bare decorator applies its own value (wala/ML#188).
+    boolean bare = decorator.getKind() != CAstNode.CALL;
     CallSiteReference site =
-        decorator.getKind() == CAstNode.CALL
-            ? new DynamicCallSiteReference(PythonTypes.CodeBody, pos)
-            : new BareDecoratorCallSiteReference(PythonTypes.CodeBody, pos);
+        toClass
+            ? bare
+                ? new BareClassDecoratorCallSiteReference(PythonTypes.CodeBody, pos)
+                : new ClassDecoratorCallSiteReference(PythonTypes.CodeBody, pos)
+            : bare
+                ? new BareDecoratorCallSiteReference(PythonTypes.CodeBody, pos)
+                : new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
     @SuppressWarnings({"unchecked", "rawtypes"})
     Pair<String, Integer>[] keywordParams = new Pair[0];
     context
@@ -617,7 +626,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       if (((DynamicAnnotatableEntity) fn).dynamicAnnotations().iterator().hasNext()) {
         ((DynamicAnnotatableEntity) fn)
             .dynamicAnnotations()
-            .forEach(a -> applyDecorator(context, a, result, result));
+            .forEach(a -> applyDecorator(context, a, result, result, false));
       }
     }
 
@@ -1347,7 +1356,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     if (decorated != null)
       for (CAstNode decorator : decorated.dynamicAnnotations()) {
         int applied = code.currentScope().allocateTempValue();
-        applyDecorator(code, decorator, applied, bound);
+        applyDecorator(code, decorator, applied, bound, true);
         bound = applied;
       }
     int boundValue = bound;
