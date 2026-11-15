@@ -714,7 +714,8 @@ public record ContainerMutations(
      * The values the analysis stores under a field name on an object a method's {@code self} may be
      * (wala/ML#1268): an object whose class is the method's class or related to it, as a subclass
      * or a base, whose class body may store the field, or an object whose class the analysis does
-     * not tell.
+     * not tell. An object whose class reaches a base the analysis does not resolve counts too: that
+     * base may be the method's class, as an alias of it is ({@link #reachesUnresolvedBase}).
      *
      * <p>Only a method of a class a class statement declares is scoped. The first parameter of a
      * function nested in another function may be any object, so for one the values are read on
@@ -733,7 +734,8 @@ public record ContainerMutations(
         if (!(owner instanceof PythonClass)
             || cls == null
             || ancestorsOf(cls).contains(owner)
-            || ancestorsOf(owner).contains(cls)) ret.addAll(holder.getValue());
+            || ancestorsOf(owner).contains(cls)
+            || reachesUnresolvedBase(cls)) ret.addAll(holder.getValue());
       }
       return ret;
     }
@@ -762,7 +764,8 @@ public record ContainerMutations(
      * method's {@code self} may be (wala/ML#1268): every store, unless both the method and the
      * storing body are methods of classes class statements declare and the store is on the storing
      * body's own {@code self}, which then must be an instance of a class both classes are ancestors
-     * of, itself among them.
+     * of, itself among them, or of a class reaching a base the analysis does not resolve, which may
+     * be either ({@link #reachesUnresolvedBase}).
      *
      * @param field The field name.
      * @param owner The class or function the reading body is nested in.
@@ -775,7 +778,8 @@ public record ContainerMutations(
         IClass storer = selfClass(store.method(), store.du(), store.object());
         if (!(owner instanceof PythonClass)
             || !(storer instanceof PythonClass)
-            || mayShareInstance(storer, owner)) ret.add(store);
+            || mayShareInstance(storer, owner)
+            || reachesUnresolvedBase(storer)) ret.add(store);
       }
       return ret;
     }

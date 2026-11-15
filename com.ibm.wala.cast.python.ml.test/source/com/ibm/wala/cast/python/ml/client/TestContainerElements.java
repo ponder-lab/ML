@@ -127,6 +127,12 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   private static final String UNREACHED_SHARED_STORE =
       "tf2_test_container_elements_unreached_shared_store.py";
 
+  private static final String UNREACHED_ALIAS_FIELD =
+      "tf2_test_container_elements_unreached_alias_field.py";
+
+  private static final String UNREACHED_ALIAS_STORE =
+      "tf2_test_container_elements_unreached_alias_store.py";
+
   private static final String UNREACHED_UNNAMED =
       "tf2_test_container_elements_unreached_unnamed.py";
 
@@ -968,6 +974,26 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedSharedStore() {
     assertArity(UNREACHED_SHARED_STORE, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name a class stores a
+   * tensor, where that class's other base is an alias of the method's class the analysis does not
+   * resolve, may hold the tensor, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedAliasField() {
+    assertArity(UNREACHED_ALIAS_FIELD, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: As {@link #testUnreachedSharedStore()}, with the
+   * class having both classes as bases reaching one of them through an alias the analysis does not
+   * resolve, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedAliasStore() {
+    assertArity(UNREACHED_ALIAS_STORE, "sink_list", OptionalInt.empty());
   }
 
   /**
