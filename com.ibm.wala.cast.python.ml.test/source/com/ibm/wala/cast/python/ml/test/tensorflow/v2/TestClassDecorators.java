@@ -118,9 +118,14 @@ public class TestClassDecorators extends AbstractTensorTest {
   }
 
   /**
-   * A decorator neither the program nor a summary defines resolves no callee, so the class's name
-   * is bound to nothing and the class is not constructed. That is a modeling gap in the decorator's
-   * library, filled by a summary for it as {@code dataclass} has, not by the front end.
+   * A decorator neither the program nor a summary defines, here {@code typing.final}, resolves no
+   * callee, so the class's name is bound to nothing and the class is not constructed. At run time
+   * the decorator returns the class, so its initializer passes the consumer a {@code (9,)} float32
+   * tensor.
+   *
+   * <p>TODO: wala/ML#1260; once a class under a decorator nothing models stays reachable (design A
+   * or B of this change's open question), flip to a plain {@code @Test} reading {@code (9,)}
+   * float32.
    */
   @Test(expected = AssertionError.class)
   public void testUnmodeledDecoratorUnbinds()
