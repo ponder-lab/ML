@@ -2872,7 +2872,7 @@
         </method>
       </class>
       <class name="rnn_states" allocatable="true">
-        <!-- Internal to the `RNN` summary (wala/ML#1265): a call of this makes the state list the layer hands its cell from its initial state, as Keras does: a list or tuple is the list itself, and anything else, as one tensor, is the one element of a fresh list, whose one position the container query reports. The builder makes the result (`setListWrap`); the body reads a field nothing writes, so it contributes nothing itself. An initial state not passed, or `None`, makes no list, since the zero states Keras makes from the cell's `state_size` are not modeled. Not bound on any module. -->
+        <!-- Internal to the `RNN` summary (wala/ML#1265): a call of this makes the state list the layer hands its cell from its initial state, as Keras does: a list or tuple is the list itself, and anything else, as one tensor, is the one element of a fresh list, whose one position the container query reports. The builder makes the result (`setListWrap`); the body reads a field nothing writes, so it contributes nothing itself. An initial state not passed, or `None`, makes no list, since the zero states Keras makes from the cell's `state_size` are not modeled (wala/ML#1267). Not bound on any module. -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self initial_state">
           <getfield class="LRoot" field="wrapped" fieldType="LRoot" ref="self" def="none"/>
           <return value="none"/>

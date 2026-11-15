@@ -1115,7 +1115,11 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   /**
    * A Keras {@code RNN} given no initial state hands its cell the zero states it makes from the
-   * cell's {@code state_size}, which are not modeled, so no list reaches the cell (wala/ML#1265).
+   * cell's {@code state_size}, a list of one {@code (2, 3) float32} tensor here. Those are not
+   * modeled, so no list reaches the cell (wala/ML#1265).
+   *
+   * <p>TODO: wala/ML#1267; once the zero states are modeled, the cell receives a list of length 1
+   * whose position is {@code (2, 3) float32}.
    */
   @Test
   public void testRnnStatesUnpassed() {
