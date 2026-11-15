@@ -7926,13 +7926,55 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         // Both checks run every round, so one's revision does not put off the other's.
         boolean lists = reviseForChangedLists();
         boolean contexts = reviseTrainingContexts();
-        if (!lists && !contexts) break;
+        boolean decorators = reviseUnresolvedClassDecorators();
+        if (!lists && !contexts && !decorators) break;
         solver.solve(monitor);
         solves++;
       }
       if (scannedMutations != null && scannedMutationsSolves == solves)
         ContainerMutations.remember(this, scannedMutations);
     };
+  }
+
+  /** The class decorator applications that resolved no callee, whose class objects pass through. */
+  private final Set<Pair<CGNode, CallSiteReference>> unresolvedClassDecorators =
+      HashSetFactory.make();
+
+  /**
+   * Passes the class object through each class decorator application the call graph resolved no
+   * callee for (wala/ML#1260), so a class under a decorator no summary or program function models
+   * keeps its class object; one that resolves binds its name to the decorator's result alone.
+   * Whether an application resolves is known only once the analysis is solved; see {@link
+   * #makeSolver}.
+   *
+   * @return {@code true} iff an application was revised, so the analysis must be solved again.
+   */
+  private boolean reviseUnresolvedClassDecorators() {
+    boolean revised = false;
+    CallGraph callGraph = getCallGraph();
+    for (CGNode node : callGraph) {
+      IR ir = node.getIR();
+      if (ir == null) continue;
+      for (SSAInstruction instruction : ir.getInstructions()) {
+        if (!(instruction instanceof PythonInvokeInstruction call)
+            || !(call.getCallSite() instanceof ClassDecoratorSite)
+            || !call.hasDef()
+            || call.getNumberOfUses() < 2
+            || !callGraph.getPossibleTargets(node, call.getCallSite()).isEmpty()
+            || !unresolvedClassDecorators.add(Pair.make(node, call.getCallSite()))) continue;
+        PointerKey result = getPointerKeyForLocal(node, call.getDef());
+        int classVn = call.getUse(1);
+        if (node.getDU().getDef(classVn) instanceof SSANewInstruction allocation) {
+          InstanceKey classObject = getInstanceKeyForAllocation(node, allocation.getNewSite());
+          if (classObject != null) system.newConstraint(result, classObject);
+        } else {
+          PointerKey classKey = getPointerKeyForLocal(node, classVn);
+          if (!system.isImplicit(classKey)) system.newConstraint(result, assignOperator, classKey);
+        }
+        revised = true;
+      }
+    }
+    return revised;
   }
 
   /** How many times the analysis was solved, so a scan read before the last solve is not kept. */
