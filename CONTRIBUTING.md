@@ -188,13 +188,13 @@ When the PA assignment graph propagates a tensor type into a destination that se
 - Add JUnit test cases for any new functionality or bug fixes implemented in the Java codebase.
 - Use descriptive names for JUnit test methods that clearly indicate the purpose of the test.
 - If you change any of the summary files (e.g., `tensorflow.xml`), ensure that you add or update JUnit test cases to cover the changes made. Also, you must run `mvn clean` to ensure that the changes are correctly reflected in the build for summary (XML) files.
-- When a test would fail because of a known precision/correctness gap, **prefer encoding the *observed* (current, imprecise) behavior in the assertion itself** with a `TODO(<issue>):` comment that names the precise post-fix form. When the fix lands, the actual result changes and the test starts failing with a clear "expected observed-form, got precise-form" diff—that's the cue to update the assertion. For example:
+- When a test would fail because of a known precision/correctness gap, **prefer encoding the *observed* (current, imprecise) behavior in the assertion itself** with a `TODO: wala/ML#N;` comment that names the precise post-fix form. When the fix lands, the actual result changes and the test starts failing with a clear "expected observed-form, got precise-form" diff—that's the cue to update the assertion. For example:
 
 	```java
 	/**
 	 * ...test description, including why the result is currently imprecise...
 	 *
-	 * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to
+	 * <p>TODO: wala/ML#380; when the per-Model collapse is fixed, narrow the assertion to
 	 * {@code Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)}.
 	 */
 	@Test

@@ -1713,7 +1713,7 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         // The interpreter evaluates the concatenated shape expression to the concrete
         // (2, 3, 16); the opaque-shape-operand unknown-rank pin (wala/ML#703) rides along in the
-        // union. TODO(https://github.com/wala/ML/issues/703): drop the ⊤ member once the pin
+        // union. TODO: https://github.com/wala/ML/issues/703; drop the ⊤ member once the pin
         // defers to interpreter-resolved shape operands.
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16))));
   }
