@@ -30,6 +30,13 @@ final class DispatchPath {
   private static final ThreadLocal<Map<PointsToSetVariable, Integer>> RESOLVING =
       ThreadLocal.withInitial(HashMap::new);
 
+  /**
+   * How many times a dispatch on each thread, on any path, reached a source being resolved, so a
+   * reading made of several walks can tell whether one of them was cut ({@link #reachedOnThread}).
+   */
+  private static final ThreadLocal<long[]> REACHED_ON_THREAD =
+      ThreadLocal.withInitial(() -> new long[1]);
+
   /** The sources on this path. */
   private final Set<PointsToSetVariable> sources = new HashSet<>();
 
@@ -71,8 +78,21 @@ final class DispatchPath {
    * @return {@code true} iff the source is on this path.
    */
   boolean cuts(PointsToSetVariable source) {
-    if (RESOLVING.get().containsKey(source)) this.reached++;
+    if (RESOLVING.get().containsKey(source)) {
+      this.reached++;
+      REACHED_ON_THREAD.get()[0]++;
+    }
     return this.sources.contains(source);
+  }
+
+  /**
+   * How many times a dispatch on this thread, on any path, has reached a source being resolved. A
+   * reading whose walks left this unchanged depends on what it read alone.
+   *
+   * @return The count.
+   */
+  static long reachedOnThread() {
+    return REACHED_ON_THREAD.get()[0];
   }
 
   /**

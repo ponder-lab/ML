@@ -41,8 +41,11 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A generator for {@code tf.data.Dataset.map(map_func)}. The default {@link DatasetGenerator}
@@ -680,8 +683,74 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * @param path The selectors, outermost first.
    * @return The component's points-to set, possibly empty, and the stored values without an
    *     allocation, possibly empty.
+   * @implNote The component depends only on the mapped instances and the path, read off the pointer
+   *     analysis and the call graph, which are final when generators run. So it is memoized per
+   *     builder while an analysis resolves for it: a mirrored leaf's type read asks it again for
+   *     every value holding the leaf (wala/ML#1269).
    */
   private Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> getMappedElementComponent(
+      PropagationCallGraphBuilder builder, List<Object> path) {
+    Object anchor =
+        this.getSource() != null ? this.getSource().getPointerKey() : this.mapResultInstance;
+    if (anchor == null || WorklistTypeResolver.active(builder) == null)
+      return this.readMappedElementComponent(builder, path);
+    Map<List<Object>, Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>>> components;
+    synchronized (MAPPED_COMPONENTS) {
+      components = MAPPED_COMPONENTS.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+    List<Object> key = List.of(anchor, this.tensorReturnsOnly, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> memoized = components.get(key);
+    if (memoized != null) return memoized;
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =
+        this.readMappedElementComponent(builder, path);
+    Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> raced =
+        components.putIfAbsent(key, component);
+    return raced == null ? component : raced;
+  }
+
+  /**
+   * The memoized components per builder ({@link #getMappedElementComponent}), keyed by the mapped
+   * instances' anchor, whether the view takes only tensor returns, and the path. Each value holds
+   * the builder's call-graph nodes, which keep the weak key reachable, so {@link
+   * TensorGenerator#clearCaches} removes the entry.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder,
+          Map<List<Object>, Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>>>>
+      MAPPED_COMPONENTS = new WeakHashMap<>();
+
+  /**
+   * Drops a builder's memoized components.
+   *
+   * @param builder The builder.
+   */
+  static void clearMappedComponents(PropagationCallGraphBuilder builder) {
+    synchronized (MAPPED_COMPONENTS) {
+      MAPPED_COMPONENTS.remove(builder);
+    }
+  }
+
+  /**
+   * Whether a builder has memoized components, for tests of their release.
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasMappedComponents(PropagationCallGraphBuilder builder) {
+    synchronized (MAPPED_COMPONENTS) {
+      return MAPPED_COMPONENTS.containsKey(builder);
+    }
+  }
+
+  /**
+   * Reads the values {@code map_func} returns at a path of its element ({@link
+   * #getMappedElementComponent}).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param path The selectors, outermost first.
+   * @return The component's points-to set and the stored values without an allocation.
+   */
+  private Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> readMappedElementComponent(
       PropagationCallGraphBuilder builder, List<Object> path) {
     OrdinalSet<InstanceKey> component =
         selectComponent(builder, getMappedElementPointsToSet(builder), path);
@@ -698,7 +767,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
                             .getHeapModel()
                             .getPointerKeyForLocal(value.fst, value.snd)))
             .isEmpty()) stored.add(value);
-    return Pair.make(component == null ? OrdinalSet.empty() : component, stored);
+    return Pair.make(
+        component == null ? OrdinalSet.empty() : component, Collections.unmodifiableSet(stored));
   }
 
   /**
