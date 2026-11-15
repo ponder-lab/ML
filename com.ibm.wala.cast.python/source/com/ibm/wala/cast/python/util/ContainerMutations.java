@@ -14,10 +14,13 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -598,20 +601,22 @@ public record ContainerMutations(
         && symtab.isStringConstant(read.getMemberRef())
         && program.readsPlainAttribute(
             method, du, read, symtab.getStringValue(read.getMemberRef()))) {
-      // `self.f` may be only a container stored under a field named `f`: one the analysis stores,
-      // or one a body the call graph does not reach stores. Any other value there may have a
-      // method of that name that changes a container it is passed.
+      // `self.f` may be only a container stored under a field named `f` on an object `self` may
+      // be: one the analysis stores, or one a body the call graph does not reach stores. Any other
+      // value there may have a method of that name that changes a container it is passed. A value
+      // stored under `f` on an object of an unrelated class is none of these (wala/ML#1268).
       String field = symtab.getStringValue(read.getMemberRef());
       if (!fields.add(field)) return;
-      for (InstanceKey value : program.fieldValues(field))
+      IClass owner = program.selfClass(method, du, read.getObjectRef());
+      Set<InstanceKey> values = program.fieldValues(field, owner);
+      for (InstanceKey value : values)
         if (!isMutable(value.concreteType().getReference())
             && !value.concreteType().getName().toString().startsWith("Lscript ")) {
           marks.markAll(adds);
           return;
         }
-      for (InstanceKey value : program.fieldValues(field))
-        marks.mark(builder.getPointerAnalysis(), value, adds);
-      for (Store store : program.unreachedStores(field))
+      for (InstanceKey value : values) marks.mark(builder.getPointerAnalysis(), value, adds);
+      for (Store store : program.unreachedStores(field, owner))
         if (!isBuiltHere(program, store.du(), store.du().getDef(store.value())))
           markReceiver(
               program,
@@ -636,9 +641,10 @@ public record ContainerMutations(
    * @param method The body's method.
    * @param symtab The body's symbol table.
    * @param du The body's def-use.
+   * @param object The object stored on.
    * @param value The stored value.
    */
-  private record Store(IMethod method, SymbolTable symtab, DefUse du, int value) {}
+  private record Store(IMethod method, SymbolTable symtab, DefUse du, int object, int value) {}
 
   /**
    * What the scan of the bodies the call graph does not reach reads about the whole program, each
@@ -664,6 +670,12 @@ public record ContainerMutations(
 
     /** The values the analysis stores under each field name, or {@code null} until read. */
     private Map<String, Set<InstanceKey>> fields;
+
+    /**
+     * The values the analysis stores under each field name, by the object it stores them on, or
+     * {@code null} until read.
+     */
+    private Map<String, Map<InstanceKey, Set<InstanceKey>>> holders;
 
     /** The program's classes that define an attribute hook, or {@code null} until read. */
     private Set<IClass> hooked;
@@ -699,25 +711,94 @@ public record ContainerMutations(
     }
 
     /**
-     * The values the analysis stores under a field name, on any object.
+     * The values the analysis stores under a field name on an object a method's {@code self} may be
+     * (wala/ML#1268): an object whose class is the method's class or related to it, as a subclass
+     * or a base, whose class body may store the field, or an object whose class the analysis does
+     * not tell. An object whose class reaches a base the analysis does not resolve counts too: that
+     * base may be the method's class, as an alias of it is ({@link #reachesUnresolvedBase}).
+     *
+     * <p>Only a method of a class a class statement declares is scoped. The first parameter of a
+     * function nested in another function may be any object, so for one the values are read on
+     * every object.
      *
      * @param field The field name.
+     * @param owner The class or function the body is nested in.
      * @return The values.
      */
-    Set<InstanceKey> fieldValues(String field) {
+    Set<InstanceKey> fieldValues(String field, IClass owner) {
       readFields();
-      return this.fields.getOrDefault(field, Set.of());
+      Set<InstanceKey> ret = new HashSet<>();
+      for (Map.Entry<InstanceKey, Set<InstanceKey>> holder :
+          this.holders.getOrDefault(field, Map.of()).entrySet()) {
+        IClass cls = holderClass(holder.getKey());
+        if (!(owner instanceof PythonClass)
+            || cls == null
+            || ancestorsOf(cls).contains(owner)
+            || ancestorsOf(owner).contains(cls)
+            || reachesUnresolvedBase(cls)) ret.addAll(holder.getValue());
+      }
+      return ret;
     }
 
     /**
-     * The stores under a field name in the bodies the call graph does not reach.
+     * The class a class statement declares of an object a field is stored on: the object's own type
+     * when that is such a class, as a class object's is, or, for an object whose own type is {@code
+     * object}, as an instance's is, the class whose synthesized constructor allocates it.
+     *
+     * @param holder The object.
+     * @return The class, or {@code null} when the analysis does not tell it.
+     */
+    private static IClass holderClass(InstanceKey holder) {
+      IClass type = holder.concreteType();
+      if (type instanceof PythonClass) return type;
+      if (type != null
+          && type.getReference().equals(PythonTypes.object)
+          && holder instanceof AllocationSiteInNode allocation
+          && allocation.getNode().getMethod().getDeclaringClass() instanceof PythonClass allocator)
+        return allocator;
+      return null;
+    }
+
+    /**
+     * The stores under a field name in the bodies the call graph does not reach on an object a
+     * method's {@code self} may be (wala/ML#1268): every store, unless both the method and the
+     * storing body are methods of classes class statements declare and the store is on the storing
+     * body's own {@code self}, which then must be an instance of a class both classes are ancestors
+     * of, itself among them, or of a class reaching a base the analysis does not resolve, which may
+     * be either ({@link #reachesUnresolvedBase}).
      *
      * @param field The field name.
+     * @param owner The class or function the reading body is nested in.
      * @return The stores.
      */
-    List<Store> unreachedStores(String field) {
+    List<Store> unreachedStores(String field, IClass owner) {
       readBodies();
-      return this.stores.getOrDefault(field, List.of());
+      List<Store> ret = new ArrayList<>();
+      for (Store store : this.stores.getOrDefault(field, List.of())) {
+        IClass storer = selfClass(store.method(), store.du(), store.object());
+        if (!(owner instanceof PythonClass)
+            || !(storer instanceof PythonClass)
+            || mayShareInstance(storer, owner)
+            || reachesUnresolvedBase(storer)) ret.add(store);
+      }
+      return ret;
+    }
+
+    /**
+     * Whether an object may be an instance of two classes: one is an ancestor of the other, or a
+     * class of the program has both among its ancestors.
+     *
+     * @param a A class.
+     * @param b Another class.
+     * @return {@code true} iff an object may be an instance of both.
+     */
+    private boolean mayShareInstance(IClass a, IClass b) {
+      if (ancestorsOf(a).contains(b) || ancestorsOf(b).contains(a)) return true;
+      for (IClass cls : this.builder.getClassHierarchy()) {
+        Set<IClass> ancestors = ancestorsOf(cls);
+        if (ancestors.contains(a) && ancestors.contains(b)) return true;
+      }
+      return false;
     }
 
     /**
@@ -890,6 +971,7 @@ public record ContainerMutations(
     private void readFields() {
       if (this.fields != null) return;
       this.fields = new HashMap<>();
+      this.holders = new HashMap<>();
       this.hooked = new HashSet<>();
       IClassHierarchy cha = this.builder.getClassHierarchy();
       PointerAnalysis<InstanceKey> pa = this.builder.getPointerAnalysis();
@@ -900,7 +982,14 @@ public record ContainerMutations(
           if (ATTRIBUTE_HOOKS.contains(name))
             this.hooked.add(field.getInstanceKey().concreteType());
           Set<InstanceKey> values = this.fields.computeIfAbsent(name, n -> new HashSet<>());
-          for (InstanceKey value : pa.getPointsToSet(key)) values.add(value);
+          Set<InstanceKey> held =
+              this.holders
+                  .computeIfAbsent(name, n -> new HashMap<>())
+                  .computeIfAbsent(field.getInstanceKey(), h -> new HashSet<>());
+          for (InstanceKey value : pa.getPointsToSet(key)) {
+            values.add(value);
+            held.add(value);
+          }
         }
       // A hook a class defines as a method, whose function's class is named under the class's.
       for (IClass cls : cha) {
@@ -982,7 +1071,7 @@ public record ContainerMutations(
               this.stores
                   .computeIfAbsent(
                       symtab.getStringValue(write.getMemberRef()), n -> new ArrayList<>())
-                  .add(new Store(method, symtab, du, write.getValue()));
+                  .add(new Store(method, symtab, du, write.getObjectRef(), write.getValue()));
         }
       }
     }

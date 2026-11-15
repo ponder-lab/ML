@@ -109,6 +109,30 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   private static final String UNREACHED_FIELD = "tf2_test_container_elements_unreached_field.py";
 
+  private static final String UNREACHED_UNRELATED_FIELD =
+      "tf2_test_container_elements_unreached_unrelated_field.py";
+
+  private static final String UNREACHED_RELATED_FIELD =
+      "tf2_test_container_elements_unreached_related_field.py";
+
+  private static final String UNREACHED_NESTED_FIELD =
+      "tf2_test_container_elements_unreached_nested_field.py";
+
+  private static final String UNREACHED_LAYER_FIELD =
+      "tf2_test_container_elements_unreached_layer_field.py";
+
+  private static final String UNREACHED_UNRELATED_STORE =
+      "tf2_test_container_elements_unreached_unrelated_store.py";
+
+  private static final String UNREACHED_SHARED_STORE =
+      "tf2_test_container_elements_unreached_shared_store.py";
+
+  private static final String UNREACHED_ALIAS_FIELD =
+      "tf2_test_container_elements_unreached_alias_field.py";
+
+  private static final String UNREACHED_ALIAS_STORE =
+      "tf2_test_container_elements_unreached_alias_store.py";
+
   private static final String UNREACHED_UNNAMED =
       "tf2_test_container_elements_unreached_unnamed.py";
 
@@ -890,6 +914,86 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testUnreachedField() {
     assertArity(UNREACHED_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name only an unrelated
+   * class stores a tensor holds no list the analysis has, so a list keeps its length
+   * (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedUnrelatedField() {
+    assertArity(UNREACHED_UNRELATED_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name a subclass stores a
+   * tensor may be that tensor, whose method may change any list, so no list reports a length
+   * (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedRelatedField() {
+    assertArity(UNREACHED_RELATED_FIELD, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute of the first parameter of a function
+   * nested in another function, which may be any object, may hold a list a class stores under its
+   * name, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedNestedField() {
+    assertArity(UNREACHED_NESTED_FIELD, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name only an unrelated
+   * Keras layer stores a tensor holds no list the analysis has, so a list keeps its length. The
+   * layer's instance is told apart by the constructor that allocates it (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedLayerField() {
+    assertArity(UNREACHED_LAYER_FIELD, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name only an unreached
+   * method of an unrelated class stores a value a call returns holds no list the analysis has, so a
+   * list keeps its length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedUnrelatedStore() {
+    assertArity(UNREACHED_UNRELATED_STORE, "sink_list", OptionalInt.of(2));
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name an unreached method
+   * of another class stores a value a call returns may hold that value when a class has both
+   * classes as bases, and the value may be any list, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedSharedStore() {
+    assertArity(UNREACHED_SHARED_STORE, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: An attribute under whose name a class stores a
+   * tensor, where that class's other base is an alias of the method's class the analysis does not
+   * resolve, may hold the tensor, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedAliasField() {
+    assertArity(UNREACHED_ALIAS_FIELD, "sink_list", OptionalInt.empty());
+  }
+
+  /**
+   * In a function the call graph does not reach: As {@link #testUnreachedSharedStore()}, with the
+   * class having both classes as bases reaching one of them through an alias the analysis does not
+   * resolve, so no list reports a length (wala/ML#1268).
+   */
+  @Test
+  public void testUnreachedAliasStore() {
+    assertArity(UNREACHED_ALIAS_STORE, "sink_list", OptionalInt.empty());
   }
 
   /**
