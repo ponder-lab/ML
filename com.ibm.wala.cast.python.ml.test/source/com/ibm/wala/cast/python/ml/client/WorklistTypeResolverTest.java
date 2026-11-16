@@ -1070,6 +1070,159 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A tracked computation's value is kept and returned without recomputing while the query it read
+   * keeps its value, and is recomputed once the query is written again (wala/ML#1272).
+   */
+  @Test
+  public void testTrackedValueKeptUntilAReadIsWritten() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult both = ShapeResult.of(Set.of(List.of(), List.of(new NumericDim(2))));
+    Object[] value = {scalar};
+    int[] runs = new int[1];
+    Supplier<Object> computation =
+        () -> {
+          runs[0]++;
+          return engine.demand("TRACK_K", () -> value[0], true);
+        };
+
+    assertEquals(scalar, engine.tracked("TRACK_T", computation, () -> true));
+    assertEquals(scalar, engine.tracked("TRACK_T", computation, () -> true));
+    assertEquals(1, runs[0]);
+    assertEquals(1, engine.trackedHits());
+
+    value[0] = both;
+    engine.evaluateForTest("TRACK_K");
+
+    assertEquals(both, engine.tracked("TRACK_T", computation, () -> true));
+    assertEquals(2, runs[0]);
+    assertEquals(2, engine.trackedComputations());
+  }
+
+  /**
+   * A kept value returned inside an evaluation replays the reads it stands for, so the evaluating
+   * query is evaluated again when a query the value was computed from changes. Without the replay
+   * the query would keep the value it read, since nothing would tie it to the changed query.
+   */
+  @Test
+  public void testTrackedHitReplaysItsReads() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult both = ShapeResult.of(Set.of(List.of(), List.of(new NumericDim(2))));
+    Object[] value = {scalar};
+    int[] runs = new int[1];
+    Supplier<Object> computation =
+        () -> {
+          runs[0]++;
+          return engine.isEvaluating()
+              ? engine.read("REPLAY_K", () -> value[0], true)
+              : engine.demand("REPLAY_K", () -> value[0], true);
+        };
+    Supplier<Object> reader = () -> engine.tracked("REPLAY_T", computation, () -> true);
+    engine.tracked("REPLAY_T", computation, () -> true);
+
+    assertEquals(scalar, engine.demand("REPLAY_R", reader, true));
+    assertEquals("The reader is answered from the kept value.", 1, runs[0]);
+
+    value[0] = both;
+    engine.evaluateForTest("REPLAY_K");
+
+    assertEquals(both, engine.demand("REPLAY_R", reader, true));
+  }
+
+  /**
+   * A tracked computation inside another hands its reads on, also when it is answered from a kept
+   * value, so the outer value is recomputed once a query the inner one read is written again.
+   */
+  @Test
+  public void testNestedTrackedValueHandsItsReadsOn() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult both = ShapeResult.of(Set.of(List.of(), List.of(new NumericDim(2))));
+    Object[] value = {scalar};
+    int[] runs = new int[1];
+    Supplier<Object> inner = () -> engine.demand("NEST_K", () -> value[0], true);
+    Supplier<Object> outer =
+        () -> {
+          runs[0]++;
+          return engine.tracked("NEST_INNER", inner, () -> true);
+        };
+    engine.tracked("NEST_INNER", inner, () -> true);
+
+    assertEquals(scalar, engine.tracked("NEST_OUTER", outer, () -> true));
+    assertEquals(scalar, engine.tracked("NEST_OUTER", outer, () -> true));
+    assertEquals(1, runs[0]);
+
+    value[0] = both;
+    engine.evaluateForTest("NEST_K");
+
+    assertEquals(both, engine.tracked("NEST_OUTER", outer, () -> true));
+    assertEquals(2, runs[0]);
+  }
+
+  /**
+   * A tracked computation's value is not kept when the computation deferred an arm for a settled
+   * recomputation, or when its caller's own conditions do not hold after it.
+   */
+  @Test
+  public void testTrackedValueNotKeptWhenDeferredOrRefused() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = new int[2];
+    Supplier<Object> deferring =
+        () -> {
+          runs[0]++;
+          engine.requestSettledRecomputation();
+          return scalar;
+        };
+    Supplier<Object> refused =
+        () -> {
+          runs[1]++;
+          return scalar;
+        };
+
+    engine.tracked("DEFER_T", deferring, () -> true);
+    engine.tracked("DEFER_T", deferring, () -> true);
+    engine.tracked("REFUSE_T", refused, () -> false);
+    engine.tracked("REFUSE_T", refused, () -> false);
+
+    assertEquals(2, runs[0]);
+    assertEquals(2, runs[1]);
+    assertEquals(0, engine.trackedHits());
+  }
+
+  /**
+   * The check mode recomputes each kept value it returns: it passes when the recomputation gives
+   * the kept value, and fails on a computation that is not a function of the queries it reads.
+   */
+  @Test
+  public void testTrackedCheckMode() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableTrackedCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    Supplier<Object> stable = () -> engine.demand("CHECKED_K", () -> scalar, true);
+    engine.tracked("CHECKED_T", stable, () -> true);
+    assertEquals(scalar, engine.tracked("CHECKED_T", stable, () -> true));
+    assertEquals(1, engine.checkedTracked());
+
+    int[] runs = new int[1];
+    Supplier<Object> counting = () -> ++runs[0];
+    engine.tracked("COUNTING_T", counting, () -> true);
+    AssertionError difference = null;
+    try {
+      engine.tracked("COUNTING_T", counting, () -> true);
+    } catch (AssertionError e) {
+      difference = e;
+    }
+    assertTrue(difference != null && difference.getMessage().contains("A kept value differs"));
+  }
+
+  /**
    * Demands a fresh two-query cycle, so the fixpoint runs past its early return and scans for stale
    * readers.
    *

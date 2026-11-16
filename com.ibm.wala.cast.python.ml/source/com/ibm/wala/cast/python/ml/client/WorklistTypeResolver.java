@@ -30,10 +30,12 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -209,6 +211,7 @@ final class WorklistTypeResolver {
   void noteReentryDeferralAtSettlement() {
     Object query = this.evaluating.peek();
     if (this.settling && query != null) this.reentryDeferredAtSettlement.add(query);
+    this.deferTracked();
   }
 
   private final Deque<Object> worklist = new ArrayDeque<>();
@@ -490,6 +493,15 @@ final class WorklistTypeResolver {
                 + engine.checkedSkips
                 + " checked).");
     SETTLEMENT_CENSUS.fine(() -> "Walk census: " + engine.walkCensus() + ".");
+    SETTLEMENT_CENSUS.fine(
+        () ->
+            "Tracked values: "
+                + engine.trackedComputations
+                + " computed, "
+                + engine.trackedHits
+                + " answered from a kept value ("
+                + engine.checkedTracked
+                + " checked).");
     int cyclicQueries = 0;
     Map<Object, String> cyclicSliceGenerators = HashMapFactory.make();
     for (List<Object> scc : engine.tarjan()) {
@@ -818,6 +830,266 @@ final class WorklistTypeResolver {
   }
 
   /**
+   * A tracked computation in progress: the queries it has read itself, not through an evaluation it
+   * started, each with the stamp its value had when read.
+   */
+  private static final class Tracking {
+
+    /** How many evaluations were in progress when the computation began. */
+    private final int depth;
+
+    /** Per query read, the {@link #stamps} entry at the read; 0 for a value never written. */
+    private final Map<Object, Long> stamps = new LinkedHashMap<>();
+
+    /**
+     * Whether the computation's value may not be a function of the values recorded: it read one
+     * query at two stamps, or deferred an arm for a settled recomputation.
+     */
+    private boolean unstable;
+
+    private Tracking(int depth) {
+      this.depth = depth;
+    }
+  }
+
+  /**
+   * A tracked computation's value with the stamps of the queries it read.
+   *
+   * @param value The value, which may be {@code null}.
+   * @param stamps Per query read, the stamp its value had.
+   */
+  private record TrackedValue(Object value, Map<Object, Long> stamps) {}
+
+  /** The tracked computations in progress, innermost first. */
+  private final Deque<Tracking> trackings = new ArrayDeque<>();
+
+  /** The values of the tracked computations that completed, by their keys. */
+  private final Map<Object, TrackedValue> trackedValues = HashMapFactory.make();
+
+  /** How many tracked computations ran, and how many were answered from a kept value. */
+  private long trackedComputations, trackedHits;
+
+  /** Whether each kept value returned is also recomputed and checked; see {@link #tracked}. */
+  private boolean checkTracked = Boolean.getBoolean(CHECK_TRACKED_PROPERTY);
+
+  /** The system property that turns on {@link #checkTracked}. */
+  static final String CHECK_TRACKED_PROPERTY = "ariadne.typeResolution.checkTrackedValues";
+
+  /** How many kept values the check mode verified. */
+  private long checkedTracked;
+
+  /**
+   * Computes a value that is not a query's but is computed from queries' values, once for as long
+   * as those values stand (wala/ML#1272). The value is kept with the stamp of each query the
+   * computation read, and is returned without recomputing while every one of those queries still
+   * has the stamp it was read at; a stamp moves on every write of a query's state, by an
+   * evaluation, a promotion or the settlement pass. Returning a kept value replays the reads it
+   * stands for, so the evaluation in progress has the edges, the consumed versions and the cycle
+   * flag it would have had recomputing, and a tracked computation around this one records them.
+   *
+   * <p>A value is not kept when the computation read one query at two stamps, when it deferred an
+   * arm for a settled recomputation, when a query it read was written again before it ended, or
+   * when the caller's own conditions, asked after the computation, do not hold. The computation
+   * must otherwise depend only on what is final when generators run.
+   *
+   * @param key The computation's key, distinct from every other computation's.
+   * @param computation The computation.
+   * @param storable Whether the value just computed may be kept, asked after the computation.
+   * @return The value.
+   */
+  Object tracked(Object key, Supplier<Object> computation, BooleanSupplier storable) {
+    TrackedValue stored = this.trackedValues.get(key);
+    if (stored != null) {
+      if (this.stand(stored.stamps())) {
+        this.trackedHits++;
+        for (Object read : stored.stamps().keySet()) this.replay(read);
+        if (this.checkTracked) this.checkTracked(key, stored, computation, storable);
+        return stored.value();
+      }
+      this.trackedValues.remove(key);
+    }
+    this.trackedComputations++;
+    Tracking tracking = new Tracking(this.evaluating.size());
+    Object value = this.track(tracking, computation);
+    if (!tracking.unstable && this.stand(tracking.stamps) && storable.getAsBoolean())
+      this.trackedValues.put(key, new TrackedValue(value, tracking.stamps));
+    return value;
+  }
+
+  /**
+   * Runs a computation with its reads recorded, and hands the reads on to the tracked computation
+   * around it, if they are made for the same evaluation.
+   *
+   * @param tracking The record of the computation's reads.
+   * @param computation The computation.
+   * @return The computation's value.
+   */
+  private Object track(Tracking tracking, Supplier<Object> computation) {
+    this.trackings.push(tracking);
+    try {
+      return computation.get();
+    } finally {
+      this.trackings.pop();
+      Tracking outer = this.trackings.peek();
+      if (outer != null && outer.depth == tracking.depth) {
+        for (Map.Entry<Object, Long> read : tracking.stamps.entrySet()) {
+          Long earlier = outer.stamps.putIfAbsent(read.getKey(), read.getValue());
+          if (earlier != null && !earlier.equals(read.getValue())) outer.unstable = true;
+        }
+        if (tracking.unstable) outer.unstable = true;
+      }
+    }
+  }
+
+  /**
+   * The check mode: recomputes a kept value that was just returned and fails if the recomputation,
+   * one the value could have been kept from, gives another value or reads other queries.
+   *
+   * @param key The computation's key.
+   * @param stored The kept value.
+   * @param computation The computation.
+   * @param storable Whether the value just computed may be kept, asked after the computation.
+   * @throws AssertionError if the recomputation differs from the kept value.
+   */
+  private void checkTracked(
+      Object key, TrackedValue stored, Supplier<Object> computation, BooleanSupplier storable) {
+    Tracking tracking = new Tracking(this.evaluating.size());
+    Object value = this.track(tracking, computation);
+    // A recomputation that deferred, wrote a query the kept value stands on, or fails the caller's
+    // conditions is not one the value would be kept from, so it says nothing about the kept one.
+    if (tracking.unstable || !this.stand(stored.stamps()) || !storable.getAsBoolean()) return;
+    if (!Objects.equals(value, stored.value()))
+      throw new AssertionError(
+          "A kept value differs: "
+              + key
+              + " kept "
+              + stored.value()
+              + " but recomputes to "
+              + value
+              + ".");
+    if (!tracking.stamps.keySet().equals(stored.stamps().keySet()))
+      throw new AssertionError(
+          "A kept value's recomputation reads other queries: "
+              + key
+              + " kept reading "
+              + stored.stamps().keySet()
+              + " but recomputes reading "
+              + tracking.stamps.keySet()
+              + ".");
+    this.checkedTracked++;
+  }
+
+  /** Turns on the check mode of {@link #CHECK_TRACKED_PROPERTY} for this engine. */
+  void enableTrackedCheck() {
+    this.checkTracked = true;
+  }
+
+  /**
+   * How many kept values the check mode verified.
+   *
+   * @return The count.
+   */
+  long checkedTracked() {
+    return this.checkedTracked;
+  }
+
+  /**
+   * Whether every query still has the stamp recorded for it.
+   *
+   * @param stamps Per query, the recorded stamp.
+   * @return {@code true} iff none was written since.
+   */
+  private boolean stand(Map<Object, Long> stamps) {
+    for (Map.Entry<Object, Long> read : stamps.entrySet())
+      if (!read.getValue().equals(this.stamps.getOrDefault(read.getKey(), 0L))) return false;
+    return true;
+  }
+
+  /**
+   * Records a read of a query for the tracked computation in progress, if it made the read itself.
+   *
+   * @param key The query read.
+   */
+  private void track(Object key) {
+    Tracking tracking = this.trackings.peek();
+    if (tracking == null || tracking.depth != this.evaluating.size()) return;
+    Long now = this.stamps.getOrDefault(key, 0L);
+    Long earlier = tracking.stamps.putIfAbsent(key, now);
+    if (earlier != null && !earlier.equals(now)) tracking.unstable = true;
+  }
+
+  /**
+   * Replays a read of a query a kept value stands for: what {@link #read} records for the
+   * evaluation in progress, without evaluating anything, since the query was evaluated when the
+   * value was computed.
+   *
+   * @param key The query read.
+   */
+  private void replay(Object key) {
+    READS_ON_THREAD.get()[0]++;
+    Object reader = this.evaluating.peek();
+    this.recordEdge(reader, key);
+    if (reader != null && (this.inStack.contains(key) || this.unwindPending.containsKey(key)))
+      this.cycleSeen = true;
+    this.recordConsumedVersion(reader, key);
+    this.track(key);
+  }
+
+  /**
+   * How many tracked computations ran.
+   *
+   * @return The count.
+   */
+  long trackedComputations() {
+    return this.trackedComputations;
+  }
+
+  /**
+   * How many tracked computations were answered from a kept value.
+   *
+   * @return The count.
+   */
+  long trackedHits() {
+    return this.trackedHits;
+  }
+
+  /**
+   * Records the edge of a read for the evaluation making it, if any.
+   *
+   * @param reader The evaluating query, or {@code null} outside any evaluation.
+   * @param key The query read.
+   */
+  private void recordEdge(Object reader, Object key) {
+    if (this.settling && reader != null && reader.equals(key)) this.selfReadInRecomputation = true;
+    if (reader != null && !reader.equals(key)) {
+      Set<Object> readerReads = this.reads.get(reader);
+      if (readerReads == null) {
+        readerReads = HashSetFactory.make();
+        this.reads.put(reader, readerReads);
+        this.readsOrder.put(reader, this.readsOrder.size());
+      }
+      if (readerReads.add(key)) {
+        this.newEdgeReaders.add(reader);
+        this.promotionEdgeReaders.add(reader);
+      }
+      this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
+    }
+  }
+
+  /**
+   * Records the version of the value a reader consumes (wala/ML#758).
+   *
+   * @param reader The evaluating query, or {@code null} outside any evaluation.
+   * @param key The query read.
+   */
+  private void recordConsumedVersion(Object reader, Object key) {
+    if (reader != null && !reader.equals(key))
+      this.readVersions
+          .computeIfAbsent(reader, k -> HashMapFactory.make())
+          .put(key, this.versions.getOrDefault(key, 0));
+  }
+
+  /**
    * How many reads and demands each thread has made of any engine, so a computation can tell
    * whether it read a value the fixpoint may still revise ({@link #readsOnThread}).
    */
@@ -847,20 +1119,7 @@ final class WorklistTypeResolver {
   Object read(Object key, Supplier<Object> transfer, boolean shapeKind) {
     READS_ON_THREAD.get()[0]++;
     Object reader = this.evaluating.peek();
-    if (this.settling && reader != null && reader.equals(key)) this.selfReadInRecomputation = true;
-    if (reader != null && !reader.equals(key)) {
-      Set<Object> readerReads = this.reads.get(reader);
-      if (readerReads == null) {
-        readerReads = HashSetFactory.make();
-        this.reads.put(reader, readerReads);
-        this.readsOrder.put(reader, this.readsOrder.size());
-      }
-      if (readerReads.add(key)) {
-        this.newEdgeReaders.add(reader);
-        this.promotionEdgeReaders.add(reader);
-      }
-      this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
-    }
+    this.recordEdge(reader, key);
     if (!this.transfers.containsKey(key)) this.register(key, transfer, shapeKind);
     // Hybrid scheduling: a first-sighted query evaluates inline, so recursion gives the acyclic
     // region its natural (reverse-topological) order and each such query runs once; only an
@@ -879,10 +1138,8 @@ final class WorklistTypeResolver {
     // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
     // evaluation so it matches the value returned below, and an on-stack (interim) read records the
     // pre-completion version, which lags as soon as the read value grows.
-    if (reader != null && !reader.equals(key))
-      this.readVersions
-          .computeIfAbsent(reader, k -> HashMapFactory.make())
-          .put(key, this.versions.getOrDefault(key, 0));
+    this.recordConsumedVersion(reader, key);
+    this.track(key);
     Object value = this.state.get(key);
     if (value == NULL_DTYPE) return null;
     if (value != null) return value;
@@ -921,6 +1178,16 @@ final class WorklistTypeResolver {
   void requestSettledRecomputation() {
     Object reader = this.evaluating.peek();
     if (reader != null) this.settlementRequested.add(reader);
+    this.deferTracked();
+  }
+
+  /**
+   * Marks the tracked computation in progress, if it is the one deferring, as one whose value is
+   * not to be kept: a deferring arm answers differently once its observation is final.
+   */
+  private void deferTracked() {
+    Tracking tracking = this.trackings.peek();
+    if (tracking != null && tracking.depth == this.evaluating.size()) tracking.unstable = true;
   }
 
   /**
@@ -941,6 +1208,7 @@ final class WorklistTypeResolver {
           return null;
         });
     this.solve();
+    this.track(key);
     Object value = this.state.get(key);
     if (value == NULL_DTYPE) return null;
     if (value != null) return value;

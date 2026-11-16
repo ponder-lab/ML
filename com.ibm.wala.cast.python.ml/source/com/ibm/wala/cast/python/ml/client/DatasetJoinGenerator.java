@@ -281,7 +281,7 @@ public abstract class DatasetJoinGenerator extends DatasetGenerator {
     Set<Long> ret = HashSetFactory.make();
     for (TensorGenerator alternative : alternatives) {
       if (!(alternative instanceof DatasetGenerator dataset)) return Collections.emptySet();
-      Set<Long> sizes = dataset.getDatasetSizes(builder);
+      Set<Long> sizes = dataset.readDatasetSizes(builder);
       if (sizes == null || sizes.isEmpty()) return Collections.emptySet();
       ret.addAll(sizes);
     }

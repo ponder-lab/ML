@@ -223,7 +223,7 @@ public class DatasetBatchGenerator extends DatasetGenerator {
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    Set<Long> datasetSizes = this.getDatasetSizes(builder);
+    Set<Long> datasetSizes = this.readDatasetSizes(builder);
 
     // If the upstream chain contains `.repeat()` (with no `.take(N)` between it and this batch),
     // the stream is infinite and partial batches never occur at runtime. Suppress the partial
