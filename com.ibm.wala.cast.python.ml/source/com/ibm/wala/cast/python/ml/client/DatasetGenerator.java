@@ -29,6 +29,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset} transformations.
@@ -403,7 +404,22 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   public DatasetGenerator overReceiver(TensorGenerator receiver) {
     DatasetGenerator ret = (DatasetGenerator) this.copy();
     ret.receiver = receiver;
+    VIEWS.get()[0]++;
     return ret;
+  }
+
+  /** How many views the current thread has made ({@link #overReceiver}). */
+  private static final ThreadLocal<long[]> VIEWS = ThreadLocal.withInitial(() -> new long[1]);
+
+  /**
+   * How many views the current thread has made ({@link #overReceiver}). A view's queries are keyed
+   * by its receiver's identity ({@link #operationDiscriminator}), so a computation that made one
+   * read queries no later computation reads again.
+   *
+   * @return The count.
+   */
+  static long viewsOnThread() {
+    return VIEWS.get()[0];
   }
 
   /**
@@ -527,8 +543,8 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    * receiver ({@link #overReceiver}), which is keyed by the receiver's identity, so nothing would
    * ask for its sizes again; and when this generator reads a composed call's arguments or a
    * generator guard is in progress on the thread, since the computation may then answer for the
-   * frame it is asked in. A computation in which a fold declined on re-entering itself, or a
-   * dispatch walk was cut, is not kept.
+   * frame it is asked in. A computation that did not answer for itself alone ({@link
+   * #answeredForItself}) is not kept.
    *
    * @param builder The propagation call graph builder used for analysis.
    * @return The possible dataset sizes, in a set of the caller's own; empty if unknown.
@@ -539,8 +555,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
         || this.receiver != null
         || this.getComposedArguments() != null
         || guardsInProgress()) return this.computeDatasetSizes(builder);
-    long reentries = foldReentries();
-    long reached = DispatchPath.reachedOnThread();
+    BooleanSupplier storable = answeredForItself();
     @SuppressWarnings("unchecked")
     Set<Long> sizes =
         (Set<Long>)
@@ -552,7 +567,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
                       ? null
                       : Collections.unmodifiableSet(HashSetFactory.make(computed));
                 },
-                () -> foldReentries() == reentries && DispatchPath.reachedOnThread() == reached);
+                storable);
     return sizes == null ? null : HashSetFactory.make(sizes);
   }
 

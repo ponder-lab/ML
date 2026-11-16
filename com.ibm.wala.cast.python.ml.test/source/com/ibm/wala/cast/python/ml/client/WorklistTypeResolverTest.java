@@ -6,6 +6,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeFalse;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -1075,6 +1076,8 @@ public class WorklistTypeResolverTest {
    */
   @Test
   public void testTrackedValueKeptUntilAReadIsWritten() {
+    // The check mode computes a kept value again at every read of it, and this counts the runs.
+    assumeFalse(Boolean.getBoolean(WorklistTypeResolver.CHECK_TRACKED_PROPERTY));
     WorklistTypeResolver engine = WorklistTypeResolver.install(null);
 
     ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
@@ -1107,6 +1110,8 @@ public class WorklistTypeResolverTest {
    */
   @Test
   public void testTrackedHitReplaysItsReads() {
+    // The check mode computes a kept value again at every read of it, and this counts the runs.
+    assumeFalse(Boolean.getBoolean(WorklistTypeResolver.CHECK_TRACKED_PROPERTY));
     WorklistTypeResolver engine = WorklistTypeResolver.install(null);
 
     ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
@@ -1138,6 +1143,8 @@ public class WorklistTypeResolverTest {
    */
   @Test
   public void testNestedTrackedValueHandsItsReadsOn() {
+    // The check mode computes a kept value again at every read of it, and this counts the runs.
+    assumeFalse(Boolean.getBoolean(WorklistTypeResolver.CHECK_TRACKED_PROPERTY));
     WorklistTypeResolver engine = WorklistTypeResolver.install(null);
 
     ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
