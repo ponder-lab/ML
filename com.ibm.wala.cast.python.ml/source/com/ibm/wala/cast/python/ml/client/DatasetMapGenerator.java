@@ -698,7 +698,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
     synchronized (MAPPED_COMPONENTS) {
       components = MAPPED_COMPONENTS.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
     }
-    List<Object> key = List.of(anchor, this.tensorReturnsOnly, path);
+    List<Object> key = List.of(anchor, this.tensorReturnsOnly, List.copyOf(path));
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> memoized = components.get(key);
     if (memoized != null) return memoized;
     Pair<OrdinalSet<InstanceKey>, Set<Pair<CGNode, Integer>>> component =

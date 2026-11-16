@@ -1917,6 +1917,27 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * How many times a mirrored leaf's types were read per builder, for tests that a nested read of a
+   * leaf is a lookup (wala/ML#1270). The counts hold nothing of the builder, so its entry expires
+   * with it.
+   */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> LEAF_TYPE_READS =
+      new WeakHashMap<>();
+
+  /**
+   * How many times a mirrored leaf's types were read for a builder.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long leafTypeReads(PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_TYPE_READS) {
+      AtomicLong reads = LEAF_TYPE_READS.get(builder);
+      return reads == null ? 0 : reads.get();
+    }
+  }
+
+  /**
    * A mirrored leaf's tensor types (wala/ML#1190): its dataset's element at each path the mirror
    * recorded for it, by (dataset, path), joined over the paths and the datasets, and the
    * unknown-marked element when the mirror reached it only past the length it records. The field
@@ -1930,6 +1951,9 @@ public class TensorGeneratorFactory {
       ElementMirrorKey leaf, PropagationCallGraphBuilder builder) {
     Set<TensorType> ret = HashSetFactory.make();
     if (!(builder instanceof PythonSSAPropagationCallGraphBuilder python)) return ret;
+    synchronized (LEAF_TYPE_READS) {
+      LEAF_TYPE_READS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
     if (python.isElementMirrorCutoff(leaf)) ret.add(new TensorType(DType.UNKNOWN, null));
     LeafReading reading = leafReading(leaf, python);
     if (reading == null) return ret;
