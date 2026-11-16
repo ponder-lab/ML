@@ -6981,9 +6981,9 @@ public abstract class TensorGenerator implements Cloneable {
         // A mirrored dataset element's structure is no tensor, and its leaf is its own reading,
         // not the summary allocation's (wala/ML#1190).
         if (!mirror.isLeaf()) continue;
-        for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(mirror, builder))
-          if (type.getDims() == null) hasUnknown = true;
-          else ret.add(type.getDims());
+        ShapeResult leaf = getShapeResultOfMirroredLeaf(builder, mirror);
+        ret.addAll(leaf.members());
+        if (leaf.hasUnknown()) hasUnknown = true;
       } else if (valueIK instanceof ConstantKey) {
         // A null constant is analysis substrate (loop-carried phi defaults, the generator
         // iteration protocol) or an explicit `None` argument, never a scalar value; typing it as
@@ -7257,6 +7257,74 @@ public abstract class TensorGenerator implements Cloneable {
         (engine.isEvaluating()
             ? engine.read(key, transfer, true)
             : engine.demand(key, transfer, true));
+  }
+
+  /**
+   * The shapes of a mirrored dataset element leaf (wala/ML#1190): those of its types ({@link
+   * TensorGeneratorFactory#mirroredLeafTypes}), with an unknown remainder when one of them has an
+   * unknown shape.
+   *
+   * <p>A leaf's reading reads its dataset's element at each path, and a member of that element can
+   * be a leaf of an upstream dataset, as a {@code map} function's return is, whose reading reads it
+   * in turn, on both axes. Read directly, a shape read of a value nested a reading of every leaf
+   * upstream once per value and per axis (wala/ML#1270). So it is a query of the resolver, keyed by
+   * the leaf alone, since the reading depends on nothing else: no generator's binding enters it,
+   * and the transfer captures no reader. Outside an analysis it is read as the other queries are.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param leaf The leaf.
+   * @return Its shapes.
+   */
+  static ShapeResult getShapeResultOfMirroredLeaf(
+      PropagationCallGraphBuilder builder, ElementMirrorKey leaf) {
+    Object key = HashedPair.of("mirrored-leaf-shape", leaf);
+    java.util.function.Supplier<Object> transfer =
+        () -> {
+          boolean unknown = false;
+          Set<List<Dimension<?>>> members = HashSetFactory.make();
+          for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(leaf, builder))
+            if (type.getDims() == null) unknown = true;
+            else members.add(type.getDims());
+          return new ShapeResult(members, unknown);
+        };
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine == null)
+      return nullEngineRead(
+          builder, key, () -> (ShapeResult) transfer.get(), ShapeResult.unknown());
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
+  }
+
+  /**
+   * The dtypes of a mirrored dataset element leaf, those of its types: the dtype twin of {@link
+   * #getShapeResultOfMirroredLeaf}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param leaf The leaf.
+   * @return Its dtypes.
+   */
+  static Set<DType> getDTypesOfMirroredLeaf(
+      PropagationCallGraphBuilder builder, ElementMirrorKey leaf) {
+    Object key = HashedPair.of("mirrored-leaf-dtype", leaf);
+    java.util.function.Supplier<Object> transfer =
+        () -> {
+          Set<DType> dtypes = EnumSet.noneOf(DType.class);
+          for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(leaf, builder))
+            dtypes.add(type.getDType());
+          return dtypes;
+        };
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    @SuppressWarnings("unchecked")
+    Set<DType> ret =
+        engine == null
+            ? nullEngineRead(builder, key, () -> (Set<DType>) transfer.get(), EnumSet.of(UNKNOWN))
+            : (Set<DType>)
+                (engine.isEvaluating()
+                    ? engine.read(key, transfer, false)
+                    : engine.demand(key, transfer, false));
+    return ret;
   }
 
   /**
@@ -8237,9 +8305,7 @@ public abstract class TensorGenerator implements Cloneable {
     for (InstanceKey valueIK : valuePointsToSet) {
       if (valueIK instanceof ElementMirrorKey mirror) {
         // As in the shape read, a mirrored dataset element (wala/ML#1190).
-        if (mirror.isLeaf())
-          for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(mirror, builder))
-            ret.add(type.getDType());
+        if (mirror.isLeaf()) ret.addAll(getDTypesOfMirroredLeaf(builder, mirror));
         continue;
       }
       if (valueIK instanceof AllocationSiteInNode && !visited.add(valueIK)) continue;
