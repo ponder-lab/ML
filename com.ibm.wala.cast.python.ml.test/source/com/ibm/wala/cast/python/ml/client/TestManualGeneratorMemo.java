@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import java.io.File;
 import java.util.Collections;
 import org.junit.Test;
@@ -32,8 +31,7 @@ public class TestManualGeneratorMemo extends AbstractTensorTest {
     PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FILE);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     builder.makeCallGraph(builder.getOptions());
-    long nodes = 0;
-    for (@SuppressWarnings("unused") CGNode node : builder.getCallGraph()) nodes++;
+    long nodes = builder.getCallGraph().getNumberOfNodes();
     engine.performAnalysis(builder);
     long dispatches = TensorGenerator.manualDispatchCount(builder);
     assertTrue("The analysis dispatches a manual generator.", dispatches > 0);
