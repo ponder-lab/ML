@@ -649,6 +649,9 @@ public abstract class TensorGenerator implements Cloneable {
     synchronized (CALLER_FOLDS) {
       CALLER_FOLDS.remove(builder);
     }
+    synchronized (MANUAL_GENERATORS) {
+      MANUAL_GENERATORS.remove(builder);
+    }
     PASSED_COMPREHENSION_READS.remove(builder);
     TensorGeneratorFactory.clearDispatches(builder);
     DatasetMapGenerator.clearMappedComponents(builder);
@@ -12889,6 +12892,95 @@ public abstract class TensorGenerator implements Cloneable {
    * @return The generator, or {@code null} when no arm matches the type.
    */
   protected static TensorGenerator createManualGenerator(
+      CGNode node, TypeReference type, PropagationCallGraphBuilder builder) {
+    Map<Pair<CGNode, TypeReference>, Optional<TensorGenerator>> memo =
+        WorklistTypeResolver.active(builder) != null ? manualGenerators(builder) : null;
+    Pair<CGNode, TypeReference> key = Pair.make(node, type);
+    if (memo != null) {
+      Optional<TensorGenerator> memoized = memo.get(key);
+      if (memoized != null) return memoized.map(TensorGenerator::copy).orElse(null);
+    }
+    TensorGenerator ret = dispatchManualGenerator(node, type, builder);
+    synchronized (MANUAL_DISPATCH_COUNTS) {
+      MANUAL_DISPATCH_COUNTS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
+    if (memo == null) return ret;
+    Optional<TensorGenerator> raced =
+        memo.putIfAbsent(key, Optional.ofNullable(ret == null ? null : ret.copy()));
+    return raced == null ? ret : raced.map(TensorGenerator::copy).orElse(null);
+  }
+
+  /**
+   * Per builder, the manual generators dispatched for each (node, type) while an analysis resolves
+   * for it ({@link #createManualGenerator(CGNode, TypeReference, PropagationCallGraphBuilder)}), an
+   * empty {@link Optional} where no arm matched. The dispatch reads only the type and the node: no
+   * pointer analysis, call graph or resolver read decides the arm, so it depends on the key alone.
+   * A dataset's size read dispatches every upstream dataset's generator again at each step of its
+   * recursion, and a whole-project analysis spent much of an hour in those dispatches
+   * (wala/ML#1271). The generators are never handed out themselves: a caller gets a copy, as a
+   * replayed dispatch's caller does, since callers bind onto the generator they are given and a
+   * dataset generator compares its receiver by identity. The keys hold the builder's nodes, which
+   * keep the weak key reachable, so {@link #clearCaches} removes the entry.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<Pair<CGNode, TypeReference>, Optional<TensorGenerator>>>
+      MANUAL_GENERATORS = new WeakHashMap<>();
+
+  /**
+   * The memoized manual generators of a builder.
+   *
+   * @param builder The builder.
+   * @return Its generators.
+   */
+  private static Map<Pair<CGNode, TypeReference>, Optional<TensorGenerator>> manualGenerators(
+      PropagationCallGraphBuilder builder) {
+    synchronized (MANUAL_GENERATORS) {
+      return MANUAL_GENERATORS.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+  }
+
+  /**
+   * Whether a builder has memoized manual generators, for tests of their release.
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasManualGenerators(PropagationCallGraphBuilder builder) {
+    synchronized (MANUAL_GENERATORS) {
+      return MANUAL_GENERATORS.containsKey(builder);
+    }
+  }
+
+  /**
+   * How many manual generators were dispatched per builder, for tests that a (node, type) is
+   * dispatched once. The counts hold nothing of the builder, so its entry expires with it.
+   */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> MANUAL_DISPATCH_COUNTS =
+      new WeakHashMap<>();
+
+  /**
+   * How many manual generators were dispatched for a builder.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long manualDispatchCount(PropagationCallGraphBuilder builder) {
+    synchronized (MANUAL_DISPATCH_COUNTS) {
+      AtomicLong count = MANUAL_DISPATCH_COUNTS.get(builder);
+      return count == null ? 0 : count.get();
+    }
+  }
+
+  /**
+   * Dispatches a manual generator for a node and a type, unmemoized ({@link
+   * #createManualGenerator(CGNode, TypeReference, PropagationCallGraphBuilder)}).
+   *
+   * @param node The anchoring node.
+   * @param type The operation's type.
+   * @param builder The propagation call graph builder.
+   * @return The generator, or {@code null} when no arm matches the type.
+   */
+  private static TensorGenerator dispatchManualGenerator(
       CGNode node, TypeReference type, PropagationCallGraphBuilder builder) {
     TensorGenerator shared =
         TensorGeneratorFactory.dispatchShared(new GeneratorAnchor.NodeAnchor(node, type, builder));
