@@ -818,6 +818,23 @@ final class WorklistTypeResolver {
   }
 
   /**
+   * How many reads and demands each thread has made of any engine, so a computation can tell
+   * whether it read a value the fixpoint may still revise ({@link #readsOnThread}).
+   */
+  private static final ThreadLocal<long[]> READS_ON_THREAD =
+      ThreadLocal.withInitial(() -> new long[1]);
+
+  /**
+   * How many reads and demands this thread has made of any engine. A computation that left this
+   * unchanged read no query, so it depends only on what is final when generators run.
+   *
+   * @return The count.
+   */
+  static long readsOnThread() {
+    return READS_ON_THREAD.get()[0];
+  }
+
+  /**
    * Reads a query's current value from inside another query's evaluation: records the edge,
    * registers and schedules the dependency on first sight, and returns the state value or the
    * kind-appropriate bottom without recursing.
@@ -828,6 +845,7 @@ final class WorklistTypeResolver {
    * @return The current value.
    */
   Object read(Object key, Supplier<Object> transfer, boolean shapeKind) {
+    READS_ON_THREAD.get()[0]++;
     Object reader = this.evaluating.peek();
     if (this.settling && reader != null && reader.equals(key)) this.selfReadInRecomputation = true;
     if (reader != null && !reader.equals(key)) {
@@ -915,6 +933,7 @@ final class WorklistTypeResolver {
    * @return The stabilized value.
    */
   Object demand(Object key, Supplier<Object> transfer, boolean shapeKind) {
+    READS_ON_THREAD.get()[0]++;
     if (!this.transfers.containsKey(key)) this.register(key, transfer, shapeKind);
     this.unwinding(
         () -> {
