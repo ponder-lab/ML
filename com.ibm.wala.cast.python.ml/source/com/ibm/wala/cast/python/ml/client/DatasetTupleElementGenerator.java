@@ -105,7 +105,11 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    * #sharingReads}). The read is computed when no analysis resolves, when this generator carries a
    * binding or a composed call's arguments, and when a generator guard is in progress on the
    * thread, since the computation may then answer for the frame it is asked in; a computation that
-   * did not answer for itself alone ({@link #answeredForItself}) is not kept.
+   * did not answer for itself alone ({@link #answeredForItself}) is not kept. Nor is one that made
+   * a view of a dataset over one of its receivers ({@link DatasetGenerator#overReceiver}), as the
+   * element of an enumeration of a receiver that may be several datasets does: a view's queries are
+   * keyed by its receiver's identity, so such a computation read queries that no later computation
+   * of the same read reads again.
    *
    * @param <S> The type of the read's value.
    * @param builder The propagation call graph builder.
@@ -132,7 +136,10 @@ public class DatasetTupleElementGenerator extends TensorGenerator
         || this.getValueBinding() != null
         || this.getComposedArguments() != null
         || guardsInProgress()) return counted.get();
-    BooleanSupplier storable = answeredForItself();
+    BooleanSupplier forItself = answeredForItself();
+    long views = DatasetGenerator.viewsOnThread();
+    BooleanSupplier storable =
+        () -> forItself.getAsBoolean() && DatasetGenerator.viewsOnThread() == views;
     @SuppressWarnings("unchecked")
     S kept =
         (S)

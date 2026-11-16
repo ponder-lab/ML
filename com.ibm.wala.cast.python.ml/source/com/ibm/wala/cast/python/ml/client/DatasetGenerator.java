@@ -404,7 +404,22 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   public DatasetGenerator overReceiver(TensorGenerator receiver) {
     DatasetGenerator ret = (DatasetGenerator) this.copy();
     ret.receiver = receiver;
+    VIEWS.get()[0]++;
     return ret;
+  }
+
+  /** How many views the current thread has made ({@link #overReceiver}). */
+  private static final ThreadLocal<long[]> VIEWS = ThreadLocal.withInitial(() -> new long[1]);
+
+  /**
+   * How many views the current thread has made ({@link #overReceiver}). A view's queries are keyed
+   * by its receiver's identity ({@link #operationDiscriminator}), so a computation that made one
+   * read queries no later computation reads again.
+   *
+   * @return The count.
+   */
+  static long viewsOnThread() {
+    return VIEWS.get()[0];
   }
 
   /**
