@@ -128,6 +128,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -645,6 +646,9 @@ public abstract class TensorGenerator implements Cloneable {
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
     MAY_RUN_IN_GRAPH_MODE.remove(builder);
     BLOCK_FEASIBILITIES.remove(builder);
+    synchronized (CALLER_FOLDS) {
+      CALLER_FOLDS.remove(builder);
+    }
     PASSED_COMPREHENSION_READS.remove(builder);
     TensorGeneratorFactory.clearDispatches(builder);
     DatasetMapGenerator.clearMappedComponents(builder);
@@ -5026,7 +5030,10 @@ public abstract class TensorGenerator implements Cloneable {
       Set<Pair<CGNode, Integer>> onStack = PHI_FOLD_ON_STACK.get();
       // The feasibility check evaluates governing branches through this resolver with fresh
       // state, so a phi reachable from its own guard must break the cycle here.
-      if (!onStack.add(frame)) return null;
+      if (!onStack.add(frame)) {
+        FOLD_REENTRIES.get()[0]++;
+        return null;
+      }
       try {
         Object agreed = null;
         boolean any = false;
@@ -5204,6 +5211,14 @@ public abstract class TensorGenerator implements Cloneable {
       ThreadLocal.withInitial(() -> new int[1]);
 
   /**
+   * How many folds on this thread have declined because they re-entered themselves, a phi fold
+   * through its own guard or a {@code len} fold through a descent into its own function. Such a
+   * decline depends on what the thread is folding, not on the fold alone (wala/ML#863).
+   */
+  private static final ThreadLocal<long[]> FOLD_REENTRIES =
+      ThreadLocal.withInitial(() -> new long[1]);
+
+  /**
    * The {@code len} folds in progress on this thread, as {@code (node, operand)} frames, and those
    * among them that were re-entered: a guard whose vector is read through a descent into the
    * guard's own function asks for its own rank mid-computation. The re-entry has no answer yet, and
@@ -5321,6 +5336,7 @@ public abstract class TensorGenerator implements Cloneable {
     Set<Pair<CGNode, Integer>> inProgress = RANK_FOLDS_IN_PROGRESS.get();
     if (inProgress.contains(frame)) {
       RANK_FOLDS_REENTERED.get().add(frame);
+      FOLD_REENTRIES.get()[0]++;
       if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
       LOGGER.fine(
           () -> "The len fold of vn " + argVn + " in " + describe(node) + " re-entered itself.");
@@ -9423,6 +9439,114 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The blocks of a caller its decided guards leave reachable, for {@link #getCallerInvokes}. While
+   * an analysis resolves for the builder, the caller's guards are folded with no bindings and every
+   * branch decided, so the blocks depend on the caller alone unless a fold read a query the
+   * fixpoint may still revise, or declined on re-entering itself. Every callee of the caller asks
+   * for the same blocks, and a whole-project analysis spent most of an hour folding the same
+   * callers again for every argument read (wala/ML#863). So the blocks are memoized per builder
+   * when no fold read a query or re-entered, and no fold was in progress on the thread when they
+   * were asked for.
+   *
+   * @param builder The builder.
+   * @param caller The caller.
+   * @param targets The blocks whose reachability is asked after the analysis, or {@code null}.
+   * @return The reachable blocks.
+   */
+  private static Set<ISSABasicBlock> callerReachableBlocks(
+      PropagationCallGraphBuilder builder, CGNode caller, Set<ISSABasicBlock> targets) {
+    Map<CGNode, Set<ISSABasicBlock>> memo =
+        targets == null
+                && WorklistTypeResolver.active(builder) != null
+                && PHI_FOLD_ON_STACK.get().isEmpty()
+                && RANK_FOLDS_IN_PROGRESS.get().isEmpty()
+                && RANK_FOLDS_REENTERED.get().isEmpty()
+            ? callerFolds(builder)
+            : null;
+    if (memo != null) {
+      Set<ISSABasicBlock> memoized = memo.get(caller);
+      if (memoized != null) return memoized;
+    }
+    long reads = WorklistTypeResolver.readsOnThread();
+    long reentries = FOLD_REENTRIES.get()[0];
+    Set<ISSABasicBlock> ret =
+        computeReachableBlocksUnderBindings(builder, caller, Collections.emptyMap(), targets);
+    synchronized (CALLER_FOLD_COUNTS) {
+      CALLER_FOLD_COUNTS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
+    if (memo != null
+        && WorklistTypeResolver.readsOnThread() == reads
+        && FOLD_REENTRIES.get()[0] == reentries) memo.putIfAbsent(caller, ret);
+    return ret;
+  }
+
+  /**
+   * Per builder, the reachable blocks of each caller whose fold read no query ({@link
+   * #callerReachableBlocks}). The keys hold the builder's nodes, which keep the weak key reachable,
+   * so {@link #clearCaches} removes the entry.
+   */
+  private static final Map<PropagationCallGraphBuilder, Map<CGNode, Set<ISSABasicBlock>>>
+      CALLER_FOLDS = new WeakHashMap<>();
+
+  /**
+   * The memoized caller folds of a builder.
+   *
+   * @param builder The builder.
+   * @return Its folds.
+   */
+  private static Map<CGNode, Set<ISSABasicBlock>> callerFolds(PropagationCallGraphBuilder builder) {
+    synchronized (CALLER_FOLDS) {
+      return CALLER_FOLDS.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+  }
+
+  /**
+   * Whether a caller's fold is memoized for a builder, for tests of what is memoized.
+   *
+   * @param builder The builder.
+   * @param caller The caller.
+   * @return {@code true} iff it is.
+   */
+  static boolean hasCallerFold(PropagationCallGraphBuilder builder, CGNode caller) {
+    synchronized (CALLER_FOLDS) {
+      Map<CGNode, Set<ISSABasicBlock>> folds = CALLER_FOLDS.get(builder);
+      return folds != null && folds.containsKey(caller);
+    }
+  }
+
+  /**
+   * Whether a builder has memoized caller folds, for tests of their release.
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasCallerFolds(PropagationCallGraphBuilder builder) {
+    synchronized (CALLER_FOLDS) {
+      return CALLER_FOLDS.containsKey(builder);
+    }
+  }
+
+  /**
+   * How many caller folds were computed per builder, for tests that a caller is folded once. The
+   * counts hold nothing of the builder, so its entry expires with it.
+   */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> CALLER_FOLD_COUNTS =
+      new WeakHashMap<>();
+
+  /**
+   * How many caller folds were computed for a builder.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long callerFoldCount(PropagationCallGraphBuilder builder) {
+    synchronized (CALLER_FOLD_COUNTS) {
+      AtomicLong count = CALLER_FOLD_COUNTS.get(builder);
+      return count == null ? 0 : count.get();
+    }
+  }
+
+  /**
    * Returns the calling invocations of the given node: for each call-graph predecessor, the invoke
    * instructions at the sites that can dispatch to it. Derived from call-graph edges rather than a
    * {@code CALL_STRING} lookup, so it works for any {@link com.ibm.wala.ipa.callgraph.Context}
@@ -9465,10 +9589,7 @@ public abstract class TensorGenerator implements Cloneable {
       Set<ISSABasicBlock> sitesTargets = targets;
       Set<ISSABasicBlock> reachable =
           reachableByCaller.computeIfAbsent(
-              caller,
-              c ->
-                  computeReachableBlocksUnderBindings(
-                      builder, c, Collections.emptyMap(), sitesTargets));
+              caller, c -> callerReachableBlocks(builder, c, sitesTargets));
       for (SSAAbstractInvokeInstruction call : calls) {
         if (call.iIndex() >= 0) {
           ISSABasicBlock block =
