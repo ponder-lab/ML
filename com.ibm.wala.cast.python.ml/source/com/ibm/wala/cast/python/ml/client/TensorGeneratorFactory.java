@@ -1755,10 +1755,14 @@ public class TensorGeneratorFactory {
           continue;
         }
         // A single index reads the element's tuple position, as a subscript of the element does.
-        if (path.isIndex() || path.resolves())
-          parts.add(
+        if (path.isIndex() || path.resolves()) {
+          DatasetTupleElementGenerator part =
               new DatasetTupleElementGenerator(
-                  source, (DatasetIteratorElementGenerator) path.at().copy(), path.path()));
+                  source, (DatasetIteratorElementGenerator) path.at().copy(), path.path());
+          // A memoized reading is the leaf's alone, so every value holding the leaf reads the same
+          // element at the path, and the parts share the read.
+          parts.add(reading.memoized() ? part.sharingReads(new LeafPath(leaf, path.path())) : part);
+        }
       }
     }
     return new MirroredLeaves(parts, only);
@@ -1772,11 +1776,23 @@ public class TensorGeneratorFactory {
    * @param datasets The datasets ({@link #mirroredDatasets}), never empty.
    * @param element The whole element, read over the spread datasets where each one's is a tensor.
    * @param paths The element at each path, in the mirror's order.
+   * @param memoized Whether this is the reading memoized for the leaf ({@link #leafReading}), which
+   *     every value holding the leaf reads, and not one that holds for a dispatch path only.
    */
   private record LeafReading(
       List<TensorGenerator> datasets,
       DatasetIteratorElementGenerator element,
-      List<PathReading> paths) {}
+      List<PathReading> paths,
+      boolean memoized) {}
+
+  /**
+   * What identifies a mirrored leaf's element at one of its paths, as its memoized reading reads
+   * it, among the shared reads of an element ({@link DatasetTupleElementGenerator#sharingReads}).
+   *
+   * @param leaf The leaf.
+   * @param path The path.
+   */
+  private record LeafPath(ElementMirrorKey leaf, List<Object> path) {}
 
   /**
    * A mirrored leaf's element at one of its paths.
@@ -1823,8 +1839,14 @@ public class TensorGeneratorFactory {
     }
     long mark = DispatchPath.reachedOnThread();
     LeafReading reading = readLeaf(leaf, builder);
-    if (readings != null && DispatchPath.reachedOnThread() == mark)
-      readings.putIfAbsent(leaf, Optional.ofNullable(reading));
+    if (readings != null && DispatchPath.reachedOnThread() == mark) {
+      LeafReading memoized =
+          reading == null
+              ? null
+              : new LeafReading(reading.datasets(), reading.element(), reading.paths(), true);
+      // A reading of the leaf memoized meanwhile, by a read within this one, stands.
+      if (readings.putIfAbsent(leaf, Optional.ofNullable(memoized)) == null) return memoized;
+    }
     return reading;
   }
 
@@ -1859,7 +1881,7 @@ public class TensorGeneratorFactory {
     synchronized (LEAF_READS) {
       LEAF_READS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
     }
-    return new LeafReading(datasets, element, paths);
+    return new LeafReading(datasets, element, paths, false);
   }
 
   /**

@@ -130,6 +130,7 @@ import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -5229,6 +5230,26 @@ public abstract class TensorGenerator implements Cloneable {
    */
   static long foldReentries() {
     return FOLD_REENTRIES.get()[0];
+  }
+
+  /**
+   * A check, made now and asked after a computation, of whether the computation answered for itself
+   * alone and not for what the thread was computing around it: no fold declined on re-entering
+   * itself ({@link #foldReentries}), no dispatch walk was cut at a source the thread is resolving
+   * ({@link DispatchPath#reachedOnThread}), and no memo read its own key's floor ({@link
+   * ReentrantMemo#floorsOnThread}). A value {@link WorklistTypeResolver#tracked} keeps must pass
+   * it.
+   *
+   * @return The check, {@code true} iff none of the three happened since this call.
+   */
+  static BooleanSupplier answeredForItself() {
+    long reentries = foldReentries();
+    long reached = DispatchPath.reachedOnThread();
+    long floors = ReentrantMemo.floorsOnThread();
+    return () ->
+        foldReentries() == reentries
+            && DispatchPath.reachedOnThread() == reached
+            && ReentrantMemo.floorsOnThread() == floors;
   }
 
   /**

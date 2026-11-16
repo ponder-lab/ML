@@ -15,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import org.junit.Test;
 
 /**
@@ -42,6 +43,27 @@ public class ReentrantMemoTest {
     assertEquals(Optional.empty(), inner.get());
     assertEquals(Optional.of("computed"), outer);
     assertEquals(Optional.of("computed"), values.get("k"));
+  }
+
+  /**
+   * A re-entry that reads the floor is counted for its thread, and a check of whether a computation
+   * answered for itself alone fails for the computation that read it: its value stands for what the
+   * thread was computing, so nothing may keep it. A computation that does not re-enter leaves both
+   * as they were.
+   */
+  @Test
+  public void testAFloorIsCountedForItsThread() {
+    ReentrantMemo<String> memo = new ReentrantMemo<>(Collections.synchronizedMap(new HashMap<>()));
+    long before = ReentrantMemo.floorsOnThread();
+    BooleanSupplier plain = TensorGenerator.answeredForItself();
+    memo.get("plain", () -> "computed");
+    assertEquals(before, ReentrantMemo.floorsOnThread());
+    assertTrue(plain.getAsBoolean());
+
+    BooleanSupplier reentrant = TensorGenerator.answeredForItself();
+    memo.get("k", () -> memo.get("k", () -> "recursed").orElse("floor"));
+    assertEquals(before + 1, ReentrantMemo.floorsOnThread());
+    assertFalse(reentrant.getAsBoolean());
   }
 
   /**

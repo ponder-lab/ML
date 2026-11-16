@@ -26,6 +26,20 @@ final class ReentrantMemo<V> {
   /** The keys the current thread is computing. */
   private final ThreadLocal<Set<Object>> inProgress = ThreadLocal.withInitial(HashSet::new);
 
+  /** How many re-entries the current thread has read as the floor, over every memo. */
+  private static final ThreadLocal<long[]> FLOORS = ThreadLocal.withInitial(() -> new long[1]);
+
+  /**
+   * How many re-entries the current thread has read as the floor, over every memo. A floor answers
+   * for what the thread is computing, not for the key alone, so a computation that left this
+   * unchanged read no such answer.
+   *
+   * @return The count.
+   */
+  static long floorsOnThread() {
+    return FLOORS.get()[0];
+  }
+
   /**
    * Creates a memo over the given map.
    *
@@ -50,7 +64,10 @@ final class ReentrantMemo<V> {
     Optional<V> memo = this.values.get(key);
     if (memo != null) return memo;
     Set<Object> active = this.inProgress.get();
-    if (!active.add(key)) return Optional.empty();
+    if (!active.add(key)) {
+      FLOORS.get()[0]++;
+      return Optional.empty();
+    }
     try {
       memo = Optional.ofNullable(compute.get());
       Optional<V> prior = this.values.putIfAbsent(key, memo);
