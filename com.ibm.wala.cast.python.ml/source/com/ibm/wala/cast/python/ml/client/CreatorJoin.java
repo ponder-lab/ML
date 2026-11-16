@@ -77,12 +77,12 @@ public class CreatorJoin extends TensorGenerator {
   CreatorJoin(PointsToSetVariable source, List<TensorGenerator> parts) {
     super(source);
     this.parts = List.copyOf(parts);
-    List<TensorGenerator> leaves = new ArrayList<>();
+    List<TensorGenerator> read = new ArrayList<>();
     Set<TensorGenerator> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     for (TensorGenerator part : this.parts)
       for (TensorGenerator leaf : part instanceof CreatorJoin join ? join.leaves : List.of(part))
-        if (seen.add(leaf)) leaves.add(leaf);
-    this.leaves = List.copyOf(leaves);
+        if (seen.add(leaf)) read.add(leaf);
+    this.leaves = List.copyOf(read);
   }
 
   /**

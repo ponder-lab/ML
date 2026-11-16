@@ -160,16 +160,18 @@ final class DispatchPath {
    * @return {@code true} iff the source is on this path.
    */
   boolean cuts(PointsToSetVariable source) {
-    Frame top = this.path.peek();
     Frame entered = this.frames.get(source);
     if (entered != null) {
       REACHED_ON_THREAD.get()[0]++;
+      // A source on the path means the path has a top.
+      Frame top = this.path.element();
       top.low = Math.min(top.low, entered.index);
       top.reached = true;
       return true;
     }
     if (RESOLVING.get().containsKey(source)) {
       REACHED_ON_THREAD.get()[0]++;
+      Frame top = this.path.peek();
       if (top != null) top.reached = top.outside = true;
     }
     return false;
