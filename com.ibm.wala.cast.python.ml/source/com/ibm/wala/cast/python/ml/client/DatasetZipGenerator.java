@@ -526,7 +526,7 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
       return null;
     }
     if (!(generator instanceof DatasetGenerator dataset)) return null;
-    Set<Long> sizes = dataset.getDatasetSizes(builder);
+    Set<Long> sizes = dataset.readDatasetSizes(builder);
     return sizes == null || sizes.isEmpty() ? null : sizes;
   }
 }

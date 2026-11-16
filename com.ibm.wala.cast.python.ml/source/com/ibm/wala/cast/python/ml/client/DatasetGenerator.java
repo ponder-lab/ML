@@ -24,8 +24,11 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset} transformations.
@@ -505,6 +508,89 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
   }
 
   /**
+   * The key of a dataset's sizes among the resolver's tracked computations.
+   *
+   * @param dataset The dataset generator's evaluation key, with its binding.
+   */
+  private record DatasetSizesKey(Object dataset) {}
+
+  /**
+   * The sizes of this dataset, as {@link #getDatasetSizes} computes them, for a read from another
+   * generator or from this one's own shapes. Each dataset asks its receivers' generators for their
+   * sizes, so computed at every read a chain of transformations is walked once per path through its
+   * receivers' instances, a number that multiplies at every transformation whose receiver holds
+   * more than one (wala/ML#1272). While an analysis resolves for the builder, the sizes are instead
+   * computed once for as long as the queries the computation read keep their values ({@link
+   * WorklistTypeResolver#tracked}).
+   *
+   * <p>The sizes are computed at the read when no analysis resolves; for a view fixed to one
+   * receiver ({@link #overReceiver}), which is keyed by the receiver's identity, so nothing would
+   * ask for its sizes again; and when this generator reads a composed call's arguments or a
+   * generator guard is in progress on the thread, since the computation may then answer for the
+   * frame it is asked in. A computation in which a fold declined on re-entering itself, or a
+   * dispatch walk was cut, is not kept.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The possible dataset sizes, in a set of the caller's own; empty if unknown.
+   */
+  final Set<Long> readDatasetSizes(PropagationCallGraphBuilder builder) {
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine == null
+        || this.receiver != null
+        || this.getComposedArguments() != null
+        || guardsInProgress()) return this.computeDatasetSizes(builder);
+    long reentries = foldReentries();
+    long reached = DispatchPath.reachedOnThread();
+    @SuppressWarnings("unchecked")
+    Set<Long> sizes =
+        (Set<Long>)
+            engine.tracked(
+                new DatasetSizesKey(this.boundKey(evaluationKey(this))),
+                () -> {
+                  Set<Long> computed = this.computeDatasetSizes(builder);
+                  return computed == null
+                      ? null
+                      : Collections.unmodifiableSet(HashSetFactory.make(computed));
+                },
+                () -> foldReentries() == reentries && DispatchPath.reachedOnThread() == reached);
+    return sizes == null ? null : HashSetFactory.make(sizes);
+  }
+
+  /**
+   * Computes this dataset's sizes for {@link #readDatasetSizes}, counting the computation.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The sizes {@link #getDatasetSizes} gives.
+   */
+  private Set<Long> computeDatasetSizes(PropagationCallGraphBuilder builder) {
+    synchronized (SIZE_COMPUTATIONS) {
+      SIZE_COMPUTATIONS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
+    return this.getDatasetSizes(builder);
+  }
+
+  /**
+   * How many times a dataset's sizes were computed for a read per builder, for tests that a chain
+   * of datasets is not walked once per path through it. The counts hold nothing of the builder, so
+   * its entry expires with it.
+   */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> SIZE_COMPUTATIONS =
+      new WeakHashMap<>();
+
+  /**
+   * How many times a dataset's sizes were computed for a read of them for a builder.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long sizeComputations(PropagationCallGraphBuilder builder) {
+    synchronized (SIZE_COMPUTATIONS) {
+      AtomicLong count = SIZE_COMPUTATIONS.get(builder);
+      return count == null ? 0 : count.get();
+    }
+  }
+
+  /**
    * Retrieves the sizes (number of elements) of the dataset represented by this generator. By
    * default, it recursively queries the receiver (the dataset this one is derived from).
    *
@@ -538,7 +624,7 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
 
             if (generator instanceof DatasetGenerator
                 && !generator.getClass().equals(this.getClass())) {
-              ret.addAll(((DatasetGenerator) generator).getDatasetSizes(builder));
+              ret.addAll(((DatasetGenerator) generator).readDatasetSizes(builder));
             }
           }
         }

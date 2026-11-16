@@ -5222,6 +5222,16 @@ public abstract class TensorGenerator implements Cloneable {
       ThreadLocal.withInitial(() -> new long[1]);
 
   /**
+   * How many folds on this thread have declined because they re-entered themselves; see {@link
+   * #FOLD_REENTRIES}. A computation that left this unchanged had no fold decline that way.
+   *
+   * @return The count.
+   */
+  static long foldReentries() {
+    return FOLD_REENTRIES.get()[0];
+  }
+
+  /**
    * The {@code len} folds in progress on this thread, as {@code (node, operand)} frames, and those
    * among them that were re-entered: a guard whose vector is read through a descent into the
    * guard's own function asks for its own rank mid-computation. The re-entry has no answer yet, and
@@ -12859,14 +12869,14 @@ public abstract class TensorGenerator implements Cloneable {
    */
   protected static TensorGenerator createManualGenerator(
       CGNode node, PropagationCallGraphBuilder builder) {
-    TypeReference type = node.getMethod().getDeclaringClass().getReference();
-    LOGGER.fine("createManualGenerator checking type: " + type.getName());
+    TypeReference declared = node.getMethod().getDeclaringClass().getReference();
+    LOGGER.fine(() -> "createManualGenerator checking type: " + declared.getName());
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
-    type = TensorFlowTypes.layerCallAsDunderCall(sanitize(type));
+    TypeReference type = TensorFlowTypes.layerCallAsDunderCall(sanitize(declared));
 
-    LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
+    LOGGER.fine(() -> "createManualGenerator checking sanitized type: " + type.getName());
 
     return createManualGenerator(node, type, builder);
   }
