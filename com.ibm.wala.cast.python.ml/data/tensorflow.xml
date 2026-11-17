@@ -1554,6 +1554,15 @@
           <return value="lst"/>
         </method>
       </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/Tensor#get_shape. A tensor's `get_shape()` returns its static shape, the value its `shape` attribute reads (wala/ML#1280). The builder allocates this method at each read of `get_shape` off a tensor (`setFreshAttributeTypes`), and a call of it allocates the shape with its `as_list` method. -->
+      <class name="get_shape" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="shape" class="Ltensorflow/framework/StaticTensorShape"/>
+          <new def="as_list" class="Ltensorflow/framework/StaticTensorShape/as_list"/>
+          <putfield class="LRoot" field="as_list" fieldType="LRoot" ref="shape" value="as_list"/>
+          <return value="shape"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/framework">
       <!-- The shape a tensor's `shape` attribute reads (wala/ML#1104): the builder allocates one for each such read (`setFreshAttributeTypes`) and attaches its `as_list` method. It is a type of its own, apart from a `TensorShape` the program constructs, whose `dims` the shape-argument reader reads. -->
