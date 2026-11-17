@@ -28,6 +28,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorAttribute;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorKey;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorSource;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -1544,15 +1545,32 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   /**
    * The attributes whose read describes a structure their receiver holds (wala/ML#1280): a
    * dataset's {@code element_spec} is the structure of its element, with a {@code tf.TensorSpec} in
-   * place of each component. A dataset {@code tfds.load} returns is no subclass of {@code Dataset},
-   * but holds its element as one does.
+   * place of each component. A dataset {@code tfds.load} returns, a dataset of a file's lines or
+   * records and a dataset of file names are no subclasses of {@code Dataset}, but hold their
+   * elements as one does.
+   *
+   * <p>The structure has two sources. A dataset whose element is mirrored holds it in its {@code
+   * mirrored_element} field. A dataset whose element is not mirrored holds the marker of that in
+   * its {@code legacy_element} field, and its {@code map} method object carries the element's
+   * structure: what the function of the {@code map} it descends from returns, or the marker for an
+   * element that is one value. That structure is the same object for every dataset made from the
+   * mapped one, a batch of it too, so its descriptions are located: each is read from its dataset,
+   * at its path, by {@link TensorGeneratorFactory#describedElementTypes}.
    */
   private static final Map<String, DescriptorAttribute> DESCRIPTOR_ATTRIBUTES =
       Map.of(
           "element_spec",
           new DescriptorAttribute(
-              Set.of(TensorFlowTypes.DATASET, TensorFlowTypes.TFDS_DATASET_TYPE),
-              "mirrored_element",
+              Set.of(
+                  TensorFlowTypes.DATASET,
+                  TensorFlowTypes.TFDS_DATASET_TYPE,
+                  TensorFlowTypes.TEXT_LINE_DATASET_TYPE,
+                  TensorFlowTypes.TFRECORD_DATASET_TYPE,
+                  TensorFlowTypes.LIST_FILES_DATASET_TYPE),
+              List.of(
+                  new DescriptorSource(null, List.of("mirrored_element"), false),
+                  new DescriptorSource(
+                      "legacy_element", List.of("map", "element_structure"), true)),
               TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES,
               TensorFlowTypes.TENSOR_SPEC));
 

@@ -280,6 +280,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorKey;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
@@ -1873,7 +1874,8 @@ public class TensorGeneratorFactory {
         paths.add(new PathReading(path, null, false));
         continue;
       }
-      DatasetIteratorElementGenerator at = leafElementAt(leaf, datasets, spread, path, builder);
+      DatasetIteratorElementGenerator at =
+          leafElementAt(leaf.getNode(), datasets, spread, path, builder);
       PathReading reading = new PathReading(path, at, false);
       paths.add(
           reading.isIndex() ? reading : new PathReading(path, at, at.resolvesPath(builder, path)));
@@ -2068,7 +2070,7 @@ public class TensorGeneratorFactory {
    * In {@code (flat if flag else pair).batch(2)}, a leaf at position 0 is the flat dataset's
    * tensor, not the pair's tuple at position 0.
    *
-   * @param leaf The leaf.
+   * @param node The node the element is anchored on, the leaf's.
    * @param datasets The leaf's datasets ({@link #mirroredDatasets}).
    * @param spread The datasets spread over their receivers ({@link #spreadOverReceivers}).
    * @param path The path.
@@ -2076,7 +2078,7 @@ public class TensorGeneratorFactory {
    * @return The element, over the given datasets when every spread one has a structure there.
    */
   private static DatasetIteratorElementGenerator leafElementAt(
-      ElementMirrorKey leaf,
+      CGNode node,
       List<TensorGenerator> datasets,
       List<TensorGenerator> spread,
       List<Object> path,
@@ -2085,7 +2087,44 @@ public class TensorGeneratorFactory {
     for (TensorGenerator dataset : spread)
       if (!(dataset instanceof TupleElementProvider tep && tep.isStructureAt(builder, path)))
         at.add(dataset);
-    return new DatasetIteratorElementGenerator(leaf.getNode(), at.isEmpty() ? datasets : at);
+    return new DatasetIteratorElementGenerator(node, at.isEmpty() ? datasets : at);
+  }
+
+  /**
+   * The tensor types a description from a located source describes (wala/ML#1280): its dataset's
+   * element at the description's path, read as a mirrored leaf is ({@link #mirroredLeafTypes}). The
+   * value the description copies is not read, since it stands for the element of every dataset made
+   * from the one that produced it: a member of what a {@code map} function returns is described for
+   * the mapped dataset and, with the batch axis, for a batch of it.
+   *
+   * @param descriptor The description, with a receiver ({@link DescriptorKey#getReceiver}).
+   * @param builder The propagation call graph builder.
+   * @return The types, never empty: the unknown-marked element when the description has no path,
+   *     its receiver no dataset generator, or the dataset no type at the path, since a description
+   *     describes a tensor whatever the analysis reads for it.
+   */
+  static Set<TensorType> describedElementTypes(
+      DescriptorKey descriptor, PropagationCallGraphBuilder builder) {
+    Set<TensorType> ret = HashSetFactory.make();
+    List<Object> path = descriptor.getPath();
+    AllocationSiteInNode receiver = findAllocationSiteInNode(descriptor.getReceiver());
+    if (path != null && receiver != null) {
+      List<TensorGenerator> datasets = producedDatasets(receiver.getNode(), builder);
+      if (!datasets.isEmpty()) {
+        List<TensorGenerator> spread = spreadOverReceivers(datasets, builder);
+        CGNode node = receiver.getNode();
+        if (path.isEmpty())
+          ret.addAll(
+              new DatasetIteratorElementGenerator(node, overTensorReturns(spread, builder))
+                  .getTensorTypes(builder));
+        else {
+          DatasetIteratorElementGenerator at = leafElementAt(node, datasets, spread, path, builder);
+          if (at.resolvesPath(builder, path)) ret.addAll(at.getTensorTypesForPath(builder, path));
+        }
+      }
+    }
+    if (ret.isEmpty()) ret.add(new TensorType(DType.UNKNOWN, null));
+    return ret;
   }
 
   /**
@@ -2101,8 +2140,25 @@ public class TensorGeneratorFactory {
    */
   static List<TensorGenerator> mirroredDatasets(
       ElementMirrorKey key, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> ret = producedDatasets(key.getNode(), builder);
+    if (!ret.isEmpty()) return ret;
+    return DatasetIteratorElementGenerator.datasetsIn(
+        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key.getDataset())),
+        builder);
+  }
+
+  /**
+   * The generators of the datasets a producer's summary returns, read in the frame of each call to
+   * it ({@link #mirroredDatasets}).
+   *
+   * @param producer The node of the producer's summary.
+   * @param builder The propagation call graph builder.
+   * @return The dataset generators, without duplicates, and empty for a producer no call with a
+   *     result reaches.
+   */
+  private static List<TensorGenerator> producedDatasets(
+      CGNode producer, PropagationCallGraphBuilder builder) {
     List<TensorGenerator> ret = new ArrayList<>();
-    CGNode producer = key.getNode();
     CallGraph cg = builder.getCallGraph();
     for (CGNode caller : Iterator2Iterable.make(cg.getPredNodes(producer))) {
       if (caller.getIR() == null) continue;
@@ -2122,10 +2178,7 @@ public class TensorGeneratorFactory {
         }
       }
     }
-    if (!ret.isEmpty()) return ret;
-    return DatasetIteratorElementGenerator.datasetsIn(
-        withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(key.getDataset())),
-        builder);
+    return ret;
   }
 
   /**

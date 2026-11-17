@@ -624,23 +624,46 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Where the receiver of a describing attribute holds the structure the attribute describes
+   * (wala/ML#1280); see {@link DescriptorAttribute}.
+   *
+   * @param gate The receiver's field that must hold a value before the source is read, or {@code
+   *     null} for a source that is always read. A points-to set only grows, so a source cannot be
+   *     read only while a field is empty, and a gate names a field that holds a value exactly when
+   *     the source is the receiver's.
+   * @param path The fields that lead from the receiver to the structure, never empty.
+   * @param located Whether each description records its receiver and its path in the structure
+   *     ({@link DescriptorKey#getReceiver}, {@link DescriptorKey#getPath}). A located source holds
+   *     values the receiver's own are computed from, as the return of a function a dataset maps
+   *     stands for the element of every dataset made from the mapped one, so a client reads what a
+   *     description describes from the receiver, at the path, and not from the value copied.
+   */
+  public record DescriptorSource(String gate, List<String> path, boolean located) {
+    public DescriptorSource {
+      path = List.copyOf(path);
+    }
+  }
+
+  /**
    * An attribute whose read describes a structure its receiver holds (wala/ML#1280): the read
-   * returns a copy of the structure in the receiver's field, with a fresh object of the descriptor
-   * class in place of each value that is no structure, as a dataset's element specification has the
-   * nesting of its element and a specification where the element has a tensor.
+   * returns a copy of the structure each of the receiver's sources holds, with a fresh object of
+   * the descriptor class in place of each value that is no structure, as a dataset's element
+   * specification has the nesting of its element and a specification where the element has a
+   * tensor.
    *
    * @param receivers The classes whose instances have the attribute.
-   * @param field The receiver's field holding the described structure.
+   * @param sources Where a receiver holds the described structure.
    * @param structures The classes copied as structure; a value of any other class is described.
    * @param descriptor The class of the object that describes a value.
    */
   public record DescriptorAttribute(
       Set<TypeReference> receivers,
-      String field,
+      List<DescriptorSource> sources,
       Set<TypeReference> structures,
       TypeReference descriptor) {
     public DescriptorAttribute {
       receivers = Set.copyOf(receivers);
+      sources = List.copyOf(sources);
       structures = Set.copyOf(structures);
     }
   }
@@ -4278,17 +4301,53 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * one key of the described structure; see {@link DescriptorAttribute}. A copy of a structure has
    * the structure's class and is a structure itself; a copy of anything else is of the descriptor
    * class and describes the key it copies. Keyed by the read and the copied key, so a structure
-   * reached along several paths, or a cyclic one, is copied once.
+   * reached along several paths, or a cyclic one, is copied once. A copy from a located source
+   * ({@link DescriptorSource#located}) is keyed by its receiver too, and a descriptor from one by
+   * its path, so each receiver has a description of its own and a value the structure holds at
+   * several paths is described at each.
    */
   public static final class DescriptorKey extends AllocationSiteInNode {
     private final InstanceKey described;
     private final boolean leaf;
+    private final InstanceKey receiver;
+    private final List<Object> path;
 
     private DescriptorKey(
-        CGNode node, NewSiteReference site, IClass type, InstanceKey described, boolean leaf) {
+        CGNode node,
+        NewSiteReference site,
+        IClass type,
+        InstanceKey described,
+        boolean leaf,
+        InstanceKey receiver,
+        List<Object> path) {
       super(node, site, type);
       this.described = described;
       this.leaf = leaf;
+      this.receiver = receiver;
+      this.path = path == null ? null : List.copyOf(path);
+    }
+
+    /**
+     * The receiver whose attribute read made this key, for a copy from a located source ({@link
+     * DescriptorSource#located}).
+     *
+     * @return The receiver, or {@code null} for a copy from a source that is not located, where
+     *     {@link #getDescribed} is the described value itself.
+     */
+    public InstanceKey getReceiver() {
+      return receiver;
+    }
+
+    /**
+     * Where the described value is in the receiver's structure, for a descriptor from a located
+     * source: the catalog values from the structure's root, an {@link Integer} for a tuple's
+     * position and a {@link String} for a dict's key, and empty for a structure that is the value.
+     *
+     * @return The path, or {@code null} for a structure, for a copy from a source that is not
+     *     located, and for a descriptor reached only past the length a path records.
+     */
+    public List<Object> getPath() {
+      return path;
     }
 
     /**
@@ -4315,17 +4374,26 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return o instanceof DescriptorKey other
           && getNode().equals(other.getNode())
           && getSite().equals(other.getSite())
-          && described.equals(other.described);
+          && described.equals(other.described)
+          && Objects.equals(receiver, other.receiver)
+          && Objects.equals(path, other.path);
     }
 
     @Override
     public int hashCode() {
-      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + described.hashCode();
+      return (((getNode().hashCode() * 31 + getSite().hashCode()) * 31 + described.hashCode()) * 31
+                  + Objects.hashCode(receiver))
+              * 31
+          + Objects.hashCode(path);
     }
 
     @Override
     public String toString() {
-      return "Descriptor[" + (leaf ? "of " : "structure of ") + described + "]";
+      return "Descriptor["
+          + (leaf ? "of " : "structure of ")
+          + described
+          + (receiver == null ? "" : " in " + receiver + (path == null ? "" : " at " + path))
+          + "]";
     }
   }
 
@@ -5970,7 +6038,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @param value A catalogued field's value, a string or a number.
      * @return The key or the position.
      */
-    private Object mirrorPathElement(Object value) {
+    private static Object mirrorPathElement(Object value) {
       if (value instanceof String) return value;
       if ((value instanceof Integer
               || value instanceof Long
@@ -6152,19 +6220,106 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * Describes the structure a receiver holds, if the receiver is of one of the attribute's
-     * classes.
+     * Describes the structure a receiver holds at each of the attribute's sources, if the receiver
+     * is of one of the attribute's classes. A gated source is read once its gate holds a value.
      *
      * @param receiver A key the read's receiver may be.
      */
     private void describe(InstanceKey receiver) {
       if (!isOneOf(receiver.concreteType(), attribute.receivers())) return;
-      IField field = resolveRootField(getClassHierarchy(), attribute.field());
+      for (DescriptorSource source : attribute.sources())
+        if (source.gate() == null) follow(receiver, receiver, source, 0);
+        else {
+          IField gate = resolveRootField(getClassHierarchy(), source.gate());
+          if (gate == null) continue;
+          PointerKey key = getPointerKeyForInstanceField(receiver, gate);
+          if (key != null) getSystem().newSideEffect(new SourceStep(receiver, source, -1), key);
+        }
+    }
+
+    /**
+     * Reads one field of a source's path off a key that holds it: the last field holds the
+     * structure, which is copied into the read's result, and any other holds the keys the next
+     * field is read off.
+     *
+     * @param holder The key the field is read off, the receiver for the first field.
+     * @param receiver The receiver.
+     * @param source The source.
+     * @param index The field's position in the source's path.
+     */
+    private void follow(
+        InstanceKey holder, InstanceKey receiver, DescriptorSource source, int index) {
+      IField field = resolveRootField(getClassHierarchy(), source.path().get(index));
       if (field == null) return;
-      getSystem()
-          .newSideEffect(
-              new DescriptorCopyOperator(node, pc, resultKey, attribute),
-              getPointerKeyForInstanceField(receiver, field));
+      PointerKey key = getPointerKeyForInstanceField(holder, field);
+      if (key == null) return;
+      if (index < source.path().size() - 1)
+        getSystem().newSideEffect(new SourceStep(receiver, source, index), key);
+      else
+        getSystem()
+            .newSideEffect(
+                new DescriptorCopyOperator(
+                    node,
+                    pc,
+                    resultKey,
+                    attribute,
+                    source.located() ? receiver : null,
+                    source.located() ? List.of() : null),
+                key);
+    }
+
+    /**
+     * A step toward a receiver's source: on the gate, at position -1, it starts the source's path
+     * once the gate holds a value, and on a field of the path it reads the next field off each key
+     * the field holds. Equal for the same read, receiver, source and position, so the propagation
+     * system keeps one per field it is on.
+     */
+    private final class SourceStep extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey receiver;
+      private final DescriptorSource source;
+      private final int index;
+
+      private SourceStep(InstanceKey receiver, DescriptorSource source, int index) {
+        this.receiver = receiver;
+        this.source = source;
+        this.index = index;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (rhs.getValue() == null || rhs.getValue().isEmpty()) return NOT_CHANGED;
+        if (index < 0) follow(receiver, receiver, source, 0);
+        else
+          rhs.getValue()
+              .foreach(i -> follow(getSystem().getInstanceKey(i), receiver, source, index + 1));
+        return NOT_CHANGED;
+      }
+
+      private DescriptorReadOperator read() {
+        return DescriptorReadOperator.this;
+      }
+
+      @Override
+      public int hashCode() {
+        return ((DescriptorReadOperator.this.hashCode() * 31 + receiver.hashCode()) * 31
+                    + source.hashCode())
+                * 31
+            + index;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof SourceStep other
+            && read().equals(other.read())
+            && receiver.equals(other.receiver)
+            && source.equals(other.source)
+            && index == other.index;
+      }
+
+      @Override
+      public String toString() {
+        return "descriptor source step " + index + " of " + source + " for " + receiver;
+      }
     }
 
     @Override
@@ -6194,21 +6349,42 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * a descriptor, a key of the descriptor class that describes it. A {@code None} is held as it is.
    * A copy is keyed by the read and the key it copies, so a structure that holds itself is copied
    * once. The catalog is order-free, so a member written into a structure after the read is
-   * described too, an over-approximation. Equal for the same read and target.
+   * described too, an over-approximation. Equal for the same read and target, and for a located
+   * source ({@link DescriptorSource#located}) the same receiver and path. A path is recorded up to
+   * the length an element mirror records, so a structure that holds itself is copied at finitely
+   * many paths, and a descriptor past that length has none.
    */
   private final class DescriptorCopyOperator extends UnaryOperator<PointsToSetVariable> {
     private final CGNode node;
     private final int pc;
     private final PointerKey target;
     private final DescriptorAttribute attribute;
+    private final InstanceKey receiver;
+    private final List<Object> path;
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
+    /**
+     * @param node The node of the read.
+     * @param pc The read's instruction index.
+     * @param target Where the copies go.
+     * @param attribute The attribute read.
+     * @param receiver The receiver for a located source, or {@code null}.
+     * @param path The path of what the operator copies in the receiver's structure, or {@code null}
+     *     for a source that is not located and past the length a path records.
+     */
     private DescriptorCopyOperator(
-        CGNode node, int pc, PointerKey target, DescriptorAttribute attribute) {
+        CGNode node,
+        int pc,
+        PointerKey target,
+        DescriptorAttribute attribute,
+        InstanceKey receiver,
+        List<Object> path) {
       this.node = node;
       this.pc = pc;
       this.target = target;
       this.attribute = attribute;
+      this.receiver = receiver;
+      this.path = path;
     }
 
     @Override
@@ -6229,7 +6405,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (type == null) return;
       DescriptorKey copy =
           new DescriptorKey(
-              node, NewSiteReference.make(pc, type.getReference()), type, source, !structure);
+              node,
+              NewSiteReference.make(pc, type.getReference()),
+              type,
+              source,
+              !structure,
+              receiver,
+              structure ? null : path);
       logger.fine(() -> "Describing " + source + " as " + copy + " at " + pc + " in " + node + ".");
       getSystem().newConstraint(target, copy);
       if (!structure) return;
@@ -6262,13 +6444,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                             if (f == null) return;
                             getSystem()
                                 .newConstraint(factory.getPointerKeyForObjectCatalog(copy), name);
+                            List<Object> next = null;
+                            if (path != null && path.size() < ElementMirrorOperator.MAX_PATH) {
+                              next = new ArrayList<>(path);
+                              next.add(ElementMirrorOperator.mirrorPathElement(value));
+                            }
                             getSystem()
                                 .newSideEffect(
                                     new DescriptorCopyOperator(
                                         node,
                                         pc,
                                         factory.getPointerKeyForInstanceField(copy, f),
-                                        attribute),
+                                        attribute,
+                                        receiver,
+                                        next),
                                     factory.getPointerKeyForInstanceField(source, f));
                           });
                   return NOT_CHANGED;
@@ -6294,7 +6483,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public int hashCode() {
-      return (node.hashCode() * 31 + pc) * 31 + target.hashCode();
+      return (((node.hashCode() * 31 + pc) * 31 + target.hashCode()) * 31
+                  + Objects.hashCode(receiver))
+              * 31
+          + Objects.hashCode(path);
     }
 
     @Override
@@ -6303,7 +6495,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           && node.equals(other.node)
           && pc == other.pc
           && target.equals(other.target)
-          && attribute.equals(other.attribute);
+          && attribute.equals(other.attribute)
+          && Objects.equals(receiver, other.receiver)
+          && Objects.equals(path, other.path);
     }
 
     @Override
