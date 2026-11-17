@@ -5488,7 +5488,13 @@
       <class name="UpSampling1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="UpSampling2D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="UpSampling3D" super="Ltensorflow/keras/layers/Layer"></class>
-      <class name="Wrapper" super="Ltensorflow/keras/layers/Layer"></class>
+      <class name="Wrapper" super="Ltensorflow/keras/layers/Layer">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Wrapper. The constructor a subclass's `super().__init__(layer)` reaches: it stores the wrapped layer as `self.layer`, as Keras's own does, so the subclass's `self.layer` is the layer it was given, and its call and stores into its attributes reach that layer (wala/ML#1288). -->
+        <method name="__init__" descriptor="()LRoot;" numArgs="3" paramNames="func self layer">
+          <putfield class="LRoot" field="layer" fieldType="LRoot" ref="self" value="layer"/>
+          <return value="self"/>
+        </method>
+      </class>
       <class name="ZeroPadding1D" super="Ltensorflow/keras/layers/Layer"></class>
       <class name="ZeroPadding3D" super="Ltensorflow/keras/layers/Layer"></class>
     </package>
