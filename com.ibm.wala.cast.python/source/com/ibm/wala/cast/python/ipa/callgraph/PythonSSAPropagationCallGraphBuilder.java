@@ -955,6 +955,39 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The summary class whose call projects the leaves of its argument (wala/ML#1280), or {@code
+   * null} when no client names one; see {@link #setStructureProjection}.
+   */
+  private TypeReference structureProjectionType;
+
+  /**
+   * The fields a structure projection reads off a leaf, each off what the one before it holds; see
+   * {@link #setStructureProjection}.
+   */
+  private List<String> structureProjectionPath = List.of();
+
+  /**
+   * Names the class of structure projection (wala/ML#1280): a call {@code project(structure)} whose
+   * callee is an instance of {@code projection} returns the nesting of {@code structure}, a fresh
+   * copy of each list, tuple, dict and namedtuple instance it holds, as a structure rebuild copies
+   * them ({@link #setStructureRebuild}), with, in the place of every value that is not itself one
+   * of those, what that value holds at the path of fields; where {@code structure} is none of
+   * those, the call returns what it holds at the path. A summary of a library function that makes
+   * one object out of a structure of objects calls it where the new object needs, in that nesting,
+   * something each of them carries. A value that holds nothing at the path leaves its place empty.
+   * A value reaches a place without an edge of the pointer analysis's flow graph, so a dataflow
+   * over that graph does not carry what it holds into the place.
+   *
+   * @param projection The summary class whose call projects a structure.
+   * @param path The fields that lead from a leaf to what takes its place, never empty.
+   */
+  public void setStructureProjection(TypeReference projection, List<String> path) {
+    if (path.isEmpty()) throw new IllegalArgumentException("A structure projection has no path.");
+    this.structureProjectionType = projection;
+    this.structureProjectionPath = List.copyOf(path);
+  }
+
+  /**
    * Names the class of {@code map}'s spreading (wala/ML#164): a call {@code spread(element, holder,
    * legacy, argument, r_1, ..., r_max, dataset)} whose callee is an instance of {@code spread}
    * spreads each key of {@code element} as {@code tf.data} does. An exact tuple of {@code n}
@@ -1960,6 +1993,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processStructureLeaves(inst);
       processPresenceGate(inst);
       processStructureRebuild(inst);
+      processStructureProjection(inst);
     }
 
     /**
@@ -2288,7 +2322,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               inst.iIndex(),
               getPointerKeyForLocal(inst.getDef()),
               List.copyOf(values),
-              Set.copyOf(valueKeys));
+              Set.copyOf(valueKeys),
+              null);
+      rebuildStructureArgument(inst, operator);
+    }
+
+    /**
+     * Rebuilds a call's first argument with an operator, reading directly an argument whose keys
+     * are invariant or implicitly represented.
+     *
+     * @param inst The call.
+     * @param operator The operator that rebuilds into the call's result.
+     */
+    private void rebuildStructureArgument(
+        PythonInvokeInstruction inst, StructureRebuildOperator operator) {
+      SymbolTable symtab = ir.getSymbolTable();
       int structureVn = inst.getUse(1);
       PointerKey structureKey = getPointerKeyForLocal(structureVn);
       if (contentsAreInvariant(symtab, du, structureVn) || system.isImplicit(structureKey)) {
@@ -2297,6 +2345,39 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         return;
       }
       system.newSideEffect(operator, structureKey);
+    }
+
+    /**
+     * Projects the leaves of a call's first argument where its callee is the structure projection
+     * class (wala/ML#1280); see {@link #setStructureProjection}. The summary allocates the callee
+     * itself, so its keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processStructureProjection(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.structureProjectionType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 2) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      boolean projection = false;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.structureProjectionType))
+          projection = true;
+      if (!projection) return;
+      rebuildStructureArgument(
+          inst,
+          builder
+          .new StructureRebuildOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              List.of(),
+              Set.of(),
+              builder.structureProjectionPath));
     }
 
     /**
@@ -4923,6 +5004,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * where the run time has one value per leaf, an over-approximation. A place that holds no key
    * holds none of the later arguments' values. The catalog is order-free, so a member written into
    * a structure after the call is rebuilt too. Equal for the same call and target.
+   *
+   * <p>For a structure projection call ({@link #setStructureProjection}) a leaf's place is taken by
+   * what the leaf itself holds at the projection's path of fields, and there are no later
+   * arguments.
    */
   private final class StructureRebuildOperator extends UnaryOperator<PointsToSetVariable> {
     private final CGNode node;
@@ -4935,7 +5020,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     /** The keys of the later arguments whose values are represented implicitly. */
     private final Set<InstanceKey> valueKeys;
 
-    /** The structures copied into the target so far. */
+    /**
+     * The fields a projection reads off a leaf, or {@code null} for a rebuild around the later
+     * arguments.
+     */
+    private final List<String> projection;
+
+    /** The structures copied into the target so far, and the leaves projected into it. */
     private final Set<InstanceKey> copied = HashSetFactory.make();
 
     /** Whether the target holds the later arguments' values. */
@@ -4946,12 +5037,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         int pc,
         PointerKey target,
         List<PointerKey> values,
-        Set<InstanceKey> valueKeys) {
+        Set<InstanceKey> valueKeys,
+        List<String> projection) {
       this.node = node;
       this.pc = pc;
       this.target = target;
       this.values = values;
       this.valueKeys = valueKeys;
+      this.projection = projection;
     }
 
     @Override
@@ -4963,14 +5056,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     /**
      * Rebuilds a key the place may hold: a structure is copied, and a leaf's place is taken by the
-     * later arguments' values.
+     * later arguments' values, or for a projection by what the leaf holds at the path.
      *
      * @param source A key the argument, or the field, may be.
      */
     void rebuild(InstanceKey source) {
       if (source.concreteType() == null) return;
       if (!isNestedStructure(source)) {
-        fill();
+        if (projection == null) fill();
+        else if (copied.add(source)) project(source, 0);
         return;
       }
       if (!copied.add(source)) return;
@@ -5003,6 +5097,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Reads one field of the projection's path off a key that holds it: the keys the last field
+     * holds go into the target, and the next field is read off each key any other holds.
+     *
+     * @param holder The key the field is read off, a leaf for the first field.
+     * @param index The field's position in the path.
+     */
+    private void project(InstanceKey holder, int index) {
+      IField field = resolveRootField(getClassHierarchy(), projection.get(index));
+      if (field == null) return;
+      PointerKey key = getPointerKeyForInstanceField(holder, field);
+      if (key != null) getSystem().newSideEffect(new ProjectionStep(index), key);
+    }
+
+    /**
      * Rebuilds a field of a structure into the same field of its copy.
      *
      * @param source The structure.
@@ -5014,7 +5122,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       getSystem()
           .newSideEffect(
               new StructureRebuildOperator(
-                  node, pc, factory.getPointerKeyForInstanceField(copy, field), values, valueKeys),
+                  node,
+                  pc,
+                  factory.getPointerKeyForInstanceField(copy, field),
+                  values,
+                  valueKeys,
+                  projection),
               factory.getPointerKeyForInstanceField(source, field));
     }
 
@@ -5034,6 +5147,54 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "structure rebuild at " + pc + " in " + node + " into " + target;
+    }
+
+    /**
+     * A step along the projection's path, on one field of it: the keys the last field holds go into
+     * the target, and the next field is read off each key any other holds. Equal for the same
+     * target and position, so the propagation system keeps one per field it is on.
+     */
+    private final class ProjectionStep extends UnaryOperator<PointsToSetVariable> {
+      private final int index;
+
+      private ProjectionStep(int index) {
+        this.index = index;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        if (rhs.getValue() == null) return NOT_CHANGED;
+        boolean last = index == projection.size() - 1;
+        rhs.getValue()
+            .foreach(
+                i -> {
+                  InstanceKey held = getSystem().getInstanceKey(i);
+                  if (last) getSystem().newConstraint(target, held);
+                  else project(held, index + 1);
+                });
+        return NOT_CHANGED;
+      }
+
+      private StructureRebuildOperator rebuild() {
+        return StructureRebuildOperator.this;
+      }
+
+      @Override
+      public int hashCode() {
+        return StructureRebuildOperator.this.hashCode() * 31 + index;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof ProjectionStep other
+            && rebuild().equals(other.rebuild())
+            && index == other.index;
+      }
+
+      @Override
+      public String toString() {
+        return "structure projection step " + index + " into " + target;
+      }
     }
 
     /**

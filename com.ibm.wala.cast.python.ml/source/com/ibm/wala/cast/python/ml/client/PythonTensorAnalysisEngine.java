@@ -1185,6 +1185,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // They return a structure of the same nesting, with other values in the leaves' places
     // (wala/ML#1280).
     builder.setStructureRebuild(TensorFlowTypes.NEST_REBUILD);
+    // A zip's method objects carry the nesting of the datasets it is given, each replaced by the
+    // element structure its own `map` method object carries, so a zip of datasets whose elements
+    // are not mirrored is described as a `map` of one is (wala/ML#1280).
+    builder.setStructureProjection(
+        TensorFlowTypes.DATASET_ZIP_STRUCTURE, List.of("map", "element_structure"));
 
     // A dataset's `element_spec` has the nesting of its element, with a `tf.TensorSpec` where the
     // element has a tensor (wala/ML#1280).
