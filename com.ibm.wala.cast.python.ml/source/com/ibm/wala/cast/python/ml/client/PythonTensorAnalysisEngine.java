@@ -2042,6 +2042,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // are a source, as a loop variable bound to the element is.
           sources.add(src);
           LOGGER.fine(() -> "Added dataflow source from a dataset element read: " + describe(src));
+        } else if (TensorGeneratorFactory.isAppliedDatasetRead(src)) {
+          // The dataset `Dataset.apply` hands the function it applies is a source: no assignment
+          // carries the receiver's type across the method object's field.
+          sources.add(src);
+          LOGGER.fine(() -> "Added dataflow source from an applied dataset read: " + describe(src));
         } else if (UnaryOperation.isTensorUnaryOperator(inst)) {
           // Unary `-` and `~` on tensors are sources too; the factory declines non-tensor operands.
           sources.add(src);

@@ -51,6 +51,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSO
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_APPLY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BUCKET_BY_SEQUENCE_LENGTH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CACHE_TYPE;
@@ -1321,6 +1322,52 @@ public class TensorGeneratorFactory {
         || def instanceof SSABinaryOpInstruction
         || UnaryOperation.isTensorUnaryOperator(def)
         || packComponentRead(variable, builder) != null;
+  }
+
+  /** The field of a {@code Dataset.apply} method object that holds the dataset it was read off. */
+  private static final String APPLIED_DATASET_FIELD = "applied_dataset";
+
+  /**
+   * Whether a variable is the {@code Dataset.apply} summary's read of its receiver: the dataset the
+   * summary hands the function it applies, read off the field of the method object that the
+   * dataset's own summary wrote.
+   *
+   * <p>The dataset is written to the field where it is allocated, so the field has no assignment a
+   * walk back could follow, and a walk from the applied function's parameter, or from what {@code
+   * apply} returns, ends at the field with no creator. The read is a dataflow source for that
+   * reason, typed from the datasets it holds.
+   *
+   * @param variable The variable.
+   * @return {@code true} iff the variable is such a read.
+   */
+  static boolean isAppliedDatasetRead(PointsToSetVariable variable) {
+    if (!(variable.getPointerKey() instanceof LocalPointerKey lpk)) return false;
+    CGNode node = lpk.getNode();
+    return node.getMethod().getDeclaringClass().getReference().equals(DATASET_APPLY_TYPE)
+        && node.getDU().getDef(lpk.getValueNumber()) instanceof SSAGetInstruction get
+        && get.getDeclaredField().getName().toString().equals(APPLIED_DATASET_FIELD);
+  }
+
+  /**
+   * The generator of the dataset a {@code Dataset.apply} summary {@linkplain #isAppliedDatasetRead
+   * reads} for the function it applies: the generator of the dataset the read holds, or the join of
+   * the generators when it holds several.
+   *
+   * @param source The read.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @return The generator, or {@code null} when the read holds no dataset with a generator, for
+   *     which the caller reads what it would for any other field read.
+   */
+  private static TensorGenerator appliedDatasetGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    List<TensorGenerator> datasets =
+        DatasetIteratorElementGenerator.datasetsIn(
+            withoutClientOnlyKeys(
+                builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())),
+            builder);
+    LOGGER.fine(() -> "Applied dataset read " + describe(source) + " holds: " + datasets + ".");
+    if (datasets.isEmpty()) return null;
+    return datasets.size() == 1 ? datasets.get(0) : new DatasetCreatorJoin(source, datasets);
   }
 
   /**
@@ -3838,6 +3885,11 @@ public class TensorGeneratorFactory {
     // inputs` of the inputs a Keras step unpacks (wala/ML#997), reads the position below it.
     TensorGenerator memberRead = datasetElementMemberRead(source, builder);
     if (memberRead != null) return memberRead;
+    // The dataset `Dataset.apply` hands the function it applies is the receiver's.
+    if (isAppliedDatasetRead(source)) {
+      TensorGenerator applied = appliedDatasetGenerator(source, builder);
+      if (applied != null) return applied;
+    }
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
       CGNode node = lpk.getNode();
