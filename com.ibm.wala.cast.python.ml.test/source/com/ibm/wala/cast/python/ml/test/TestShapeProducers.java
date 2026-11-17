@@ -90,6 +90,16 @@ public class TestShapeProducers extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The number of allocations a sink receives.
+   *
+   * @param sink The sink's name.
+   * @return The size of the points-to set of its parameter.
+   */
+  private static int count(String sink) {
+    return builder().getPointerAnalysis().getPointsToSet(parameter(sink)).size();
+  }
+
+  /**
    * The types of the allocations a sink receives.
    *
    * @param sink The sink's name.
@@ -188,16 +198,73 @@ public class TestShapeProducers extends TestPythonMLCallGraphShape {
 
   /**
    * The {@code element_spec} of a dataset whose element is not mirrored, a dataset of a file's
-   * lines, and its {@code shape}, also for the dataset a {@code map} over the lines returns. The
-   * element has no structure to describe, so the read holds nothing.
+   * lines, is a spec, and its {@code shape} a static shape, also for the dataset a {@code map} over
+   * the lines returns. Such a dataset carries its element's structure on its method objects, which
+   * is what the read describes.
    */
-  // TODO: Expect `TensorFlowTypes.TENSOR_SPEC` for the first and `STATIC_SHAPE` for the others once
-  // the element of a dataset that is not mirrored is described (wala/ML#1280).
   @Test
   public void testSpecOfUnmirroredElement() {
-    assertEquals(Set.of(), types("consume_text_spec"));
-    assertEquals(Set.of(), types("consume_text_spec_shape"));
-    assertEquals(Set.of(), types("consume_text_map_spec_shape"));
+    assertEquals(names(TensorFlowTypes.TENSOR_SPEC), types("consume_text_spec"));
+    assertEquals(STATIC_SHAPE, types("consume_text_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_text_map_spec_shape"));
+  }
+
+  /**
+   * The {@code element_spec} of a {@code map} over a file's lines whose function returns a dict is
+   * a dict, and its member a spec.
+   */
+  @Test
+  public void testSpecOfUnmirroredStructure() {
+    assertEquals(names(PythonTypes.dict), types("consume_text_dict_spec"));
+    assertEquals(names(TensorFlowTypes.TENSOR_SPEC), types("consume_text_dict_spec_member"));
+  }
+
+  /**
+   * The shapes a {@code tf.nest.map_structure} maps out of the specs of a dataset whose element is
+   * not mirrored: a static shape for an element that is one tensor, and for a dict of specs a dict
+   * whose member is the shape.
+   */
+  @Test
+  public void testMappedShapesOfUnmirroredElement() {
+    assertEquals(STATIC_SHAPE, types("consume_text_mapped"));
+    assertEquals(names(PythonTypes.dict), types("consume_text_dict_mapped"));
+    assertEquals(STATIC_SHAPE, types("consume_text_dict_mapped_member"));
+  }
+
+  /**
+   * A dataset whose element is mirrored is described once, from the mirror, also when a {@code map}
+   * returned it. The structure a dataset's method objects carry is read only for a dataset that
+   * holds the marker of an element that is not mirrored.
+   */
+  @Test
+  public void testSpecOfMirroredElementIsDescribedOnce() {
+    assertEquals(1, count("consume_spec"));
+    assertEquals(1, count("consume_map_spec"));
+  }
+
+  /**
+   * The {@code element_spec} of a window of a dataset of a file's lines, a dataset that is another
+   * dataset's element.
+   */
+  // TODO: Expect a `TensorSpec` once the spec of a dataset that is a dataset's element is described
+  // (wala/ML#1280).
+  @Test
+  public void testSpecOfWindowOfUnmirroredElement() {
+    assertEquals(Set.of(), types("consume_text_window_spec"));
+  }
+
+  /** The {@code element_spec} of an {@code enumerate} of a dataset of a file's lines. */
+  // TODO: Expect a `tuple` once the spec of an `enumerate` of a dataset whose element is not
+  // mirrored is described (wala/ML#1280).
+  @Test
+  public void testSpecOfEnumeratedUnmirroredElement() {
+    assertEquals(Set.of(), types("consume_text_enumerate_spec"));
+  }
+
+  /** A descriptor source with no path is refused where it is made, not where it is followed. */
+  @Test(expected = IllegalArgumentException.class)
+  public void testDescriptorSourceWithoutPath() {
+    new PythonSSAPropagationCallGraphBuilder.DescriptorSource(null, List.of(), false);
   }
 
   /**

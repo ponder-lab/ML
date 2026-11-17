@@ -7074,12 +7074,16 @@ public abstract class TensorGenerator implements Cloneable {
         // What describes a value has the value's shape, and a structure of descriptors has none
         // (wala/ML#1280).
         if (!descriptor.isLeaf()) continue;
+        // A description with a receiver is read from the receiver's element, at its path, and not
+        // from the value it copies, which stands for every dataset made from the one it is of.
         ShapeResult described =
-            getShapeResultOfValue(
-                builder,
-                OrdinalSet.toOrdinalSet(
-                    List.of(descriptor.getDescribed()), valuePointsToSet.getMapping()),
-                exact);
+            descriptor.getReceiver() != null
+                ? getShapeResultOfDescribedElement(builder, descriptor)
+                : getShapeResultOfValue(
+                    builder,
+                    OrdinalSet.toOrdinalSet(
+                        List.of(descriptor.getDescribed()), valuePointsToSet.getMapping()),
+                    exact);
         ret.addAll(described.members());
         if (described.hasUnknown()) hasUnknown = true;
       } else if (valueIK instanceof ConstantKey) {
@@ -7410,6 +7414,68 @@ public abstract class TensorGenerator implements Cloneable {
         () -> {
           Set<DType> dtypes = EnumSet.noneOf(DType.class);
           for (TensorType type : TensorGeneratorFactory.mirroredLeafTypes(leaf, builder))
+            dtypes.add(type.getDType());
+          return dtypes;
+        };
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    @SuppressWarnings("unchecked")
+    Set<DType> ret =
+        engine == null
+            ? nullEngineRead(builder, key, () -> (Set<DType>) transfer.get(), EnumSet.of(UNKNOWN))
+            : (Set<DType>)
+                (engine.isEvaluating()
+                    ? engine.read(key, transfer, false)
+                    : engine.demand(key, transfer, false));
+    return ret;
+  }
+
+  /**
+   * The shapes a description from a located source describes (wala/ML#1280): those of the types its
+   * dataset's element has at its path ({@link TensorGeneratorFactory#describedElementTypes}), read
+   * through the resolver as a mirrored leaf's are ({@link #getShapeResultOfMirroredLeaf}), since
+   * the element's read may reach the description again.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param descriptor The description, with a receiver.
+   * @return Its shapes.
+   */
+  static ShapeResult getShapeResultOfDescribedElement(
+      PropagationCallGraphBuilder builder, DescriptorKey descriptor) {
+    Object key = HashedPair.of("described-element-shape", descriptor);
+    java.util.function.Supplier<Object> transfer =
+        () -> {
+          boolean unknown = false;
+          Set<List<Dimension<?>>> members = HashSetFactory.make();
+          for (TensorType type : TensorGeneratorFactory.describedElementTypes(descriptor, builder))
+            if (type.getDims() == null) unknown = true;
+            else members.add(type.getDims());
+          return new ShapeResult(members, unknown);
+        };
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine == null)
+      return nullEngineRead(
+          builder, key, () -> (ShapeResult) transfer.get(), ShapeResult.unknown());
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
+  }
+
+  /**
+   * The dtypes a description from a located source describes: the dtype twin of {@link
+   * #getShapeResultOfDescribedElement}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param descriptor The description, with a receiver.
+   * @return Its dtypes.
+   */
+  static Set<DType> getDTypesOfDescribedElement(
+      PropagationCallGraphBuilder builder, DescriptorKey descriptor) {
+    Object key = HashedPair.of("described-element-dtype", descriptor);
+    java.util.function.Supplier<Object> transfer =
+        () -> {
+          Set<DType> dtypes = EnumSet.noneOf(DType.class);
+          for (TensorType type : TensorGeneratorFactory.describedElementTypes(descriptor, builder))
             dtypes.add(type.getDType());
           return dtypes;
         };
@@ -8410,11 +8476,13 @@ public abstract class TensorGenerator implements Cloneable {
         // As in the shape read, what describes a value has the value's dtype (wala/ML#1280).
         if (descriptor.isLeaf()) {
           Set<DType> described =
-              getDTypesOfValue(
-                  builder,
-                  OrdinalSet.toOrdinalSet(
-                      List.of(descriptor.getDescribed()), valuePointsToSet.getMapping()),
-                  visited);
+              descriptor.getReceiver() != null
+                  ? getDTypesOfDescribedElement(builder, descriptor)
+                  : getDTypesOfValue(
+                      builder,
+                      OrdinalSet.toOrdinalSet(
+                          List.of(descriptor.getDescribed()), valuePointsToSet.getMapping()),
+                      visited);
           if (described != null) ret.addAll(described);
         }
         continue;

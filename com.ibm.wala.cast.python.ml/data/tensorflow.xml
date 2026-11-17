@@ -5779,6 +5779,29 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
+          <!-- A dataset whose element is not mirrored carries the element's structure on its method objects, as a dataset a `map` returns carries what the function returns. This element is one value, so the structure is the marker: a pass-through hands it on, and a read of `element_spec` describes one value (wala/ML#1280). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
@@ -5878,6 +5901,29 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
+          <!-- A dataset whose element is not mirrored carries the element's structure on its method objects, as a dataset a `map` returns carries what the function returns. This element is one value, so the structure is the marker: a pass-through hands it on, and a read of `element_spec` describes one value (wala/ML#1280). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
@@ -10178,6 +10224,29 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
+          <!-- A dataset whose element is not mirrored carries the element's structure on its method objects, as a dataset a `map` returns carries what the function returns. This element is one value, so the structure is the marker: a pass-through hands it on, and a read of `element_spec` describes one value (wala/ML#1280). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>
@@ -10757,6 +10826,29 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_take" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_window" value="legacy"/>
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
+          <!-- A dataset whose element is not mirrored carries the element's structure on its method objects, as a dataset a `map` returns carries what the function returns. This element is one value, so the structure is the marker: a pass-through hands it on, and a read of `element_spec` describes one value (wala/ML#1280). -->
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_enumerate" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="legacy"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <return value="x"/>
         </method>
       </class>

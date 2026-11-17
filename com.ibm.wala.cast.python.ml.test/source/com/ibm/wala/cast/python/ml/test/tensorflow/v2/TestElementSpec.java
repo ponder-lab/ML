@@ -44,8 +44,8 @@ public class TestElementSpec extends AbstractTensorTest {
 
   /**
    * The spec of a dataset whose element is not mirrored, a dataset of a file's lines, is not a
-   * tensor, and neither is its shape. The read holds nothing, so it is the read's receiver, a
-   * dataset, that tells it from a read of the element.
+   * tensor, and neither is its shape. It is the read's receiver, a dataset, that tells the read
+   * from a read of the element, so this holds whether or not the element is described.
    */
   @Test
   public void testSpecOfUnmirroredElementIsNotATensor()

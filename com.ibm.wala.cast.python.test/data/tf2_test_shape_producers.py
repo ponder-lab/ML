@@ -83,6 +83,10 @@ def consume_parameter_spec_shape(s):
     assert s.as_list() == [None, 3]
 
 
+def consume_map_spec(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
 def consume_map_spec_shape(s):
     assert isinstance(s, tf.TensorShape)
     assert s.as_list() == [None, 3]
@@ -105,6 +109,36 @@ def consume_text_spec_shape(s):
 def consume_text_map_spec_shape(s):
     assert isinstance(s, tf.TensorShape)
     assert s.as_list() == [3]
+
+
+def consume_text_mapped(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [3]
+
+
+def consume_text_dict_spec(spec):
+    assert isinstance(spec, dict)
+
+
+def consume_text_dict_spec_member(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
+def consume_text_enumerate_spec(spec):
+    assert isinstance(spec, tuple)
+
+
+def consume_text_window_spec(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
+def consume_text_dict_mapped(shapes):
+    assert isinstance(shapes, dict)
+
+
+def consume_text_dict_mapped_member(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [2, 2]
 
 
 def consume_spec_batch_size(n):
@@ -482,6 +516,7 @@ consume_named_spec_shape(tupled.element_spec.a.shape)
 consume_parameter_spec_shape(spec_shape_of(dataset))
 consume_parameter_mapped(mapped_shapes_of(dataset))
 consume_map_spec_shape(dataset.map(lambda t: t * 2).element_spec.shape)
+consume_map_spec(dataset.map(lambda t: t * 3).element_spec)
 spec_of_optional(True)
 
 # The spec's dtype, beside a control: a tensor's.
@@ -520,6 +555,22 @@ with tempfile.TemporaryDirectory() as directory:
     # A function's results over the lines.
     rows = text.map(lambda line: tf.zeros([3]))
     consume_text_map_spec_shape(rows.element_spec.shape)
+    # The shapes mapped out of its specs.
+    consume_text_mapped(
+        tf.nest.map_structure(lambda spec: spec.shape, rows.element_spec)
+    )
+    # A function's results that are a dict, and the shapes mapped out of its specs.
+    pairs = text.map(lambda line: {"a": tf.ones([3]), "b": tf.zeros([2, 2], tf.int32)})
+    consume_text_dict_spec(pairs.element_spec)
+    consume_text_dict_spec_member(pairs.element_spec["a"])
+    pair_shapes = tf.nest.map_structure(lambda spec: spec.shape, pairs.element_spec)
+    consume_text_dict_mapped(pair_shapes)
+    consume_text_dict_mapped_member(pair_shapes["b"])
+    # The lines counted.
+    consume_text_enumerate_spec(text.enumerate().element_spec)
+    # A window of the lines, a dataset that is another dataset's element.
+    for window in text.window(2):
+        consume_text_window_spec(window.element_spec)
     # A control: a member named as the attribute is, of an element of such a dataset.
     keyed_rows = text.map(lambda line: {"element_spec": tf.zeros([3])})
     for row in keyed_rows.map(keyed_row):
