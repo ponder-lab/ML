@@ -1095,6 +1095,8 @@
         <putfield class="LRoot" field="map_structure" fieldType="LRoot" ref="nest" value="nest_map_structure"/>
         <new def="nest_flatten" class="Ltensorflow/nest/flatten"/>
         <putfield class="LRoot" field="flatten" fieldType="LRoot" ref="nest" value="nest_flatten"/>
+        <new def="nest_pack_sequence_as" class="Ltensorflow/nest/pack_sequence_as"/>
+        <putfield class="LRoot" field="pack_sequence_as" fieldType="LRoot" ref="nest" value="nest_pack_sequence_as"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/map_fn -->
         <new def="map_fn" class="Ltensorflow/functions/map_fn"/>
         <putfield class="LRoot" field="map_fn" fieldType="LRoot" ref="x" value="map_fn"/>
@@ -1442,9 +1444,16 @@
           <return value="none"/>
         </method>
       </class>
+      <class name="rebuild" allocatable="true">
+        <!-- Internal to the `tf.nest` summaries (wala/ML#1280): a call returns the nesting of `structure`, a fresh copy of each list, tuple, dict and namedtuple it holds, with what `value`, `value2` and `value3` hold in the place of every leaf, and those values themselves where `structure` is a leaf. A summary cannot enumerate a dict's keys, so the call graph builder builds the result, which the engine names through `setStructureRebuild`; the body returns a field nothing writes. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self structure value value2 value3">
+          <getfield class="LRoot" field="rebuilt" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
       <class name="map_structure" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nest/map_structure. Invokes `func` on a leaf of `structure`, so the function has a call-graph node and its parameter the leaves' types (wala/ML#1067). -->
-        <!-- TODO: https://github.com/wala/ML/issues/1280; return a structure of the results of `func`. Until then the call returns a field nothing writes: a result of `func` is not what the call returns for a structure, and `structure` holds the values `func` was given, not its results. -->
+        <!-- Returns the nesting of the first structure with the results of `func` in its leaves' places, and the results themselves where it is no structure (wala/ML#1280). The results are not paired with the leaves they were computed from, so every leaf's place holds every result. -->
         <!-- `func` takes a leaf of each structure the call passes, up to three, so there is one call per count of structures, as `map` has one per arity. The calls with two and three leaves go through `when_present`, so each has a target only once its last structure has a leaf: a structure the call does not pass has none, and a call passing a defaulted parameter of `func` an argument that holds nothing would leave the parameter without its default there. The call with one leaf has a target whatever the count, which over-approximates. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self func structure structure2 structure3">
           <new def="leaves_op" class="Ltensorflow/nest/leaves"/>
@@ -1457,8 +1466,19 @@
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="func2" arg1="leaf" arg2="leaf2" numArgs="3" def="func_result2"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="when_present" arg1="func" arg2="leaf3" numArgs="3" def="func3"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="func3" arg1="leaf" arg2="leaf2" arg3="leaf3" numArgs="4" def="func_result3"/>
-          <getfield class="LRoot" field="mapped" fieldType="LRoot" ref="self" def="none"/>
-          <return value="none"/>
+          <new def="rebuild" class="Ltensorflow/nest/rebuild"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="rebuild" arg1="structure" arg2="func_result" arg3="func_result2" arg4="func_result3" numArgs="5" def="mapped"/>
+          <return value="mapped"/>
+        </method>
+      </class>
+      <class name="pack_sequence_as" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nest/pack_sequence_as. Returns the nesting of `structure` with the members of `flat_sequence` in its leaves' places (wala/ML#1280). The members are not counted, so every leaf's place holds every member. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self structure flat_sequence expand_composites">
+          <new def="leaves_op" class="Ltensorflow/nest/leaves"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="leaves_op" arg1="flat_sequence" numArgs="2" def="member"/>
+          <new def="rebuild" class="Ltensorflow/nest/rebuild"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="rebuild" arg1="structure" arg2="member" numArgs="3" def="packed"/>
+          <return value="packed"/>
         </method>
       </class>
       <class name="flatten" allocatable="true">

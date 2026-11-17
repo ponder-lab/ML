@@ -910,6 +910,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The summary class whose call rebuilds its first argument around its later ones (wala/ML#1280),
+   * or {@code null} when no client names one; see {@link #setStructureRebuild}.
+   */
+  private TypeReference structureRebuildType;
+
+  /**
+   * Names the class of structure rebuilding (wala/ML#1280): a call {@code rebuild(structure, value,
+   * ...)} whose callee is an instance of {@code rebuild} returns the nesting of {@code structure},
+   * a fresh copy of each list, tuple, dict and namedtuple instance it holds, with what the later
+   * arguments hold in the place of every value that is not itself one of those; where {@code
+   * structure} is none of those, the call returns what the later arguments hold. A library function
+   * that returns a structure of the results of a function it applied to each leaf of a nested
+   * structure returns this call's result; see {@link #setStructureLeaves}.
+   *
+   * @param rebuild The summary class whose call rebuilds a structure.
+   */
+  public void setStructureRebuild(TypeReference rebuild) {
+    this.structureRebuildType = rebuild;
+  }
+
+  /**
    * Names the class of {@code map}'s spreading (wala/ML#164): a call {@code spread(element, holder,
    * legacy, argument, r_1, ..., r_max, dataset)} whose callee is an instance of {@code spread}
    * spreads each key of {@code element} as {@code tf.data} does. An exact tuple of {@code n}
@@ -1914,6 +1935,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processListWrap(inst);
       processStructureLeaves(inst);
       processPresenceGate(inst);
+      processStructureRebuild(inst);
     }
 
     /**
@@ -2203,6 +2225,54 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         return;
       }
       system.newSideEffect(operator, conditionKey);
+    }
+
+    /**
+     * Rebuilds a call's first argument around its later ones where its callee is the structure
+     * rebuild class (wala/ML#1280); see {@link #setStructureRebuild}. The summary allocates the
+     * callee itself, so its keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processStructureRebuild(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.structureRebuildType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 3) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      boolean rebuild = false;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.structureRebuildType)) rebuild = true;
+      if (!rebuild) return;
+      List<PointerKey> values = new ArrayList<>();
+      Set<InstanceKey> valueKeys = HashSetFactory.make();
+      for (int i = 2; i < inst.getNumberOfPositionalParameters(); i++) {
+        int valueVn = inst.getUse(i);
+        PointerKey valueKey = getPointerKeyForLocal(valueVn);
+        if (contentsAreInvariant(symtab, du, valueVn) || system.isImplicit(valueKey))
+          for (InstanceKey key : getInvariantContents(symtab, du, node, valueVn))
+            valueKeys.add(key);
+        else values.add(valueKey);
+      }
+      StructureRebuildOperator operator =
+          builder
+          .new StructureRebuildOperator(
+              node,
+              inst.iIndex(),
+              getPointerKeyForLocal(inst.getDef()),
+              List.copyOf(values),
+              Set.copyOf(valueKeys));
+      int structureVn = inst.getUse(1);
+      PointerKey structureKey = getPointerKeyForLocal(structureVn);
+      if (contentsAreInvariant(symtab, du, structureVn) || system.isImplicit(structureKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, structureVn))
+          operator.rebuild(key);
+        return;
+      }
+      system.newSideEffect(operator, structureKey);
     }
 
     /**
@@ -4260,6 +4330,49 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * A structure a structure rebuild call allocated (wala/ML#1280): the copy, at one call, of one
+   * list, tuple, dict or namedtuple instance its first argument holds; see {@link
+   * #setStructureRebuild}. Keyed by the call and the copied structure, so a structure reached along
+   * several paths, or one that holds itself, is copied once.
+   */
+  public static final class RebuiltStructureKey extends AllocationSiteInNode {
+    private final InstanceKey source;
+
+    private RebuiltStructureKey(
+        CGNode node, NewSiteReference site, IClass type, InstanceKey source) {
+      super(node, site, type);
+      this.source = source;
+    }
+
+    /**
+     * The structure this one copies.
+     *
+     * @return The copied structure.
+     */
+    public InstanceKey getSource() {
+      return source;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof RebuiltStructureKey other
+          && getNode().equals(other.getNode())
+          && getSite().equals(other.getSite())
+          && source.equals(other.source);
+    }
+
+    @Override
+    public int hashCode() {
+      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + source.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return "RebuiltStructure[of " + source + "]";
+    }
+  }
+
+  /**
    * Starts a mirror where a call's callee may be the mirror class (wala/ML#1190). Equal for the
    * same call, so the propagation system keeps one per call site.
    */
@@ -4727,6 +4840,186 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "structure leaf filter";
+    }
+  }
+
+  /**
+   * Rebuilds the keys of a structure rebuild call's first argument, or of a field of a structure it
+   * holds, into a target as they arrive (wala/ML#1280); see {@link #setStructureRebuild}. A list, a
+   * tuple, a dict or a namedtuple instance is copied as a {@link RebuiltStructureKey} of its class,
+   * whose list contents and catalogued fields are rebuilt from the structure's the same way. Once
+   * the argument or the field holds any other key, a leaf, the call's later arguments flow into the
+   * target, each through an edge of the pointer analysis's flow graph, so a dataflow over that
+   * graph reaches the target from them. Every leaf's place holds every later argument's values,
+   * where the run time has one value per leaf, an over-approximation. A place that holds no key
+   * holds none of the later arguments' values. The catalog is order-free, so a member written into
+   * a structure after the call is rebuilt too. Equal for the same call and target.
+   */
+  private final class StructureRebuildOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey target;
+
+    /** The later arguments that have a variable. */
+    private final List<PointerKey> values;
+
+    /** The keys of the later arguments whose values are represented implicitly. */
+    private final Set<InstanceKey> valueKeys;
+
+    /** The structures copied into the target so far. */
+    private final Set<InstanceKey> copied = HashSetFactory.make();
+
+    /** Whether the target holds the later arguments' values. */
+    private boolean filled;
+
+    private StructureRebuildOperator(
+        CGNode node,
+        int pc,
+        PointerKey target,
+        List<PointerKey> values,
+        Set<InstanceKey> valueKeys) {
+      this.node = node;
+      this.pc = pc;
+      this.target = target;
+      this.values = values;
+      this.valueKeys = valueKeys;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null)
+        rhs.getValue().foreach(i -> rebuild(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Rebuilds a key the place may hold: a structure is copied, and a leaf's place is taken by the
+     * later arguments' values.
+     *
+     * @param source A key the argument, or the field, may be.
+     */
+    void rebuild(InstanceKey source) {
+      if (source.concreteType() == null) return;
+      if (!isNestedStructure(source)) {
+        fill();
+        return;
+      }
+      if (!copied.add(source)) return;
+      IClass type = source.concreteType();
+      RebuiltStructureKey copy =
+          new RebuiltStructureKey(
+              node, NewSiteReference.make(pc, type.getReference()), type, source);
+      logger.fine(() -> "Rebuilding " + source + " as " + copy + " at " + pc + " in " + node + ".");
+      getSystem().newConstraint(target, copy);
+      // A namedtuple's names are kept by the instance, which a copy of it copies.
+      if (type.getReference().equals(NAMED_TUPLE_INSTANCE))
+        copyNamedTupleNames(copiedInstance(source), copy);
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      for (String name : List.of(LIST_APPEND_CONTENTS_FIELD, LIST_OPERATION_CONTENTS_FIELD)) {
+        IField field = resolveRootField(cha, name);
+        if (field != null) rebuildField(source, copy, field);
+      }
+      getSystem()
+          .newSideEffect(
+              new FieldsOperator(source, copy), factory.getPointerKeyForObjectCatalog(source));
+    }
+
+    /** Makes the target hold the later arguments' values. */
+    private void fill() {
+      if (filled) return;
+      filled = true;
+      for (PointerKey value : values) getSystem().newConstraint(target, assignOperator, value);
+      for (InstanceKey key : valueKeys) getSystem().newConstraint(target, key);
+    }
+
+    /**
+     * Rebuilds a field of a structure into the same field of its copy.
+     *
+     * @param source The structure.
+     * @param copy The structure's copy.
+     * @param field The field.
+     */
+    private void rebuildField(InstanceKey source, RebuiltStructureKey copy, IField field) {
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newSideEffect(
+              new StructureRebuildOperator(
+                  node, pc, factory.getPointerKeyForInstanceField(copy, field), values, valueKeys),
+              factory.getPointerKeyForInstanceField(source, field));
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + target.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof StructureRebuildOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && target.equals(other.target);
+    }
+
+    @Override
+    public String toString() {
+      return "structure rebuild at " + pc + " in " + node + " into " + target;
+    }
+
+    /**
+     * Names, in a copy's catalog, every field the copied structure's catalog names, and rebuilds
+     * each as the names arrive. Equal for the same copy.
+     */
+    private final class FieldsOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey source;
+      private final RebuiltStructureKey copy;
+
+      /** The names rebuilt so far. */
+      private final Set<Object> names = HashSetFactory.make();
+
+      private FieldsOperator(InstanceKey source, RebuiltStructureKey copy) {
+        this.source = source;
+        this.copy = copy;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+        if (catalog.getValue() == null) return NOT_CHANGED;
+        AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+        IClassHierarchy cha = getClassHierarchy();
+        catalog
+            .getValue()
+            .foreach(
+                c -> {
+                  if (!(getSystem().getInstanceKey(c) instanceof ConstantKey<?> name)) return;
+                  Object value = name.getValue();
+                  // A position is named by an integer constant and a dictionary's key by a string;
+                  // both name a field.
+                  if (!(value instanceof String) && !(value instanceof Number)) return;
+                  if (!names.add(value)) return;
+                  IField field = resolveRootField(cha, value.toString());
+                  if (field == null) return;
+                  getSystem().newConstraint(factory.getPointerKeyForObjectCatalog(copy), name);
+                  rebuildField(source, copy, field);
+                });
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return copy.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof FieldsOperator other && copy.equals(other.copy);
+      }
+
+      @Override
+      public String toString() {
+        return "rebuilt fields of " + source;
+      }
     }
   }
 
@@ -6051,6 +6344,22 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         .add(name)) return;
     for (InstanceKey copy : namedTupleCopies.getOrDefault(instance, Set.of()))
       aliasNamedTupleField(copy, index, name);
+  }
+
+  /**
+   * The instance a copy of a structure ultimately copies: a mirrored element's source, what a
+   * description describes and what a rebuilt structure copies, through however many copies.
+   *
+   * @param key A key that may be a copy.
+   * @return The key no copy was made of.
+   */
+  private static InstanceKey copiedInstance(InstanceKey key) {
+    while (true) {
+      if (key instanceof ElementMirrorKey mirror) key = mirror.getSource();
+      else if (key instanceof DescriptorKey descriptor) key = descriptor.getDescribed();
+      else if (key instanceof RebuiltStructureKey rebuilt) key = rebuilt.getSource();
+      else return key;
+    }
   }
 
   /**

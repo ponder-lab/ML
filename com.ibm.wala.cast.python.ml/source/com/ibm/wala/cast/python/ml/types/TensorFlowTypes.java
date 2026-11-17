@@ -1996,6 +1996,15 @@ public class TensorFlowTypes extends PythonTypes {
           PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/nest/when_present"));
 
   /**
+   * The {@code tf.nest} summaries' internal class whose call returns the nesting of its first
+   * argument with its later arguments' values in the leaves' places (wala/ML#1280); bound on no
+   * module.
+   */
+  public static final TypeReference NEST_REBUILD =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/nest/rebuild"));
+
+  /**
    * The {@code tf.nest} summaries' internal class whose call returns the leaves of a nested
    * structure (wala/ML#1067); bound on no module.
    */

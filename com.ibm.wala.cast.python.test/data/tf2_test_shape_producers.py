@@ -148,6 +148,16 @@ def consume_mapped_member(s):
     assert s.as_list() == [None, 3]
 
 
+def consume_mapped_structure(s):
+    assert isinstance(s, tuple)
+    assert s[0].as_list() == [None, 3]
+
+
+def consume_parameter_mapped(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [None, 3]
+
+
 def consume_element_shape(s):
     assert isinstance(s, tf.TensorShape)
     assert s.as_list() == [2, 3]
@@ -361,6 +371,10 @@ def spec_shape_of(d):
     return d.element_spec.shape
 
 
+def mapped_shapes_of(d):
+    return tf.nest.map_structure(lambda spec: spec.shape, d.element_spec)
+
+
 Pair = collections.namedtuple("Pair", ["a", "b"])
 
 
@@ -438,6 +452,9 @@ consume_tuple_output_shape(tf.compat.v1.data.get_output_shapes(pairs)[0])
 consume_mapped_member(
     tf.nest.map_structure(lambda spec: spec.shape, pairs.element_spec)[0]
 )
+consume_mapped_structure(
+    tf.nest.map_structure(lambda spec: spec.shape, pairs.element_spec)
+)
 
 named = tf.data.Dataset.from_tensor_slices({"a": x, "b": tf.zeros([4])}).batch(2)
 consume_dict_spec_shape(named.element_spec["a"].shape)
@@ -463,6 +480,7 @@ consume_nested_spec_shape(nested.element_spec[0]["a"].shape)
 tupled = tf.data.Dataset.from_tensor_slices(Pair(x, tf.zeros([4]))).batch(2)
 consume_named_spec_shape(tupled.element_spec.a.shape)
 consume_parameter_spec_shape(spec_shape_of(dataset))
+consume_parameter_mapped(mapped_shapes_of(dataset))
 consume_map_spec_shape(dataset.map(lambda t: t * 2).element_spec.shape)
 spec_of_optional(True)
 

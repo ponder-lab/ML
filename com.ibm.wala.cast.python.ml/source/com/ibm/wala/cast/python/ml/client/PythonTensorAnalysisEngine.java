@@ -1181,6 +1181,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // It calls the function with a leaf of each further structure only where the call passes that
     // structure.
     builder.setPresenceGate(TensorFlowTypes.NEST_WHEN_PRESENT);
+    // They return a structure of the same nesting, with other values in the leaves' places
+    // (wala/ML#1280).
+    builder.setStructureRebuild(TensorFlowTypes.NEST_REBUILD);
 
     // A dataset's `element_spec` has the nesting of its element, with a `tf.TensorSpec` where the
     // element has a tensor (wala/ML#1280).
