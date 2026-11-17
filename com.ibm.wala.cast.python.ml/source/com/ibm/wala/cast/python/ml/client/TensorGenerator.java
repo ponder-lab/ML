@@ -45,6 +45,7 @@ import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorKey;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
@@ -7069,6 +7070,18 @@ public abstract class TensorGenerator implements Cloneable {
         ShapeResult leaf = getShapeResultOfMirroredLeaf(builder, mirror);
         ret.addAll(leaf.members());
         if (leaf.hasUnknown()) hasUnknown = true;
+      } else if (valueIK instanceof DescriptorKey descriptor) {
+        // What describes a value has the value's shape, and a structure of descriptors has none
+        // (wala/ML#1280).
+        if (!descriptor.isLeaf()) continue;
+        ShapeResult described =
+            getShapeResultOfValue(
+                builder,
+                OrdinalSet.toOrdinalSet(
+                    List.of(descriptor.getDescribed()), valuePointsToSet.getMapping()),
+                exact);
+        ret.addAll(described.members());
+        if (described.hasUnknown()) hasUnknown = true;
       } else if (valueIK instanceof ConstantKey) {
         // A null constant is analysis substrate (loop-carried phi defaults, the generator
         // iteration protocol) or an explicit `None` argument, never a scalar value; typing it as
@@ -8391,6 +8404,19 @@ public abstract class TensorGenerator implements Cloneable {
       if (valueIK instanceof ElementMirrorKey mirror) {
         // As in the shape read, a mirrored dataset element (wala/ML#1190).
         if (mirror.isLeaf()) ret.addAll(getDTypesOfMirroredLeaf(builder, mirror));
+        continue;
+      }
+      if (valueIK instanceof DescriptorKey descriptor) {
+        // As in the shape read, what describes a value has the value's dtype (wala/ML#1280).
+        if (descriptor.isLeaf()) {
+          Set<DType> described =
+              getDTypesOfValue(
+                  builder,
+                  OrdinalSet.toOrdinalSet(
+                      List.of(descriptor.getDescribed()), valuePointsToSet.getMapping()),
+                  visited);
+          if (described != null) ret.addAll(described);
+        }
         continue;
       }
       if (valueIK instanceof AllocationSiteInNode && !visited.add(valueIK)) continue;

@@ -1,7 +1,10 @@
 # A tensor shape reaches a program through more than the `shape` attribute (wala/ML#1280): the
 # `get_shape` method, a dataset's `element_spec`, `tf.compat.v1.data.get_output_shapes`, and a
 # `tf.nest.map_structure` over a structure of specs. Each sink below receives one.
+import collections
 import json
+import os
+import tempfile
 
 import tensorflow as tf
 
@@ -42,6 +45,87 @@ def consume_tuple_spec_shape(s):
 def consume_dict_spec_shape(s):
     assert isinstance(s, tf.TensorShape)
     assert s.as_list() == [None, 3]
+
+
+def consume_tuple_spec(specs):
+    assert isinstance(specs, tuple)
+    assert isinstance(specs[0], tf.TensorSpec)
+
+
+def consume_tuple_spec_member(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
+def consume_nested_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [None, 3]
+
+
+def consume_named_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [None, 3]
+
+
+def consume_optional_spec(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
+def spec_of_optional(given):
+    chosen = None
+    if given:
+        chosen = dataset
+    if chosen is not None:
+        consume_optional_spec(chosen.element_spec)
+
+
+def consume_parameter_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [None, 3]
+
+
+def consume_map_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [None, 3]
+
+
+def consume_constructed_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [None, 3]
+
+
+def consume_text_spec(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
+def consume_text_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == []
+
+
+def consume_text_map_spec_shape(s):
+    assert isinstance(s, tf.TensorShape)
+    assert s.as_list() == [3]
+
+
+def consume_spec_batch_size(n):
+    assert n is None
+
+
+def consume_keyed_row(t):
+    assert t.shape == (3,)
+
+
+def keyed_row(d):
+    consume_keyed_row(d["element_spec"])
+    return d["element_spec"]
+
+
+def consume_keyed_element(t):
+    assert t.shape == (3,)
+
+
+def use_constructed_spec_shape(t):
+    assert t.shape == (2, 3)
 
 
 def consume_output_shapes(s):
@@ -121,6 +205,84 @@ def use_spec_shape(t):
     assert t.shape == (2, 3)
 
 
+def use_spec_size(t):
+    assert t.shape == (3, 2)
+
+
+def use_spec_list_size(t):
+    assert t.shape == (3, 2)
+
+
+def use_unbatched_spec_shape(t):
+    assert t.shape == (3,)
+
+
+def use_sliced_list(t):
+    assert t.shape == (2, 3)
+
+
+def use_sliced_list_reshape(t):
+    assert t.shape == (2, 3)
+
+
+def use_spec_reshape(t):
+    assert t.shape == (2, 3)
+
+
+def use_passed_spec_shape(t):
+    assert t.shape == (3,)
+
+
+def zeros_of(spec):
+    return tf.zeros(spec.shape)
+
+
+def use_passed_spec_dtype(t):
+    assert t.shape == (2,)
+    assert t.dtype == tf.int32
+
+
+def typed_as(spec):
+    return tf.zeros([2], dtype=spec.dtype)
+
+
+def use_mapped_spec_shape(t):
+    assert t.shape == (3,)
+
+
+def zeros_of_leaf(spec):
+    use_mapped_spec_shape(tf.zeros(spec.shape))
+
+
+def use_mapped_spec_dtype(t):
+    assert t.shape == (2,)
+    assert t.dtype == tf.int32
+
+
+def typed_as_leaf(spec):
+    use_mapped_spec_dtype(tf.zeros([2], dtype=spec.dtype))
+
+
+def use_member_spec_shape(t):
+    assert t.shape == (3,)
+    assert t.dtype == tf.float32
+
+
+def use_member_spec_dtype(t):
+    assert t.shape == (2,)
+    assert t.dtype == tf.int32
+
+
+def use_spec_dtype(t):
+    assert t.shape == (2,)
+    assert t.dtype == tf.int32
+
+
+def use_tensor_dtype(t):
+    assert t.shape == (2,)
+    assert t.dtype == tf.int32
+
+
 def use_rank_attribute(t):
     assert t.shape == (5,)
 
@@ -193,6 +355,13 @@ class Opaque:
 
     def get_shape(self):
         return json.loads("[7, 7]")
+
+
+def spec_shape_of(d):
+    return d.element_spec.shape
+
+
+Pair = collections.namedtuple("Pair", ["a", "b"])
 
 
 def ones_of_assigned_attribute(t):
@@ -274,6 +443,75 @@ named = tf.data.Dataset.from_tensor_slices({"a": x, "b": tf.zeros([4])}).batch(2
 consume_dict_spec_shape(named.element_spec["a"].shape)
 
 use_spec_shape(tf.zeros([2] + dataset.element_spec.shape.as_list()[1:]))
+# A control: the same list built from a tensor's shape.
+use_sliced_list(tf.zeros([2] + x.shape.as_list()[1:]))
+z = tf.ones([3, 2])
+use_sliced_list_reshape(tf.reshape(z, [2] + x.shape.as_list()[1:]))
+use_spec_reshape(tf.reshape(z, [2] + dataset.element_spec.shape.as_list()[1:]))
+use_spec_size(tf.ones([dataset.element_spec.shape[1], 2]))
+use_spec_list_size(tf.ones([dataset.element_spec.shape.as_list()[1], 2]))
+# A batch's size is not in its spec, since the last batch may be smaller.
+consume_spec_batch_size(dataset.element_spec.shape[0])
+plain = tf.data.Dataset.from_tensor_slices(x)
+use_unbatched_spec_shape(tf.zeros(plain.element_spec.shape))
+
+# A structure of specs is no spec, and its member is one.
+consume_tuple_spec(pairs.element_spec)
+consume_tuple_spec_member(pairs.element_spec[0])
+nested = tf.data.Dataset.from_tensor_slices(({"a": x}, tf.zeros([4]))).batch(2)
+consume_nested_spec_shape(nested.element_spec[0]["a"].shape)
+tupled = tf.data.Dataset.from_tensor_slices(Pair(x, tf.zeros([4]))).batch(2)
+consume_named_spec_shape(tupled.element_spec.a.shape)
+consume_parameter_spec_shape(spec_shape_of(dataset))
+consume_map_spec_shape(dataset.map(lambda t: t * 2).element_spec.shape)
+spec_of_optional(True)
+
+# The spec's dtype, beside a control: a tensor's.
+ints = tf.data.Dataset.from_tensor_slices(tf.zeros([4, 3], tf.int32))
+use_spec_dtype(tf.zeros([2], dtype=ints.element_spec.dtype))
+use_tensor_dtype(tf.zeros([2], dtype=tf.zeros([4, 3], tf.int32).dtype))
+
+# A spec passed on, so that its shape and dtype are read where the dataset is out of sight.
+use_passed_spec_shape(zeros_of(plain.element_spec))
+use_passed_spec_dtype(typed_as(ints.element_spec))
+
+# The specs of a dict's values, which reach a function as the leaves `tf.nest.map_structure` maps.
+twins = tf.data.Dataset.from_tensor_slices(
+    {"a": tf.zeros([4, 3], tf.int32), "b": tf.ones([4, 3], tf.int32)}
+)
+tf.nest.map_structure(zeros_of_leaf, twins.element_spec)
+tf.nest.map_structure(typed_as_leaf, twins.element_spec)
+
+# The spec of one value of a dict whose values differ in shape and in dtype, passed on.
+mixed = tf.data.Dataset.from_tensor_slices({"a": x, "b": tf.zeros([4], tf.int32)})
+use_member_spec_shape(zeros_of(mixed.element_spec["a"]))
+use_member_spec_dtype(typed_as(mixed.element_spec["b"]))
+
+# A spec the program constructs.
+consume_constructed_spec_shape(tf.TensorSpec([None, 3]).shape)
+use_constructed_spec_shape(tf.zeros(tf.TensorSpec([2, 3]).shape))
+
+# A dataset of a file's lines, whose element is a scalar string.
+with tempfile.TemporaryDirectory() as directory:
+    path = os.path.join(directory, "lines.txt")
+    with open(path, "w") as lines:
+        lines.write("a\nb\n")
+    text = tf.data.TextLineDataset(path)
+    consume_text_spec(text.element_spec)
+    consume_text_spec_shape(text.element_spec.shape)
+    # A function's results over the lines.
+    rows = text.map(lambda line: tf.zeros([3]))
+    consume_text_map_spec_shape(rows.element_spec.shape)
+    # A control: a member named as the attribute is, of an element of such a dataset.
+    keyed_rows = text.map(lambda line: {"element_spec": tf.zeros([3])})
+    for row in keyed_rows.map(keyed_row):
+        break
+
+# A control: an element's own member named as the attribute is.
+keyed = tf.data.Dataset.from_tensor_slices({"element_spec": x})
+for item in keyed:
+    consume_keyed_element(item["element_spec"])
+    break
 
 # A control: the `shape` attribute of an element the program iterates.
 for element in dataset:

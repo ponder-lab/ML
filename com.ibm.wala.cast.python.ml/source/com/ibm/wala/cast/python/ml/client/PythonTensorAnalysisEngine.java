@@ -26,6 +26,8 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorAttribute;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorKey;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.ElementMirrorKey;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -1180,6 +1182,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // structure.
     builder.setPresenceGate(TensorFlowTypes.NEST_WHEN_PRESENT);
 
+    // A dataset's `element_spec` has the nesting of its element, with a `tf.TensorSpec` where the
+    // element has a tensor (wala/ML#1280).
+    builder.setDescriptorAttributes(DESCRIPTOR_ATTRIBUTES);
+
     // A dataset built from a generator mirrors the structure it declares, and a call declaring none
     // marks its element as not mirrored (wala/ML#164).
     builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");
@@ -1303,6 +1309,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Map<TypeReference, TypeReference> getShapeTypes = new HashMap<>();
     for (TypeReference tensor : shapeTypes.keySet())
       getShapeTypes.put(tensor, TensorFlowTypes.STATIC_TENSOR_SHAPE_GET_SHAPE);
+    // A `tf.TensorSpec`'s `shape` is a tensor shape as well, and a spec has no `get_shape`
+    // (wala/ML#1280).
+    shapeTypes.put(TensorFlowTypes.TENSOR_SPEC, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     // An ndarray's `shape` attribute reads its shape, a tuple of Python ints, for points-to clients
     // only, as a tensor's does (wala/ML#1159).
     shapeTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.STATIC_ARRAY_SHAPE);
@@ -1528,6 +1537,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /** The Python attribute name for {@code tf.Tensor.set_shape}, used by the IR-syntactic scan. */
   private static final String SET_SHAPE_ATTRIBUTE = "set_shape";
+
+  /**
+   * The attributes whose read describes a structure their receiver holds (wala/ML#1280): a
+   * dataset's {@code element_spec} is the structure of its element, with a {@code tf.TensorSpec} in
+   * place of each component. A dataset {@code tfds.load} returns is no subclass of {@code Dataset},
+   * but holds its element as one does.
+   */
+  private static final Map<String, DescriptorAttribute> DESCRIPTOR_ATTRIBUTES =
+      Map.of(
+          "element_spec",
+          new DescriptorAttribute(
+              Set.of(TensorFlowTypes.DATASET, TensorFlowTypes.TFDS_DATASET_TYPE),
+              "mirrored_element",
+              TensorFlowTypes.DATASET_ELEMENT_STRUCTURE_TYPES,
+              TensorFlowTypes.TENSOR_SPEC));
 
   /**
    * WALA allocation types whose Python counterparts expose a public {@code set_shape} method
@@ -2052,6 +2076,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             continue;
           }
 
+          // What describes a dataset's element is not the element, and neither is what is read
+          // off the description (wala/ML#1280).
+          if (readsDescriptorAttribute(propertyRead, localPointerKeyNode, pointerAnalysis)
+              || readsOffDescriptor(propertyRead, localPointerKeyNode, du, pointerAnalysis)) {
+            LOGGER.fine(
+                () -> "Skipping seeding of a read that describes an element: " + describe(src));
+            continue;
+          }
+
           // Find the potential tensor iterable definition.
           int objectRef = propertyRead.getObjectRef();
           SSAInstruction def = du.getDef(objectRef);
@@ -2482,11 +2515,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IClass concreteType = asin.concreteType();
         TypeReference reference = concreteType.getReference();
 
-        // The holder of a `map` function's arguments is a summary object, no dataset (wala/ML#164).
-        if ((reference.equals(DATASET)
-                || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
-            && !reference.equals(TensorFlowTypes.DATASET_MAP_ARGUMENTS)
-            && isDatasetTensorElement(src, use, pointerAnalysis)) {
+        if (isDatasetType(reference) && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
           LOGGER.fine("Added dataflow source from tensor dataset: " + describe(src) + ".");
           return true;
@@ -2495,6 +2524,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
 
     return false;
+  }
+
+  /**
+   * Whether an allocation of the given type is read as a dataset by the element seeding.
+   *
+   * @param reference The allocation's type.
+   * @return {@code true} iff the type is {@link TensorFlowTypes#DATASET} or one of the dataset
+   *     package, other than the holder of a {@code map} function's arguments.
+   */
+  private static boolean isDatasetType(TypeReference reference) {
+    // The holder of a `map` function's arguments is a summary object, no dataset (wala/ML#164).
+    return (reference.equals(DATASET)
+            || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
+        && !reference.equals(TensorFlowTypes.DATASET_MAP_ARGUMENTS);
   }
 
   /**
@@ -2678,6 +2721,69 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean isTensorElement(TensorGenerator generator) {
     return generator instanceof TensorElementGenerator element
         && element.getContainerGenerator() != null;
+  }
+
+  /**
+   * Whether a property read reads an attribute of {@link #DESCRIPTOR_ATTRIBUTES} off a dataset
+   * (wala/ML#1280): the member is the attribute's name, and the receiver is nothing but allocations
+   * the element seeding reads as a dataset, so the read is of what describes the dataset's element
+   * and not of the element. The test is the seeding's own, {@link #isDatasetType(TypeReference)},
+   * so it holds for a dataset whose element has no description too. A receiver that may be
+   * something else is left to the seeding: the parameter of a {@code map} function over an element
+   * that is not mirrored holds the dataset beside a dict, and a member of that name read off it is
+   * the element's.
+   *
+   * @param read The property read.
+   * @param node The node containing the read.
+   * @param pointerAnalysis The pointer analysis.
+   * @return {@code true} iff the read describes its receiver's element.
+   */
+  private static boolean readsDescriptorAttribute(
+      PythonPropertyRead read, CGNode node, PointerAnalysis<InstanceKey> pointerAnalysis) {
+    SymbolTable symbolTable = node.getIR().getSymbolTable();
+    int member = read.getMemberRef();
+    if (!symbolTable.isStringConstant(member)
+        || !DESCRIPTOR_ATTRIBUTES.containsKey(symbolTable.getStringValue(member))) return false;
+
+    PointerKey receiverKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef());
+    OrdinalSet<InstanceKey> receivers = pointerAnalysis.getPointsToSet(receiverKey);
+    for (InstanceKey ik : receivers)
+      if (!(ik instanceof AllocationSiteInNode allocation
+          && isDatasetType(allocation.concreteType().getReference()))) return false;
+    return !receivers.isEmpty();
+  }
+
+  /**
+   * Whether a property read's receiver is what describes a dataset's element, or a member of it
+   * (wala/ML#1280): a {@code tf.TensorSpec}, or a structure of them. What is read off one is a
+   * shape, a dtype or another description, and no element.
+   *
+   * @param read The property read.
+   * @param node The node containing the read.
+   * @param du The node's def-use.
+   * @param pointerAnalysis The pointer analysis.
+   * @return {@code true} iff the receiver holds {@link DescriptorKey}s alone, or is read in this
+   *     node, through property reads, off a read {@link #readsDescriptorAttribute} holds for. The
+   *     second covers a dataset whose element has no description, where the receiver holds nothing.
+   */
+  private static boolean readsOffDescriptor(
+      PythonPropertyRead read,
+      CGNode node,
+      DefUse du,
+      PointerAnalysis<InstanceKey> pointerAnalysis) {
+    PointerKey receiverKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef());
+    OrdinalSet<InstanceKey> receivers = pointerAnalysis.getPointsToSet(receiverKey);
+    boolean descriptors = !receivers.isEmpty();
+    for (InstanceKey ik : receivers) descriptors &= ik instanceof DescriptorKey;
+    if (descriptors) return true;
+
+    for (SSAInstruction def = du.getDef(read.getObjectRef());
+        def instanceof PythonPropertyRead receiverRead;
+        def = du.getDef(receiverRead.getObjectRef()))
+      if (readsDescriptorAttribute(receiverRead, node, pointerAnalysis)) return true;
+    return false;
   }
 
   /**
