@@ -3522,15 +3522,12 @@ public class TensorGeneratorFactory {
   private static final ThreadLocal<Integer> UNMEMOIZED_WALKS = ThreadLocal.withInitial(() -> 0);
 
   /**
-   * A completed dispatch: the generator, or the {@link IllegalArgumentException} the dispatch
-   * threw.
+   * A memoized dispatch: the generator, or the {@link IllegalArgumentException} the dispatch threw.
    *
    * @param generator The generator, never handed out itself, or {@code null} when there is none.
    * @param failure What the dispatch threw, or {@code null} when it returned.
-   * @param exact Whether the dispatch was computed without a cut and without replaying a dispatch
-   *     that had one, so computing it again from any path gives the same.
    */
-  record Dispatch(TensorGenerator generator, IllegalArgumentException failure, boolean exact) {
+  private record Dispatch(TensorGenerator generator, IllegalArgumentException failure) {
 
     /**
      * Replays this dispatch.
@@ -3545,135 +3542,12 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * The system property that turns on the check of replayed dispatches: each replay of a dispatch
-   * that is not {@link Dispatch#exact} also computes the dispatch afresh from the path replaying
-   * it, with every dispatch below it computed afresh too, and counts the replays whose generators
-   * differ from the fresh ones ({@link #replayDifferences}). A diagnostic of what keeping a cycle's
-   * dispatches changes (wala/ML#1274); the fresh computation takes every path through a cycle. A
-   * difference is not by itself an error: a memoized dispatch that was cut at its own source,
-   * replayed on a path holding another source it reaches, holds what that source gave it, where the
-   * fresh one is cut there.
-   */
-  static final String CHECK_REPLAYS_PROPERTY = "ariadne.dispatch.checkReplays";
-
-  /** How many replays the check mode of {@link #CHECK_REPLAYS_PROPERTY} compared. */
-  private static final AtomicLong REPLAY_CHECKS = new AtomicLong();
-
-  /** How many replays the check mode of {@link #CHECK_REPLAYS_PROPERTY} found to differ. */
-  private static final AtomicLong REPLAY_DIFFERENCES = new AtomicLong();
-
-  /**
-   * How many replays the check mode of {@link #CHECK_REPLAYS_PROPERTY} has compared.
-   *
-   * @return The count, over every builder.
-   */
-  static long replayChecks() {
-    return REPLAY_CHECKS.get();
-  }
-
-  /**
-   * How many replays the check mode of {@link #CHECK_REPLAYS_PROPERTY} has found to differ from the
-   * dispatch computed afresh.
-   *
-   * @return The count, over every builder.
-   */
-  static long replayDifferences() {
-    return REPLAY_DIFFERENCES.get();
-  }
-
-  /**
-   * Replays a dispatch for a visit of its source, checking it under {@link
-   * #CHECK_REPLAYS_PROPERTY}.
-   *
-   * @param dispatch The dispatch.
-   * @param source The source.
-   * @param builder The builder.
-   * @param visited The path of the visit.
-   * @return A copy of the dispatch's generator.
-   * @throws IllegalArgumentException The dispatch's failure, if it threw.
-   */
-  private static TensorGenerator replay(
-      Dispatch dispatch,
-      PointsToSetVariable source,
-      PropagationCallGraphBuilder builder,
-      DispatchPath visited) {
-    if (!dispatch.exact() && Boolean.getBoolean(CHECK_REPLAYS_PROPERTY)) {
-      Object fresh;
-      DispatchPath path = visited.unmemoized();
-      long reached = DispatchPath.reachedOnThread();
-      UNMEMOIZED_WALKS.set(UNMEMOIZED_WALKS.get() + 1);
-      path.enter(source);
-      try {
-        fresh = getGeneratorBody(source, builder, path);
-      } catch (IllegalArgumentException e) {
-        fresh = e;
-      } finally {
-        path.abandon(source);
-        UNMEMOIZED_WALKS.set(UNMEMOIZED_WALKS.get() - 1);
-        // The fresh walk is the check's, not the reading's that replays.
-        DispatchPath.forgetReachedSince(reached);
-      }
-      Object replayed = dispatch.failure() != null ? dispatch.failure() : dispatch.generator();
-      REPLAY_CHECKS.incrementAndGet();
-      Set<Object> expected = dispatchParts(fresh), actual = dispatchParts(replayed);
-      if (!expected.equals(actual)) {
-        REPLAY_DIFFERENCES.incrementAndGet();
-        LOGGER.warning(
-            () ->
-                "A replayed dispatch of "
-                    + source
-                    + " gives "
-                    + actual
-                    + " and the dispatch computed afresh gives "
-                    + expected
-                    + ".");
-      }
-    }
-    return dispatch.replay();
-  }
-
-  /**
-   * What a dispatch gave, for comparing two dispatches of a source: its failure's message, or its
-   * generator, a {@link CreatorJoin} as the parts it joins.
-   *
-   * @param dispatch A generator, an {@link IllegalArgumentException}, or {@code null}.
-   * @return The parts, none for no generator.
-   */
-  private static Set<Object> dispatchParts(Object dispatch) {
-    Set<Object> ret = HashSetFactory.make();
-    if (dispatch instanceof IllegalArgumentException e) ret.add("Failure: " + e.getMessage());
-    else if (dispatch instanceof CreatorJoin join) ret.addAll(join.getLeaves());
-    else if (dispatch != null) ret.add(dispatch);
-    return ret;
-  }
-
-  /**
-   * How many dispatches were computed for each builder, rather than replayed. The counts hold
-   * nothing of the builder, so its entry expires with it.
-   */
-  private static final Map<PropagationCallGraphBuilder, AtomicLong> DISPATCH_COMPUTATIONS =
-      new WeakHashMap<>();
-
-  /**
-   * How many dispatches were computed for a builder, rather than replayed.
-   *
-   * @param builder The builder.
-   * @return The count.
-   */
-  static long dispatchComputations(PropagationCallGraphBuilder builder) {
-    synchronized (DISPATCH_COMPUTATIONS) {
-      AtomicLong computations = DISPATCH_COMPUTATIONS.get(builder);
-      return computations == null ? 0 : computations.get();
-    }
-  }
-
-  /**
-   * The dispatches per builder that depended on no source being resolved but their own (see {@link
-   * DispatchPath}), keyed by the source {@link #findCreator} resolves. Each value holds the
-   * builder's points-to set variables, which keep the weak key reachable, so {@link
-   * TensorGenerator#clearCaches} removes the entry. Entries are written only while an analysis
-   * resolves for the builder (its {@link WorklistTypeResolver} is active), so a query made after
-   * the analysis leaves none behind (wala/ML#1170).
+   * The dispatches per builder that depended on their source alone (see {@link DispatchPath}),
+   * keyed by the source {@link #findCreator} resolves. Each value holds the builder's points-to set
+   * variables, which keep the weak key reachable, so {@link TensorGenerator#clearCaches} removes
+   * the entry. Entries are written only while an analysis resolves for the builder (its {@link
+   * WorklistTypeResolver} is active), so a query made after the analysis leaves none behind
+   * (wala/ML#1170).
    */
   private static final Map<PropagationCallGraphBuilder, Map<PointsToSetVariable, Dispatch>>
       DISPATCHES = new WeakHashMap<>();
@@ -3728,13 +3602,12 @@ public class TensorGeneratorFactory {
    * {@code null} so the outer dispatch loop can try other candidate callees / predecessors. See
    * wala/ML#435.
    *
-   * @implNote {@code visited} is the DFS path: a source is entered on entry and left before
-   *     returning, so only true cycles on the current call path short-circuit. A dispatch that
-   *     depended on no source being resolved but its own is memoized per builder and replayed for
-   *     every later visit of its source, from any path. A dispatch cut at a source below its own on
-   *     the path is replayed at its source's later visits of the same walk until the cut source is
-   *     left, so a walk computes each source of a cycle once (wala/ML#1274); see {@link
-   *     DispatchPath}.
+   * @implNote {@code visited} is the DFS path: a source is entered on entry and left in a {@code
+   *     finally} block before returning. This means only true cycles on the current call path
+   *     short-circuit; sibling sub-dispatches in the same top-level call can re-visit a source
+   *     freely without losing precision. A dispatch during which no source being resolved was
+   *     reached is memoized per builder and replayed for every later visit of its source, from any
+   *     path; see {@link DispatchPath}.
    */
   private static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
@@ -3838,30 +3711,22 @@ public class TensorGeneratorFactory {
     }
     if (dispatches != null) {
       Dispatch memoized = dispatches.get(source);
-      if (memoized != null) return replay(memoized, source, builder, visited);
+      if (memoized != null) return memoized.replay();
     }
-    // A dispatch this walk completed for the source, while a cycle it is in is being resolved or
-    // where the memo does not take it (wala/ML#1274).
-    Dispatch kept = visited.memoizes() ? visited.kept(source) : null;
-    if (kept != null) return replay(kept, source, builder, visited);
-    synchronized (DISPATCH_COMPUTATIONS) {
-      DISPATCH_COMPUTATIONS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
-    }
-    visited.enter(source);
+    long mark = visited.enter(source);
     TensorGenerator generator = null;
     IllegalArgumentException failure = null;
-    boolean completed = false;
+    boolean ownSourceOnly;
     try {
       generator = getGeneratorBody(source, builder, visited);
-      completed = true;
     } catch (IllegalArgumentException e) {
       failure = e;
-      completed = true;
     } finally {
-      if (!completed) visited.abandon(source);
+      ownSourceOnly = visited.leave(source, mark);
     }
-    Dispatch ownSourceOnly = visited.leave(source, generator, failure);
-    if (dispatches != null && ownSourceOnly != null) dispatches.putIfAbsent(source, ownSourceOnly);
+    if (dispatches != null && ownSourceOnly)
+      dispatches.putIfAbsent(
+          source, new Dispatch(generator == null ? null : generator.copy(), failure));
     if (failure != null) throw failure;
     return generator;
   }
