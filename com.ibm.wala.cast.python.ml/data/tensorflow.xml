@@ -1085,6 +1085,16 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/log_abs_determinant -->
         <putfield class="LRoot" field="log_abs_determinant" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="log_abs_determinant" fieldType="LRoot" ref="linear_operator" value="pass_through"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nest (wala/ML#1067). Bound on `tf.nest` and on the private module path of `from tensorflow.python.util import nest`. -->
+        <new def="nest" class="Lobject"/>
+        <putfield class="LRoot" field="nest" fieldType="LRoot" ref="x" value="nest"/>
+        <new def="util" class="Lobject"/>
+        <putfield class="LRoot" field="util" fieldType="LRoot" ref="python" value="util"/>
+        <putfield class="LRoot" field="nest" fieldType="LRoot" ref="util" value="nest"/>
+        <new def="nest_map_structure" class="Ltensorflow/nest/map_structure"/>
+        <putfield class="LRoot" field="map_structure" fieldType="LRoot" ref="nest" value="nest_map_structure"/>
+        <new def="nest_flatten" class="Ltensorflow/nest/flatten"/>
+        <putfield class="LRoot" field="flatten" fieldType="LRoot" ref="nest" value="nest_flatten"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/map_fn -->
         <new def="map_fn" class="Ltensorflow/functions/map_fn"/>
         <putfield class="LRoot" field="map_fn" fieldType="LRoot" ref="x" value="map_fn"/>
@@ -1417,6 +1427,51 @@
         <return value="x"/>
       </method>
     </class>
+    <package name="tensorflow/nest">
+      <class name="leaves" allocatable="true">
+        <!-- Internal to the `tf.nest` summaries (wala/ML#1067): a call of this returns the leaves of a nested structure, every value it holds that is not itself a list, a tuple, a dict or a namedtuple, and the argument itself where it is none of those. A summary cannot enumerate a dict's keys, so the call graph builder reads the leaves at each call of this class, which the engine names through `setStructureLeaves`; the body returns a field nothing writes. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self structure">
+          <getfield class="LRoot" field="leaves" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
+      <class name="when_present" allocatable="true">
+        <!-- Internal to the `tf.nest` summaries (wala/ML#1067): a call returns `value` once `condition` holds anything, which the engine names through `setPresenceGate`; the body returns a field nothing writes. Not bound on any module. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self value condition">
+          <getfield class="LRoot" field="gated" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
+      <class name="map_structure" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nest/map_structure. Invokes `func` on a leaf of `structure`, so the function has a call-graph node and its parameter the leaves' types (wala/ML#1067). -->
+        <!-- TODO: https://github.com/wala/ML/issues/1280; return a structure of the results of `func`. Until then the call returns a field nothing writes: a result of `func` is not what the call returns for a structure, and `structure` holds the values `func` was given, not its results. -->
+        <!-- `func` takes a leaf of each structure the call passes, up to three, so there is one call per count of structures, as `map` has one per arity. The calls with two and three leaves go through `when_present`, so each has a target only once its last structure has a leaf: a structure the call does not pass has none, and a call passing a defaulted parameter of `func` an argument that holds nothing would leave the parameter without its default there. The call with one leaf has a target whatever the count, which over-approximates. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self func structure structure2 structure3">
+          <new def="leaves_op" class="Ltensorflow/nest/leaves"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="leaves_op" arg1="structure" numArgs="2" def="leaf"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="leaves_op" arg1="structure2" numArgs="2" def="leaf2"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="leaves_op" arg1="structure3" numArgs="2" def="leaf3"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="func" arg1="leaf" numArgs="2" def="func_result"/>
+          <new def="when_present" class="Ltensorflow/nest/when_present"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="when_present" arg1="func" arg2="leaf2" numArgs="3" def="func2"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="func2" arg1="leaf" arg2="leaf2" numArgs="3" def="func_result2"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="when_present" arg1="func" arg2="leaf3" numArgs="3" def="func3"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="func3" arg1="leaf" arg2="leaf2" arg3="leaf3" numArgs="4" def="func_result3"/>
+          <getfield class="LRoot" field="mapped" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
+      <class name="flatten" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nest/flatten. Returns a fresh list of the leaves of `structure` (wala/ML#1067). The list's length is the number of leaves, which is not counted, so the leaves are its contents at no position. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self structure expand_composites">
+          <new def="leaves_op" class="Ltensorflow/nest/leaves"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="leaves_op" arg1="structure" numArgs="2" def="leaf"/>
+          <new def="lst" class="Llist"/>
+          <putfield class="LRoot" field="__list_append_contents__" fieldType="LRoot" ref="lst" value="leaf"/>
+          <return value="lst"/>
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/class">
       <class name="Function" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self test">

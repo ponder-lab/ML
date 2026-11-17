@@ -832,6 +832,45 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The summary class whose call returns the leaves of its argument (wala/ML#1067), or {@code null}
+   * when no client names one; see {@link #setStructureLeaves}.
+   */
+  private TypeReference structureLeavesType;
+
+  /**
+   * Names the class of structure flattening (wala/ML#1067): a call {@code leaves(x)} whose callee
+   * is an instance of {@code leaves} returns every value {@code x} holds that is not itself a
+   * structure, read through however many structures nest, and {@code x} itself where it is no
+   * structure. A structure is a list, a tuple, a dict or a namedtuple instance. A library function
+   * that applies a function to each leaf of a nested structure calls the function on this result.
+   *
+   * @param leaves The summary class whose call returns its argument's leaves.
+   */
+  public void setStructureLeaves(TypeReference leaves) {
+    this.structureLeavesType = leaves;
+  }
+
+  /**
+   * The summary class whose call returns its first argument once its second holds anything
+   * (wala/ML#1067), or {@code null} when no client names one; see {@link #setPresenceGate}.
+   */
+  private TypeReference presenceGateType;
+
+  /**
+   * Names the class of a presence gate (wala/ML#1067): a call {@code gate(value, condition)} whose
+   * callee is an instance of {@code gate} returns what {@code value} holds once {@code condition}
+   * holds anything, and nothing until then. A library summary that calls a function only where an
+   * optional argument was passed calls the function through this result, so the call has no target
+   * where the argument is absent, and no defaulted parameter of the function is bound to an
+   * argument that holds nothing.
+   *
+   * @param gate The summary class whose call gates.
+   */
+  public void setPresenceGate(TypeReference gate) {
+    this.presenceGateType = gate;
+  }
+
+  /**
    * Names the class of {@code map}'s spreading (wala/ML#164): a call {@code spread(element, holder,
    * legacy, argument, r_1, ..., r_max, dataset)} whose callee is an instance of {@code spread}
    * spreads each key of {@code element} as {@code tf.data} does. An exact tuple of {@code n}
@@ -1834,6 +1873,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processElementDeclared(inst);
       processElementSupervised(inst);
       processListWrap(inst);
+      processStructureLeaves(inst);
+      processPresenceGate(inst);
     }
 
     /**
@@ -2050,6 +2091,79 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       }
       system.newSideEffect(
           builder.new ListWrapOperator(node, inst.iIndex(), resultKey, argumentKey), argumentKey);
+    }
+
+    /**
+     * Reads the leaves of a call's argument where its callee is the structure leaves class
+     * (wala/ML#1067); see {@link #setStructureLeaves}. The summary allocates the callee itself, so
+     * its keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processStructureLeaves(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.structureLeavesType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 2) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      boolean leaves = false;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.structureLeavesType)) leaves = true;
+      if (!leaves) return;
+      int argumentVn = inst.getUse(1);
+      PointerKey argumentKey = getPointerKeyForLocal(argumentVn);
+      StructureLeavesOperator operator =
+          builder
+          .new StructureLeavesOperator(node, inst.iIndex(), getPointerKeyForLocal(inst.getDef()));
+      if (contentsAreInvariant(symtab, du, argumentVn) || system.isImplicit(argumentKey)) {
+        for (InstanceKey key : getInvariantContents(symtab, du, node, argumentVn))
+          operator.add(key);
+        return;
+      }
+      operator.read(argumentKey);
+    }
+
+    /**
+     * Gates a call's first argument on its second where its callee is the presence gate class
+     * (wala/ML#1067); see {@link #setPresenceGate}. The summary allocates the callee itself, so its
+     * keys are read directly.
+     *
+     * @param inst The call.
+     */
+    private void processPresenceGate(PythonInvokeInstruction inst) {
+      PythonSSAPropagationCallGraphBuilder builder = getBuilder();
+      if (builder.presenceGateType == null
+          || !inst.hasDef()
+          || inst.getNumberOfPositionalParameters() < 3) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int calleeVn = inst.getUse(0);
+      if (!contentsAreInvariant(symtab, du, calleeVn)
+          && !system.isImplicit(getPointerKeyForLocal(calleeVn))) return;
+      boolean gate = false;
+      for (InstanceKey key : getInvariantContents(symtab, du, node, calleeVn))
+        if (key.concreteType().getReference().equals(builder.presenceGateType)) gate = true;
+      if (!gate) return;
+      int valueVn = inst.getUse(1);
+      PointerKey valueKey = getPointerKeyForLocal(valueVn);
+      Set<InstanceKey> valueKeys = null;
+      if (contentsAreInvariant(symtab, du, valueVn) || system.isImplicit(valueKey)) {
+        valueKeys = HashSetFactory.make();
+        for (InstanceKey key : getInvariantContents(symtab, du, node, valueVn)) valueKeys.add(key);
+      }
+      PresenceGateOperator operator =
+          builder
+          .new PresenceGateOperator(
+              node, inst.iIndex(), getPointerKeyForLocal(inst.getDef()), valueKey, valueKeys);
+      int conditionVn = inst.getUse(2);
+      PointerKey conditionKey = getPointerKeyForLocal(conditionVn);
+      if (contentsAreInvariant(symtab, du, conditionVn) || system.isImplicit(conditionKey)) {
+        if (getInvariantContents(symtab, du, node, conditionVn).length > 0) operator.open();
+        return;
+      }
+      system.newSideEffect(operator, conditionKey);
     }
 
     /**
@@ -4286,6 +4400,271 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "list wrap filter";
+    }
+  }
+
+  /**
+   * Whether a structure leaves call reads through a key (wala/ML#1067): a list, a tuple, a dict or
+   * a namedtuple instance; see {@link #setStructureLeaves}.
+   *
+   * @param key A key a value may be.
+   * @return {@code true} iff the key is a structure, whose members are read in its place.
+   */
+  private static boolean isNestedStructure(InstanceKey key) {
+    if (key.concreteType() == null) return false;
+    TypeReference type = key.concreteType().getReference();
+    return type.equals(PythonTypes.list)
+        || type.equals(PythonTypes.tuple)
+        || type.equals(PythonTypes.dict)
+        || type.equals(NAMED_TUPLE_INSTANCE);
+  }
+
+  /**
+   * Reads the leaves of a structure leaves call's argument into its result as the argument's keys
+   * arrive (wala/ML#1067); see {@link #setStructureLeaves}. Each value read, the argument first,
+   * flows into the result through a {@link LeafFilter}, an edge of the pointer analysis's flow
+   * graph, so a dataflow over that graph reaches the result from a leaf. Each structure a value may
+   * be is opened: its list contents and every field its object catalog names are values read the
+   * same way. A structure is opened once, so one that holds itself, as a flow-insensitive points-to
+   * set makes of a structure built in a loop, is read finitely. The catalog is order-free, so a
+   * member written into a structure after the call is read too, an over-approximation. Equal for
+   * the same call, so the propagation system keeps one per call site.
+   */
+  private final class StructureLeavesOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+
+    /** The values read so far. */
+    private final Set<PointerKey> values = HashSetFactory.make();
+
+    /** The structures opened so far. */
+    private final Set<InstanceKey> structures = HashSetFactory.make();
+
+    private StructureLeavesOperator(CGNode node, int pc, PointerKey resultKey) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null)
+        rhs.getValue()
+            .foreach(
+                i -> {
+                  InstanceKey key = getSystem().getInstanceKey(i);
+                  if (isNestedStructure(key)) open(key);
+                });
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Reads a value: its leaves flow into the result, and its structures are opened as they arrive.
+     *
+     * @param value A value the argument holds, or the argument itself.
+     */
+    void read(PointerKey value) {
+      if (!values.add(value)) return;
+      getSystem().newConstraint(resultKey, new LeafFilter(), value);
+      getSystem().newSideEffect(this, value);
+    }
+
+    /**
+     * Adds a key of an argument whose keys are represented implicitly: a leaf is a result itself,
+     * and a structure is opened.
+     *
+     * @param key A key the argument may be.
+     */
+    void add(InstanceKey key) {
+      if (isNestedStructure(key)) open(key);
+      else if (key.concreteType() != null) getSystem().newConstraint(resultKey, key);
+    }
+
+    /**
+     * Reads the members of a structure.
+     *
+     * @param structure A structure a value read may be.
+     */
+    private void open(InstanceKey structure) {
+      if (!structures.add(structure)) return;
+      logger.fine(() -> "Reading the leaves of " + structure + " at " + pc + " in " + node + ".");
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      for (String name : List.of(LIST_APPEND_CONTENTS_FIELD, LIST_OPERATION_CONTENTS_FIELD)) {
+        IField field = resolveRootField(cha, name);
+        if (field != null) read(factory.getPointerKeyForInstanceField(structure, field));
+      }
+      getSystem()
+          .newSideEffect(
+              new MembersOperator(structure), factory.getPointerKeyForObjectCatalog(structure));
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof StructureLeavesOperator other
+          && node.equals(other.node)
+          && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "structure leaves at " + pc + " in " + node;
+    }
+
+    /**
+     * Reads every catalogued field of one structure as the catalog's names arrive. Equal for the
+     * same call and structure.
+     */
+    private final class MembersOperator extends UnaryOperator<PointsToSetVariable> {
+      private final InstanceKey structure;
+
+      private MembersOperator(InstanceKey structure) {
+        this.structure = structure;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+        if (catalog.getValue() == null) return NOT_CHANGED;
+        AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+        IClassHierarchy cha = getClassHierarchy();
+        catalog
+            .getValue()
+            .foreach(
+                c -> {
+                  InstanceKey nameKey = getSystem().getInstanceKey(c);
+                  if (!(nameKey instanceof ConstantKey<?> constant)) return;
+                  Object value = constant.getValue();
+                  // A position is named by an integer constant and a dictionary's key by a string;
+                  // both name a field.
+                  if (!(value instanceof String) && !(value instanceof Number)) return;
+                  IField field = resolveRootField(cha, value.toString());
+                  if (field != null) read(factory.getPointerKeyForInstanceField(structure, field));
+                });
+        return NOT_CHANGED;
+      }
+
+      private StructureLeavesOperator leaves() {
+        return StructureLeavesOperator.this;
+      }
+
+      @Override
+      public int hashCode() {
+        return StructureLeavesOperator.this.hashCode() * 31 + structure.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof MembersOperator other
+            && leaves().equals(other.leaves())
+            && structure.equals(other.structure);
+      }
+
+      @Override
+      public String toString() {
+        return "members of " + structure + " for " + StructureLeavesOperator.this;
+      }
+    }
+  }
+
+  /**
+   * Passes the keys a structure leaves call returns (wala/ML#1067), and no structure; see {@link
+   * #isNestedStructure}.
+   */
+  private final class LeafFilter extends UnaryOperator<PointsToSetVariable> {
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() == null) return NOT_CHANGED;
+      MutableIntSet out = IntSetUtil.make();
+      rhs.getValue()
+          .foreach(
+              i -> {
+                InstanceKey key = getSystem().getInstanceKey(i);
+                if (key.concreteType() != null && !isNestedStructure(key)) out.add(i);
+              });
+      return lhs.addAll(out) ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(this);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o == this;
+    }
+
+    @Override
+    public String toString() {
+      return "structure leaf filter";
+    }
+  }
+
+  /**
+   * Passes a presence gate call's first argument to its result once its second argument holds
+   * anything (wala/ML#1067); see {@link #setPresenceGate}. Equal for the same call, so the
+   * propagation system keeps one per call site.
+   */
+  private final class PresenceGateOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final PointerKey valueKey;
+
+    /**
+     * The keys of a value represented implicitly, or {@code null} when the value has a variable.
+     */
+    private final Set<InstanceKey> valueKeys;
+
+    private boolean opened;
+
+    private PresenceGateOperator(
+        CGNode node,
+        int pc,
+        PointerKey resultKey,
+        PointerKey valueKey,
+        Set<InstanceKey> valueKeys) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.valueKey = valueKey;
+      this.valueKeys = valueKeys;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable condition) {
+      if (condition.getValue() != null && !condition.getValue().isEmpty()) open();
+      return NOT_CHANGED;
+    }
+
+    /** Lets the value through, once. */
+    void open() {
+      if (opened) return;
+      opened = true;
+      logger.fine(() -> "Opening the presence gate at " + pc + " in " + node + ".");
+      if (valueKeys == null) getSystem().newConstraint(resultKey, assignOperator, valueKey);
+      else for (InstanceKey key : valueKeys) getSystem().newConstraint(resultKey, key);
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof PresenceGateOperator other && node.equals(other.node) && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "presence gate at " + pc + " in " + node;
     }
   }
 

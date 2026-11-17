@@ -1979,6 +1979,22 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String RNN_STEP_SIGNATURE = "tf.keras.layers.RNN step";
 
   /**
+   * The {@code tf.nest} summaries' internal class whose call returns its first argument once its
+   * second holds anything (wala/ML#1067); bound on no module.
+   */
+  public static final TypeReference NEST_WHEN_PRESENT =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/nest/when_present"));
+
+  /**
+   * The {@code tf.nest} summaries' internal class whose call returns the leaves of a nested
+   * structure (wala/ML#1067); bound on no module.
+   */
+  public static final TypeReference NEST_LEAVES =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/nest/leaves"));
+
+  /**
    * The {@code RNN} summary's internal class whose call makes the state list the layer hands its
    * cell from an initial state (wala/ML#1265); bound on no module.
    */
