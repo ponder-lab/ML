@@ -9,10 +9,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -28,10 +25,6 @@ import java.util.function.Supplier;
  * whose creators are a scalar tensor and a Python integer is the tensor's type, and a value with no
  * tensor creator is ⊥ on both axes, as the pairing convention requires. The parts' readings are the
  * memoized ones every other read of them sees.
- *
- * <p>A part that is a join is read as the generators that join reads ({@link #getLeaves}), each
- * once: a join's reading is the union of what it joins, so the union is the same, and a generator
- * that several of the parts hold is read once.
  *
  * <p>The legacy shape view is the collapse of the record view, as for every record-capable
  * generator. No type feed is declared: a feed replaces one operation's unresolved seed from its
@@ -60,15 +53,6 @@ public class CreatorJoin extends TensorGenerator {
   private final List<TensorGenerator> parts;
 
   /**
-   * The generators this join reads: each part that is no join, and each generator a part that is a
-   * join reads, once each, in the order the parts hold them. The joins of values that reach each
-   * other hold each other's (wala/ML#1274): a part read through the joins holding it would be read
-   * once per path to it, and a join held by a join of its own value would be a read of that value
-   * during itself.
-   */
-  private final List<TensorGenerator> leaves;
-
-  /**
    * Constructs the join of the given generators, anchored at the value they are the creators of.
    *
    * @param source The value's {@link PointsToSetVariable}.
@@ -77,22 +61,6 @@ public class CreatorJoin extends TensorGenerator {
   CreatorJoin(PointsToSetVariable source, List<TensorGenerator> parts) {
     super(source);
     this.parts = List.copyOf(parts);
-    List<TensorGenerator> read = new ArrayList<>();
-    Set<TensorGenerator> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-    for (TensorGenerator part : this.parts)
-      for (TensorGenerator leaf : part instanceof CreatorJoin join ? join.leaves : List.of(part))
-        if (seen.add(leaf)) read.add(leaf);
-    this.leaves = List.copyOf(read);
-  }
-
-  /**
-   * The generators this join reads: its parts, with a part that is a join standing for the
-   * generators that join reads, once each.
-   *
-   * @return The generators, none of them a join, in the order the parts hold them.
-   */
-  List<TensorGenerator> getLeaves() {
-    return this.leaves;
   }
 
   /**
@@ -132,7 +100,7 @@ public class CreatorJoin extends TensorGenerator {
         () -> {
           Set<TensorType> joined = HashSetFactory.make();
           boolean unknownPart = false;
-          for (TensorGenerator part : this.leaves) {
+          for (TensorGenerator part : this.parts) {
             Set<TensorType> types = part.getTensorTypes(builder);
             if (types == null) unknownPart = true;
             else joined.addAll(types);
@@ -155,7 +123,7 @@ public class CreatorJoin extends TensorGenerator {
         builder,
         () -> {
           ShapeResult joined = ShapeResult.bottom();
-          for (TensorGenerator part : this.leaves)
+          for (TensorGenerator part : this.parts)
             joined = joined.union(memoizedShapeResult(builder, part));
           return joined;
         },
@@ -173,7 +141,7 @@ public class CreatorJoin extends TensorGenerator {
         builder,
         () -> {
           Set<DType> joined = EnumSet.noneOf(DType.class);
-          for (TensorGenerator part : this.leaves) {
+          for (TensorGenerator part : this.parts) {
             Set<DType> dtypes = memoizedDTypes(builder, part);
             // The legacy dtype convention reads `null` as ⊤.
             if (dtypes == null) joined.add(DType.UNKNOWN);

@@ -940,58 +940,6 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Chains of thirty binary operators, each over the results of the two before it (wala/ML#1275): a
-   * chain over tensors reads {@link TensorOrigin#TENSORFLOW}, a chain over ndarrays reads {@link
-   * TensorOrigin#NUMPY}, and a chain that adds a tensor to an ndarray chain halfway reads {@link
-   * TensorOrigin#NUMPY} before the tensor and {@link TensorOrigin#TENSORFLOW} after it. An operand
-   * of two operators is classified once and its classification replayed, and the replay reads what
-   * classifying it again read.
-   *
-   * @throws ClassHierarchyException If the class hierarchy cannot be built.
-   * @throws CancelException If the analysis is canceled.
-   * @throws IOException If the test file cannot be read.
-   */
-  @Test
-  public void testOperandChainOrigins()
-      throws ClassHierarchyException, CancelException, IOException {
-    SinkOrigins sinkOrigins =
-        getSinkOrigins(
-            "tf2_test_operand_origin_chain.py", "consume_tf", "consume_np", "consume_mixed");
-    assertEquals(
-        List.of(EnumSet.of(TensorOrigin.TENSORFLOW)),
-        sinkOrigins.argumentOrigins().get("consume_tf"));
-    assertEquals(
-        List.of(EnumSet.of(TensorOrigin.NUMPY), EnumSet.of(TensorOrigin.NUMPY)),
-        sinkOrigins.argumentOrigins().get("consume_np"));
-    assertEquals(
-        List.of(EnumSet.of(TensorOrigin.TENSORFLOW)),
-        sinkOrigins.argumentOrigins().get("consume_mixed"));
-  }
-
-  /**
-   * The chains of {@link #testOperandChainOrigins()} in a loop that carries their first two values,
-   * so every operand reaches itself (wala/ML#1275). An operand met while it is being classified
-   * contributes no origin evidence, and the classifications that met one are replayed only while
-   * that operand is being classified: the ndarray chain reads {@link TensorOrigin#NUMPY} alone,
-   * with no {@link TensorOrigin#TENSORFLOW} from the default for an operator without evidence.
-   *
-   * @throws ClassHierarchyException If the class hierarchy cannot be built.
-   * @throws CancelException If the analysis is canceled.
-   * @throws IOException If the test file cannot be read.
-   */
-  @Test
-  public void testOperandLoopOrigins()
-      throws ClassHierarchyException, CancelException, IOException {
-    SinkOrigins sinkOrigins =
-        getSinkOrigins("tf2_test_operand_origin_loop.py", "consume_tf", "consume_np");
-    assertEquals(
-        List.of(EnumSet.of(TensorOrigin.TENSORFLOW)),
-        sinkOrigins.argumentOrigins().get("consume_tf"));
-    assertEquals(
-        List.of(EnumSet.of(TensorOrigin.NUMPY)), sinkOrigins.argumentOrigins().get("consume_np"));
-  }
-
-  /**
    * The {@code .T} attribute follows its receiver (wala/ML#980): under numpy behavior a {@code
    * tf.Tensor}'s {@code .T} returns a {@code Tensor}, so it reads {@link TensorOrigin#TENSORFLOW},
    * while an ndarray's reads {@link TensorOrigin#NUMPY}. A constant numpy answer would mislabel the

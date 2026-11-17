@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.BiFunction;
 import org.junit.Test;
 
@@ -29,18 +28,9 @@ import org.junit.Test;
  * answers. For every points-to set variable of a fixture, in the pointer analysis's order and its
  * reverse, with the memo filling as the walk goes, the memoized dispatch must give the same
  * generator, field by field and through every generator it holds, as the dispatch computed afresh,
- * or fail as it does. A join of creators is compared by the generators it reads: the dispatch of a
- * value in a cycle, replayed, is the join the walk that entered the cycle there computed, which
- * holds the joins of the cycle's other values where a dispatch computed afresh holds their parts
- * (wala/ML#1274).
+ * or fail as it does.
  */
 public class TestGeneratorDispatchMemo extends AbstractTensorTest {
-
-  /**
-   * The fields of a {@link CreatorJoin} that hold what it joins, compared as the generators it
-   * reads ({@link CreatorJoin#getLeaves}).
-   */
-  private static final Set<String> JOINED_FIELDS = Set.of("parts", "leaves");
 
   /** The package whose objects are compared field by field rather than by their own equality. */
   private static final String ANALYSIS_PACKAGE = "com.ibm.wala.cast.python.ml.";
@@ -179,61 +169,8 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
   }
 
   /**
-   * The generators a dispatch result reads.
-   *
-   * @param dispatch A generator.
-   * @return The generators a {@link CreatorJoin} reads, and any other generator itself.
-   */
-  private static List<?> leaves(Object dispatch) {
-    return dispatch instanceof CreatorJoin join ? join.getLeaves() : List.of(dispatch);
-  }
-
-  /**
-   * Asserts two dispatch results read the same generators, in any order and any number of times:
-   * each generator one reads is the same, by {@link #assertSameDispatch}, as one the other reads.
-   *
-   * @param where What is compared, for the failure message.
-   * @param expected The generators the unmemoized result reads.
-   * @param actual The generators the memoized result reads.
-   * @param compared The analysis objects already compared, against their counterparts.
-   */
-  private static void assertSameLeaves(
-      String where, List<?> expected, List<?> actual, Map<Object, Object> compared)
-      throws IllegalAccessException {
-    for (Object e : expected)
-      assertTrue(where + " reads " + e + " only afresh", hasSame(e, actual, true, compared));
-    for (Object a : actual)
-      assertTrue(where + " reads " + a + " only memoized", hasSame(a, expected, false, compared));
-  }
-
-  /**
-   * Whether a generator is the same, by {@link #assertSameDispatch}, as one of some others.
-   *
-   * @param generator The generator.
-   * @param others The others.
-   * @param fresh Whether the generator is of the unmemoized result, and the others of the memoized.
-   * @param compared The analysis objects already compared, against their counterparts.
-   * @return {@code true} iff it is.
-   */
-  private static boolean hasSame(
-      Object generator, List<?> others, boolean fresh, Map<Object, Object> compared)
-      throws IllegalAccessException {
-    for (Object other : others)
-      try {
-        Map<Object, Object> attempt = new IdentityHashMap<>(compared);
-        if (fresh) assertSameDispatch("", generator, other, attempt);
-        else assertSameDispatch("", other, generator, attempt);
-        return true;
-      } catch (AssertionError e) {
-        // Not this one.
-      }
-    return false;
-  }
-
-  /**
    * Asserts two dispatch results are the same: the same failure message, or objects of the analysis
-   * equal field by field, recursively, and other values equal. A {@link CreatorJoin} is compared by
-   * the generators it reads, and with a generator that is none as the join of that one.
+   * equal field by field, recursively, and other values equal.
    *
    * @param where What is compared, for the failure message.
    * @param expected The unmemoized result.
@@ -246,10 +183,6 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
     if (expected == actual) return;
     assertNotNull(where, expected);
     assertNotNull(where, actual);
-    if (expected instanceof CreatorJoin || actual instanceof CreatorJoin) {
-      assertSameLeaves(where, leaves(expected), leaves(actual), compared);
-      if (!(expected instanceof CreatorJoin && actual instanceof CreatorJoin)) return;
-    }
     assertEquals(where, expected.getClass(), actual.getClass());
     if (expected instanceof IllegalArgumentException e) {
       assertEquals(where, e.getMessage(), ((IllegalArgumentException) actual).getMessage());
@@ -275,7 +208,6 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
     for (Class<?> c = expected.getClass(); c != null && c != Object.class; c = c.getSuperclass())
       for (Field field : c.getDeclaredFields()) {
         if (Modifier.isStatic(field.getModifiers())) continue;
-        if (c == CreatorJoin.class && JOINED_FIELDS.contains(field.getName())) continue;
         field.setAccessible(true);
         assertSameDispatch(
             where + "." + field.getName(), field.get(expected), field.get(actual), compared);
