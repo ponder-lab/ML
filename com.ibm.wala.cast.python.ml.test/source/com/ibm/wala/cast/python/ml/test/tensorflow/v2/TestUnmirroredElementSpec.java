@@ -84,6 +84,28 @@ public class TestUnmirroredElementSpec extends AbstractTensorTest {
     test(FILE, "use_tensor_batch_size", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
   }
 
+  /**
+   * The batch axis of the spec of a batch that may be partial reads what an element of the batch
+   * has there, the batch's size and the uncounted size of the last batch, where at run time the
+   * spec's axis has no size.
+   */
+  // TODO: Expect a first axis with no size, or no tensor, once the spec of a batch that may be
+  // partial has no size for the batch axis (wala/ML#1280).
+  @Test
+  public void testBatchAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        FILE,
+        "use_batch_axis",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 5),
+                new TensorType(FLOAT_32, List.of(new SymbolicDim("?"), new NumericDim(5))))));
+  }
+
   /** The spec of a {@code map} whose function returns one tensor. */
   @Test
   public void testTensor()

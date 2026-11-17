@@ -128,6 +128,10 @@ def consume_text_enumerate_spec(spec):
     assert isinstance(spec, tuple)
 
 
+def consume_text_window_spec(spec):
+    assert isinstance(spec, tf.TensorSpec)
+
+
 def consume_text_dict_mapped(shapes):
     assert isinstance(shapes, dict)
 
@@ -564,6 +568,9 @@ with tempfile.TemporaryDirectory() as directory:
     consume_text_dict_mapped_member(pair_shapes["b"])
     # The lines counted.
     consume_text_enumerate_spec(text.enumerate().element_spec)
+    # A window of the lines, a dataset that is another dataset's element.
+    for window in text.window(2):
+        consume_text_window_spec(window.element_spec)
     # A control: a member named as the attribute is, of an element of such a dataset.
     keyed_rows = text.map(lambda line: {"element_spec": tf.zeros([3])})
     for row in keyed_rows.map(keyed_row):

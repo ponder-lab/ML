@@ -641,6 +641,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   public record DescriptorSource(String gate, List<String> path, boolean located) {
     public DescriptorSource {
       path = List.copyOf(path);
+      if (path.isEmpty()) throw new IllegalArgumentException("A descriptor source has no path.");
     }
   }
 

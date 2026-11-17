@@ -242,12 +242,29 @@ public class TestShapeProducers extends TestPythonMLCallGraphShape {
     assertEquals(1, count("consume_map_spec"));
   }
 
+  /**
+   * The {@code element_spec} of a window of a dataset of a file's lines, a dataset that is another
+   * dataset's element.
+   */
+  // TODO: Expect a `TensorSpec` once the spec of a dataset that is a dataset's element is described
+  // (wala/ML#1280).
+  @Test
+  public void testSpecOfWindowOfUnmirroredElement() {
+    assertEquals(Set.of(), types("consume_text_window_spec"));
+  }
+
   /** The {@code element_spec} of an {@code enumerate} of a dataset of a file's lines. */
   // TODO: Expect a `tuple` once the spec of an `enumerate` of a dataset whose element is not
   // mirrored is described (wala/ML#1280).
   @Test
   public void testSpecOfEnumeratedUnmirroredElement() {
     assertEquals(Set.of(), types("consume_text_enumerate_spec"));
+  }
+
+  /** A descriptor source with no path is refused where it is made, not where it is followed. */
+  @Test(expected = IllegalArgumentException.class)
+  public void testDescriptorSourceWithoutPath() {
+    new PythonSSAPropagationCallGraphBuilder.DescriptorSource(null, List.of(), false);
   }
 
   /**

@@ -61,6 +61,12 @@ def use_batch_member_sizes(t):
     assert t.dtype == tf.float32
 
 
+def use_batch_axis(t):
+    # Not called at run time, where the batch axis has no size.
+    assert t.shape == (2, 5)
+    assert t.dtype == tf.float32
+
+
 def use_tensor_shape(t):
     assert t.shape == (5,)
     assert t.dtype == tf.float32
@@ -177,6 +183,9 @@ with tempfile.TemporaryDirectory() as directory:
     b = batched.element_spec["b"]
     assert a.shape.as_list() == [None, 3]
     assert b.shape.as_list() == [None, 2, 2]
+    # The batch axis has no size, since the last batch may be smaller.
+    if a.shape[0] is not None:
+        use_batch_axis(tf.zeros([a.shape[0], 5]))
     use_batch_member_size(tf.zeros([a.shape[1], 2]))
     use_batch_member_sizes(tf.zeros([b.shape[1], b.shape[2]]))
 
