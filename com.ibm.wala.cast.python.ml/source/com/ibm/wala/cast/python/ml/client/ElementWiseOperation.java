@@ -40,7 +40,6 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -55,7 +54,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -181,22 +179,9 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    */
   private Set<TensorOrigin> getBinaryOperationOrigins(
       PropagationCallGraphBuilder builder, CGNode node, SSABinaryOpInstruction binop) {
-    return getDispatchedOrigins(
-        this.getOperandOrigins(builder, node, binop.getUse(0)),
-        this.getOperandOrigins(builder, node, binop.getUse(1)));
-  }
+    Set<TensorOrigin> x = this.getOperandOrigins(builder, node, binop.getUse(0));
+    Set<TensorOrigin> y = this.getOperandOrigins(builder, node, binop.getUse(1));
 
-  /**
-   * Returns the origins a binary operator's runtime dispatch assigns to its result, from its
-   * operands' origins: every pairing's {@link #getDispatchedOrigin}. An operand that contributes no
-   * origin evidence keeps the other operand's origins, and the result of two such operands reads
-   * {@link TensorOrigin#TENSORFLOW}.
-   *
-   * @param x One operand's origins, or {@code null} when it contributes no origin evidence.
-   * @param y The other operand's origins, or {@code null} when it contributes no origin evidence.
-   * @return The origins of the operator's result.
-   */
-  static Set<TensorOrigin> getDispatchedOrigins(Set<TensorOrigin> x, Set<TensorOrigin> y) {
     // A scalar (or otherwise skipped) operand keeps the other operand's origins.
     if (x == null && y == null) return EnumSet.of(TensorOrigin.TENSORFLOW);
     if (x == null) return y;
@@ -227,13 +212,24 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   }
 
   /**
-   * Returns whether this thread is classifying an operand's origins (see {@link
-   * OperandOriginWalk}).
+   * Per-thread set of the operands whose origins are currently being classified.
+   *
+   * <p>Breaks unbounded recursion on a loop-carried elementwise chain ({@code x = x * a} in a
+   * loop): the operand's creator walk stops at the loop body's own binary operator (see {@code
+   * findCreator}'s binary-op stop, wala/ML#396), whose origin classification revisits the operand.
+   * On re-entry the operand contributes no evidence, and the chain's other operand decides,
+   * mirroring the wala/ML#599 cycle break.
+   */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> OPERAND_ORIGINS_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  /**
+   * Returns whether this thread has a {@link #OPERAND_ORIGINS_IN_PROGRESS} frame open.
    *
    * @return {@code true} iff the guard is in progress.
    */
   static boolean guardInProgress() {
-    return OperandOriginWalk.current().inProgress();
+    return !OPERAND_ORIGINS_IN_PROGRESS.get().isEmpty();
   }
 
   /**
@@ -243,13 +239,6 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * creators its call sites feed it. A nested binary operator recurses structurally (its result has
    * no points-to set to dispatch on); any other operand classifies through the generator its
    * points-to chain dispatches to.
-   *
-   * <p>An operand already being classified contributes no evidence, and the chain's other operand
-   * decides, mirroring the wala/ML#599 cycle break. That breaks the unbounded recursion on a
-   * loop-carried elementwise chain ({@code x = x * a} in a loop): the operand's creator walk stops
-   * at the loop body's own binary operator (see {@code findCreator}'s binary-op stop, wala/ML#396),
-   * whose origin classification revisits the operand. An operand the walk has classified is not
-   * classified again (see {@link OperandOriginWalk}, wala/ML#1275).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param node The node whose IR defines the operand.
@@ -263,51 +252,29 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
 
     if (node.getIR().getSymbolTable().isParameter(vn)) return EnumSet.of(TensorOrigin.PARAMETER);
 
-    OperandOriginWalk walk = OperandOriginWalk.current();
+    Set<Pair<CGNode, Integer>> inProgress = OPERAND_ORIGINS_IN_PROGRESS.get();
     Pair<CGNode, Integer> key = Pair.make(node, vn);
-    if (walk.cuts(key)) return null; // cycle: the other operand decides.
-    OperandOriginWalk.Kept kept = walk.kept(key);
-    if (kept != null) return kept.copy();
-
-    walk.enter(builder, key);
-    boolean classified = false;
+    if (!inProgress.add(key)) return null; // cycle: the other operand decides.
     try {
-      Set<TensorOrigin> ret = this.classifyOperand(builder, node, vn);
-      classified = true;
-      walk.leave(key, ret);
-      return ret;
+      SSAInstruction def = node.getDU().getDef(vn);
+      if (def instanceof SSABinaryOpInstruction)
+        return this.getBinaryOperationOrigins(builder, node, (SSABinaryOpInstruction) def);
+
+      PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+      if (builder.getPropagationSystem().isImplicit(pk)) return null;
+      PointsToSetVariable operand = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+      if (operand == null) return null;
+
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(operand, builder);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      return generator == null ? null : generator.getOrigins(builder);
     } finally {
-      if (!classified) walk.abandon(key);
+      inProgress.remove(key);
     }
-  }
-
-  /**
-   * Classifies an operand that is neither a scalar expression nor a parameter, and that the walk
-   * has entered.
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param node The node whose IR defines the operand.
-   * @param vn The operand's value number.
-   * @return The operand's origins, or {@code null} when the operand contributes no origin evidence.
-   */
-  private Set<TensorOrigin> classifyOperand(
-      PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    SSAInstruction def = node.getDU().getDef(vn);
-    if (def instanceof SSABinaryOpInstruction)
-      return this.getBinaryOperationOrigins(builder, node, (SSABinaryOpInstruction) def);
-
-    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    if (builder.getPropagationSystem().isImplicit(pk)) return null;
-    PointsToSetVariable operand = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
-    if (operand == null) return null;
-
-    TensorGenerator generator;
-    try {
-      generator = TensorGeneratorFactory.getGenerator(operand, builder);
-    } catch (IllegalArgumentException e) {
-      return null;
-    }
-    return generator == null ? null : generator.getOrigins(builder);
   }
 
   /**
@@ -456,28 +423,6 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   }
 
   /**
-   * How many values were tested for being a scalar expression for each builder, rather than
-   * answered from a test's earlier answers. The counts hold nothing of the builder, so its entry
-   * expires with it.
-   */
-  private static final Map<PropagationCallGraphBuilder, AtomicLong> SCALAR_EXPRESSION_TESTS =
-      new WeakHashMap<>();
-
-  /**
-   * How many values were tested for being a scalar expression for a builder, rather than answered
-   * from a test's earlier answers.
-   *
-   * @param builder The builder.
-   * @return The count.
-   */
-  static long scalarExpressionTests(PropagationCallGraphBuilder builder) {
-    synchronized (SCALAR_EXPRESSION_TESTS) {
-      AtomicLong tests = SCALAR_EXPRESSION_TESTS.get(builder);
-      return tests == null ? 0 : tests.get();
-    }
-  }
-
-  /**
    * Recognizes a statically opaque scalar expression: a scalar literal, a {@code float(...)} or
    * {@code int(...)} builtin call, a {@code math.<fn>(...)} call, a unary minus, or a binary op
    * whose operands are both scalar expressions (wala/ML#718). The value never resolves (the PA does
@@ -502,47 +447,6 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * @return {@code true} iff the operand is structurally a Python scalar expression.
    */
   private boolean isScalarExpression(PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return this.isScalarExpression(builder, node, vn, HashMapFactory.make());
-  }
-
-  /**
-   * Answers {@link #isScalarExpression(PropagationCallGraphBuilder, CGNode, int)} for a value, once
-   * for each value of a test. A binary operator is a scalar expression when both its operands are,
-   * so a chain of operators that share operands asked about a shared one once for every path of
-   * operators to it (wala/ML#1275).
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The {@link CGNode} whose IR defines {@code vn}.
-   * @param vn The operand's value number.
-   * @param tested The values of {@code node} this test has answered for, with the answers.
-   * @return {@code true} iff the operand is structurally a Python scalar expression.
-   */
-  private boolean isScalarExpression(
-      PropagationCallGraphBuilder builder, CGNode node, int vn, Map<Integer, Boolean> tested) {
-    Boolean scalar = tested.get(vn);
-    if (scalar == null) {
-      synchronized (SCALAR_EXPRESSION_TESTS) {
-        SCALAR_EXPRESSION_TESTS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
-      }
-      scalar = this.testScalarExpression(builder, node, vn, tested);
-      tested.put(vn, scalar);
-    }
-    return scalar;
-  }
-
-  /**
-   * Tests whether a value is a scalar expression, asking {@link
-   * #isScalarExpression(PropagationCallGraphBuilder, CGNode, int, Map)} about the operands of an
-   * operator.
-   *
-   * @param builder The propagation call graph builder.
-   * @param node The {@link CGNode} whose IR defines {@code vn}.
-   * @param vn The operand's value number.
-   * @param tested The values of {@code node} this test has answered for, with the answers.
-   * @return {@code true} iff the operand is structurally a Python scalar expression.
-   */
-  private boolean testScalarExpression(
-      PropagationCallGraphBuilder builder, CGNode node, int vn, Map<Integer, Boolean> tested) {
     if (vn <= 0) return false;
     if (node.getDU() == null || node.getIR() == null) return false;
     if (node.getIR().getSymbolTable().isConstant(vn)) return true;
@@ -570,10 +474,10 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
 
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof SSABinaryOpInstruction)
-      return isScalarExpression(builder, node, def.getUse(0), tested)
-          && isScalarExpression(builder, node, def.getUse(1), tested);
+      return isScalarExpression(builder, node, def.getUse(0))
+          && isScalarExpression(builder, node, def.getUse(1));
     if (def instanceof SSAUnaryOpInstruction)
-      return isScalarExpression(builder, node, def.getUse(0), tested);
+      return isScalarExpression(builder, node, def.getUse(0));
     // A shape-vector element (e.g. `tf.shape(x)[k]`) is a rank-0 int32 tensor: structurally
     // scalar for broadcast purposes even though it is a runtime tensor, so a broadcast against it
     // preserves the tensor operand's shape. Only the singular element qualifies; a shape-vector
