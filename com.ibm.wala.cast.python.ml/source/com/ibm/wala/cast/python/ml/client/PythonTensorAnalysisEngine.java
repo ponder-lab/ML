@@ -1173,6 +1173,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // and anything else is the one element of a fresh list (wala/ML#1265).
     builder.setListWrap(TensorFlowTypes.RNN_STATES);
 
+    // The `tf.nest` functions read the leaves of a nested structure, through lists, tuples, dicts
+    // and namedtuples (wala/ML#1067).
+    builder.setStructureLeaves(TensorFlowTypes.NEST_LEAVES);
+    // It calls the function with a leaf of each further structure only where the call passes that
+    // structure.
+    builder.setPresenceGate(TensorFlowTypes.NEST_WHEN_PRESENT);
+
     // A dataset built from a generator mirrors the structure it declares, and a call declaring none
     // marks its element as not mirrored (wala/ML#164).
     builder.setElementDeclared(TensorFlowTypes.DATASET_ELEMENT_DECLARED, "legacy_element");

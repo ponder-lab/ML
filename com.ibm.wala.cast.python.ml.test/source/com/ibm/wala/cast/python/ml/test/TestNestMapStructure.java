@@ -1,6 +1,5 @@
 package com.ibm.wala.cast.python.ml.test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -19,23 +18,22 @@ import org.junit.Test;
 public class TestNestMapStructure extends TestPythonMLCallGraphShape {
 
   /**
-   * {@code tf.nest} has no summary, so {@code map_structure} has no target and the function passed
-   * to it gets no node, while the function making the call does.
-   *
-   * <p>TODO: https://github.com/wala/ML/issues/1067; expect a node for {@code to_numpy} once it is
-   * fixed.
+   * {@code map_structure} calls the function it is given, so the function has a node, as the
+   * function making the call does (<a
+   * href="https://github.com/wala/ML/issues/1067">wala/ML#1067</a>). Before, {@code tf.nest} had no
+   * summary, the call had no target, and the function had no node.
    *
    * @throws Exception On analysis failure.
    */
   @Test
-  public void testMappedFunctionHasNoNode() throws Exception {
+  public void testMappedFunctionHasNode() throws Exception {
     PythonTensorAnalysisEngine engine =
         (PythonTensorAnalysisEngine) makeEngine("tf2_test_nest_map_structure.py");
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     CallGraph cg = builder.makeCallGraph(builder.getOptions());
 
     assertTrue("The calling function has no node.", nodes(cg, "predict") > 0);
-    assertEquals("The mapped function has a node.", 0, nodes(cg, "to_numpy"));
+    assertTrue("The mapped function has no node.", nodes(cg, "to_numpy") > 0);
   }
 
   /**
