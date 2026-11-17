@@ -42,6 +42,14 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
    */
   private static final Set<String> JOINED_FIELDS = Set.of("parts", "leaves");
 
+  /**
+   * The field of a {@link DatasetTupleElementGenerator} that marks its reads as shared ({@link
+   * DatasetTupleElementGenerator#sharingReads}). Only the parts of a memoized leaf reading carry
+   * the mark, so a dispatch computed afresh has none; that the shared reads give the types the
+   * unshared ones give is {@link TestMirroredLeafReads}'s to test.
+   */
+  private static final String SHARED_READS_FIELD = "sharedReads";
+
   /** The package whose objects are compared field by field rather than by their own equality. */
   private static final String ANALYSIS_PACKAGE = "com.ibm.wala.cast.python.ml.";
 
@@ -133,6 +141,8 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     addPytestEntrypoints(builder);
     builder.makeCallGraph(builder.getOptions());
+    // The factory memoizes per builder only while an analysis resolves for it.
+    WorklistTypeResolver.install(builder);
     try {
       int generators = 0;
       // A snapshot: dispatch creates points-to set variables for keys it reads.
@@ -155,7 +165,9 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
         }
       }
       assertTrue(fixture + " dispatched no generator", generators > 0);
+      assertTrue(fixture + " memoized no dispatch", TensorGeneratorFactory.hasDispatches(builder));
     } finally {
+      WorklistTypeResolver.uninstall(builder, false);
       TensorGenerator.clearCaches(builder);
     }
   }
@@ -276,6 +288,8 @@ public class TestGeneratorDispatchMemo extends AbstractTensorTest {
       for (Field field : c.getDeclaredFields()) {
         if (Modifier.isStatic(field.getModifiers())) continue;
         if (c == CreatorJoin.class && JOINED_FIELDS.contains(field.getName())) continue;
+        if (c == DatasetTupleElementGenerator.class && field.getName().equals(SHARED_READS_FIELD))
+          continue;
         field.setAccessible(true);
         assertSameDispatch(
             where + "." + field.getName(), field.get(expected), field.get(actual), compared);

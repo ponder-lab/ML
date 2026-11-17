@@ -66,7 +66,7 @@ final class DispatchPath {
     /** The lowest number the source's dispatch has depended on so far, at most its own. */
     private int low;
 
-    /** Whether the dispatch was cut, or replayed a dispatch that depended on a path. */
+    /** Whether the dispatch was cut, or replayed a dispatch that was not exact. */
     private boolean reached;
 
     /** Whether the dispatch depended on a source that another path of the thread is resolving. */
@@ -213,10 +213,22 @@ final class DispatchPath {
     Frame top = this.path.peek();
     if (top != null) {
       if (kept.provisional()) top.low = Math.min(top.low, kept.index());
-      top.reached |= kept.provisional() || kept.outside();
+      top.reached |= kept.provisional() || kept.outside() || !kept.dispatch().exact();
       top.outside |= kept.outside();
     }
     return kept.dispatch();
+  }
+
+  /**
+   * Notes that the dispatch now on top of the path replays a dispatch the factory memoized per
+   * builder. That one depends on no source on this path, so it adds nothing to what the replaying
+   * dispatch depends on; the replaying dispatch is exact only if it is.
+   *
+   * @param memoized The memoized dispatch.
+   */
+  void replays(Dispatch memoized) {
+    Frame top = this.path.peek();
+    if (top != null && !memoized.exact()) top.reached = true;
   }
 
   /**

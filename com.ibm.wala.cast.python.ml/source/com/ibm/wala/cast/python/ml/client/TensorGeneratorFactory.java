@@ -3528,7 +3528,7 @@ public class TensorGeneratorFactory {
    * @param generator The generator, never handed out itself, or {@code null} when there is none.
    * @param failure What the dispatch threw, or {@code null} when it returned.
    * @param exact Whether the dispatch was computed without a cut and without replaying a dispatch
-   *     that had one, so computing it again from any path gives the same.
+   *     that is not exact, so computing it again from any path gives the same.
    */
   record Dispatch(TensorGenerator generator, IllegalArgumentException failure, boolean exact) {
 
@@ -3548,11 +3548,12 @@ public class TensorGeneratorFactory {
    * The system property that turns on the check of replayed dispatches: each replay of a dispatch
    * that is not {@link Dispatch#exact} also computes the dispatch afresh from the path replaying
    * it, with every dispatch below it computed afresh too, and counts the replays whose generators
-   * differ from the fresh ones ({@link #replayDifferences}). A diagnostic of what keeping a cycle's
-   * dispatches changes (wala/ML#1274); the fresh computation takes every path through a cycle. A
-   * difference is not by itself an error: a memoized dispatch that was cut at its own source,
-   * replayed on a path holding another source it reaches, holds what that source gave it, where the
-   * fresh one is cut there.
+   * differ from the fresh ones ({@link #replayDifferences}). A dispatch that replayed one that is
+   * not exact is not exact either, so its replays are checked too. A diagnostic of what keeping a
+   * cycle's dispatches changes (wala/ML#1274); the fresh computation takes every path through a
+   * cycle. A difference is not by itself an error: a memoized dispatch that was cut at its own
+   * source, replayed on a path holding another source it reaches, holds what that source gave it,
+   * where the fresh one is cut there.
    */
   static final String CHECK_REPLAYS_PROPERTY = "ariadne.dispatch.checkReplays";
 
@@ -3838,7 +3839,10 @@ public class TensorGeneratorFactory {
     }
     if (dispatches != null) {
       Dispatch memoized = dispatches.get(source);
-      if (memoized != null) return replay(memoized, source, builder, visited);
+      if (memoized != null) {
+        visited.replays(memoized);
+        return replay(memoized, source, builder, visited);
+      }
     }
     // A dispatch this walk completed for the source, while a cycle it is in is being resolved or
     // where the memo does not take it (wala/ML#1274).

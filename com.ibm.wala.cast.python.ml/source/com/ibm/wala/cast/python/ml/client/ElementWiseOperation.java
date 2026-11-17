@@ -259,15 +259,17 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    */
   private Set<TensorOrigin> getOperandOrigins(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    if (this.isScalarExpression(builder, node, vn)) return null;
-
-    if (node.getIR().getSymbolTable().isParameter(vn)) return EnumSet.of(TensorOrigin.PARAMETER);
-
+    // The walk enters neither a scalar expression nor a parameter, so it answers for an operand
+    // only after both tests said no, and an operand it answers for needs neither again.
     OperandOriginWalk walk = OperandOriginWalk.current();
     Pair<CGNode, Integer> key = Pair.make(node, vn);
     if (walk.cuts(key)) return null; // cycle: the other operand decides.
     OperandOriginWalk.Kept kept = walk.kept(key);
     if (kept != null) return kept.copy();
+
+    if (this.isScalarExpression(builder, node, vn)) return null;
+
+    if (node.getIR().getSymbolTable().isParameter(vn)) return EnumSet.of(TensorOrigin.PARAMETER);
 
     walk.enter(builder, key);
     boolean classified = false;

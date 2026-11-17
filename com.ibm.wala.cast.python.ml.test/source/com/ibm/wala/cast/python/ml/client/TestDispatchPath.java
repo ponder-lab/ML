@@ -68,7 +68,11 @@ public class TestDispatchPath {
         this.cuts.add(name);
         return;
       }
-      if (this.memoized.containsKey(name)) return;
+      Dispatch memoized = this.memoized.get(name);
+      if (memoized != null) {
+        path.replays(memoized);
+        return;
+      }
       if (path.kept(source) != null) return;
       this.computed.merge(name, 1, Integer::sum);
       path.enter(source);
@@ -139,7 +143,8 @@ public class TestDispatchPath {
 
   /**
    * A source reached again after its cycle is complete is computed again, replaying the memoized
-   * dispatch of the cycle's first source, and its dispatch is then handed over too.
+   * dispatch of the cycle's first source, and its dispatch is then handed over too. It was not cut,
+   * and is not exact either: the dispatch it replayed was cut.
    */
   @Test
   public void testCycleMemberAfterItsCycle() {
@@ -152,6 +157,8 @@ public class TestDispatchPath {
     assertEquals(2, walk.computed("third"));
     assertEquals(1, walk.computed("first"));
     assertEquals(Set.of("first", "second", "third"), walk.memoized.keySet());
+    assertTrue(walk.cuts.equals(Set.of("first")));
+    for (Dispatch dispatch : walk.memoized.values()) assertFalse(dispatch.exact());
   }
 
   /**
@@ -243,6 +250,38 @@ public class TestDispatchPath {
     walk.dispatch(new DispatchPath(false), "top");
     assertEquals(2, walk.computed("shared"));
     assertTrue(walk.memoized.isEmpty());
+  }
+
+  /**
+   * A dispatch that replays the dispatch of a cycle's first source after the cycle is complete
+   * depends on no source on the path, so it is handed over, and so is the dispatch above it.
+   * Neither is exact, the replayed dispatch having been cut.
+   */
+  @Test
+  public void testReplayOfCompletedCycle() {
+    Walk walk = new Walk().source("top").source("first").source("after");
+    PointsToSetVariable top = walk.sources.get("top");
+    PointsToSetVariable first = walk.sources.get("first");
+    PointsToSetVariable after = walk.sources.get("after");
+    DispatchPath path = new DispatchPath();
+    long reached = DispatchPath.reachedOnThread();
+    path.enter(top);
+    path.enter(first);
+    assertTrue(path.cuts(first));
+    assertNotNull(path.leave(first, null, null));
+    path.enter(after);
+    assertNotNull(path.kept(first));
+    // The replayed dispatch was cut at its own source alone, which reaches no source being
+    // resolved.
+    assertEquals(reached + 1, DispatchPath.reachedOnThread());
+    Dispatch replaying = path.leave(after, null, null);
+    assertNotNull(replaying);
+    assertFalse(replaying.exact());
+    Dispatch above = path.leave(top, null, null);
+    assertNotNull(above);
+    assertFalse(above.exact());
+    // Handed over, the replaying dispatch is kept for the rest of the walk too.
+    assertNotNull(path.kept(after));
   }
 
   /** A dispatch that did not complete keeps nothing, and no dispatch above it is handed over. */

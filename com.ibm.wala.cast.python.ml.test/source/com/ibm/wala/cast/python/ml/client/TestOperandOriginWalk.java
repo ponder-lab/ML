@@ -311,6 +311,32 @@ public class TestOperandOriginWalk {
   }
 
   /**
+   * An operand whose classification did not complete passes what it was cut at to the operand above
+   * it, whose classification, completed without it, holds only until the operand of the cut is
+   * left.
+   */
+  @Test
+  public void testAbandonedClassificationPassesItsCut() {
+    Pair<CGNode, Integer> outer = Pair.make(null, 0);
+    Pair<CGNode, Integer> first = Pair.make(null, 1);
+    Pair<CGNode, Integer> above = Pair.make(null, 2);
+    Pair<CGNode, Integer> abandoned = Pair.make(null, 3);
+    OperandOriginWalk walk = new OperandOriginWalk();
+    walk.enter(null, outer);
+    walk.enter(null, first);
+    walk.enter(null, above);
+    walk.enter(null, abandoned);
+    assertTrue(walk.cuts(first));
+    walk.abandon(abandoned);
+    walk.leave(above, EnumSet.of(TensorOrigin.NUMPY));
+    assertTrue(walk.kept(above).provisional());
+    walk.leave(first, EnumSet.of(TensorOrigin.NUMPY));
+    assertNull(walk.kept(above));
+    assertNotNull(walk.kept(first));
+    walk.leave(outer, null);
+  }
+
+  /**
    * Where a replay changes a classification. An operator whose operands both contribute no evidence
    * reads TensorFlow, and a cut is no evidence. Classified per path, {@code inner} asked after
    * {@code outer} classifies {@code outer} again under itself, where {@code outer}'s operands are a

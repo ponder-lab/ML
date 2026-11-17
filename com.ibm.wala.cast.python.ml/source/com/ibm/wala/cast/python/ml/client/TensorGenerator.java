@@ -7321,6 +7321,10 @@ public abstract class TensorGenerator implements Cloneable {
    * the leaf alone, since the reading depends on nothing else: no generator's binding enters it,
    * and the transfer captures no reader. Outside an analysis it is read as the other queries are.
    *
+   * <p>As a query, the reading is widened as every query's is. It holds each of the leaf's shapes
+   * while they are within the resolver's caps on how many shapes a query holds and on a shape's
+   * rank, and reads unknown past either, where the direct read kept every shape.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
    * @param leaf The leaf.
    * @return Its shapes.
@@ -9485,7 +9489,7 @@ public abstract class TensorGenerator implements Cloneable {
    * @param builder The builder.
    * @param caller The caller.
    * @param targets The blocks whose reachability is asked after the analysis, or {@code null}.
-   * @return The reachable blocks.
+   * @return The reachable blocks, in a set that cannot be modified when it is the memoized one.
    */
   private static Set<ISSABasicBlock> callerReachableBlocks(
       PropagationCallGraphBuilder builder, CGNode caller, Set<ISSABasicBlock> targets) {
@@ -9510,7 +9514,11 @@ public abstract class TensorGenerator implements Cloneable {
     }
     if (memo != null
         && WorklistTypeResolver.readsOnThread() == reads
-        && FOLD_REENTRIES.get()[0] == reentries) memo.putIfAbsent(caller, ret);
+        && FOLD_REENTRIES.get()[0] == reentries) {
+      // Every later asker is handed this set.
+      ret = Collections.unmodifiableSet(ret);
+      memo.putIfAbsent(caller, ret);
+    }
     return ret;
   }
 

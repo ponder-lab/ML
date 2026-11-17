@@ -218,13 +218,19 @@ final class OperandOriginWalk {
   }
 
   /**
-   * Leaves an operand whose classification did not complete. Nothing is kept for it.
+   * Leaves an operand whose classification did not complete. Nothing is kept for it. What it
+   * depended on passes to the classification now on top of the path, as in {@link #leave}: a caller
+   * that goes on without the operand's origins goes on from a classification that may have been
+   * cut.
    *
    * @param operand The operand, as passed to {@link #enter}.
    */
   void abandon(Pair<CGNode, Integer> operand) {
     Frame frame = this.pop(operand);
-    if (!this.path.isEmpty()) this.dropProvisionalSince(frame.index);
+    if (this.path.isEmpty()) return;
+    Frame parent = this.path.element();
+    parent.low = Math.min(parent.low, frame.low);
+    this.dropProvisionalSince(frame.index);
   }
 
   /**
