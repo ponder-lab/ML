@@ -739,12 +739,21 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/StaticTensorShape/as_list"));
 
+  /**
+   * The {@code get_shape} method of a tensor, whose call returns a {@link #STATIC_TENSOR_SHAPE} (<a
+   * href="https://github.com/wala/ML/issues/1280">wala/ML#1280</a>).
+   */
+  public static final TypeReference STATIC_TENSOR_SHAPE_GET_SHAPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/StaticTensorShape/get_shape"));
+
   static {
-    // The static shape and its method are for points-to clients only (wala/ML#1104). Registering
+    // The static shape and its methods are for points-to clients only (wala/ML#1104). Registering
     // them as the types load, rather than when an engine is built, makes the generators' filter
     // independent of which engine a JVM builds first.
     Util.registerClientOnlyType(STATIC_TENSOR_SHAPE);
     Util.registerClientOnlyType(STATIC_TENSOR_SHAPE_AS_LIST);
+    Util.registerClientOnlyType(STATIC_TENSOR_SHAPE_GET_SHAPE);
   }
 
   /** The {@code dims} argument the {@code TensorShape} constructor stores (wala/ML#789). */

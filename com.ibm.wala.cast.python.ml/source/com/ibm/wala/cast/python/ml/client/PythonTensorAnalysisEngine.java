@@ -1298,12 +1298,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (TypeReference component : TensorFlowTypes.DATASET_ELEMENT_COMPONENT_TYPES)
       shapeTypes.put(component, TensorFlowTypes.STATIC_TENSOR_SHAPE);
     shapeTypes.put(TensorFlowTypes.DATASET_ELEMENT_LEAF, TensorFlowTypes.STATIC_TENSOR_SHAPE);
+    // A tensor's `get_shape()` returns the same shape, so a read of `get_shape` off a tensor
+    // allocates the method whose call allocates it (wala/ML#1280).
+    Map<TypeReference, TypeReference> getShapeTypes = new HashMap<>();
+    for (TypeReference tensor : shapeTypes.keySet())
+      getShapeTypes.put(tensor, TensorFlowTypes.STATIC_TENSOR_SHAPE_GET_SHAPE);
     // An ndarray's `shape` attribute reads its shape, a tuple of Python ints, for points-to clients
     // only, as a tensor's does (wala/ML#1159).
     shapeTypes.put(NumpyTypes.NDARRAY_TYPE, NumpyTypes.STATIC_ARRAY_SHAPE);
     for (TypeReference array : TensorFlowTypes.KERAS_DATASET_ARRAYS)
       shapeTypes.put(array, NumpyTypes.STATIC_ARRAY_SHAPE);
-    builder.setFreshAttributeTypes(Map.of("shape", shapeTypes));
+    builder.setFreshAttributeTypes(Map.of("shape", shapeTypes, "get_shape", getShapeTypes));
     builder.setFreshArrayAttributes(
         Map.of(
             NumpyTypes.NDARRAY_TYPE,

@@ -4919,6 +4919,39 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The receiver of a read of a value's static shape: of its {@code shape} attribute, or of a call
+   * of its {@code get_shape} method with no argument, which returns what the attribute reads (<a
+   * href="https://github.com/wala/ML/issues/1280">wala/ML#1280</a>). The test is by name, as the
+   * attribute's is, so it also answers for a receiver whose points-to set is empty. A call with a
+   * target other than the tensor method's summary, such as a program's own {@code get_shape}
+   * method, is not that form, and is left to the readings of a call to program code.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the call.
+   * @param node The {@link CGNode} whose IR holds the read.
+   * @param def The instruction defining the value read, or {@code null}.
+   * @return The receiver's value number, or {@code -1} when {@code def} is neither form.
+   */
+  private static int staticShapeReadReceiver(
+      PropagationCallGraphBuilder builder, CGNode node, SSAInstruction def) {
+    if (node.getIR() == null || node.getDU() == null) return -1;
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (def instanceof PythonPropertyRead read)
+      return st.isStringConstant(read.getMemberRef())
+              && "shape".equals(st.getStringValue(read.getMemberRef()))
+          ? read.getObjectRef()
+          : -1;
+    if (def instanceof PythonInvokeInstruction call
+        && call.getNumberOfUses() == 1
+        && node.getDU().getDef(call.getUse(0)) instanceof PythonPropertyRead method
+        && st.isStringConstant(method.getMemberRef())
+        && "get_shape".equals(st.getStringValue(method.getMemberRef()))
+        && (builder.getCallGraph().getPossibleTargets(node, call.getCallSite()).isEmpty()
+            || callsOnly(builder, node, call, TensorFlowTypes.STATIC_TENSOR_SHAPE_GET_SHAPE)))
+      return method.getObjectRef();
+    return -1;
+  }
+
+  /**
    * Whether every target of a call is the summary of the given type.
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the call.
@@ -5512,10 +5545,13 @@ public abstract class TensorGenerator implements Cloneable {
     String outerName = resolvePropertyName(builder, node, outer);
     if (!"ndims".equals(outerName) && !"rank".equals(outerName)) return null;
     SSAInstruction innerDef = node.getDU().getDef(outer.getObjectRef());
-    if (!(innerDef instanceof PythonPropertyRead)) return null;
-    PythonPropertyRead inner = (PythonPropertyRead) innerDef;
-    if (!"shape".equals(resolvePropertyName(builder, node, inner))) return null;
-    int baseVn = inner.getObjectRef();
+    int baseVn;
+    if (innerDef instanceof PythonPropertyRead inner) {
+      if (!"shape".equals(resolvePropertyName(builder, node, inner))) return null;
+      baseVn = inner.getObjectRef();
+    } else
+      // The shape `x.get_shape()` returns is the one `x.shape` reads (wala/ML#1280).
+      baseVn = staticShapeReadReceiver(builder, node, innerDef);
     if (baseVn <= 0) return null;
     PointerKey basePK =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, baseVn);
@@ -6974,15 +7010,14 @@ public abstract class TensorGenerator implements Cloneable {
           || number.intValue() != index) continue;
       if (!(du.getDef(write.getValue()) instanceof AstPropertyRead element)
           || !symtab.isConstant(element.getMemberRef())
-          || !(symtab.getConstantValue(element.getMemberRef()) instanceof Number)
-          || !(du.getDef(element.getObjectRef()) instanceof AstPropertyRead shape)
-          || !symtab.isStringConstant(shape.getMemberRef())
-          || !"shape".equals(symtab.getStringValue(shape.getMemberRef()))) return false;
+          || !(symtab.getConstantValue(element.getMemberRef()) instanceof Number)) return false;
+      int shapeReceiver = staticShapeReadReceiver(builder, node, du.getDef(element.getObjectRef()));
+      if (shapeReceiver <= 0) return false;
       OrdinalSet<InstanceKey> receiver =
           withoutClientOnlyKeys(
               builder
                   .getPointerAnalysis()
-                  .getPointsToSet(builder.getPointerKeyForLocal(node, shape.getObjectRef())));
+                  .getPointsToSet(builder.getPointerKeyForLocal(node, shapeReceiver)));
       if (receiver == null || receiver.isEmpty()) return false;
       for (InstanceKey value : receiver) {
         String type = value.concreteType().getName().toString();
@@ -9667,19 +9702,16 @@ public abstract class TensorGenerator implements Cloneable {
       }
       if (argVn <= 0) continue;
       SSAInstruction def = caller.getDU().getDef(argVn);
-      int tensorVn;
-      if (def instanceof PythonPropertyRead propRead) {
-        SymbolTable st = caller.getIR().getSymbolTable();
-        int memberVn = propRead.getMemberRef();
-        if (!st.isStringConstant(memberVn) || !"shape".equals(st.getStringValue(memberVn)))
-          continue;
-        tensorVn = propRead.getObjectRef();
-      } else if (def instanceof SSAAbstractInvokeInstruction call
-          && call.getNumberOfUses() > 1
-          && callsOnly(builder, caller, call, TensorFlowTypes.INT_SHAPE.getDeclaringClass()))
-        // `tf.keras.backend.int_shape(t)` is `t`'s static shape as a tuple, read as `t.shape` is.
-        tensorVn = call.getUse(1);
-      else continue;
+      // The argument `t.shape`, or `t.get_shape()`, which returns the same shape (wala/ML#1280).
+      int tensorVn = staticShapeReadReceiver(builder, caller, def);
+      if (tensorVn <= 0) {
+        if (def instanceof SSAAbstractInvokeInstruction call
+            && call.getNumberOfUses() > 1
+            && callsOnly(builder, caller, call, TensorFlowTypes.INT_SHAPE.getDeclaringClass()))
+          // `tf.keras.backend.int_shape(t)` is `t`'s static shape as a tuple, read as `t.shape` is.
+          tensorVn = call.getUse(1);
+        else continue;
+      }
       try {
         Set<List<Dimension<?>>> tensorShapes = this.getShapes(builder, caller, tensorVn);
         if (tensorShapes != null && !tensorShapes.isEmpty()) {
@@ -10446,12 +10478,13 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
 
-    if (def instanceof PythonPropertyRead) {
-      PythonPropertyRead read = (PythonPropertyRead) def;
-      int memberVn = read.getMemberRef();
-      if (st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn))) {
+    // A tensor's static shape, read by its `shape` attribute or returned by its `get_shape()`
+    // method (wala/ML#1280).
+    int shapeReceiver = staticShapeReadReceiver(builder, node, def);
+    if (def instanceof PythonPropertyRead || shapeReceiver > 0) {
+      if (shapeReceiver > 0) {
         try {
-          int objVn = read.getObjectRef();
+          int objVn = shapeReceiver;
           // The walk's folds assert per-member facts (subscripts, slices, products), so the
           // source must be the complete set of possibilities; a partially resolvable source
           // keeps its members with the remainder marked (wala/ML#716, wala/ML#718).
@@ -11314,10 +11347,9 @@ public abstract class TensorGenerator implements Cloneable {
     SSAInstruction def = node.getDU().getDef(vn);
     SymbolTable st = node.getIR().getSymbolTable();
 
-    if (def instanceof PythonPropertyRead) {
-      int memberVn = ((PythonPropertyRead) def).getMemberRef();
-      return st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn));
-    }
+    // A read of a tensor's `shape`, or a call of its `get_shape()` (wala/ML#1280).
+    if (staticShapeReadReceiver(builder, node, def) > 0) return true;
+    if (def instanceof PythonPropertyRead) return false;
 
     // A parameter chains iff some caller's corresponding argument chains (wala/ML#706); the
     // resolve-side walk unions the callers and marks the unmappable ones as the unknown
@@ -11571,13 +11603,10 @@ public abstract class TensorGenerator implements Cloneable {
     if (vn <= 0 || !visited.add(vn) || node.getDU() == null || node.getIR() == null) return vn;
     SSAInstruction def = node.getDU().getDef(vn);
     SymbolTable st = node.getIR().getSymbolTable();
-    if (def instanceof PythonPropertyRead) {
-      int memberVn = ((PythonPropertyRead) def).getMemberRef();
-      if (st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn)))
-        return this.peelShapeVectorRoot(
-            builder, node, ((PythonPropertyRead) def).getObjectRef(), visited);
-      return vn;
-    }
+    // A read of a tensor's `shape`, or a call of its `get_shape()` (wala/ML#1280).
+    int shapeReceiver = staticShapeReadReceiver(builder, node, def);
+    if (shapeReceiver > 0) return this.peelShapeVectorRoot(builder, node, shapeReceiver, visited);
+    if (def instanceof PythonPropertyRead) return vn;
     if (def instanceof PythonInvokeInstruction) {
       PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
       if (invoke.getNumberOfUses() < 1) return vn;
