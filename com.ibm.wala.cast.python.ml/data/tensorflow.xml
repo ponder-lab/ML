@@ -5667,6 +5667,13 @@
           <return value="none"/>
         </method>
       </class>
+      <!-- Internal to the `zip` summary (wala/ML#1280): a call returns the nesting of `datasets`, a fresh copy of each list, tuple, dict and namedtuple it holds, with the element structure each dataset's `map` method object carries in that dataset's place. A summary cannot enumerate a dict's keys or follow a nesting of unknown depth, so the call graph builder builds the result, which the engine names through `setStructureProjection`; the body returns a field nothing writes. -->
+      <class name="zip_structure" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self datasets">
+          <getfield class="LRoot" field="projected" fieldType="LRoot" ref="self" def="none"/>
+          <return value="none"/>
+        </method>
+      </class>
       <!-- Joins the elements of a sequence of datasets into one dataset's element, any one of theirs, as `element_zip` replaces each dataset by the copy of its element, except that the sequence itself is not copied (wala/ML#1215). The builder does the copying. -->
       <class name="element_join" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self datasets dataset">
@@ -10545,6 +10552,9 @@
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="x" value="element"/>
           <!-- A zipped dataset whose element is not mirrored passes its marker to this dataset, so an iterator over it still allocates the element (wala/ML#1190). -->
           <getfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="x" def="legacy"/>
+          <!-- The element's structure is the nesting of `datasets` with each dataset's own element structure in its place, which this dataset's method objects carry as a `map`'s result carries what its function returns, so `element_spec` describes the places of datasets whose elements are not mirrored (wala/ML#1280). -->
+          <new def="structure_fn" class="Ltensorflow/data/zip_structure"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="structure_fn" arg1="datasets" numArgs="2" def="structure"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <new def="rd_skip" class="Ltensorflow/data/skip"/>
@@ -10628,27 +10638,49 @@
           <putfield class="LRoot" field="legacy_element" fieldType="LRoot" ref="rd_with_options" value="legacy"/>
           <!-- Each method installed here that a pass-through reads the element from carries this dataset's (wala/ML#1190). -->
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shuffle" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shuffle" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_skip" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_skip" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_shard" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_shard" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_cache" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_cache" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_scan" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_scan" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_bucket_by_sequence_length" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_rejection_resample" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_rejection_resample" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_unbatch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_unbatch" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_enumerate" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_enumerate" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_batch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_batch" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_padded_batch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_padded_batch" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_repeat" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_repeat" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_prefetch" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_prefetch" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_with_options" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_with_options" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_take" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_take" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_map" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_map" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_flat_map" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_flat_map" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_interleave" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_interleave" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_window" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_filter" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_filter" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_group_window" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_group_window" value="structure"/>
           <putfield class="LRoot" field="mirrored_element" fieldType="LRoot" ref="rd_concatenate" value="element"/>
+          <putfield class="LRoot" field="element_structure" fieldType="LRoot" ref="rd_concatenate" value="structure"/>
           <return value="x"/>
         </method>
       </class>

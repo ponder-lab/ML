@@ -289,6 +289,15 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "element_zip"));
 
   /**
+   * The summary class whose call returns the nesting of a structure of datasets with, in each
+   * dataset's place, the element structure its method objects carry (wala/ML#1280), which a zip's
+   * method objects carry in turn.
+   */
+  public static final TypeReference DATASET_ZIP_STRUCTURE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "zip_structure"));
+
+  /**
    * The summary class whose call joins the elements of a sequence of datasets into one dataset's
    * element, any one of theirs (wala/ML#1215).
    */
