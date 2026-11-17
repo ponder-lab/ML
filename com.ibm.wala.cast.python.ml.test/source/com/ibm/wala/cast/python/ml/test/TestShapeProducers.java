@@ -28,10 +28,10 @@ import org.junit.Test;
  * each sink receives a shape, and the test reads the types of the allocations in the points-to set
  * of the sink's parameter. A read of a tensor's {@code shape} attribute holds an allocation of
  * {@link TensorFlowTypes#STATIC_TENSOR_SHAPE}, and so does a call of its {@code get_shape} method
- * and the {@code shape} of a {@code tf.TensorSpec} a dataset's {@code element_spec} holds. The
- * shapes read through {@code tf.compat.v1.data.get_output_shapes} and a {@code
- * tf.nest.map_structure} over the specs are not modeled yet, and their sinks pin an empty points-to
- * set.
+ * and the {@code shape} of a {@code tf.TensorSpec} a dataset's {@code element_spec} holds, read
+ * directly or through a {@code tf.nest.map_structure} over the specs. The shapes read through
+ * {@code tf.compat.v1.data.get_output_shapes} are not modeled yet, and their sinks pin an empty
+ * points-to set.
  */
 public class TestShapeProducers extends TestPythonMLCallGraphShape {
 
@@ -222,14 +222,15 @@ public class TestShapeProducers extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * What {@code tf.nest.map_structure} returns for a function reading each spec's {@code shape},
-   * and a member of it for a tuple.
+   * What {@code tf.nest.map_structure} returns for a function reading each spec's {@code shape}:
+   * the shape for a dataset of tensors, the same for a dataset that is a parameter, and for a tuple
+   * of specs a tuple whose member is the shape.
    */
-  // TODO: Expect a tensor shape type for each once `map_structure` returns a structure of its
-  // function's results (wala/ML#1280).
   @Test
   public void testMappedShapes() {
-    assertEquals(Set.of(), types("consume_mapped"));
-    assertEquals(Set.of(), types("consume_mapped_member"));
+    assertEquals(STATIC_SHAPE, types("consume_mapped"));
+    assertEquals(STATIC_SHAPE, types("consume_parameter_mapped"));
+    assertEquals(names(PythonTypes.tuple), types("consume_mapped_structure"));
+    assertEquals(STATIC_SHAPE, types("consume_mapped_member"));
   }
 }
