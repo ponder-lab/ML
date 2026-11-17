@@ -138,21 +138,4 @@ public class TestStaticShapeMethod extends AbstractTensorTest {
     test(FILE, "consume_method_list", 0, 0);
     test(FILE, "use_dimension_method", 0, 0);
   }
-
-  /** A dataset's {@code element_spec} is read as the dataset's element, a tensor. */
-  // TODO: Expect no tensor, `test(FILE, "consume_spec", 0, 0)`, once a dataset's `element_spec` is
-  // a `tf.TensorSpec` (wala/ML#1280).
-  @Test
-  public void testSpecIsReadAsElement()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FILE, "consume_spec", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
-  }
-
-  /** An allocator whose shape list is built from the shape of a dataset's {@code element_spec}. */
-  // TODO: Expect `TENSOR_2_3_FLOAT32` once a dataset's `element_spec` is modeled (wala/ML#1280).
-  @Test
-  public void testSpecShape()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(FILE, "use_spec_shape", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
-  }
 }

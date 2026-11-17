@@ -55,8 +55,8 @@ public class TestDatasetDictElement extends AbstractTensorTest {
    * The same element passed into a function and subscripted there, whose signature is the dataset's
    * {@code element_spec}: the dict parameter has no points-to set, so its subscript is admitted at
    * seeding by its constant string key, and the parameter's container resolves through the loop's
-   * call to the tuple element's first member (wala/ML#993). {@code element_spec} itself stays
-   * unmodeled; the call is what types it.
+   * call to the tuple element's first member (wala/ML#993). The signature gives the parameter no
+   * type; the call is what types it.
    */
   @Test
   public void testElementSpecStep() throws ClassHierarchyException, CancelException, IOException {

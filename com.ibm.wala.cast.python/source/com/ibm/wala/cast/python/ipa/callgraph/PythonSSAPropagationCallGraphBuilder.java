@@ -624,6 +624,45 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * An attribute whose read describes a structure its receiver holds (wala/ML#1280): the read
+   * returns a copy of the structure in the receiver's field, with a fresh object of the descriptor
+   * class in place of each value that is no structure, as a dataset's element specification has the
+   * nesting of its element and a specification where the element has a tensor.
+   *
+   * @param receivers The classes whose instances have the attribute.
+   * @param field The receiver's field holding the described structure.
+   * @param structures The classes copied as structure; a value of any other class is described.
+   * @param descriptor The class of the object that describes a value.
+   */
+  public record DescriptorAttribute(
+      Set<TypeReference> receivers,
+      String field,
+      Set<TypeReference> structures,
+      TypeReference descriptor) {
+    public DescriptorAttribute {
+      receivers = Set.copyOf(receivers);
+      structures = Set.copyOf(structures);
+    }
+  }
+
+  /**
+   * The attributes whose read describes a structure, by name (wala/ML#1280); see {@link
+   * DescriptorAttribute}. Empty by default, so a client that names none sees no change.
+   */
+  private Map<String, DescriptorAttribute> descriptorAttributes = Collections.emptyMap();
+
+  /**
+   * Names the attributes whose read describes a structure (wala/ML#1280); see {@link
+   * DescriptorAttribute}.
+   *
+   * @param attributes Each attribute name mapped to what its read describes.
+   */
+  public void setDescriptorAttributes(Map<String, DescriptorAttribute> attributes) {
+    this.descriptorAttributes =
+        attributes == null ? Collections.emptyMap() : Map.copyOf(attributes);
+  }
+
+  /**
    * An allocation that happens only when a value the allocating method reads from a field may be of
    * the allocation's own type (wala/ML#1088): a summary cannot branch on a value's type, so the
    * builder decides it from the points-to set of the read.
@@ -2782,6 +2821,32 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Gives a read of an attribute {@link #descriptorAttributes} names the description of the
+     * structure each receiver holds (wala/ML#1280); see {@link DescriptorAttribute}.
+     *
+     * @param read The property read.
+     */
+    private void processDescriptorRead(AstPropertyRead read) {
+      Map<String, DescriptorAttribute> attributes = getBuilder().descriptorAttributes;
+      if (attributes.isEmpty() || !read.hasDef()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int member = read.getMemberRef();
+      if (!symtab.isStringConstant(member)) return;
+      DescriptorAttribute attribute = attributes.get(symtab.getStringValue(member));
+      if (attribute == null) return;
+      int object = read.getObjectRef();
+      if (object <= 0 || symtab.isConstant(object)) return;
+      DescriptorReadOperator operator =
+          getBuilder()
+          .new DescriptorReadOperator(
+              node, read.iIndex(), getPointerKeyForLocal(read.getDef()), attribute);
+      PointerKey key = getPointerKeyForLocal(object);
+      if (contentsAreInvariant(symtab, du, object) || system.isImplicit(key))
+        for (InstanceKey ik : getInvariantContents(symtab, du, node, object)) operator.describe(ik);
+      else system.newSideEffect(operator, key);
+    }
+
+    /**
      * Allocates the element read off an array (wala/ML#1009): for each receiver key of a type
      * {@link #freshElementTypes} names, a fresh key of the mapped type at the read's instruction
      * index joins the result, with the receiver's per-instance methods, so a slice of the element
@@ -2964,6 +3029,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processUnknownIndexRead(instruction);
       processElementRead(instruction);
       processAttributeRead(instruction);
+      processDescriptorRead(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
@@ -4138,6 +4204,62 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * A key the read of a describing attribute allocated (wala/ML#1280): the copy, at one read, of
+   * one key of the described structure; see {@link DescriptorAttribute}. A copy of a structure has
+   * the structure's class and is a structure itself; a copy of anything else is of the descriptor
+   * class and describes the key it copies. Keyed by the read and the copied key, so a structure
+   * reached along several paths, or a cyclic one, is copied once.
+   */
+  public static final class DescriptorKey extends AllocationSiteInNode {
+    private final InstanceKey described;
+    private final boolean leaf;
+
+    private DescriptorKey(
+        CGNode node, NewSiteReference site, IClass type, InstanceKey described, boolean leaf) {
+      super(node, site, type);
+      this.described = described;
+      this.leaf = leaf;
+    }
+
+    /**
+     * The key this one copies: the value a descriptor describes, or the structure a structure
+     * copies.
+     *
+     * @return The copied key.
+     */
+    public InstanceKey getDescribed() {
+      return described;
+    }
+
+    /**
+     * Whether this key is a descriptor rather than a structure of them.
+     *
+     * @return {@code true} iff a descriptor.
+     */
+    public boolean isLeaf() {
+      return leaf;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DescriptorKey other
+          && getNode().equals(other.getNode())
+          && getSite().equals(other.getSite())
+          && described.equals(other.described);
+    }
+
+    @Override
+    public int hashCode() {
+      return (getNode().hashCode() * 31 + getSite().hashCode()) * 31 + described.hashCode();
+    }
+
+    @Override
+    public String toString() {
+      return "Descriptor[" + (leaf ? "of " : "structure of ") + described + "]";
+    }
+  }
+
+  /**
    * Starts a mirror where a call's callee may be the mirror class (wala/ML#1190). Equal for the
    * same call, so the propagation system keeps one per call site.
    */
@@ -4423,12 +4545,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * Reads the leaves of a structure leaves call's argument into its result as the argument's keys
    * arrive (wala/ML#1067); see {@link #setStructureLeaves}. Each value read, the argument first,
    * flows into the result through a {@link LeafFilter}, an edge of the pointer analysis's flow
-   * graph, so a dataflow over that graph reaches the result from a leaf. Each structure a value may
-   * be is opened: its list contents and every field its object catalog names are values read the
-   * same way. A structure is opened once, so one that holds itself, as a flow-insensitive points-to
-   * set makes of a structure built in a loop, is read finitely. The catalog is order-free, so a
-   * member written into a structure after the call is read too, an over-approximation. Equal for
-   * the same call, so the propagation system keeps one per call site.
+   * graph, so a dataflow over that graph reaches the result from a leaf. An argument whose keys are
+   * represented implicitly has no variable to filter, so its leaves are added to the result
+   * themselves, with no such edge. Each structure a value may be is opened: its list contents and
+   * every field its object catalog names are values read the same way. A structure is opened once,
+   * so one that holds itself, as a flow-insensitive points-to set makes of a structure built in a
+   * loop, is read finitely. The catalog is order-free, so a member written into a structure after
+   * the call is read too, an over-approximation. Equal for the same call, so the propagation system
+   * keeps one per call site.
    */
   private final class StructureLeavesOperator extends UnaryOperator<PointsToSetVariable> {
     private final CGNode node;
@@ -5706,6 +5830,210 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public String toString() {
       return "element mirror at " + pc + " into " + target + " at " + path;
     }
+  }
+
+  /**
+   * Starts the description of the structure each receiver of a describing attribute's read holds
+   * (wala/ML#1280); see {@link DescriptorAttribute}. A receiver of none of the attribute's classes
+   * adds nothing. Equal for the same read, so the propagation system keeps one per read.
+   */
+  public final class DescriptorReadOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey resultKey;
+    private final DescriptorAttribute attribute;
+
+    private DescriptorReadOperator(
+        CGNode node, int pc, PointerKey resultKey, DescriptorAttribute attribute) {
+      this.node = node;
+      this.pc = pc;
+      this.resultKey = resultKey;
+      this.attribute = attribute;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null)
+        rhs.getValue().foreach(i -> describe(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Describes the structure a receiver holds, if the receiver is of one of the attribute's
+     * classes.
+     *
+     * @param receiver A key the read's receiver may be.
+     */
+    private void describe(InstanceKey receiver) {
+      if (!isOneOf(receiver.concreteType(), attribute.receivers())) return;
+      IField field = resolveRootField(getClassHierarchy(), attribute.field());
+      if (field == null) return;
+      getSystem()
+          .newSideEffect(
+              new DescriptorCopyOperator(node, pc, resultKey, attribute),
+              getPointerKeyForInstanceField(receiver, field));
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + resultKey.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DescriptorReadOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && resultKey.equals(other.resultKey)
+          && attribute.equals(other.attribute);
+    }
+
+    @Override
+    public String toString() {
+      return "descriptor read at " + pc + " in " + node;
+    }
+  }
+
+  /**
+   * Copies the keys of a described structure into a target (wala/ML#1280); see {@link
+   * DescriptorAttribute}. A key of a structure class is copied as a {@link DescriptorKey} of its
+   * class, whose fields copy the key's catalogued fields as they arrive; any other key is copied as
+   * a descriptor, a key of the descriptor class that describes it. A {@code None} is held as it is.
+   * A copy is keyed by the read and the key it copies, so a structure that holds itself is copied
+   * once. The catalog is order-free, so a member written into a structure after the read is
+   * described too, an over-approximation. Equal for the same read and target.
+   */
+  private final class DescriptorCopyOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final PointerKey target;
+    private final DescriptorAttribute attribute;
+    private final Set<InstanceKey> copied = HashSetFactory.make();
+
+    private DescriptorCopyOperator(
+        CGNode node, int pc, PointerKey target, DescriptorAttribute attribute) {
+      this.node = node;
+      this.pc = pc;
+      this.target = target;
+      this.attribute = attribute;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> copy(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    private void copy(InstanceKey source) {
+      if (!copied.add(source)) return;
+      if (isNoneConstant(source)) {
+        getSystem().newConstraint(target, source);
+        return;
+      }
+      IClassHierarchy cha = getClassHierarchy();
+      boolean structure = isOneOf(source.concreteType(), attribute.structures());
+      IClass type = structure ? source.concreteType() : cha.lookupClass(attribute.descriptor());
+      if (type == null) return;
+      DescriptorKey copy =
+          new DescriptorKey(
+              node, NewSiteReference.make(pc, type.getReference()), type, source, !structure);
+      logger.fine(() -> "Describing " + source + " as " + copy + " at " + pc + " in " + node + ".");
+      getSystem().newConstraint(target, copy);
+      if (!structure) return;
+      if (type.getReference().equals(NAMED_TUPLE_INSTANCE)) {
+        // A namedtuple's names are kept by the instance, which a mirrored element copies.
+        InstanceKey instance = source;
+        while (instance instanceof ElementMirrorKey mirror) instance = mirror.getSource();
+        copyNamedTupleNames(instance, copy);
+      }
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      getSystem()
+          .newSideEffect(
+              new UnaryOperator<PointsToSetVariable>() {
+                private final Set<Object> names = HashSetFactory.make();
+
+                @Override
+                public byte evaluate(PointsToSetVariable l, PointsToSetVariable catalog) {
+                  if (catalog.getValue() == null) return NOT_CHANGED;
+                  catalog
+                      .getValue()
+                      .foreach(
+                          c -> {
+                            if (!(getSystem().getInstanceKey(c) instanceof ConstantKey<?> name))
+                              return;
+                            Object value = name.getValue();
+                            // A tuple's fields are named by integers, a dict's by strings.
+                            if (!(value instanceof String) && !(value instanceof Number)) return;
+                            if (!names.add(value)) return;
+                            IField f = resolveRootField(cha, value.toString());
+                            if (f == null) return;
+                            getSystem()
+                                .newConstraint(factory.getPointerKeyForObjectCatalog(copy), name);
+                            getSystem()
+                                .newSideEffect(
+                                    new DescriptorCopyOperator(
+                                        node,
+                                        pc,
+                                        factory.getPointerKeyForInstanceField(copy, f),
+                                        attribute),
+                                    factory.getPointerKeyForInstanceField(source, f));
+                          });
+                  return NOT_CHANGED;
+                }
+
+                @Override
+                public int hashCode() {
+                  return copy.hashCode();
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                  return this == o;
+                }
+
+                @Override
+                public String toString() {
+                  return "descriptor fields of " + source;
+                }
+              },
+              factory.getPointerKeyForObjectCatalog(source));
+    }
+
+    @Override
+    public int hashCode() {
+      return (node.hashCode() * 31 + pc) * 31 + target.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DescriptorCopyOperator other
+          && node.equals(other.node)
+          && pc == other.pc
+          && target.equals(other.target)
+          && attribute.equals(other.attribute);
+    }
+
+    @Override
+    public String toString() {
+      return "descriptor copy at " + pc + " into " + target;
+    }
+  }
+
+  /**
+   * Whether a class is, or is a subclass of, one of the named classes.
+   *
+   * @param type A key's class, or {@code null}.
+   * @param named The named classes.
+   * @return {@code true} iff it is.
+   */
+  private boolean isOneOf(IClass type, Set<TypeReference> named) {
+    if (type == null) return false;
+    IClassHierarchy cha = getClassHierarchy();
+    for (TypeReference reference : named) {
+      IClass c = cha.lookupClass(reference);
+      if (c != null && cha.isSubclassOf(type, c)) return true;
+    }
+    return false;
   }
 
   /**

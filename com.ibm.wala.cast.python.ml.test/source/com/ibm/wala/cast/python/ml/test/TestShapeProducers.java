@@ -27,10 +27,11 @@ import org.junit.Test;
  * tf2_test_shape_producers.py} (<a href="https://github.com/wala/ML/issues/1280">wala/ML#1280</a>):
  * each sink receives a shape, and the test reads the types of the allocations in the points-to set
  * of the sink's parameter. A read of a tensor's {@code shape} attribute holds an allocation of
- * {@link TensorFlowTypes#STATIC_TENSOR_SHAPE}, and so does a call of its {@code get_shape} method.
- * The shapes read through a dataset's {@code element_spec}, {@code
- * tf.compat.v1.data.get_output_shapes} and a {@code tf.nest.map_structure} over the specs are not
- * modeled yet, and their sinks pin an empty points-to set.
+ * {@link TensorFlowTypes#STATIC_TENSOR_SHAPE}, and so does a call of its {@code get_shape} method
+ * and the {@code shape} of a {@code tf.TensorSpec} a dataset's {@code element_spec} holds. The
+ * shapes read through {@code tf.compat.v1.data.get_output_shapes} and a {@code
+ * tf.nest.map_structure} over the specs are not modeled yet, and their sinks pin an empty points-to
+ * set.
  */
 public class TestShapeProducers extends TestPythonMLCallGraphShape {
 
@@ -147,16 +148,69 @@ public class TestShapeProducers extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * The {@code shape} of a dataset's {@code element_spec}, for an element that is a tensor, a
-   * tuple's member and a dict's value.
+   * A dataset's {@code element_spec} is a {@code tf.TensorSpec} for an element that is a tensor,
+   * and the element's structure for one that is a tuple, whose member is a spec.
    */
-  // TODO: Expect a tensor shape type for each once a dataset's `element_spec` is modeled
-  // (wala/ML#1280).
+  @Test
+  public void testSpec() {
+    assertEquals(names(TensorFlowTypes.TENSOR_SPEC), types("consume_spec"));
+    assertEquals(names(PythonTypes.tuple), types("consume_tuple_spec"));
+    assertEquals(names(TensorFlowTypes.TENSOR_SPEC), types("consume_tuple_spec_member"));
+  }
+
+  /**
+   * The {@code shape} of a dataset's {@code element_spec}, for an element that is a tensor, a
+   * tuple's member, a dict's value, a dict's value in a tuple and a namedtuple's field, for a
+   * dataset that is a function's parameter, and for the dataset a {@code map} returns.
+   */
   @Test
   public void testSpecShape() {
-    assertEquals(Set.of(), types("consume_spec_shape"));
-    assertEquals(Set.of(), types("consume_tuple_spec_shape"));
-    assertEquals(Set.of(), types("consume_dict_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_tuple_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_dict_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_nested_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_named_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_parameter_spec_shape"));
+    assertEquals(STATIC_SHAPE, types("consume_map_spec_shape"));
+  }
+
+  /**
+   * The batch size read from the {@code shape} of a batched dataset's {@code element_spec} is the
+   * Python int the batch has, where at run time it is {@code None}, since the last batch may be
+   * smaller.
+   */
+  // TODO: Expect no int once the spec of a batch that may be partial has no size for the batch axis
+  // (wala/ML#1280).
+  @Test
+  public void testSpecBatchSize() {
+    assertEquals(names(PythonTypes.PYTHON_INT), types("consume_spec_batch_size"));
+  }
+
+  /**
+   * The {@code element_spec} of a dataset whose element is not mirrored, a dataset of a file's
+   * lines, and its {@code shape}, also for the dataset a {@code map} over the lines returns. The
+   * element has no structure to describe, so the read holds nothing.
+   */
+  // TODO: Expect `TensorFlowTypes.TENSOR_SPEC` for the first and `STATIC_SHAPE` for the others once
+  // the element of a dataset that is not mirrored is described (wala/ML#1280).
+  @Test
+  public void testSpecOfUnmirroredElement() {
+    assertEquals(Set.of(), types("consume_text_spec"));
+    assertEquals(Set.of(), types("consume_text_spec_shape"));
+    assertEquals(Set.of(), types("consume_text_map_spec_shape"));
+  }
+
+  /**
+   * The {@code shape} of a {@code tf.TensorSpec} a program constructs is a static shape, beside the
+   * list the program passed, which the spec's summary stores as its {@code shape}.
+   */
+  // TODO: Expect `STATIC_SHAPE` alone once a constructed spec no longer stores the list it was
+  // passed (wala/ML#1280).
+  @Test
+  public void testConstructedSpecShape() {
+    assertEquals(
+        names(PythonTypes.list, TensorFlowTypes.STATIC_TENSOR_SHAPE),
+        types("consume_constructed_spec_shape"));
   }
 
   /** What {@code tf.compat.v1.data.get_output_shapes} returns, and a member of it for a tuple. */
