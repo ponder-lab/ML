@@ -4383,10 +4383,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * one key of the described structure; see {@link DescriptorAttribute}. A copy of a structure has
    * the structure's class and is a structure itself; a copy of anything else is of the descriptor
    * class and describes the key it copies. Keyed by the read and the copied key, so a structure
-   * reached along several paths, or a cyclic one, is copied once. A copy from a located source
-   * ({@link DescriptorSource#located}) is keyed by its receiver too, and a descriptor from one by
-   * its path, so each receiver has a description of its own and a value the structure holds at
-   * several paths is described at each.
+   * reached along several paths, or a cyclic one, is copied once.
+   *
+   * <p>A copy from a located source ({@link DescriptorSource#located}) is keyed by the read, its
+   * receiver, its path and its class, and not by the key it copies (wala/ML#1300): each receiver
+   * has a description of its own, a value the structure holds at several paths is described at
+   * each, and the keys of one class the receiver's structure holds at one path have one copy there.
+   * A client reads what such a copy describes from the receiver, at the path, so copies of two keys
+   * at one path would read the same. One past the length a path records has no path and is keyed by
+   * the key it copies.
    */
   public static final class DescriptorKey extends AllocationSiteInNode {
     private final InstanceKey described;
@@ -4421,12 +4426,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * Where the described value is in the receiver's structure, for a descriptor from a located
-     * source: the catalog values from the structure's root, an {@link Integer} for a tuple's
-     * position and a {@link String} for a dict's key, and empty for a structure that is the value.
+     * Where the copied key is in the receiver's structure, for a copy from a located source: the
+     * catalog values from the structure's root, an {@link Integer} for a tuple's position and a
+     * {@link String} for a dict's key, and empty for the structure's root.
      *
-     * @return The path, or {@code null} for a structure, for a copy from a source that is not
-     *     located, and for a descriptor reached only past the length a path records.
+     * @return The path, or {@code null} for a copy from a source that is not located and for a copy
+     *     reached only past the length a path records.
      */
     public List<Object> getPath() {
       return path;
@@ -4436,7 +4441,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * The key this one copies: the value a descriptor describes, or the structure a structure
      * copies.
      *
-     * @return The copied key.
+     * @return The copied key, or {@code null} for a copy from a located source that has a path
+     *     ({@link #getPath}), which stands for every key the receiver's structure holds there.
      */
     public InstanceKey getDescribed() {
       return described;
@@ -4456,14 +4462,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       return o instanceof DescriptorKey other
           && getNode().equals(other.getNode())
           && getSite().equals(other.getSite())
-          && described.equals(other.described)
+          // A site is equal for the same instruction whatever its class, and the copies at one
+          // path are told apart by class alone.
+          && concreteType().equals(other.concreteType())
+          && Objects.equals(described, other.described)
           && Objects.equals(receiver, other.receiver)
           && Objects.equals(path, other.path);
     }
 
     @Override
     public int hashCode() {
-      return (((getNode().hashCode() * 31 + getSite().hashCode()) * 31 + described.hashCode()) * 31
+      return (((getNode().hashCode() * 31 + getSite().hashCode()) * 31
+                          + Objects.hashCode(described))
+                      * 31
                   + Objects.hashCode(receiver))
               * 31
           + Objects.hashCode(path);
@@ -4473,7 +4484,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     public String toString() {
       return "Descriptor["
           + (leaf ? "of " : "structure of ")
-          + described
+          + (described == null ? "what is" : described)
           + (receiver == null ? "" : " in " + receiver + (path == null ? "" : " at " + path))
           + "]";
     }
@@ -6525,9 +6536,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * A copy is keyed by the read and the key it copies, so a structure that holds itself is copied
    * once. The catalog is order-free, so a member written into a structure after the read is
    * described too, an over-approximation. Equal for the same read and target, and for a located
-   * source ({@link DescriptorSource#located}) the same receiver and path. A path is recorded up to
-   * the length an element mirror records, so a structure that holds itself is copied at finitely
-   * many paths, and a descriptor past that length has none.
+   * source ({@link DescriptorSource#located}) the same receiver and path.
+   *
+   * <p>A copy from a located source is keyed by the read, the receiver, the path and the copy's
+   * class in place of the key it copies (wala/ML#1300), so the keys a structure holds at one path
+   * share a copy: the structures of one class there are one structure with the fields of each, and
+   * the other values one descriptor. A path is recorded up to the length an element mirror records,
+   * so a structure that holds itself is copied at finitely many paths, and a copy past that length
+   * has no path and is keyed by the key it copies.
    */
   private final class DescriptorCopyOperator extends UnaryOperator<PointsToSetVariable> {
     private final CGNode node;
@@ -6578,15 +6594,17 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       boolean structure = isOneOf(source.concreteType(), attribute.structures());
       IClass type = structure ? source.concreteType() : cha.lookupClass(attribute.descriptor());
       if (type == null) return;
+      // A copy with a path is read from the receiver at the path, whatever key it copies, so the
+      // keys at one path share a copy of each class.
       DescriptorKey copy =
           new DescriptorKey(
               node,
               NewSiteReference.make(pc, type.getReference()),
               type,
-              source,
+              receiver != null && path != null ? null : source,
               !structure,
               receiver,
-              structure ? null : path);
+              path);
       logger.fine(() -> "Describing " + source + " as " + copy + " at " + pc + " in " + node + ".");
       getSystem().newConstraint(target, copy);
       if (!structure) return;
@@ -6711,13 +6729,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         .computeIfAbsent(instance, k -> HashMapFactory.make())
         .computeIfAbsent(index, k -> HashSetFactory.make())
         .add(name)) return;
-    for (InstanceKey copy : namedTupleCopies.getOrDefault(instance, Set.of()))
-      aliasNamedTupleField(copy, index, name);
+    for (InstanceKey copy : List.copyOf(namedTupleCopies.getOrDefault(instance, Set.of())))
+      nameNamedTupleCopyField(copy, index, name);
+  }
+
+  /**
+   * Makes a namedtuple copy's field readable by a name ({@link #aliasNamedTupleField}). A
+   * description that records no key it copies ({@link DescriptorKey#getDescribed}) is the instance
+   * its own copies are made of ({@link #copiedInstance}), so it keeps the name as an instance does.
+   *
+   * @param copy The copy.
+   * @param index The position.
+   * @param name The field's name.
+   */
+  private void nameNamedTupleCopyField(InstanceKey copy, int index, String name) {
+    aliasNamedTupleField(copy, index, name);
+    if (copy instanceof DescriptorKey descriptor && descriptor.getDescribed() == null)
+      nameNamedTupleField(copy, index, name);
   }
 
   /**
    * The instance a copy of a structure ultimately copies: a mirrored element's source, what a
-   * description describes and what a rebuilt structure copies, through however many copies.
+   * description describes and what a rebuilt structure copies, through however many copies. A
+   * description that records no key it copies ({@link DescriptorKey#getDescribed}) is the instance
+   * itself.
    *
    * @param key A key that may be a copy.
    * @return The key no copy was made of.
@@ -6725,7 +6760,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   private static InstanceKey copiedInstance(InstanceKey key) {
     while (true) {
       if (key instanceof ElementMirrorKey mirror) key = mirror.getSource();
-      else if (key instanceof DescriptorKey descriptor) key = descriptor.getDescribed();
+      else if (key instanceof DescriptorKey descriptor && descriptor.getDescribed() != null)
+        key = descriptor.getDescribed();
       else if (key instanceof RebuiltStructureKey rebuilt) key = rebuilt.getSource();
       else return key;
     }
@@ -6744,7 +6780,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     for (Map.Entry<Integer, Set<String>> names :
         List.copyOf(namedTupleFieldNames.getOrDefault(instance, Map.of()).entrySet()))
       for (String name : List.copyOf(names.getValue()))
-        aliasNamedTupleField(copy, names.getKey(), name);
+        nameNamedTupleCopyField(copy, names.getKey(), name);
   }
 
   /**
