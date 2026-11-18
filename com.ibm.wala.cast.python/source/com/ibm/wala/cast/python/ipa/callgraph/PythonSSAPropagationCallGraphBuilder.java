@@ -4483,7 +4483,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * A structure a structure rebuild call allocated (wala/ML#1280): the copy, at one call, of one
    * list, tuple, dict or namedtuple instance its first argument holds; see {@link
    * #setStructureRebuild}. Keyed by the call and the copied structure, so a structure reached along
-   * several paths, or one that holds itself, is copied once.
+   * several paths, or one that holds itself, is copied once. The copied structure is never a
+   * rebuilt one: a copy of a copy is keyed by the structure the copy was made of (wala/ML#1297), so
+   * a call whose result reaches its own first argument, as in a loop that reassigns a variable to
+   * the call's result, allocates one copy per structure and not one per turn.
    */
   public static final class RebuiltStructureKey extends AllocationSiteInNode {
     private final InstanceKey source;
@@ -4495,7 +4498,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * The structure this one copies.
+     * The structure this one copies, itself no rebuilt structure.
      *
      * @return The copied structure.
      */
@@ -5069,9 +5072,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       }
       if (!copied.add(source)) return;
       IClass type = source.concreteType();
+      // A copy is identified by the structure it ultimately copies, not by the copy it was made
+      // from, as a mirrored element is: a call whose result reaches its own first argument, or two
+      // calls that feed each other, would otherwise copy their copies without end. The copy's
+      // fields are still rebuilt from the source's own, so it holds what a copy of the source
+      // holds.
+      InstanceKey original = source;
+      while (original instanceof RebuiltStructureKey rebuilt) original = rebuilt.getSource();
       RebuiltStructureKey copy =
           new RebuiltStructureKey(
-              node, NewSiteReference.make(pc, type.getReference()), type, source);
+              node, NewSiteReference.make(pc, type.getReference()), type, original);
       logger.fine(() -> "Rebuilding " + source + " as " + copy + " at " + pc + " in " + node + ".");
       getSystem().newConstraint(target, copy);
       // A namedtuple's names are kept by the instance, which a copy of it copies.
@@ -5198,8 +5208,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
-     * Names, in a copy's catalog, every field the copied structure's catalog names, and rebuilds
-     * each as the names arrive. Equal for the same copy.
+     * Names, in a copy's catalog, every field a source structure's catalog names, and rebuilds each
+     * as the names arrive. Equal for the same source and copy: one copy has a source per structure
+     * that is rebuilt as it, the structure it copies and that structure's copies.
      */
     private final class FieldsOperator extends UnaryOperator<PointsToSetVariable> {
       private final InstanceKey source;
@@ -5238,12 +5249,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       @Override
       public int hashCode() {
-        return copy.hashCode();
+        return source.hashCode() * 31 + copy.hashCode();
       }
 
       @Override
       public boolean equals(Object o) {
-        return o instanceof FieldsOperator other && copy.equals(other.copy);
+        return o instanceof FieldsOperator other
+            && source.equals(other.source)
+            && copy.equals(other.copy);
       }
 
       @Override
