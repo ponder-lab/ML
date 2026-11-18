@@ -397,6 +397,7 @@ public class DenseCall extends TensorGenerator {
     }
     Set<CGNode> inProgress = INPUT_SHAPE_NODES_IN_PROGRESS.get();
     if (!inProgress.add(self)) {
+      noteGuardDecision();
       // Cyclic chain: this `Dense.__call__` node's input flows back to itself (e.g., a layer-list
       // loop whose output feeds in as its own input under 1-CFA node collapse). Break the cycle;
       // the other phi operand supplies the base shape. See wala/ML#599.

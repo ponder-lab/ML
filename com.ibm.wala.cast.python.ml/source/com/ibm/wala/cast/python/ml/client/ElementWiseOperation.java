@@ -254,7 +254,10 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
 
     Set<Pair<CGNode, Integer>> inProgress = OPERAND_ORIGINS_IN_PROGRESS.get();
     Pair<CGNode, Integer> key = Pair.make(node, vn);
-    if (!inProgress.add(key)) return null; // cycle: the other operand decides.
+    if (!inProgress.add(key)) {
+      noteGuardDecision();
+      return null; // cycle: the other operand decides.
+    }
     try {
       SSAInstruction def = node.getDU().getDef(vn);
       if (def instanceof SSABinaryOpInstruction)

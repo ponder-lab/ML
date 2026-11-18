@@ -1230,6 +1230,216 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A settlement pass inside a generator guard skips a settled cycle whose inputs have not changed,
+   * as a pass outside one does (wala/ML#1293).
+   */
+  @Test
+  public void testGuardedPassSkipsSettledCycle() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    // The check mode recomputes what the pass skips; this test counts recomputations.
+    engine.disableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = {0};
+    Supplier<Object> settled =
+        readingCycle(
+            engine,
+            "GSKIP_P",
+            "GSKIP_Q",
+            () -> {
+              runs[0]++;
+              return scalar;
+            });
+    assertEquals(scalar, engine.demand("GSKIP_P", settled, true));
+    int afterFirstDemand = runs[0];
+    assertEquals(0, engine.guardedSettledSkips());
+
+    Supplier<Object> other = readingCycle(engine, "GSKIP_R", "GSKIP_S", () -> scalar);
+    assertEquals(
+        scalar, TensorGenerator.underGuardForTest(() -> engine.demand("GSKIP_R", other, true)));
+
+    assertEquals(afterFirstDemand, runs[0]);
+    assertEquals(2, engine.guardedSettledSkips());
+  }
+
+  /**
+   * A settled recomputation made inside a generator guard that no guard decided keeps its record,
+   * so a later pass skips its query (wala/ML#1293).
+   */
+  @Test
+  public void testGuardedRecomputationKeepsItsRecord() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = {0};
+    Supplier<Object> guarded =
+        readingCycle(
+            engine,
+            "GKEEP_P",
+            "GKEEP_Q",
+            () -> {
+              runs[0]++;
+              return scalar;
+            });
+    assertEquals(
+        scalar, TensorGenerator.underGuardForTest(() -> engine.demand("GKEEP_P", guarded, true)));
+    int afterFirstDemand = runs[0];
+    assertEquals(Set.of("GKEEP_Q"), engine.settledReadsOf("GKEEP_P"));
+
+    Supplier<Object> other = readingCycle(engine, "GKEEP_R", "GKEEP_S", () -> scalar);
+    assertEquals(scalar, engine.demand("GKEEP_R", other, true));
+
+    assertEquals(afterFirstDemand, runs[0]);
+  }
+
+  /**
+   * A settled recomputation that a guard decided, made inside a generator guard, leaves no record,
+   * so the next pass recomputes its query. Outside every guard the same recomputation keeps its
+   * record, as before: the frame it met was its own (wala/ML#1293).
+   */
+  @Test
+  public void testGuardDecidedRecomputationLeavesNoRecord() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = {0};
+    Supplier<Object> decided =
+        readingCycle(
+            engine,
+            "GDEC_P",
+            "GDEC_Q",
+            () -> {
+              runs[0]++;
+              TensorGenerator.noteGuardDecision();
+              return scalar;
+            });
+    assertEquals(
+        scalar, TensorGenerator.underGuardForTest(() -> engine.demand("GDEC_P", decided, true)));
+    int afterFirstDemand = runs[0];
+    long decidedInGuard = engine.guardDecidedRecomputations();
+    assertTrue(decidedInGuard > 0);
+    assertEquals(Set.of(), engine.settledReadsOf("GDEC_P"));
+    // Its partner, which no guard decided, keeps its record in the same pass.
+    assertEquals(Set.of("GDEC_P"), engine.settledReadsOf("GDEC_Q"));
+
+    Supplier<Object> unguarded =
+        readingCycle(
+            engine,
+            "GDEC_R",
+            "GDEC_S",
+            () -> {
+              TensorGenerator.noteGuardDecision();
+              return scalar;
+            });
+    assertEquals(scalar, engine.demand("GDEC_R", unguarded, true));
+
+    assertEquals(afterFirstDemand + 1, runs[0]);
+    // Outside every guard a recomputation is not counted as one a guard decided.
+    assertEquals(decidedInGuard, engine.guardDecidedRecomputations());
+    assertEquals(Set.of("GDEC_Q"), engine.settledReadsOf("GDEC_P"));
+    assertEquals(Set.of("GDEC_S"), engine.settledReadsOf("GDEC_R"));
+  }
+
+  /**
+   * The check mode inside a generator guard: a check recomputation that a guard decided is not the
+   * one the skip stands for, so its value is not compared, and one that no guard decided is
+   * compared as outside a guard (wala/ML#1293).
+   */
+  @Test
+  public void testSkipCheckModeInsideGuard() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(3))));
+    // What the transfer does once the cycle has settled: 1 has a guard decide another value, and 2
+    // returns another value with no guard deciding it.
+    int[] mode = {0};
+    Supplier<Object> settled =
+        readingCycle(
+            engine,
+            "GCHECK_P",
+            "GCHECK_Q",
+            () -> {
+              if (mode[0] == 1) TensorGenerator.noteGuardDecision();
+              return mode[0] == 0 ? scalar : vector;
+            });
+    assertEquals(scalar, engine.demand("GCHECK_P", settled, true));
+
+    mode[0] = 1;
+    Supplier<Object> other = readingCycle(engine, "GCHECK_R", "GCHECK_S", () -> scalar);
+    TensorGenerator.underGuardForTest(() -> engine.demand("GCHECK_R", other, true));
+    assertEquals(1, engine.guardDecidedCheckedSkips());
+    assertEquals(scalar, engine.demand("GCHECK_P", settled, true));
+
+    mode[0] = 2;
+    Supplier<Object> last = readingCycle(engine, "GCHECK_T", "GCHECK_U", () -> scalar);
+    AssertionError difference = null;
+    try {
+      TensorGenerator.underGuardForTest(() -> engine.demand("GCHECK_T", last, true));
+    } catch (AssertionError e) {
+      difference = e;
+    }
+    assertTrue(
+        difference != null
+            && difference.getMessage().startsWith("A skipped settled recomputation differs"));
+    assertEquals(1, engine.guardDecidedCheckedSkips());
+  }
+
+  /**
+   * The walk census counts a settlement sweep inside a generator guard as a restricted walk, and as
+   * a guarded whole-graph walk only with the settlement skip off (wala/ML#1293).
+   */
+  @Test
+  public void testWalkCensusCountsGuardedSweep() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    TensorGenerator.underGuardForTest(
+        () -> {
+          demandPureCycle(engine, "GWALK_A", "GWALK_B");
+          return null;
+        });
+    // The counts of the same cycle demanded outside a guard.
+    assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 0, 0, 2, 2, 2, 1}, engine.walkCounts());
+    WorklistTypeResolver.uninstall(null, true);
+
+    WorklistTypeResolver whole = WorklistTypeResolver.install(null);
+    whole.disableSkip();
+    TensorGenerator.underGuardForTest(
+        () -> {
+          demandPureCycle(whole, "GWHOLE_A", "GWHOLE_B");
+          return null;
+        });
+    assertArrayEquals(new long[] {2, 0, 4, 2, 2, 1, 1, 1, 2, 0, 2, 1}, whole.walkCounts());
+  }
+
+  /**
+   * Makes a cycle of two queries that read each other, of which the second returns a scalar.
+   *
+   * @param engine The engine.
+   * @param first The first query's key.
+   * @param second The second query's key.
+   * @param value What the first query's transfer returns after its read.
+   * @return The first query's transfer.
+   */
+  private static Supplier<Object> readingCycle(
+      WorklistTypeResolver engine, Object first, Object second, Supplier<Object> value) {
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read(second, transfers.get(1), true);
+          return value.get();
+        });
+    transfers.add(
+        () -> {
+          engine.read(first, transfers.get(0), true);
+          return ShapeResult.of(Set.of(List.of()));
+        });
+    return transfers.get(0);
+  }
+
+  /**
    * Demands a fresh two-query cycle, so the fixpoint runs past its early return and scans for stale
    * readers.
    *

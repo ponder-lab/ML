@@ -261,8 +261,8 @@ final class WorklistTypeResolver {
 
   /**
    * Per query, the clock at the entry of its last settled recomputation that completed normally,
-   * did not defer under a re-entered fold and ran outside every generator guard; absent if there is
-   * none, which makes the next pass recompute the query.
+   * did not defer under a re-entered fold and, where it ran inside a generator guard, had no guard
+   * decide what it did; absent if there is none, which makes the next pass recompute the query.
    */
   private final Map<Object, Long> settledAt = HashMapFactory.make();
 
@@ -288,6 +288,15 @@ final class WorklistTypeResolver {
 
   /** Whether the settled recomputation that just ran caught an exception and kept the value. */
   private boolean recomputationThrew;
+
+  /**
+   * Whether a generator guard decided what the settled recomputation that just ran did; see {@link
+   * TensorGenerator#guardDecisions}.
+   */
+  private boolean recomputationGuardDecided;
+
+  /** How many check recomputations inside a generator guard a guard decided; not compared. */
+  private long guardDecidedCheckedSkips;
 
   /** Whether each skipped query is also recomputed and checked; see {@link #enableSkipCheck}. */
   private boolean checkSkips = Boolean.getBoolean(CHECK_SKIPS_PROPERTY);
@@ -356,11 +365,18 @@ final class WorklistTypeResolver {
    */
   private final Set<Object> promotionEdgeReaders = HashSetFactory.make();
 
-  /** The settlement census: passes, guarded passes, recomputations, skips and checked skips. */
+  /**
+   * The settlement census: passes, guarded passes, recomputations, the recomputations made by
+   * guarded passes and those of them a guard decided, skips, the skips made by guarded passes and
+   * checked skips.
+   */
   private long settlementPasses,
       guardedSettlementPasses,
       settledRecomputations,
+      guardedSettledRecomputations,
+      guardDecidedRecomputations,
       settledSkips,
+      guardedSettledSkips,
       checkedSkips;
 
   /**
@@ -479,19 +495,7 @@ final class WorklistTypeResolver {
       PropagationCallGraphBuilder builder, boolean complete) {
     WorklistTypeResolver engine = ACTIVE.remove(builder);
     if (engine == null) return null;
-    SETTLEMENT_CENSUS.fine(
-        () ->
-            "Settlement census: "
-                + engine.settlementPasses
-                + " passes ("
-                + engine.guardedSettlementPasses
-                + " inside a generator guard), "
-                + engine.settledRecomputations
-                + " settled recomputations, "
-                + engine.settledSkips
-                + " skipped ("
-                + engine.checkedSkips
-                + " checked).");
+    SETTLEMENT_CENSUS.fine(() -> "Settlement census: " + engine.settlementCensus() + ".");
     SETTLEMENT_CENSUS.fine(() -> "Walk census: " + engine.walkCensus() + ".");
     SETTLEMENT_CENSUS.fine(
         () ->
@@ -1322,9 +1326,37 @@ final class WorklistTypeResolver {
         if (now - this.walkCensusLoggedAt >= WALK_CENSUS_INTERVAL_NANOS) {
           this.walkCensusLoggedAt = now;
           SETTLEMENT_CENSUS.fine(() -> "Walk census so far: " + this.walkCensus() + ".");
+          SETTLEMENT_CENSUS.fine(
+              () -> "Settlement census so far: " + this.settlementCensus() + ".");
         }
       }
     }
+  }
+
+  /**
+   * Describes the settlement census.
+   *
+   * @return The description.
+   */
+  String settlementCensus() {
+    return this.settlementPasses
+        + " passes ("
+        + this.guardedSettlementPasses
+        + " inside a generator guard), "
+        + this.settledRecomputations
+        + " settled recomputations ("
+        + this.guardedSettledRecomputations
+        + " inside a generator guard, of which "
+        + this.guardDecidedRecomputations
+        + " a guard decided), "
+        + this.settledSkips
+        + " skipped ("
+        + this.guardedSettledSkips
+        + " inside a generator guard, "
+        + this.checkedSkips
+        + " checked, of which "
+        + this.guardDecidedCheckedSkips
+        + " a guard decided)";
   }
 
   /**
@@ -1700,12 +1732,14 @@ final class WorklistTypeResolver {
     // The region a sweep can target: the readers, transitively, of the changed queries and, in a
     // full sweep with the skip on, of the stale, requested and possibly-unskippable cyclic queries
     // and of every reader that gained an edge since the last full sweep (where a new cycle can
-    // be). Outside it no query is targeted and none is written, so walking it changes nothing.
+    // be). Outside it no query is targeted and none is written, so walking it changes nothing. A
+    // pass inside a generator guard is restricted like any other: a recomputation a guard decided
+    // leaves no record, so its query is possibly unskippable.
     long walkStart = System.nanoTime();
     this.sweepWalks++;
     this.sweepGraphQueries += this.state.size();
     Set<Object> region = null;
-    if (this.restrictSettlement && !(full && (!this.skipEnabled || this.guardedSettlement))) {
+    if (this.restrictSettlement && !(full && !this.skipEnabled)) {
       Set<Object> seeds = HashSetFactory.make();
       seeds.addAll(changed);
       if (full) {
@@ -1754,6 +1788,7 @@ final class WorklistTypeResolver {
               this.settleDirty.remove(key);
               this.dirtyCyclic.remove(key);
               this.settledSkips++;
+              if (this.guardedSettlement) this.guardedSettledSkips++;
               if (this.checkSkips) this.checkSkip(key);
             }
           }
@@ -1800,6 +1835,10 @@ final class WorklistTypeResolver {
                     return this.recomputeSettled(key);
                   }));
           this.settledRecomputations++;
+          if (this.guardedSettlement) {
+            this.guardedSettledRecomputations++;
+            if (this.recomputationGuardDecided) this.guardDecidedRecomputations++;
+          }
           this.recordSettledRecomputation(key, entry[0]);
         }
         for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
@@ -1837,6 +1876,7 @@ final class WorklistTypeResolver {
     Object result;
     this.recomputationThrew = false;
     this.selfReadInRecomputation = false;
+    long decisions = TensorGenerator.guardDecisions();
     this.evaluating.push(key);
     this.inStack.add(key);
     try {
@@ -1849,6 +1889,7 @@ final class WorklistTypeResolver {
     } finally {
       this.evaluating.pop();
       this.inStack.remove(key);
+      this.recomputationGuardDecided = TensorGenerator.guardDecisions() != decisions;
     }
     if (result == null) result = this.shapeKinds.get(key) ? ShapeResult.unknown() : NULL_DTYPE;
     return this.widen(key, result);
@@ -1976,7 +2017,10 @@ final class WorklistTypeResolver {
    * Records a settled recomputation of a query for the next pass's skip decision, or forgets the
    * previous one when this one cannot stand for a recomputation: it caught an exception, deferred
    * under a re-entered fold (its value then depends on the promotion that follows), or ran inside a
-   * generator guard, whose state a transfer may read.
+   * generator guard that decided what it did. A guard's frames are state a transfer may read beside
+   * its queries, and a frame that was open around the pass is gone by the next. A recomputation
+   * that no guard decided read none of it ({@link TensorGenerator#guardDecisions}), so it is a
+   * function of the values its reads returned, inside a guard as outside one.
    *
    * @param key The query recomputed.
    * @param entry The clock at the entry of the attempt that completed.
@@ -1985,7 +2029,7 @@ final class WorklistTypeResolver {
     // The next pass decides afresh whether this recomputation stands.
     this.markDirty(key);
     if (this.recomputationThrew
-        || this.guardedSettlement
+        || (this.guardedSettlement && this.recomputationGuardDecided)
         || this.reentryDeferredAtSettlement.contains(key)) {
       this.settledAt.remove(key);
       this.settledReads.remove(key);
@@ -2007,13 +2051,16 @@ final class WorklistTypeResolver {
    * the query since, and none of the queries that recomputation read has been written since it
    * began. A transfer is a function of the values its reads return, given the final call graph and
    * pointer analysis and the generators' write-once caches, so the recomputation would return the
-   * value the query settled at. Never inside a generator guard.
+   * value the query settled at. That holds for a pass inside a generator guard too, since a record
+   * stands only for a recomputation no guard around its pass decided ({@link
+   * #recordSettledRecomputation}). There a recomputation made again could be cut at a frame that is
+   * open around this pass, and the skip keeps the value the query settled at with no such cut.
    *
    * @param key The query.
    * @return {@code true} iff the query's recomputation can be skipped.
    */
   private boolean settledInputsUnchanged(Object key) {
-    if (!this.skipEnabled || this.guardedSettlement) return false;
+    if (!this.skipEnabled) return false;
     Long at = this.settledAt.get(key);
     if (at == null) return false;
     // A query that read itself had its own write-back as an input; any other query only its writes
@@ -2027,7 +2074,10 @@ final class WorklistTypeResolver {
 
   /**
    * The check mode: recomputes a skipped query without writing anything back and fails if the
-   * recomputation would have replaced the settled value, wrote any state or deferred.
+   * recomputation would have replaced the settled value, wrote any state or deferred. Inside a
+   * generator guard, a recomputation that a guard decided is not the one the skip stands for: it
+   * can be cut at a frame that was open around the pass. Its value and its deferral are then not
+   * checked, and a state write still fails.
    *
    * @param key The skipped query.
    * @throws AssertionError if the recomputation differs from the settled value.
@@ -2038,15 +2088,22 @@ final class WorklistTypeResolver {
     long before = this.clock;
     boolean deferredBefore = this.reentryDeferredAtSettlement.contains(key);
     Object value = this.unwinding(() -> this.recomputeSettled(key));
+    boolean decided = this.guardedSettlement && this.recomputationGuardDecided;
     if (saved != null) {
       this.readVersions.put(key, saved);
       this.staleCandidates.add(key);
     }
+    // The pass did not recompute the query, so a deferral only the check noted is not the pass's.
+    if (decided && !deferredBefore) this.reentryDeferredAtSettlement.remove(key);
     // A recomputation the skip stands for writes nothing and defers nothing; one that does breaks
     // the skip's premise even when its value passes the comparison below.
     if (this.clock != before || (!deferredBefore && this.reentryDeferredAtSettlement.contains(key)))
       throw new AssertionError(
           "A skipped settled recomputation of " + key + " wrote state or deferred.");
+    if (decided) {
+      this.guardDecidedCheckedSkips++;
+      return;
+    }
     Object settled = this.state.get(key);
     if (value != null
         && !value.equals(settled)
@@ -2119,6 +2176,35 @@ final class WorklistTypeResolver {
    */
   long checkedSkips() {
     return this.checkedSkips;
+  }
+
+  /**
+   * Returns how many skipped queries the check mode recomputed inside a generator guard and did not
+   * compare, because a guard decided what the recomputation did.
+   *
+   * @return The number of such skips.
+   */
+  long guardDecidedCheckedSkips() {
+    return this.guardDecidedCheckedSkips;
+  }
+
+  /**
+   * Returns how many settled recomputations made by passes inside a generator guard a guard
+   * decided. Such a recomputation leaves no record.
+   *
+   * @return The number of such recomputations.
+   */
+  long guardDecidedRecomputations() {
+    return this.guardDecidedRecomputations;
+  }
+
+  /**
+   * Returns how many queries the settlement passes inside a generator guard skipped.
+   *
+   * @return The number of such skips.
+   */
+  long guardedSettledSkips() {
+    return this.guardedSettledSkips;
   }
 
   /**
