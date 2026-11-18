@@ -541,21 +541,25 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
    *
    * <p>The sizes are computed at the read when no analysis resolves; for a view fixed to one
    * receiver ({@link #overReceiver}), which is keyed by the receiver's identity, so nothing would
-   * ask for its sizes again; and when this generator reads a composed call's arguments or a
-   * generator guard is in progress on the thread, since the computation may then answer for the
-   * frame it is asked in. A computation that did not answer for itself alone ({@link
-   * #answeredForItself}) is not kept.
+   * ask for its sizes again; and when this generator reads a composed call's arguments, since the
+   * computation may then answer for the frame it is asked in.
+   *
+   * <p>A read made while a generator guard is in progress on the thread ({@link
+   * #guardsInProgress}), such as one from a function that branches on a rank, reads and keeps the
+   * sizes as any other does. Computed at every such read, they were again computed once per path
+   * (wala/ML#1299). A guard's decision is what can make a computation answer for the frame it is
+   * asked in, so a computation begun inside a guard is kept only when no guard decided what it did
+   * ({@link #answeredForAnyFrame}). A computation that did not answer for itself alone ({@link
+   * #answeredForItself}) is not kept either.
    *
    * @param builder The propagation call graph builder used for analysis.
    * @return The possible dataset sizes, in a set of the caller's own; empty if unknown.
    */
   final Set<Long> readDatasetSizes(PropagationCallGraphBuilder builder) {
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine == null
-        || this.receiver != null
-        || this.getComposedArguments() != null
-        || guardsInProgress()) return this.computeDatasetSizes(builder);
-    BooleanSupplier storable = answeredForItself();
+    if (engine == null || this.receiver != null || this.getComposedArguments() != null)
+      return this.computeDatasetSizes(builder);
+    BooleanSupplier storable = answeredForAnyFrame();
     @SuppressWarnings("unchecked")
     Set<Long> sizes =
         (Set<Long>)
