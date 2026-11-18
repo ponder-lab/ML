@@ -8,12 +8,12 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
-import com.ibm.wala.cast.python.ml.client.CallTargets;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.ShapeOperandRank;
 import com.ibm.wala.cast.python.ml.client.ShapeOperandRank.Rank;
 import com.ibm.wala.cast.python.ml.client.TensorFlowApis;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.util.CallTargets;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ssa.SSAInstruction;
 import java.io.File;

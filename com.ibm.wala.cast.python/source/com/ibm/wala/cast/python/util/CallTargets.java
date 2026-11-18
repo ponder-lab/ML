@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ml.client;
+package com.ibm.wala.cast.python.util;
 
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -27,25 +27,21 @@ import java.util.Set;
  * client to how the analysis lays out its call graph.
  *
  * <p>Program code is a function or method the program defines: an {@link AstMethod} that is not
- * synthetic and is not one of the analysis's library models (a TensorFlow or NumPy summary).
+ * synthetic. A summary of a library is not program code, whichever library it models.
  *
- * @see TensorFlowApis
+ * <p>This class belongs to the analysis of Python itself, which the analysis of each library is
+ * built on. It names no library, and no class that models one, in its code or in its comments.
  */
 public final class CallTargets {
-
-  /** The class-name prefixes of the analysis's library models, which are not program code. */
-  private static final Set<String> MODEL_CLASS_PREFIXES =
-      Set.of("Ltensorflow", "L$tensorflow", "Lnumpy");
 
   private CallTargets() {}
 
   /**
    * Returns the program functions a call runs: its call-graph targets that are program code, and
-   * the program code it reaches through trampolines, synthetic constructors and library models.
-   * That includes callbacks a library model invokes, such as the function {@code tf.map_fn} or
-   * {@code dataset.map} applies, and a model's {@code call} that {@code fit} runs. A program
-   * function reached is not looked into further: the calls in its body are its own. A call that
-   * reaches only library models gives the empty set.
+   * the program code it reaches through trampolines, synthetic constructors and library summaries.
+   * That includes a callback a summary invokes: a function the program hands to a library call,
+   * which the library then calls. A program function reached is not looked into further: the calls
+   * in its body are its own. A call that reaches only library summaries gives the empty set.
    *
    * <p>This answers which program code may run, not what it receives. A callback receives what the
    * library passes it, not the call's arguments, so this is not for aligning a call's arguments
@@ -85,7 +81,7 @@ public final class CallTargets {
    * method's does.
    *
    * <p>This is the subset of {@link #programTargets} a client can align the call's arguments with;
-   * a callback a library model invokes receives what the model passes it instead.
+   * a callback a library summary invokes receives what the summary passes it instead.
    *
    * @param builder The builder whose call graph holds the call's targets.
    * @param node The node whose IR holds the call.
@@ -142,7 +138,7 @@ public final class CallTargets {
    * @param method The method.
    * @return {@code true} iff the method is a trampoline.
    */
-  static boolean isTrampoline(IClassHierarchy cha, IMethod method) {
+  public static boolean isTrampoline(IClassHierarchy cha, IMethod method) {
     if (method.getSelector().name().toString().startsWith(PythonTypes.TRAMPOLINE_METHOD_NAME))
       return true;
     IClass trampoline = cha.lookupClass(PythonTypes.trampoline);
@@ -151,9 +147,9 @@ public final class CallTargets {
 
   /**
    * The client-facing authority on whether a call-graph node is program code: a function or method
-   * the program defines, which is an {@link AstMethod} that is not synthetic and is not one of the
-   * analysis's library models (a TensorFlow or NumPy summary). A client asks this rather than
-   * testing a node's class name against the models' packages.
+   * the program defines, which is an {@link AstMethod} that is not synthetic. A summary of a
+   * library is not an {@link AstMethod}, so it is not program code. A client asks this rather than
+   * testing a node's class name against the packages of the summaries.
    *
    * @param node The node.
    * @return {@code true} iff the program defines the node's method.
@@ -168,10 +164,7 @@ public final class CallTargets {
    * @param method The method.
    * @return {@code true} iff the program defines it.
    */
-  static boolean isProgramCode(IMethod method) {
-    if (!(method instanceof AstMethod) || method.isWalaSynthetic()) return false;
-    String name = method.getDeclaringClass().getName().toString();
-    for (String prefix : MODEL_CLASS_PREFIXES) if (name.startsWith(prefix)) return false;
-    return true;
+  public static boolean isProgramCode(IMethod method) {
+    return method instanceof AstMethod && !method.isWalaSynthetic();
   }
 }
