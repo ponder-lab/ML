@@ -67,6 +67,46 @@ public class TestMirroredLeafReads extends AbstractTensorTest {
   }
 
   /**
+   * A second dispatch of a value scans nothing (<a
+   * href="https://github.com/wala/ML/issues/1293">wala/ML#1293</a>): the scan of every value the
+   * first reached is memoized while an analysis resolves for the builder. Unmemoized, the second
+   * scans the value again before it finds its own memoized dispatch.
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testRepeatedDispatchScansNothing() throws Exception {
+    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FILE);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    // A snapshot: dispatch creates points-to set variables for keys it reads.
+    List<PointerKey> keys = new ArrayList<>();
+    builder.getPointerAnalysis().getPointerKeys().forEach(keys::add);
+    WorklistTypeResolver.install(builder);
+    try {
+      int values = 0;
+      for (PointerKey key : keys) {
+        if (builder.getPropagationSystem().isImplicit(key)) continue;
+        boolean holdsLeaf = false;
+        for (InstanceKey instance : builder.getPointerAnalysis().getPointsToSet(key))
+          holdsLeaf |= instance instanceof ElementMirrorKey mirror && mirror.isLeaf();
+        if (!holdsLeaf) continue;
+        values++;
+        PointsToSetVariable variable = builder.getPropagationSystem().findOrCreatePointsToSet(key);
+        TensorGeneratorFactory.getGenerator(variable, builder);
+        long scans = TensorGeneratorFactory.leafScanCount(builder);
+        assertTrue("The first dispatch scans the value.", scans > 0);
+        TensorGeneratorFactory.getGenerator(variable, builder);
+        assertEquals(key + "", scans, TensorGeneratorFactory.leafScanCount(builder));
+      }
+      assertTrue("The fixture has values holding mirrored leaves.", values > 1);
+    } finally {
+      WorklistTypeResolver.uninstall(builder, false);
+      TensorGenerator.clearCaches(builder);
+    }
+  }
+
+  /**
    * The memoized readings type every value holding a mirrored leaf as the readings computed afresh
    * do, read while an analysis resolves for the builder, the only time they are memoized, and read
    * again once the memo holds them.
@@ -105,6 +145,7 @@ public class TestMirroredLeafReads extends AbstractTensorTest {
       }
       assertTrue("The fixture has values holding mirrored leaves.", values > 1);
       assertTrue("The readings were memoized.", TensorGeneratorFactory.hasLeafReadings(builder));
+      assertTrue("The scans were memoized.", TensorGeneratorFactory.hasLeafScans(builder));
       assertTrue(
           "The mapped components were memoized.", DatasetMapGenerator.hasMappedComponents(builder));
     } finally {

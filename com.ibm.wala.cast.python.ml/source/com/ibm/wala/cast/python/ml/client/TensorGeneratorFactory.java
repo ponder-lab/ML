@@ -1781,19 +1781,10 @@ public class TensorGeneratorFactory {
     if (source == null
         || !(builder instanceof PythonSSAPropagationCallGraphBuilder python)
         || source.getPointerKey() == null) return null;
-    List<ElementMirrorKey> leaves = new ArrayList<>();
-    boolean only = true;
-    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())) {
-      if (ik instanceof ElementMirrorKey mirror) {
-        if (mirror.isLeaf()) leaves.add(mirror);
-        else only = false;
-        continue;
-      }
-      if (!isSuppressedElement(ik, builder)) only = false;
-    }
-    if (leaves.isEmpty()) return null;
+    LeafScan scan = leafScan(source.getPointerKey(), python);
+    if (scan.leaves().isEmpty()) return null;
     List<TensorGenerator> parts = new ArrayList<>();
-    for (ElementMirrorKey leaf : leaves) {
+    for (ElementMirrorKey leaf : scan.leaves()) {
       if (python.isElementMirrorCutoff(leaf)) parts.add(new DatasetElementGenerator(source, null));
       LeafReading reading = leafReading(leaf, python);
       if (reading == null) continue;
@@ -1813,7 +1804,111 @@ public class TensorGeneratorFactory {
         }
       }
     }
-    return new MirroredLeaves(parts, only);
+    return new MirroredLeaves(parts, scan.only());
+  }
+
+  /**
+   * What a value's points-to set holds of mirrored dataset element leaves ({@link #leafScan}).
+   *
+   * @param leaves The leaves, in the set's order.
+   * @param only Whether the set holds nothing else but the element allocations of datasets whose
+   *     elements are mirrored, which stand for nothing beside the mirror. Not read for a value that
+   *     holds no leaf.
+   */
+  private record LeafScan(List<ElementMirrorKey> leaves, boolean only) {}
+
+  /** The scan of a value that holds no mirrored leaf, as most values do. */
+  private static final LeafScan NO_LEAVES = new LeafScan(List.of(), false);
+
+  /**
+   * Scans a value's points-to set for mirrored leaves, memoized per builder while an analysis
+   * resolves for it, as a leaf's reading is ({@link #leafReading}). The scan reads the value's
+   * points-to set and the fields of the datasets its element allocations belong to, which are final
+   * when generators run, so it is the same on every dispatch path. A dispatch scans each value it
+   * reaches before it consults its own memo, so unmemoized, every visit of a value walked its whole
+   * set again (wala/ML#1293).
+   *
+   * @param key The value's pointer key.
+   * @param builder The builder.
+   * @return The scan.
+   */
+  private static LeafScan leafScan(PointerKey key, PythonSSAPropagationCallGraphBuilder builder) {
+    Map<PointerKey, LeafScan> scans =
+        UNMEMOIZED_WALKS.get() == 0 && WorklistTypeResolver.active(builder) != null
+            ? leafScans(builder)
+            : null;
+    if (scans != null) {
+      LeafScan memoized = scans.get(key);
+      if (memoized != null) return memoized;
+    }
+    List<ElementMirrorKey> leaves = new ArrayList<>();
+    boolean only = true;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(key)) {
+      if (ik instanceof ElementMirrorKey mirror) {
+        if (mirror.isLeaf()) leaves.add(mirror);
+        else only = false;
+        continue;
+      }
+      if (!isSuppressedElement(ik, builder)) only = false;
+    }
+    synchronized (LEAF_SCAN_COUNTS) {
+      LEAF_SCAN_COUNTS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
+    LeafScan scan = leaves.isEmpty() ? NO_LEAVES : new LeafScan(List.copyOf(leaves), only);
+    if (scans != null) scans.put(key, scan);
+    return scan;
+  }
+
+  /**
+   * The memoized scans per builder ({@link #leafScan}). Each key holds the builder's call-graph
+   * nodes, which keep the weak key reachable, so {@link TensorGenerator#clearCaches} removes the
+   * entry.
+   */
+  private static final Map<PropagationCallGraphBuilder, Map<PointerKey, LeafScan>> LEAF_SCANS =
+      new WeakHashMap<>();
+
+  /**
+   * The memoized scans of a builder.
+   *
+   * @param builder The builder.
+   * @return Its scans.
+   */
+  private static Map<PointerKey, LeafScan> leafScans(PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_SCANS) {
+      return LEAF_SCANS.computeIfAbsent(builder, b -> new ConcurrentHashMap<>());
+    }
+  }
+
+  /**
+   * Whether a builder has memoized scans, for tests of their release.
+   *
+   * @param builder The builder.
+   * @return {@code true} iff the builder has an entry.
+   */
+  static boolean hasLeafScans(PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_SCANS) {
+      return LEAF_SCANS.containsKey(builder);
+    }
+  }
+
+  /**
+   * How many scans were computed per builder, for tests that a value is scanned once. The counts
+   * hold nothing of the builder, so its entry expires with it.
+   */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> LEAF_SCAN_COUNTS =
+      new WeakHashMap<>();
+
+  /**
+   * How many scans were computed for a builder.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long leafScanCount(PropagationCallGraphBuilder builder) {
+    synchronized (LEAF_SCAN_COUNTS) {
+      AtomicLong scans = LEAF_SCAN_COUNTS.get(builder);
+      return scans == null ? 0 : scans.get();
+    }
   }
 
   /**
@@ -3678,7 +3773,7 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * Drops a builder's memoized dispatches and leaf readings.
+   * Drops a builder's memoized dispatches, leaf readings and leaf scans.
    *
    * @param builder The builder.
    */
@@ -3688,6 +3783,9 @@ public class TensorGeneratorFactory {
     }
     synchronized (LEAF_READINGS) {
       LEAF_READINGS.remove(builder);
+    }
+    synchronized (LEAF_SCANS) {
+      LEAF_SCANS.remove(builder);
     }
   }
 
