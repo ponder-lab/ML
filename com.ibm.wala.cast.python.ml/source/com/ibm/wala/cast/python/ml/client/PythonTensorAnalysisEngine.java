@@ -4145,10 +4145,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /**
    * Whether a node's method is declared by a class of a script and is no trampoline. That holds for
-   * a function or method of the analyzed program, and also for two synthetic methods {@link
-   * com.ibm.wala.cast.python.util.CallTargets#isProgramCode(CGNode)} rejects: the constructor of a
-   * program class and the summary that runs a comprehension. It does not hold for a library
-   * summary.
+   * a function or method of the analyzed program, and also for synthetic methods that {@link
+   * com.ibm.wala.cast.python.util.CallTargets#isProgramCode(CGNode)} rejects, such as the
+   * constructor of a program class and the summary that runs a comprehension. It does not hold for
+   * a library summary.
    *
    * @param node The node.
    * @return {@code true} iff the node's declaring class is a script's and its method is no
