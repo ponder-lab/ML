@@ -5318,6 +5318,25 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * A check, made now and asked after a computation, of whether the computation's value is the one
+   * it would have with nothing in progress around it on the thread: it answered for itself alone
+   * ({@link #answeredForItself}) and, where a generator guard was in progress when the check was
+   * made ({@link #guardsInProgress}), no guard decided what the computation did ({@link
+   * #guardDecisions}). A guard's decision can depend on a frame that was open around the
+   * computation, so a value computed past one may belong to that frame alone. With no guard in
+   * progress at the start, every frame a decision read was opened by the computation itself, and
+   * the decision is the computation's own.
+   *
+   * @return The check, {@code true} iff the computation since this call answered for any frame.
+   */
+  static BooleanSupplier answeredForAnyFrame() {
+    BooleanSupplier forItself = answeredForItself();
+    boolean guarded = guardsInProgress();
+    long decisions = guardDecisions();
+    return () -> forItself.getAsBoolean() && (!guarded || guardDecisions() == decisions);
+  }
+
+  /**
    * The {@code len} folds in progress on this thread, as {@code (node, operand)} frames, and those
    * among them that were re-entered: a guard whose vector is read through a descent into the
    * guard's own function asks for its own rank mid-computation. The re-entry has no answer yet, and
