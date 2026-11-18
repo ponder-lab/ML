@@ -2037,6 +2037,7 @@ public abstract class TensorGenerator implements Cloneable {
     // by query order. At the settlement pass a recomputation that still re-enters answers ⊥, which
     // never replaces a non-⊥ settled value, and is noted for the pass's diagnostic.
     if (!RANK_FOLDS_REENTERED.get().isEmpty()) {
+      noteGuardDecision();
       if (engine.isSettling()) engine.noteReentryDeferralAtSettlement();
       else if (engine.isEvaluating()) engine.requestSettledRecomputation();
       return false;
@@ -4569,7 +4570,10 @@ public abstract class TensorGenerator implements Cloneable {
       PropagationCallGraphBuilder builder, CGNode node, ISSABasicBlock block) {
     // Under a phi fold, the fold's cycle break can make the walk's branch folds answer differently
     // than a fresh walk would, so such a verdict is neither read from nor written to the memo.
-    if (!PHI_FOLD_ON_STACK.get().isEmpty()) return walkBlockFeasibility(builder, node, block);
+    if (!PHI_FOLD_ON_STACK.get().isEmpty()) {
+      noteGuardDecision();
+      return walkBlockFeasibility(builder, node, block);
+    }
     BlockFeasibilities feasibilities =
         BLOCK_FEASIBILITIES.computeIfAbsent(builder, b -> new BlockFeasibilities());
     // The lock is held across the walk's shape reads. The engine's passes ask from one thread, so
@@ -5070,6 +5074,7 @@ public abstract class TensorGenerator implements Cloneable {
       // state, so a phi reachable from its own guard must break the cycle here.
       if (!onStack.add(frame)) {
         FOLD_REENTRIES.get()[0]++;
+        noteGuardDecision();
         return null;
       }
       try {
@@ -5267,6 +5272,32 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * How many times a generator guard on this thread has decided what a computation did: cut it
+   * where it re-entered a frame in progress, read a re-entered fold as interim, or computed a
+   * verdict around a memo. A frame can be the computation's own or one that was open around it, so
+   * such a decision can depend on what the thread was computing and not on the computation alone.
+   */
+  private static final ThreadLocal<long[]> GUARD_DECISIONS =
+      ThreadLocal.withInitial(() -> new long[1]);
+
+  /** Counts a decision of a generator guard on this thread; see {@link #guardDecisions}. */
+  static void noteGuardDecision() {
+    GUARD_DECISIONS.get()[0]++;
+  }
+
+  /**
+   * How many times a generator guard on this thread has decided what a computation did. A
+   * computation that left this unchanged ran as it would with no guard in progress around it, which
+   * is what lets the settlement pass keep the record of a recomputation made inside one ({@link
+   * #guardsInProgress}).
+   *
+   * @return The count.
+   */
+  static long guardDecisions() {
+    return GUARD_DECISIONS.get()[0];
+  }
+
+  /**
    * A check, made now and asked after a computation, of whether the computation answered for itself
    * alone and not for what the thread was computing around it: no fold declined on re-entering
    * itself ({@link #foldReentries}), no dispatch walk was cut at a source the thread is resolving
@@ -5405,6 +5436,7 @@ public abstract class TensorGenerator implements Cloneable {
     if (inProgress.contains(frame)) {
       RANK_FOLDS_REENTERED.get().add(frame);
       FOLD_REENTRIES.get()[0]++;
+      noteGuardDecision();
       if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
       LOGGER.fine(
           () -> "The len fold of vn " + argVn + " in " + describe(node) + " re-entered itself.");
@@ -10017,7 +10049,9 @@ public abstract class TensorGenerator implements Cloneable {
    * Returns whether this thread has any generator guard frame open: the phi, rank and parameter
    * frames here and the per-generator frames of {@link CreatorJoin}, {@link SliceBuiltinOperation},
    * {@link ElementWiseOperation}, {@link NpTranspose} and {@link DenseCall}. A transfer may read
-   * them, so the settlement pass skips no recomputation inside one.
+   * them, and each read that decides what the transfer does is counted ({@link #guardDecisions}),
+   * so the settlement pass keeps the record of a recomputation made inside one only when the count
+   * did not move.
    *
    * @return {@code true} iff some guard is in progress on this thread.
    */
@@ -10031,6 +10065,24 @@ public abstract class TensorGenerator implements Cloneable {
         || ElementWiseOperation.guardInProgress()
         || NpTranspose.guardInProgress()
         || DenseCall.guardInProgress();
+  }
+
+  /**
+   * Runs an action with a generator guard in progress on this thread, for the tests of what the
+   * settlement pass does inside one.
+   *
+   * @param action The action.
+   * @return The action's result.
+   */
+  static <T> T underGuardForTest(java.util.function.Supplier<T> action) {
+    Pair<CGNode, Integer> frame = Pair.make(null, 0);
+    Set<Pair<CGNode, Integer>> stack = PARAMETER_CALLER_STACK.get();
+    stack.add(frame);
+    try {
+      return action.get();
+    } finally {
+      stack.remove(frame);
+    }
   }
 
   /**
@@ -10401,7 +10453,10 @@ public abstract class TensorGenerator implements Cloneable {
     if (paramPos < 0) return null; // Not a parameter.
     Pair<CGNode, Integer> key = Pair.make(node, paramVn);
     Set<Pair<CGNode, Integer>> stack = PARAMETER_CALLER_STACK.get();
-    if (!stack.add(key)) return null; // Recursive re-entry for this parameter; keep raw.
+    if (!stack.add(key)) {
+      noteGuardDecision();
+      return null; // Recursive re-entry for this parameter; keep raw.
+    }
     try {
       // An uninspectable predecessor makes the enumeration incomplete: silently dropping it would
       // report an under-approximation as complete, the silent-skip class of wala/ML#900. The

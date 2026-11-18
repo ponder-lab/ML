@@ -387,7 +387,10 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
     Set<Pair<CGNode, Integer>> inProgress = RECEIVER_ORIGINS_IN_PROGRESS.get();
     for (Pair<CGNode, Integer> receiver : this.receiverValueNumbers(builder)) {
       // A cyclic revisit (`x = x.T` in a loop) contributes no origin evidence (wala/ML#979).
-      if (!inProgress.add(receiver)) continue;
+      if (!inProgress.add(receiver)) {
+        noteGuardDecision();
+        continue;
+      }
       try {
         PointerKey pk =
             builder

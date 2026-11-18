@@ -119,10 +119,12 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
     Set<Pair<CGNode, Integer>> inProgress = RECEIVER_ORIGINS_IN_PROGRESS.get();
     Pair<CGNode, Integer> key = Pair.make(view.callerNode(), view.receiverVn);
-    if (!inProgress.add(key))
+    if (!inProgress.add(key)) {
+      noteGuardDecision();
       // A cyclic revisit: the receiver's only producer is this slice, so no origin evidence, not
       // the TensorFlow default (wala/ML#730, wala/ML#979).
       return EnumSet.noneOf(TensorOrigin.class);
+    }
     try {
       TensorGenerator generator;
       try {
