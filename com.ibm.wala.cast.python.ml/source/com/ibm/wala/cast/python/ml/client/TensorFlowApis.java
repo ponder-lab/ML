@@ -7,6 +7,7 @@ import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.CallTargets;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -60,6 +61,10 @@ import java.util.TreeSet;
  * builtins.slice}, {@code builtins.len} or {@code builtins.zip}; the front end lowers a slice,
  * {@code l[1:3]}, to a call of the {@code slice} builtin. A call that names none of these, such as
  * a call of a program function, names no API.
+ *
+ * <p>Which program functions a call runs is {@link CallTargets#programTargets}'s to answer. Among
+ * the callbacks it finds through these libraries' summaries are the function {@code tf.map_fn} or
+ * {@code dataset.map} applies, and a model's {@code call} that {@code fit} runs.
  *
  * @see CallTargets
  */

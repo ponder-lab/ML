@@ -3509,7 +3509,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       boolean changed = false;
       for (CGNode node : cg) {
         IR ir = node.getIR();
-        if (ir == null || !isProgramCode(node)) continue;
+        if (ir == null || !isDeclaredInScript(node)) continue;
         for (ISSABasicBlock block : ir.getControlFlowGraph()) {
           if (Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block)))
             continue;
@@ -3554,7 +3554,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
     Set<Pair<IMethod, Integer>> tensorBearing = HashSetFactory.make();
     for (CGNode node : cg) {
-      if (node.getIR() == null || !isProgramCode(node)) continue;
+      if (node.getIR() == null || !isDeclaredInScript(node)) continue;
       for (int p = 2; p <= node.getMethod().getNumberOfParameters(); p++) {
         PointsToSetVariable var = flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, p));
         if (var == null) continue;
@@ -3587,7 +3587,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private static Set<Pair<CGNode, Integer>> programCallees(CallGraph cg, CGNode target) {
     Set<Pair<CGNode, Integer>> callees = HashSetFactory.make();
-    if (isProgramCode(target)) {
+    if (isDeclaredInScript(target)) {
       callees.add(Pair.make(target, 1));
       return callees;
     }
@@ -3595,8 +3595,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (Iterator<CGNode> it = cg.getSuccNodes(target); it.hasNext(); ) {
       CGNode callee = it.next();
       IR ir = callee.getIR();
-      if (ir == null || !isProgramCode(callee) || callee.getMethod().getNumberOfParameters() < 2)
-        continue;
+      if (ir == null
+          || !isDeclaredInScript(callee)
+          || callee.getMethod().getNumberOfParameters() < 2) continue;
       String[] names = ir.getLocalNames(0, 2);
       if (names != null && names.length > 0 && "self".equals(names[0]))
         callees.add(Pair.make(callee, 2));
@@ -3983,7 +3984,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
     if (def instanceof SSAAbstractInvokeInstruction call) {
       for (CGNode target : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
-        if (!isProgramCode(target) || target.getIR() == null) continue;
+        if (!isDeclaredInScript(target) || target.getIR() == null) continue;
         for (SSAInstruction inst : target.getIR().getInstructions())
           if (inst instanceof SSAReturnInstruction ret
               && ret.getNumberOfUses() > 0
@@ -4102,7 +4103,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Set<Pair<InstanceKey, String>> stores = HashSetFactory.make();
     for (CGNode node : builder.getCallGraph()) {
       IR ir = node.getIR();
-      if (ir == null || !isProgramCode(node)) continue;
+      if (ir == null || !isDeclaredInScript(node)) continue;
       for (SSAInstruction inst : ir.getInstructions()) {
         int ref;
         String member;
@@ -4143,13 +4144,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * Whether a node is a function or method of the analyzed program, rather than a library summary
-   * or a trampoline.
+   * Whether a node's method is declared by a class of a script and is no trampoline. That holds for
+   * a function or method of the analyzed program, and also for two synthetic methods {@link
+   * com.ibm.wala.cast.python.util.CallTargets#isProgramCode(CGNode)} rejects: the constructor of a
+   * program class and the summary that runs a comprehension. It does not hold for a library
+   * summary.
    *
    * @param node The node.
-   * @return {@code true} iff the node's declaring class is a script's.
+   * @return {@code true} iff the node's declaring class is a script's and its method is no
+   *     trampoline.
    */
-  private static boolean isProgramCode(CGNode node) {
+  private static boolean isDeclaredInScript(CGNode node) {
     return node.getMethod().getDeclaringClass().getName().toString().startsWith("Lscript ")
         && !node.getMethod().getSignature().contains(".trampoline");
   }
