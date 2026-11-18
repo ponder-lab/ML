@@ -64,6 +64,9 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
       assertFalse(
           "A query made after the analysis memoizes no dispatch.",
           TensorGeneratorFactory.hasDispatches(builder));
+      assertFalse(
+          "A query made after the analysis memoizes no leaf scan.",
+          TensorGeneratorFactory.hasLeafScans(builder));
     } finally {
       TensorGenerator.clearCaches(builder);
     }
@@ -96,5 +99,9 @@ public class BuilderReleaseTest extends TestPythonMLCallGraphShape {
     assertFalse(
         "The analysis clears its memoized mapped components.",
         DatasetMapGenerator.hasMappedComponents(builder));
+    assertTrue("The analysis scans a value.", TensorGeneratorFactory.leafScanCount(builder) > 0);
+    assertFalse(
+        "The analysis clears its memoized leaf scans.",
+        TensorGeneratorFactory.hasLeafScans(builder));
   }
 }
