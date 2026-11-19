@@ -336,7 +336,9 @@ final class WorklistTypeResolver {
   /**
    * The queries whose settled recomputations are joined into their settled values and no longer
    * replace them: the members of each component {@link #iterate} could not bring to a fixpoint by
-   * replacement. Monotone, so the queries cannot move back and forth in any later pass either.
+   * replacement. Monotone, so the queries cannot move back and forth in any later pass either. A
+   * pass inside a generator guard writes none of them ({@link #step}), since a query that only
+   * grows cannot give back a value a guard's cut put in it.
    */
   private final Set<Object> joinSettled = HashSetFactory.make();
 
@@ -350,8 +352,12 @@ final class WorklistTypeResolver {
   /**
    * The iteration census: the components {@link #iterate} iterated, the steps it made beyond each
    * pass's own, the largest component it iterated, the orbits it found, the values it set to an
-   * orbit's meet and to an orbit's join, the components it left to join, and the queries the check
-   * mode recomputed at a fixpoint.
+   * orbit's meet and to an orbit's join, the components it left to join, the queries first sighted
+   * during an iterated component's steps, and the queries the check mode recomputed at a fixpoint.
+   * A component is counted as left to join when it puts a query in {@link #joinSettled}, so one
+   * that goes past its budget again in a later pass is not counted again. A first-sighted query is
+   * not among the readers {@link #iterate} recomputes, and one that reads the component is on its
+   * cycle, so the count of those is of the queries a fixpoint left out ({@link #countSighted}).
    */
   private long iteratedComponents,
       iterationSteps,
@@ -360,7 +366,15 @@ final class WorklistTypeResolver {
       orbitMeets,
       orbitJoins,
       joinedComponents,
+      sightedWhileIterating,
+      sightedOnCycle,
       checkedFixpointQueries;
+
+  /**
+   * The queries first sighted during the steps of the component a sweep is on, in the order of
+   * their sighting, or {@code null} where the sweep is on no component it may iterate.
+   */
+  private List<Object> sightedInSteps;
 
   /**
    * The system property that turns the restriction off when {@code false}, so every settlement walk
@@ -483,7 +497,11 @@ final class WorklistTypeResolver {
     /** The recomputation's value replaced the settled value. */
     REPLACED,
 
-    /** The recomputation returned ⊥ over a settled value that is not ⊥, which stays. */
+    /**
+     * The settled value stays over a recomputation that differs from it: one that returned ⊥ over a
+     * settled value that is not ⊥, or one a pass inside a generator guard made of a query of {@link
+     * #joinSettled}.
+     */
     KEPT
   }
 
@@ -1510,7 +1528,11 @@ final class WorklistTypeResolver {
         + this.orbitJoins
         + " to a join), "
         + this.joinedComponents
-        + " components left to join; recomputations took "
+        + " components left to join, "
+        + this.sightedWhileIterating
+        + " queries first sighted in their steps ("
+        + this.sightedOnCycle
+        + " of them read the component); recomputations took "
         + TimeUnit.NANOSECONDS.toMillis(this.sweepRecomputeNanos)
         + " ms; recomputations by cause: "
         + this.causeCensus();
@@ -2015,17 +2037,53 @@ final class WorklistTypeResolver {
                 && (targets.contains(key) || (full && cyclic && !this.settledInputsUnchanged(key))))
               throw new AssertionError("A settlement target lies outside the region: " + key + ".");
         if (targets.isEmpty()) continue;
+        boolean iterating = cyclic && this.iterationEnabled && !this.guardedSettlement;
+        if (iterating) this.sightedInSteps = new ArrayList<>();
         List<Object[]> writes = this.step(targets, causes, changed, probeFilter);
         replaced += writes.size();
         // A pass inside a generator guard makes its one step: a guard can cut a recomputation at a
         // frame that is gone by the next pass, and a value moving for that reason is not an orbit.
-        if (cyclic && this.iterationEnabled && !this.guardedSettlement && !writes.isEmpty())
+        if (iterating && !writes.isEmpty()) {
+          List<Object> sighted = this.sightedInSteps;
           replaced += this.iterate(scc, targets, writes, changed, probeFilter);
+          this.countSighted(scc, sighted);
+        }
+        this.sightedInSteps = null;
       }
     } finally {
       this.checkedSweepRegion = null;
+      this.sightedInSteps = null;
     }
     return replaced;
+  }
+
+  /**
+   * Counts the queries first sighted during an iterated component's steps, and those of them that
+   * read the component, directly or through another of them. Each was sighted by a read the
+   * component made, so one that reads the component is on its cycle, and {@link #iterate} did not
+   * recompute it: a step made after its evaluation can have rewritten a query it read.
+   *
+   * @param scc The component.
+   * @param sighted The queries first sighted during its steps.
+   */
+  private void countSighted(List<Object> scc, List<Object> sighted) {
+    List<Object> rest = sighted;
+    this.sightedWhileIterating += rest.size();
+    Set<Object> onCycle = HashSetFactory.make(scc);
+    boolean found = true;
+    while (found) {
+      found = false;
+      List<Object> unplaced = new ArrayList<>();
+      for (Object key : rest)
+        if (Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), onCycle))
+          unplaced.add(key);
+        else {
+          onCycle.add(key);
+          this.sightedOnCycle++;
+          found = true;
+        }
+      rest = unplaced;
+    }
   }
 
   /**
@@ -2034,6 +2092,13 @@ final class WorklistTypeResolver {
    * cannot influence the values (a Jacobi step). A recomputation that returns ⊥ over a settled
    * value that is not ⊥ writes nothing. A query of {@link #joinSettled} is written the join of its
    * settled value and its recomputation, or nothing once it is pinned.
+   *
+   * <p>A pass inside a generator guard writes no query of {@link #joinSettled}. What such a pass
+   * recomputes can hold a guard's cut, made in the recomputation's own run or read from a query
+   * that took one in this pass or in an earlier pass inside a guard. A query that is replaced gives
+   * the cut back when a later pass recomputes it, and a query that only grows would keep it for
+   * good. The recomputation leaves no record ({@link #recordSettledRecomputation}), so the next
+   * pass recomputes the query.
    *
    * @param targets The queries to recompute.
    * @param causes The cause of each target, or {@code null} when each is {@link
@@ -2076,6 +2141,15 @@ final class WorklistTypeResolver {
       if (probeFilter != null && String.valueOf(key).contains(probeFilter))
         LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(recomputed));
       Object value = recomputed;
+      int cause = (causes == null ? RecomputationCause.ITERATED : causes.get(key)).ordinal();
+      if (this.guardedSettlement && this.joinSettled.contains(key)) {
+        RecomputationOutcome outcome =
+            value == null || value.equals(settled)
+                ? RecomputationOutcome.SAME
+                : RecomputationOutcome.KEPT;
+        this.recomputationsByCause[cause][outcome.ordinal()]++;
+        continue;
+      }
       if (value != null && this.joinSettled.contains(key)) {
         if (this.pinnedAtSettlement.contains(key)) value = settled;
         else {
@@ -2084,7 +2158,6 @@ final class WorklistTypeResolver {
           if (!value.equals(joined)) this.pinnedAtSettlement.add(key);
         }
       }
-      int cause = (causes == null ? RecomputationCause.ITERATED : causes.get(key)).ordinal();
       if (value == null || value.equals(settled)) {
         this.recomputationsByCause[cause][RecomputationOutcome.SAME.ordinal()]++;
         continue;
@@ -2122,19 +2195,43 @@ final class WorklistTypeResolver {
    * fingerprint of the component's state names an earlier step to compare with, and the writes
    * logged since that step decide whether the state is the same. Each query the orbit wrote then
    * takes the meet of the values the orbit gave it, and the iteration goes on from there, with
-   * those queries as targets too. For monotone transfers that value is sound and the iteration from
-   * it descends: the transfers take each state of an orbit to the next, so they take the meet of
-   * the states to a value below every state of the orbit, which is below the meet, and a state its
-   * transfers only shrink is above their least fixpoint. A value the component holds for a reason
-   * outside the orbit is in every state of it, and the meet keeps it. A meet over single queries or
-   * single passes cannot tell such a value from one in transit, which is why the orbit is of the
-   * whole component. Where the meet is ⊥ the query takes the join of its orbit's values: each is
-   * evidence that the value is a tensor, as for a recomputation that returns ⊥.
+   * those queries as targets too. A value the component holds for a reason outside the orbit is in
+   * every state of it, and the meet keeps it. A meet over single queries or single passes cannot
+   * tell such a value from one in transit, which is why the orbit is of the whole component. Where
+   * the meet is ⊥ the query takes the join of its orbit's values: a settled value that is not ⊥
+   * does not return to ⊥, which is the rule a recomputation that returns ⊥ follows and the one the
+   * promotion rounds of {@link #canonicalize} end by.
    *
-   * <p>The iteration is bounded. Past a budget of recomputations, or at an orbit whose meet moves
-   * no query, the component's queries enter {@link #joinSettled}: this pass and every later one
-   * join their recomputations, which ends because a value then only grows and a join past a
-   * widening cap pins.
+   * <p>The value at the end is sound, and that needs neither monotone transfers nor the meet. The
+   * iteration ends at a step that writes nothing, and each query of the component then holds at
+   * least what its transfer returns from the state: that value where the recomputation was written
+   * or returned the settled value, and a value above it where a recomputation to ⊥ was kept out,
+   * where a join was written, and where the query is pinned at the unknown-marked element. The
+   * transfers therefore do not take the state above itself. If each transfer is sound for the
+   * program, such a state holds every value the program gives the queries: the program's own
+   * meaning is monotone, and its least fixpoint is below every state it does not take above itself.
+   * The meet decides only which such state the iteration ends at, and how soon. For monotone
+   * transfers, at an orbit where no query takes the join, the meet is such a state and the
+   * iteration from it descends: the transfers take each state of the orbit to the next, so they
+   * take the meet of the states to a value below every state of the orbit, which is below the meet.
+   * Where a query takes the join, or a transfer is not monotone, the iteration can rise from the
+   * orbit's values and find another orbit.
+   *
+   * <p>The fixpoint is of the component as the sweep condensed it. A query first sighted during the
+   * component's steps is evaluated where it is read and is not among the readers recomputed here,
+   * so a later step can rewrite a query it read. The next pass finds it on the cycle, with no
+   * settled recomputation standing, and recomputes it. The census counts the queries first sighted
+   * in this way, and those of them that read the component.
+   *
+   * <p>The iteration is bounded in two parts. While it replaces, it makes at most a budget of
+   * recomputations: past the budget, or at an orbit whose meet moves no query, the component's
+   * queries enter {@link #joinSettled}, and this pass and every later one join their
+   * recomputations. The joins are not counted against the budget. They end because a value then
+   * only grows: a shape is written at most once for each member up to the widening cap, once for
+   * its unknown remainder and once to be pinned past the cap, and a dtype set at most once for each
+   * dtype. A write makes one recomputation for each of the query's readers in the component, so the
+   * joins make at most that many writes times the component's read edges, which is quadratic in the
+   * component's size where the budget is linear.
    *
    * @param scc The component.
    * @param targets The queries the pass's own step recomputed.
@@ -2176,8 +2273,7 @@ final class WorklistTypeResolver {
       spent += readers.size();
       if (!joining && spent > budget) {
         joining = true;
-        this.joinedComponents++;
-        this.joinSettled.addAll(scc);
+        if (this.joinSettled.addAll(scc)) this.joinedComponents++;
       }
       if (recomputed != null) recomputed.addAll(readers);
       List<Object[]> writes = this.step(readers, null, changed, probeFilter);
@@ -2198,8 +2294,7 @@ final class WorklistTypeResolver {
       if (settled.isEmpty()) {
         // Every query already holds its orbit's value, and still the orbit goes on.
         joining = true;
-        this.joinedComponents++;
-        this.joinSettled.addAll(scc);
+        if (this.joinSettled.addAll(scc)) this.joinedComponents++;
         continue;
       }
       replaced += settled.size();
@@ -2392,6 +2487,7 @@ final class WorklistTypeResolver {
    */
   private void register(Object key, Supplier<Object> transfer, boolean shapeKind) {
     this.transfers.put(key, transfer);
+    if (this.sightedInSteps != null) this.sightedInSteps.add(key);
     this.shapeKinds.put(key, shapeKind);
     // No settled recomputation stands for a new query.
     this.markDirty(key);
@@ -2491,7 +2587,9 @@ final class WorklistTypeResolver {
    * generator guard that decided what it did. A guard's frames are state a transfer may read beside
    * its queries, and a frame that was open around the pass is gone by the next. A recomputation
    * that no guard decided read none of it ({@link TensorGenerator#guardDecisions}), so it is a
-   * function of the values its reads returned, inside a guard as outside one.
+   * function of the values its reads returned, inside a guard as outside one. A recomputation of a
+   * query of {@link #joinSettled} inside a guard leaves no record either: {@link #step} does not
+   * write it, so the query does not hold what the record would stand for.
    *
    * @param key The query recomputed.
    * @param entry The clock at the entry of the attempt that completed.
@@ -2500,7 +2598,8 @@ final class WorklistTypeResolver {
     // The next pass decides afresh whether this recomputation stands.
     this.markDirty(key);
     if (this.recomputationThrew
-        || (this.guardedSettlement && this.recomputationGuardDecided)
+        || (this.guardedSettlement
+            && (this.recomputationGuardDecided || this.joinSettled.contains(key)))
         || this.reentryDeferredAtSettlement.contains(key)) {
       this.settledAt.remove(key);
       this.settledReads.remove(key);
@@ -2725,6 +2824,25 @@ final class WorklistTypeResolver {
    */
   long joinedComponents() {
     return this.joinedComponents;
+  }
+
+  /**
+   * Returns how many queries were first sighted during an iterated component's steps.
+   *
+   * @return The number of queries.
+   */
+  long sightedWhileIterating() {
+    return this.sightedWhileIterating;
+  }
+
+  /**
+   * Returns how many of the queries first sighted during an iterated component's steps read the
+   * component, directly or through another of them.
+   *
+   * @return The number of queries.
+   */
+  long sightedOnCycle() {
+    return this.sightedOnCycle;
   }
 
   /**

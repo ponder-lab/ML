@@ -964,6 +964,214 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A pass inside a generator guard does not write a query the iteration left to join
+   * (wala/ML#1293): the query only grows, so it would keep a value a guard decided for good. Here a
+   * ring goes past its budget, and one of its queries has no settled recomputation standing, since
+   * its transfer threw. A pass inside a guard recomputes that query to a value a guard decides, and
+   * the value is in no query of the ring after the next pass outside a guard.
+   */
+  @Test
+  public void testGuardedPassDoesNotJoinValueGuardDecided() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(3), new NumericDim(3))));
+    // What the third query's transfer does once the state is settled: 0 throws, 1 has a guard
+    // decide another value, and 2 takes its predecessor's value as the other queries do.
+    int[] mode = {0};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "HELD_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> {
+              if (index != 2 || mode[0] == 2) return read;
+              if (mode[0] == 0) throw new IllegalArgumentException("No recomputation stands.");
+              TensorGenerator.noteGuardDecision();
+              return matrix;
+            },
+            new int[1]);
+    engine.demand("HELD_0", transfers.get(0), true);
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+
+    mode[0] = 1;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "HELD_GUARDED_");
+          return null;
+        });
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.guardDecidedRecomputations());
+    assertEquals(
+        census, 1, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.KEPT));
+
+    mode[0] = 2;
+    settleAnotherCycle(engine, "HELD_PASS_");
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("HELD_" + i, transfers.get(i), true));
+    // The ring went past its budget again, and is one component left to join.
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+  }
+
+  /**
+   * A pass inside a generator guard does not write a query left to join a value its recomputation
+   * read from a query a guard decided in that pass either (wala/ML#1293): no guard decides such a
+   * recomputation, and its value holds the guard's cut all the same. Here a query of a ring left to
+   * join reads a query of another cycle, which a pass inside a guard recomputes to a value a guard
+   * decides and writes. The next pass outside a guard replaces that value, and no query of the ring
+   * holds it.
+   */
+  @Test
+  public void testGuardedPassDoesNotJoinValueReadFromGuardDecided() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(3), new NumericDim(3))));
+    // What the outside query's transfer does once the state is settled: 0 throws, 1 has a guard
+    // decide another value, and 2 returns a scalar.
+    int[] mode = {0};
+    Supplier<Object> outside =
+        readingCycle(
+            engine,
+            "READ_OUTSIDE",
+            "READ_PARTNER",
+            () -> {
+              if (!engine.isSettling() || mode[0] == 2) return scalar;
+              if (mode[0] == 0) throw new IllegalArgumentException("No recomputation stands.");
+              TensorGenerator.noteGuardDecision();
+              return matrix;
+            });
+    assertEquals(scalar, engine.demand("READ_OUTSIDE", outside, true));
+
+    // The ring's third query takes its predecessor's value and the outside query's.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "READ_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) ->
+                index != 2
+                    ? read
+                    : read.union((ShapeResult) engine.read("READ_OUTSIDE", outside, true)),
+            new int[1]);
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("READ_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+
+    mode[0] = 1;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "READ_GUARDED_");
+          return null;
+        });
+    // A guard decided the outside query's recomputation alone, and the ring's reader of it was
+    // recomputed and not written.
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.guardDecidedRecomputations());
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.CHANGED_READ, RecomputationOutcome.KEPT));
+
+    mode[0] = 2;
+    settleAnotherCycle(engine, "READ_PASS_");
+    assertEquals(scalar, engine.demand("READ_OUTSIDE", outside, true));
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("READ_" + i, transfers.get(i), true));
+  }
+
+  /**
+   * A recomputation a pass inside a generator guard makes of a query left to join leaves no record
+   * (wala/ML#1293): the pass does not write the query, so the query does not hold the value the
+   * record would stand for, and the next pass recomputes it. Here that recomputation returns a
+   * value no guard decided, which the query holds after the next pass outside a guard.
+   */
+  @Test
+  public void testGuardedPassLeavesNoRecordForQueryLeftToJoin() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    // Whether the third query's transfer throws once the state is settled, or takes its
+    // predecessor's value as the other queries do.
+    boolean[] throwing = {true};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "UNRECORDED_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> {
+              if (index == 2 && throwing[0])
+                throw new IllegalArgumentException("No recomputation stands.");
+              return read;
+            },
+            new int[1]);
+    engine.demand("UNRECORDED_0", transfers.get(0), true);
+
+    throwing[0] = false;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "UNRECORDED_GUARDED_");
+          return null;
+        });
+    String census = engine.settlementCensus();
+    assertEquals(
+        census, 1, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.KEPT));
+
+    settleAnotherCycle(engine, "UNRECORDED_PASS_");
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("UNRECORDED_" + i, transfers.get(i), true));
+  }
+
+  /**
+   * The census counts the queries first sighted during an iterated component's steps, and those of
+   * them that read the component (wala/ML#1293): such a query is evaluated where it is read and is
+   * not among the readers the iteration recomputes, and one that reads the component is on its
+   * cycle. Here a query of a ring reads three queries no evaluation has sighted, once the state is
+   * settled: one that reads a query that reads the ring, that query, and one that reads nothing.
+   */
+  @Test
+  public void testCensusCountsQueriesFirstSightedWhileIterating() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    Supplier<Object> apart = () -> scalar;
+    Supplier<Object> reading = () -> engine.read("SIGHTING_0", transfers.get(0), true);
+    Supplier<Object> through = () -> engine.read("SIGHTED_READING", reading, true);
+    transfers.addAll(
+        ring(
+            engine,
+            "SIGHTING_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) ->
+                index != 2
+                    ? read
+                    : read.union((ShapeResult) engine.read("SIGHTED_THROUGH", through, true))
+                        .union((ShapeResult) engine.read("SIGHTED_READING", reading, true))
+                        .union((ShapeResult) engine.read("SIGHTED_APART", apart, true)),
+            new int[1]));
+    engine.demand("SIGHTING_0", transfers.get(0), true);
+
+    String census = engine.settlementCensus();
+    assertTrue(census, engine.iterationSteps() > 0);
+    assertEquals(census, 3, engine.sightedWhileIterating());
+    assertEquals(census, 2, engine.sightedOnCycle());
+    assertTrue(
+        census,
+        census.contains("3 queries first sighted in their steps (2 of them read the component)"));
+  }
+
+  /**
    * The system property turns the iteration off (wala/ML#1293): each pass then makes its one step,
    * and a value that only moves around a cycle is at the next query after it.
    */
