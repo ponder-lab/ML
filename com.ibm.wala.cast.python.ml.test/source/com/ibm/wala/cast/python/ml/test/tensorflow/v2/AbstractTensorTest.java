@@ -488,8 +488,16 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   protected static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
+  /** An {@code int32} tensor whose shape cannot be statically inferred. */
+  protected static final TensorType TENSOR_UNKNOWN_SHAPE_INT32 = new TensorType(INT_32, null);
+
   /** An {@code int64} tensor whose shape cannot be statically inferred. */
   protected static final TensorType TENSOR_UNKNOWN_SHAPE_INT64 = new TensorType(INT_64, null);
+
+  /** A {@code float32} tensor whose middle size is fixed at run time and was not computed. */
+  protected static final TensorType TENSOR_2_UNRESOLVED_4_FLOAT32 =
+      new TensorType(
+          FLOAT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE, new NumericDim(4)));
 
   /** Fully-⊤ tensor type: unknown shape and unknown dtype. */
   protected static final TensorType TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE =

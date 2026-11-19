@@ -3257,7 +3257,8 @@ public class TestModelCall extends AbstractTensorTest {
    * points to every layer at once, so the carried value takes each call's result and passes it to
    * the next iteration's call, which may dispatch to the same layer. At run time {@code Pad.call}
    * receives only the activation's {@code (2, 5, 4) float32}; the analysis adds the pad's own
-   * {@code (2, 7, 4)}.
+   * output. The pad lengthens the middle axis of what it is given, so its output grows on each turn
+   * of that cycle, and the axis reads as a size that was not computed.
    *
    * <p>TODO: https://github.com/wala/ML/issues/1073; expect {@code (2, 5, 4) float32} alone once it
    * is fixed.
@@ -3270,7 +3271,7 @@ public class TestModelCall extends AbstractTensorTest {
         "Pad.call",
         1,
         2,
-        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 5, 4), TensorType.of(FLOAT_32, 2, 7, 4))));
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 5, 4), TENSOR_2_UNRESOLVED_4_FLOAT32)));
   }
 
   /**
