@@ -1008,6 +1008,7 @@ public class WorklistTypeResolverTest {
     assertEquals(census, 1, engine.guardDecidedRecomputations());
     assertEquals(
         census, 1, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.KEPT));
+    assertEquals(census, 1, engine.guardHeldDiffering());
 
     mode[0] = 2;
     settleAnotherCycle(engine, "HELD_PASS_");
@@ -1080,6 +1081,7 @@ public class WorklistTypeResolverTest {
         census,
         1,
         engine.recomputations(RecomputationCause.CHANGED_READ, RecomputationOutcome.KEPT));
+    assertEquals(census, 1, engine.guardHeldDiffering());
 
     mode[0] = 2;
     settleAnotherCycle(engine, "READ_PASS_");
@@ -1126,10 +1128,67 @@ public class WorklistTypeResolverTest {
     String census = engine.settlementCensus();
     assertEquals(
         census, 1, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.KEPT));
+    assertEquals(census, 1, engine.guardHeldDiffering());
 
     settleAnotherCycle(engine, "UNRECORDED_PASS_");
     for (int i = 0; i < 4; i++)
       assertEquals(scalar.union(vector), engine.demand("UNRECORDED_" + i, transfers.get(i), true));
+  }
+
+  /**
+   * The census counts the recomputations a pass inside a generator guard made of a query left to
+   * join, and those of them that differ from the settled value (wala/ML#1293): the pass writes
+   * neither, and a query whose recomputation differs holds less or more than its transfer returns
+   * until a later pass recomputes it. Here one pass inside a guard recomputes a query to the value
+   * it holds, and the next to another value.
+   */
+  @Test
+  public void testCensusCountsRecomputationsHeldInsideGuard() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    // What the third query's transfer does once the state is settled: 0 throws, 1 returns the
+    // scalar the query holds, and 2 takes its predecessor's value as the other queries do.
+    int[] mode = {0};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "COUNTED_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> {
+              if (index != 2 || mode[0] == 2) return read;
+              if (mode[0] == 0) throw new IllegalArgumentException("No recomputation stands.");
+              return scalar;
+            },
+            new int[1]);
+    engine.demand("COUNTED_0", transfers.get(0), true);
+
+    mode[0] = 1;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "COUNTED_SAME_");
+          return null;
+        });
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.guardHeld());
+    assertEquals(census, 0, engine.guardHeldDiffering());
+
+    mode[0] = 2;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "COUNTED_DIFFERING_");
+          return null;
+        });
+    census = engine.settlementCensus();
+    assertEquals(census, 2, engine.guardHeld());
+    assertEquals(census, 1, engine.guardHeldDiffering());
+    assertTrue(
+        census,
+        census.contains(
+            "2 recomputations of queries left to join held inside a generator guard (1 differing"
+                + " from the settled value)"));
   }
 
   /**
