@@ -93,6 +93,20 @@ public record ShapeResult(Set<List<Dimension<?>>> members, boolean hasUnknown) {
   }
 
   /**
+   * Intersects this result with another: the members both hold, with an unknown remainder only when
+   * both have one.
+   *
+   * @param other The result to intersect with.
+   * @return The intersection.
+   */
+  public ShapeResult intersection(ShapeResult other) {
+    if (this.equals(other)) return this;
+    Set<List<Dimension<?>>> common = HashSetFactory.make(this.members());
+    common.retainAll(other.members());
+    return new ShapeResult(common, this.hasUnknown() && other.hasUnknown());
+  }
+
+  /**
    * Decides whether this result is ⊥ (not a tensor).
    *
    * @return {@code true} iff there are no members and no unknown remainder.
