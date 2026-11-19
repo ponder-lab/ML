@@ -357,7 +357,11 @@ final class WorklistTypeResolver {
    * A component is counted as left to join when it puts a query in {@link #joinSettled}, so one
    * that goes past its budget again in a later pass is not counted again. A first-sighted query is
    * not among the readers {@link #iterate} recomputes, and one that reads the component is on its
-   * cycle, so the count of those is of the queries a fixpoint left out ({@link #countSighted}).
+   * cycle, so the count of those is of the queries a fixpoint left out ({@link #countSighted}). The
+   * last two count the recomputations a pass inside a generator guard made of a query of {@link
+   * #joinSettled}, none of which it wrote ({@link #step}), and those of them that differ from the
+   * settled value: the query holds that value, and not what its transfer returns, until a later
+   * pass recomputes it.
    */
   private long iteratedComponents,
       iterationSteps,
@@ -368,7 +372,9 @@ final class WorklistTypeResolver {
       joinedComponents,
       sightedWhileIterating,
       sightedOnCycle,
-      checkedFixpointQueries;
+      checkedFixpointQueries,
+      guardHeld,
+      guardHeldDiffering;
 
   /**
    * The queries first sighted during the steps of the component a sweep is on, in the order of
@@ -500,7 +506,7 @@ final class WorklistTypeResolver {
     /**
      * The settled value stays over a recomputation that differs from it: one that returned ⊥ over a
      * settled value that is not ⊥, or one a pass inside a generator guard made of a query of {@link
-     * #joinSettled}.
+     * #joinSettled}. The census counts the second apart ({@link #guardHeldDiffering}).
      */
     KEPT
   }
@@ -1532,7 +1538,11 @@ final class WorklistTypeResolver {
         + this.sightedWhileIterating
         + " queries first sighted in their steps ("
         + this.sightedOnCycle
-        + " of them read the component); recomputations took "
+        + " of them read the component), "
+        + this.guardHeld
+        + " recomputations of queries left to join held inside a generator guard ("
+        + this.guardHeldDiffering
+        + " differing from the settled value); recomputations took "
         + TimeUnit.NANOSECONDS.toMillis(this.sweepRecomputeNanos)
         + " ms; recomputations by cause: "
         + this.causeCensus();
@@ -2148,6 +2158,8 @@ final class WorklistTypeResolver {
                 ? RecomputationOutcome.SAME
                 : RecomputationOutcome.KEPT;
         this.recomputationsByCause[cause][outcome.ordinal()]++;
+        this.guardHeld++;
+        if (outcome == RecomputationOutcome.KEPT) this.guardHeldDiffering++;
         continue;
       }
       if (value != null && this.joinSettled.contains(key)) {
@@ -2843,6 +2855,26 @@ final class WorklistTypeResolver {
    */
   long sightedOnCycle() {
     return this.sightedOnCycle;
+  }
+
+  /**
+   * Returns how many recomputations a pass inside a generator guard made of a query left to join,
+   * none of which it wrote.
+   *
+   * @return The number of recomputations.
+   */
+  long guardHeld() {
+    return this.guardHeld;
+  }
+
+  /**
+   * Returns how many of the recomputations a pass inside a generator guard made of a query left to
+   * join differ from the settled value the query keeps.
+   *
+   * @return The number of recomputations.
+   */
+  long guardHeldDiffering() {
+    return this.guardHeldDiffering;
   }
 
   /**
