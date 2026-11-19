@@ -617,6 +617,11 @@ public class WorklistTypeResolverTest {
    * settlement, so the third query is first evaluated inside that recomputation, after the clock
    * the recomputation's record holds. The next pass finds the record older than an evaluation's
    * write and recomputes the query, to the same value. The pass after that skips it.
+   *
+   * <p>That one recomputation is a skip the engine misses, and not a value it needs: the record
+   * holds the clock at the recomputation's entry, and the read is evaluated after it but before it
+   * is consumed. A change that skips it moves this test's second-pass counts, and is an
+   * improvement.
    */
   @Test
   public void testCensusCountsReadFirstEvaluatedAtSettlement() {

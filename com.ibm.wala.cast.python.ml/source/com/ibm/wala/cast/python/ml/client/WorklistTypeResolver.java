@@ -443,16 +443,20 @@ final class WorklistTypeResolver {
   private final long[] restoredByCause = new long[RecomputationCause.values().length];
 
   /**
-   * The value each query's last replacement by a settlement pass replaced, or {@code null} when the
-   * census does not count restored values. The map holds a value for every query a pass ever
-   * replaced, so it is kept only when the census line is logged.
+   * The hash code of the value each query's last replacement by a settlement pass replaced, or
+   * {@code null} when the census does not count restored values. The map holds a hash code and not
+   * the value, so it keeps no replaced value alive, and a restored count is over by any two
+   * different values with one hash code. It has an entry for every query a pass ever replaced, so
+   * it is kept only when the census line is logged.
    */
-  private Map<Object, Object> replacedBySettlement =
+  private Map<Object, Integer> replacedBySettlement =
       SETTLEMENT_CENSUS.isLoggable(Level.FINE) ? HashMapFactory.make() : null;
 
   /**
-   * The settlement passes that replaced no value, and the time the sweeps' recomputations took,
-   * which includes any sweep a recomputation's own solve ran.
+   * The settlement passes that replaced no value, and the time the sweeps' recomputations took. No
+   * sweep runs inside another's recomputations, so no time is counted twice: {@link
+   * #recomputeSettled} runs a transfer as an evaluation, a generator's query inside an evaluation
+   * is a {@link #read}, and only {@link #demand} runs a solve.
    */
   private long unchangedSettlementPasses, sweepRecomputeNanos;
 
@@ -1979,7 +1983,8 @@ final class WorklistTypeResolver {
           }
           this.recomputationsByCause[cause][RecomputationOutcome.REPLACED.ordinal()]++;
           if (this.replacedBySettlement != null
-              && value.equals(this.replacedBySettlement.put(key, settled)))
+              && Integer.valueOf(value.hashCode())
+                  .equals(this.replacedBySettlement.put(key, Objects.hashCode(settled))))
             this.restoredByCause[cause]++;
           this.putState(key, value);
           this.stamp(key, false);
