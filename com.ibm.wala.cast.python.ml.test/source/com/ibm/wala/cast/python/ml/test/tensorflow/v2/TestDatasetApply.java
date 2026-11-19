@@ -31,6 +31,13 @@ public class TestDatasetApply extends AbstractTensorTest {
           TensorType.of(FLOAT_32, 3, 23));
 
   /**
+   * What the parameter of a function applied in such a loop reads: the first dataset's rows, and
+   * the unknown shape for the datasets the loop hands back to it.
+   */
+  private static final Set<TensorType> LOOP_FED =
+      Set.of(TensorType.of(FLOAT_32, 23), TENSOR_UNKNOWN_SHAPE_FLOAT32);
+
+  /**
    * The parameter of an applied function reads the receiver's element.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
@@ -220,8 +227,13 @@ public class TestDatasetApply extends AbstractTensorTest {
    * The parameters of two functions applied in a loop that reassigns the dataset read the join of
    * the datasets the loop variable holds.
    *
-   * <p>TODO: wala/ML#1197. The join has no batch of batches, which the loop's dataset is at run
-   * time. Once fixed, the join gains {@code (3, 2, 23)}, or a shape whose leading axes are unknown.
+   * <p>Each function batches what the other returned, so the datasets' shapes form a cycle that
+   * adds an axis on each turn. No shape stands for a rank that grows without end, so the datasets
+   * the loop hands back read as the unknown shape, which covers the {@code (2, 23)} that {@code
+   * second} is given at run time.
+   *
+   * <p>TODO: wala/ML#1197. Once fixed, the read may name the batches the loop makes, {@code (2,
+   * 23)} and {@code (3, 2, 23)}, where it holds the unknown shape.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws CancelException On analysis cancellation.
@@ -229,8 +241,8 @@ public class TestDatasetApply extends AbstractTensorTest {
    */
   @Test
   public void testAppliedInLoop() throws ClassHierarchyException, CancelException, IOException {
-    test(LOOP_FILE, "first", 1, 2, Map.of(2, LOOPED));
-    test(LOOP_FILE, "second", 1, 2, Map.of(2, LOOPED));
+    test(LOOP_FILE, "first", 1, 2, Map.of(2, LOOP_FED));
+    test(LOOP_FILE, "second", 1, 2, Map.of(2, LOOP_FED));
   }
 
   /**
