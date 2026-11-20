@@ -32,6 +32,13 @@ public record ShapeResult(Set<List<Dimension<?>>> members, boolean hasUnknown) {
   private static final ShapeResult BOTTOM = new ShapeResult(Collections.emptySet(), false);
 
   /**
+   * The ranks a widened result may hold (wala/ML#1293). A value may hold shapes of two ranks
+   * without its rank growing, as one that an array and its rows both reach does; a widening that
+   * would hold more takes the rank itself to be growing.
+   */
+  static final int WIDENED_RANKS = 2;
+
+  /**
    * Wraps fully resolved members.
    *
    * @param members The resolved shape members.
@@ -114,13 +121,14 @@ public record ShapeResult(Set<List<Dimension<?>>> members, boolean hasUnknown) {
   /**
    * Widens this result by a later one (wala/ML#1293), for a value that an iteration keeps making
    * new shapes for. A member of the later result that a member here covers changes nothing. One
-   * that none covers is not added beside the others: where members here have its rank, they and it
-   * become one member, which keeps each size they all agree on and takes a marker where they
-   * differ, and where no member here has its rank, the rank itself is growing, so the result is the
-   * unknown shape, with no members. The members held until then are the ranks the growth had
-   * reached when it was noticed, which says nothing of the program, and a reader that takes a
-   * partial result's members would take them for all there is. A result that has the remainder
-   * covers every shape and is returned as it is.
+   * that none covers is not added beside the others of its rank: they and it become one member,
+   * which keeps each size they all agree on and takes a marker where they differ. Where no member
+   * here has its rank, it is added, unless the result would then hold shapes of more than {@link
+   * #WIDENED_RANKS} ranks. The rank itself is then growing, and the result is the unknown shape,
+   * with no members: the members held until then are the ranks the growth had reached when it was
+   * noticed, which says nothing of the program, and a reader that takes a partial result's members
+   * would take them for all there is. A result that has the remainder covers every shape and is
+   * returned as it is.
    *
    * <p>The marker is {@link UnresolvedDim}, a size that is fixed at run time and that the analysis
    * did not compute, as a size that depends on how often a loop ran is. It is {@link DynamicDim}
@@ -131,7 +139,8 @@ public record ShapeResult(Set<List<Dimension<?>>> members, boolean hasUnknown) {
    * <p>The result covers both results and holds no member another of its members covers ({@link
    * #withoutCovered}), and widening it by a result it covers returns it. A chain of widenings ends,
    * since each one that changes anything turns a size into a more general marker, merges or drops
-   * members, adds the remainder, or gives the unknown shape.
+   * members, adds a member of a rank not held, which {@link #WIDENED_RANKS} bounds, adds the
+   * remainder, or gives the unknown shape.
    *
    * @param later The later result.
    * @return The widened result.
@@ -143,7 +152,11 @@ public record ShapeResult(Set<List<Dimension<?>>> members, boolean hasUnknown) {
     for (List<Dimension<?>> member : later.members()) {
       List<List<Dimension<?>>> ranked = new ArrayList<>();
       for (List<Dimension<?>> held : widened) if (held.size() == member.size()) ranked.add(held);
-      if (ranked.isEmpty()) return UNKNOWN;
+      if (ranked.isEmpty()) {
+        widened.add(member);
+        if (widened.stream().map(List::size).distinct().count() > WIDENED_RANKS) return UNKNOWN;
+        continue;
+      }
       if (ranked.stream().anyMatch(held -> generalize(held, member).equals(held))) continue;
       List<Dimension<?>> general = member;
       for (List<Dimension<?>> held : ranked) general = generalize(general, held);

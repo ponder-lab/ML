@@ -87,13 +87,26 @@ public class ShapeResultWideningTest {
     assertEquals(one(R, 3), one(R, 3).widening(one(D, 3)));
   }
 
-  /** A later shape of a rank the result does not hold makes the whole shape unknown. */
+  /**
+   * A later shape of a rank the result does not hold is taken beside its shapes, and the whole
+   * shape becomes unknown where the result would then hold shapes of a third rank.
+   */
   @Test
-  public void testNewRankBecomesUnknown() {
-    assertEquals(ShapeResult.unknown(), one(2, 3).widening(one(2, 2, 3)));
+  public void testThirdRankBecomesUnknown() {
+    ShapeResult ranks = ShapeResult.of(Set.of(shape(2, 3), shape(2, 2, 3)));
+    assertEquals(ranks, one(2, 3).widening(one(2, 2, 3)));
+    assertEquals(ShapeResult.unknown(), ranks.widening(one(3)));
     assertEquals(
         ShapeResult.unknown(),
-        ShapeResult.of(Set.of(shape(2, 3), shape(2, 2, 3))).widening(one(3)));
+        one(3).widening(ShapeResult.of(Set.of(shape(2, 3), shape(2, 2, 3)))));
+
+    // A shape of a rank the result holds is widened into that rank's member, whatever else it
+    // holds.
+    assertEquals(ShapeResult.of(Set.of(shape(U, 3), shape(2, 2, 3))), ranks.widening(one(4, 3)));
+    ShapeResult three = ShapeResult.of(Set.of(shape(3), shape(2, 3), shape(2, 2, 3)));
+    assertEquals(
+        ShapeResult.of(Set.of(shape(U), shape(2, 3), shape(2, 2, 3))), three.widening(one(5)));
+    assertEquals(ShapeResult.unknown(), three.widening(one(2, 2, 2, 3)));
   }
 
   /**
