@@ -11,6 +11,7 @@ import com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -58,6 +59,9 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
 
   private static final TensorType TENSOR_NONE_3_INT32 =
       new TensorType(INT_32, List.of(DynamicDim.INSTANCE, new NumericDim(3)));
+
+  private static final TensorType TENSOR_UNRESOLVED_3_INT32 =
+      new TensorType(INT_32, List.of(UnresolvedDim.INSTANCE, new NumericDim(3)));
 
   private static final TensorType TENSOR_3_FLOAT32 = TensorType.of(FLOAT_32, 3);
 
@@ -197,7 +201,8 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
    * {@code (6, 3)}. There the cycle guard answers the re-entered cast and concatenation as unknown;
    * one level up the concatenation's element reads both {@code (2, 3)} and {@code (4, 3)}, and an
    * element with several shapes stays unknown outside an analysis run ({@link
-   * com.ibm.wala.cast.python.ml.client.Concat}, wala/ML#931). The analysis reads the same.
+   * com.ibm.wala.cast.python.ml.client.Concat}, wala/ML#931). The analysis reads a first axis of a
+   * size it did not compute there ({@link #testCyclesInsideAnalysis}).
    */
   @Test
   public void testCastAndConcatenationCycleReadDirectly()
@@ -236,6 +241,14 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
   /**
    * The same values read inside an analysis run, where the resolver converges the cycles (<a
    * href="https://github.com/wala/ML/issues/1174">wala/ML#1174</a>).
+   *
+   * <p>The cast and the concatenation that feed each other make a longer first axis each time
+   * around, {@code (2, 3)}, {@code (4, 3)}, {@code (6, 3)} and on, since the analysis does not tell
+   * the constructions in {@code stack} apart. The resolver widens that axis to a size no one
+   * computed (wala/ML#1293), which covers the program's {@code (4, 3)} and {@code (6, 3)}. The size
+   * is a fixed integer at run time, so it is not one that is {@code None} there (wala/ML#721). The
+   * read is the resolver's under its own order of the cycle's members; under one shuffled order it
+   * also holds a vector the program never makes (wala/ML#1276).
    */
   @Test
   public void testCyclesInsideAnalysis()
@@ -246,7 +259,7 @@ public class TestNullEngineProducerCycles extends AbstractTensorTest {
         types.get("consume_array"));
     assertEquals(Set.of(TENSOR_2_3_INT32), types.get("consume_recast"));
     assertEquals(Set.of(TENSOR_NONE_3_INT32), types.get("consume_grown"));
-    assertEquals(Set.of(TENSOR_2_3_INT32, new TensorType(INT_32, null)), types.get("consume_cast"));
+    assertEquals(Set.of(TENSOR_2_3_INT32, TENSOR_UNRESOLVED_3_INT32), types.get("consume_cast"));
     assertEquals(Set.of(TENSOR_3_FLOAT32), types.get("consume_zipped"));
   }
 }
