@@ -14,16 +14,16 @@ Tensor values loaded from data files (`np.load`, `pickle.load`, `tf.io.read_file
 
 ```json
 {
-"types": [
-	{
-	"module": "datas/loader.py",
-	"function": "Planetoid.load",
-	"variable": "allx",
-	"dtype": "float32",
-	"shape": "1708 3703",
-	"attribution": "Extent of the pickled Cora feature matrix."
-	}
-]
+	"types": [
+		{
+			"module": "datas/loader.py",
+			"function": "Planetoid.load",
+			"variable": "allx",
+			"dtype": "float32",
+			"shape": "1708 3703",
+			"attribution": "Extent of the pickled Cora feature matrix."
+		}
+	]
 }
 ```
 
