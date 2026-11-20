@@ -5,6 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -85,6 +86,24 @@ public class ShapeResultWideningTest {
     assertEquals(one(R, 3), one(4, 3).widening(one(R, 3)));
     assertEquals(one(R, 3), one(D, 3).widening(one(R, 3)));
     assertEquals(one(R, 3), one(R, 3).widening(one(D, 3)));
+  }
+
+  /**
+   * A product with a factor that is {@code None} at run time, or ragged, is widened as that factor
+   * is (the wala/ML#721 taint), and a size no one computed does not cover it.
+   */
+  @Test
+  public void testMarkerInsideProductIsKept() {
+    Object dynamic = new CompoundDim(shape(D, 4));
+    assertEquals(one(2, D), one(2, dynamic).widening(one(2, 8)));
+    assertEquals(one(2, D), one(2, 8).widening(one(2, dynamic)));
+    assertEquals(one(2, R), one(2, new CompoundDim(shape(R, 4))).widening(one(2, 8)));
+    assertEquals(one(2, R), one(2, new CompoundDim(shape(R, 4))).widening(one(2, dynamic)));
+    assertEquals(one(2, U), one(2, new CompoundDim(shape(3, 4))).widening(one(2, 8)));
+
+    assertFalse(ShapeResult.covers(shape(2, U), shape(2, dynamic)));
+    assertTrue(ShapeResult.covers(shape(2, D), shape(2, dynamic)));
+    assertTrue(ShapeResult.covers(shape(2, dynamic), shape(2, dynamic)));
   }
 
   /**

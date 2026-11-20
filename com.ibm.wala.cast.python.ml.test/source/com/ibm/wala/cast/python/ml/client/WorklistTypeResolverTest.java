@@ -1534,6 +1534,46 @@ public class WorklistTypeResolverTest {
   }
 
   /**
+   * A query that made shapes and stopped short of the limit is not widened, and the shape its
+   * recomputations would widen to stands for nothing (wala/ML#1293): a value that holds that shape
+   * for a reason of its own keeps the members the shape covers. Were the shape noted when the
+   * recomputations were folded, the value would keep those members when first evaluated before the
+   * cycle settled and lose them after, so the order of the two would show in what a client reads.
+   */
+  @Test(timeout = 60000)
+  public void testShapeOfQueryThatStoppedGrowingCoversNothing() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    List<Dimension<?>> last = List.of(new NumericDim(3));
+    // The second query makes a vector one longer at each of three recomputations, the first of
+    // them in the pass's own step, which counts no shape, and stops there.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "STOPS_",
+            List.of(first, first),
+            (index, read) ->
+                index == 0 || read.members().contains(last) ? read : read.union(longer(read)),
+            new int[1]);
+    ShapeResult grown =
+        ShapeResult.of(
+            Set.of(
+                List.of(new NumericDim(0)),
+                List.of(new NumericDim(1)),
+                List.of(new NumericDim(2)),
+                last));
+    for (int i = 0; i < 2; i++)
+      assertEquals(grown, engine.demand("STOPS_" + i, transfers.get(i), true));
+    assertEquals(engine.settlementCensus(), 0, engine.widenedQueries());
+
+    ShapeResult beside =
+        ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE), List.of(new NumericDim(7))));
+    assertEquals(beside, engine.demand("STOPS_BESIDE", () -> beside, true));
+  }
+
+  /**
    * Returns a vector one longer than the longest a result holds, or the result's member whose size
    * is not a number, when it has one.
    *

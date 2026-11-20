@@ -37,7 +37,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BinaryOperator;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -371,7 +370,9 @@ final class WorklistTypeResolver {
 
   /**
    * The shapes a widening made that neither the widened value nor the recomputation held: each
-   * stands for the shapes its query kept making. A value that holds one of them, a settled
+   * stands for the shapes its query kept making. A shape is here only once its query is widened: a
+   * query that made shapes and stopped short of the limit is written none of them, so what its
+   * recomputations would widen to stands for nothing. A value that holds one of them, a settled
    * recomputation or a first evaluation, is kept without the members it covers ({@link #absorb}).
    * Those members are what the growth left behind, and a cycle that hands a value on as it is would
    * keep them for good, since each of its queries reads them from the one before.
@@ -2215,10 +2216,11 @@ final class WorklistTypeResolver {
       } else if (growth != null && growth.makesShape(settled, value)) {
         // Not the value the query holds, which is no recomputation that made a shape when the
         // query's transfer gave its shapes up since, or handed another query's value on.
-        Object grown = growth.grow(key, value, this::generalizing);
+        Object grown = growth.grow(key, value);
         if (growth.keepsGrowing(key)) {
           this.joinSettled.add(key);
           this.widenedAtSettlement.add(key);
+          this.generalized.addAll(growth.widenedShapes(key));
           this.widenedQueries++;
           Object widened = this.widen(key, grown);
           LOGGER.fine(
@@ -2292,6 +2294,12 @@ final class WorklistTypeResolver {
     private final Map<Object, Object> grown = HashMapFactory.make();
 
     /**
+     * The shapes that widening made for each query and that none of the two values widened held.
+     * They stand for nothing until the query is widened, so they are kept here until then.
+     */
+    private final Map<Object, Set<List<Dimension<?>>>> widened = HashMapFactory.make();
+
+    /**
      * Notes a value a query of the component holds.
      *
      * @param value The value.
@@ -2333,12 +2341,28 @@ final class WorklistTypeResolver {
      *
      * @param key The query.
      * @param value The value it recomputed to.
-     * @param widening Widens a value by a later one.
      * @return The widening of the query's recomputations that made a shape.
      */
-    Object grow(Object key, Object value, BinaryOperator<Object> widening) {
+    Object grow(Object key, Object value) {
       this.made.merge(key, 1, Integer::sum);
-      return this.grown.merge(key, value, widening);
+      Object earlier = this.grown.get(key);
+      Object fold = earlier == null ? value : widening(earlier, value);
+      if (earlier != null)
+        this.widened
+            .computeIfAbsent(key, query -> HashSetFactory.make())
+            .addAll(madeByWidening(earlier, value, fold));
+      this.grown.put(key, fold);
+      return fold;
+    }
+
+    /**
+     * Returns the shapes the widening of a query's recomputations made.
+     *
+     * @param key The query.
+     * @return The shapes, which no two values widened held.
+     */
+    Set<List<Dimension<?>>> widenedShapes(Object key) {
+      return this.widened.getOrDefault(key, Collections.emptySet());
     }
 
     /**
@@ -3679,13 +3703,28 @@ final class WorklistTypeResolver {
    */
   private Object generalizing(Object settled, Object value) {
     Object widened = widening(settled, value);
+    this.generalized.addAll(madeByWidening(settled, value, widened));
+    return widened;
+  }
+
+  /**
+   * Returns the shapes a widening made that neither of the values widened held.
+   *
+   * @param settled The value widened.
+   * @param value The value it was widened by.
+   * @param widened The widening of the two.
+   * @return The shapes of the widening that neither value held.
+   */
+  private static Set<List<Dimension<?>>> madeByWidening(
+      Object settled, Object value, Object widened) {
+    Set<List<Dimension<?>>> made = HashSetFactory.make();
     if (settled instanceof ShapeResult
         && value instanceof ShapeResult
         && widened instanceof ShapeResult)
       for (List<Dimension<?>> member : ((ShapeResult) widened).members())
         if (!((ShapeResult) settled).members().contains(member)
-            && !((ShapeResult) value).members().contains(member)) this.generalized.add(member);
-    return widened;
+            && !((ShapeResult) value).members().contains(member)) made.add(member);
+    return made;
   }
 
   /**

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
@@ -225,13 +226,29 @@ public record ShapeResult(Set<List<Dimension<?>>> members, boolean hasUnknown) {
       Dimension<?> one = first.get(i);
       Dimension<?> other = second.get(i);
       if (Objects.equals(one, other)) general.add(one);
-      else if (one instanceof RaggedDim || other instanceof RaggedDim)
+      else if (holds(one, RaggedDim.class) || holds(other, RaggedDim.class))
         general.add(RaggedDim.INSTANCE);
-      else if (one instanceof DynamicDim || other instanceof DynamicDim)
+      else if (holds(one, DynamicDim.class) || holds(other, DynamicDim.class))
         general.add(DynamicDim.INSTANCE);
       else general.add(UnresolvedDim.INSTANCE);
     }
     return general;
+  }
+
+  /**
+   * Decides whether a size is a marker of a kind, or a product with a factor that is (the
+   * wala/ML#721 taint: a product over a size that is {@code None} at run time is {@code None}).
+   *
+   * @param size The size.
+   * @param marker The kind of marker.
+   * @return Whether the size is, or has a factor that is, of that kind.
+   */
+  private static boolean holds(Dimension<?> size, Class<? extends Dimension<?>> marker) {
+    if (marker.isInstance(size)) return true;
+    if (size instanceof CompoundDim)
+      for (Dimension<?> factor : ((CompoundDim) size).value())
+        if (holds(factor, marker)) return true;
+    return false;
   }
 
   /**
