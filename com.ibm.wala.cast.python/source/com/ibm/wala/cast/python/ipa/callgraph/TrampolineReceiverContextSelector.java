@@ -495,6 +495,14 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       // three arguments, and each site's result carried the others' shapes (wala/ML#716).
       if (isSummaryBody(callee))
         return new AnchoredCallerSiteContext(caller, caller.getMethod(), site, null);
+      // So is a call a program function makes passing one of its own parameters on: keyed on the
+      // anchor, a helper's callee had one node for every node of the helper under one receiver, so
+      // a
+      // helper nested in a method and called twice joined both calls' arguments (wala/ML#1305). A
+      // call the receiver-keyed method makes itself is keyed on that node either way.
+      if (ForwardingCallStringSelector.isProgramFunction(caller)
+          && ForwardingCallStringSelector.passesParameterOn(caller, site))
+        return new AnchoredCallerSiteContext(caller, caller.getMethod(), site, null);
       return new AnchoredCallerSiteContext(receiverAnchor(caller), caller.getMethod(), site, null);
     }
     // A library summary handed a function object is keyed on the calling node and site. Keyed on

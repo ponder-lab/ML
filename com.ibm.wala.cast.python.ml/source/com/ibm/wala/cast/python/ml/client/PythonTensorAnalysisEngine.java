@@ -175,8 +175,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private final String targetFramework;
 
   /**
-   * The k-CFA depth applied to the targeted context selector, raised to 3 under a program caller
-   * whose own string has two sites (wala/ML#1305). See {@link #DEFAULT_TARGETED_CFA_DEPTH}.
+   * The k-CFA depth applied to the targeted context selector. Unless it is 0, it is a floor: under
+   * a program caller whose own string has two sites, the depth is at least 3 (wala/ML#1305). See
+   * {@link #DEFAULT_TARGETED_CFA_DEPTH}.
    */
   private final int targetedCfaDepth;
 
@@ -1344,7 +1345,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           @Override
           protected int getLength(CGNode caller, CallSiteReference site, IMethod target) {
             int depth = PythonTensorAnalysisEngine.this.targetedCfaDepth;
-            return ForwardingCallStringSelector.isProgramFunction(caller)
+            // Depth 0 stays context-insensitive.
+            return depth > 0
+                    && ForwardingCallStringSelector.isProgramFunction(caller)
                     && ForwardingCallStringSelector.callStringLength(caller) >= 2
                 ? Math.max(depth, 3)
                 : depth;

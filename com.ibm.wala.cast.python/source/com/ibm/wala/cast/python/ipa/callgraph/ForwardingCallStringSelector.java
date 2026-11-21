@@ -59,17 +59,31 @@ public class ForwardingCallStringSelector extends CallStringContextSelector {
     return cs == null ? 0 : cs.getCallSiteRefs().length;
   }
 
-  @Override
-  protected int getLength(CGNode caller, CallSiteReference site, IMethod target) {
-    if (!isProgramFunction(caller)) return callStringLength(caller) >= 2 ? 2 : 1;
+  /**
+   * Whether the call at the given site passes one of the caller's own parameters on as an argument.
+   *
+   * @param caller The calling node.
+   * @param site The call site in {@code caller}.
+   * @return Whether an argument of the call is a parameter of {@code caller}.
+   */
+  public static boolean passesParameterOn(CGNode caller, CallSiteReference site) {
     IR ir = caller.getIR();
-    if (ir == null) return 1;
+    if (ir == null) return false;
     // Use 0 is the called function, and value 1 is the caller's own function object.
     for (SSAAbstractInvokeInstruction call : ir.getCalls(site))
       for (int i = 1; i < call.getNumberOfUses(); i++) {
         int use = call.getUse(i);
-        if (use > 1 && ir.getSymbolTable().isParameter(use)) return 2;
+        if (use > 1 && ir.getSymbolTable().isParameter(use)) return true;
       }
-    return 1;
+    return false;
+  }
+
+  @Override
+  protected int getLength(CGNode caller, CallSiteReference site, IMethod target) {
+    if (!isProgramFunction(caller)) return callStringLength(caller) >= 2 ? 2 : 1;
+    // A function calling itself keeps one site: a second would unroll its recursion by one call,
+    // whose nodes merge again below it.
+    if (target.equals(caller.getMethod())) return 1;
+    return passesParameterOn(caller, site) ? 2 : 1;
   }
 }
