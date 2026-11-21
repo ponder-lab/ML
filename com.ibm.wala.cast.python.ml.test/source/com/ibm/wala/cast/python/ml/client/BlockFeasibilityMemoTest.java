@@ -1,7 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
@@ -36,7 +37,6 @@ public class BlockFeasibilityMemoTest extends TestPythonMLCallGraphShape {
       int dead = 0;
       for (CGNode node : cg) {
         IR ir = node.getIR();
-        if (ir == null) continue;
         BitSet walked = TensorGenerator.walkBlockFeasibility(builder, node);
         for (ISSABasicBlock block : ir.getControlFlowGraph())
           assertEquals(
@@ -45,20 +45,18 @@ public class BlockFeasibilityMemoTest extends TestPythonMLCallGraphShape {
         nodes++;
         dead += walked.cardinality();
       }
-      assertTrue("The fixture has no decidably dead block.", dead > 0);
+      assertNotEquals("The fixture has no decidably dead block.", 0, dead);
       assertEquals(nodes, TensorGenerator.BLOCK_FEASIBILITIES.get(builder).walks);
 
       for (CGNode node : cg) {
-        IR ir = node.getIR();
-        if (ir == null) continue;
-        for (ISSABasicBlock block : ir.getControlFlowGraph())
+        for (ISSABasicBlock block : node.getIR().getControlFlowGraph())
           TensorGenerator.computeBlockFeasibility(builder, node, block);
       }
       assertEquals(nodes, TensorGenerator.BLOCK_FEASIBILITIES.get(builder).walks);
     } finally {
       TensorGenerator.clearCaches(builder);
     }
-    assertTrue(!TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
+    assertFalse(TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
   }
 
   /**
@@ -78,7 +76,6 @@ public class BlockFeasibilityMemoTest extends TestPythonMLCallGraphShape {
       int dead = 0;
       for (CGNode node : cg) {
         IR ir = node.getIR();
-        if (ir == null) continue;
         BitSet walked = TensorGenerator.walkBlockFeasibility(builder, node);
         for (ISSABasicBlock block : ir.getControlFlowGraph())
           assertEquals(
@@ -86,8 +83,8 @@ public class BlockFeasibilityMemoTest extends TestPythonMLCallGraphShape {
               TensorGenerator.computeBlockFeasibility(builder, node, block));
         dead += walked.cardinality();
       }
-      assertTrue("The fixture has no decidably dead block.", dead > 0);
-      assertTrue(!TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
+      assertNotEquals("The fixture has no decidably dead block.", 0, dead);
+      assertFalse(TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
     } finally {
       TensorGenerator.PHI_FOLD_ON_STACK.get().remove(frame);
       TensorGenerator.clearCaches(builder);
