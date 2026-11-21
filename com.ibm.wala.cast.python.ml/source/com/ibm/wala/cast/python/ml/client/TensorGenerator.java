@@ -113,6 +113,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
@@ -4544,22 +4545,24 @@ public abstract class TensorGenerator implements Cloneable {
 
   /**
    * Decides a basic block's feasibility from the governing branches above it: the block is
-   * decidably dead when every normal predecessor either reaches it over an edge that folds to not
-   * taken (the wala/ML#746 comparison fold, per node, so a parameter bound to one string constant
-   * in this node's context decides an {@code if mode == "..."} arm) or is itself decidably dead.
-   * The entry block is live; a block on a cycle is undecidable and kept. Only normal predecessors
-   * are walked: a block reached over an exceptional edge alone has none and is kept, so a handler
-   * is never decided dead by the guards above the call that may throw into it.
+   * decidably dead when no path of normal edges that may be taken reaches it from a block that
+   * runs. The entry block runs, and so does a block with no normal predecessor: a block reached
+   * over an exceptional edge alone has none, so a handler is never decided dead by the guards above
+   * the call that may throw into it. An edge is never taken when its source ends with a branch that
+   * folds to the other successor (the wala/ML#746 comparison fold, per node, so a parameter bound
+   * to one string constant in this node's context decides an {@code if mode == "..."} arm).
    *
-   * <p>The verdict is memoized per builder by node and block number: the analysis's passes over
-   * every block of every node ask about each block several times, and each walk follows a path of
-   * predecessors back to the entry (wala/ML#1132). The verdict depends on the builder's final
-   * pointer analysis, the node, and the block, and on the shape reads of the rank and {@code len}
-   * folds the branch folds may make. Those reads are settled when the engine's passes ask, after
-   * resolution; a walk during which a fold declined on an interim read is not memoized, so its
-   * verdict is recomputed on the next ask. Only whole walks are memoized. A predecessor's verdict
-   * within a walk counts the blocks already on that walk as live, so it can differ from the
-   * predecessor's own verdict and is not reused.
+   * <p>A block of an arm that is never taken is dead wherever it is in the arm (<a
+   * href="https://github.com/wala/ML/issues/1316">wala/ML#1316</a>): a block after a branch inside
+   * the arm has joined, and a block of a loop inside the arm, are reached from the arm's own blocks
+   * alone. A loop's back edge keeps a block only when another edge has reached the loop.
+   *
+   * <p>The verdicts are memoized per builder by node: the analysis's passes over every block of
+   * every node ask about each block several times (wala/ML#1132), and one walk decides every block
+   * of a node. The verdicts depend on the builder's final pointer analysis, the node, and the shape
+   * reads of the rank and {@code len} folds the branch folds may make. Those reads are settled when
+   * the engine's passes ask, after resolution; a walk during which a fold declined on an interim
+   * read is not memoized, so the node's verdicts are recomputed on the next ask.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
    * @param node The {@link CGNode} whose IR contains the block.
@@ -4572,23 +4575,22 @@ public abstract class TensorGenerator implements Cloneable {
     // than a fresh walk would, so such a verdict is neither read from nor written to the memo.
     if (!PHI_FOLD_ON_STACK.get().isEmpty()) {
       noteGuardDecision();
-      return walkBlockFeasibility(builder, node, block);
+      return walkBlockFeasibility(builder, node).get(block.getNumber()) ? Boolean.FALSE : null;
     }
     BlockFeasibilities feasibilities =
         BLOCK_FEASIBILITIES.computeIfAbsent(builder, b -> new BlockFeasibilities());
     // The lock is held across the walk's shape reads. The engine's passes ask from one thread, so
-    // it guards the memo's maps only; passes asking in parallel would serialize their walks on it.
+    // it guards the memo's map only; passes asking in parallel would serialize their walks on it.
     synchronized (feasibilities) {
-      Map<Integer, Boolean> byBlock =
-          feasibilities.verdicts.computeIfAbsent(node, n -> HashMapFactory.make());
-      int number = block.getNumber();
-      if (byBlock.containsKey(number)) return byBlock.get(number);
-      int declinesBefore = interimGuardDeclines();
-      Boolean ret = walkBlockFeasibility(builder, node, block);
-      feasibilities.walks++;
-      // A fold declined on an interim read, so the verdict holds for this resolution only.
-      if (interimGuardDeclines() == declinesBefore) byBlock.put(number, ret);
-      return ret;
+      BitSet dead = feasibilities.deadBlocks.get(node);
+      if (dead == null) {
+        int declinesBefore = interimGuardDeclines();
+        dead = walkBlockFeasibility(builder, node);
+        feasibilities.walks++;
+        // A fold declined on an interim read, so the verdicts hold for this resolution only.
+        if (interimGuardDeclines() == declinesBefore) feasibilities.deadBlocks.put(node, dead);
+      }
+      return dead.get(block.getNumber()) ? Boolean.FALSE : null;
     }
   }
 
@@ -4598,8 +4600,8 @@ public abstract class TensorGenerator implements Cloneable {
    */
   static final class BlockFeasibilities {
 
-    /** Each node's verdicts by block number, {@code null} meaning kept. */
-    final Map<CGNode, Map<Integer, Boolean>> verdicts = HashMapFactory.make();
+    /** Each walked node's decidably dead blocks, by block number. */
+    final Map<CGNode, BitSet> deadBlocks = HashMapFactory.make();
 
     /** The number of walks {@link #computeBlockFeasibility} made. */
     int walks;
@@ -4613,75 +4615,39 @@ public abstract class TensorGenerator implements Cloneable {
       Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
-   * The walk behind {@link #computeBlockFeasibility}, unmemoized.
+   * The walk behind {@link #computeBlockFeasibility}, unmemoized: forward from the entry block and
+   * from each block with no normal predecessor, over every normal edge that does not fold to not
+   * taken. The blocks it does not reach are the decidably dead ones.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
-   * @param node The {@link CGNode} whose IR contains the block.
-   * @param block The block.
-   * @return {@link Boolean#FALSE} iff the block is decidably dead; {@code null} otherwise (kept).
+   * @param node The {@link CGNode} to walk, which has an IR.
+   * @return The numbers of the node's decidably dead blocks.
    */
-  static Boolean walkBlockFeasibility(
-      PropagationCallGraphBuilder builder, CGNode node, ISSABasicBlock block) {
-    IR ir = node.getIR();
-    Set<ISSABasicBlock> visited = HashSetFactory.make();
-    if (ir == null || block.isEntryBlock() || !visited.add(block)) return null;
-    SSACFG cfg = ir.getControlFlowGraph();
-
-    // The walk recurses once per predecessor on the path it follows, so a long run of blocks (a
-    // body of a few thousand sequential branches) exhausted the stack (wala/ML#981). An explicit
-    // stack visits the same blocks in the same order, marking each visited at the same point, so
-    // every answer is the recursive one's.
-    Deque<FeasibilityFrame> stack = new ArrayDeque<>();
-    stack.push(new FeasibilityFrame(block, cfg.getNormalPredecessors(block).iterator()));
-    Boolean returned = null; // The verdict of the frame just popped, for the frame below it.
-    boolean hasReturned = false;
-    while (!stack.isEmpty()) {
-      FeasibilityFrame frame = stack.peek();
-      if (hasReturned) {
-        hasReturned = false;
-        if (!Boolean.FALSE.equals(returned)) {
-          // The predecessor may run, over an edge that may be taken: not provably dead.
-          stack.pop();
-          returned = null;
-          hasReturned = true;
-          continue;
-        }
-        // The predecessor itself never runs: go on to the next one.
+  static BitSet walkBlockFeasibility(PropagationCallGraphBuilder builder, CGNode node) {
+    BitSet dead = new BitSet();
+    SSACFG cfg = node.getIR().getControlFlowGraph();
+    BitSet live = new BitSet();
+    // A worklist, not a recursion: a body of a few thousand sequential branches is a path of as
+    // many blocks (wala/ML#981).
+    Deque<ISSABasicBlock> work = new ArrayDeque<>();
+    for (ISSABasicBlock block : cfg)
+      if (block.isEntryBlock() || cfg.getNormalPredecessors(block).isEmpty()) {
+        live.set(block.getNumber());
+        work.push(block);
       }
-      boolean resolved = false;
-      while (frame.predecessors.hasNext()) {
-        ISSABasicBlock pred = frame.predecessors.next();
-        frame.anyPredecessor = true;
-        if (Boolean.FALSE.equals(decideEdgeFromBranchBlock(builder, node, cfg, pred, frame.block)))
-          continue; // The edge into this block is never taken.
-        if (pred.isEntryBlock() || !visited.add(pred)) {
-          // The entry, or a block already on this walk: kept, so a live way in.
-          stack.pop();
-          returned = null;
-          hasReturned = true;
-        } else stack.push(new FeasibilityFrame(pred, cfg.getNormalPredecessors(pred).iterator()));
-        resolved = true;
-        break;
-      }
-      if (!resolved) {
-        stack.pop();
-        returned = frame.anyPredecessor ? Boolean.FALSE : null;
-        hasReturned = true;
+    while (!work.isEmpty()) {
+      ISSABasicBlock block = work.pop();
+      for (ISSABasicBlock successor : cfg.getNormalSuccessors(block)) {
+        if (live.get(successor.getNumber())
+            || Boolean.FALSE.equals(
+                decideEdgeFromBranchBlock(builder, node, cfg, block, successor)))
+          continue; // Reached already, or over an edge that is never taken.
+        live.set(successor.getNumber());
+        work.push(successor);
       }
     }
-    return returned;
-  }
-
-  /** One block of {@link #computeBlockFeasibility}'s walk, with its predecessors still to read. */
-  private static final class FeasibilityFrame {
-    final ISSABasicBlock block;
-    final Iterator<ISSABasicBlock> predecessors;
-    boolean anyPredecessor;
-
-    FeasibilityFrame(ISSABasicBlock block, Iterator<ISSABasicBlock> predecessors) {
-      this.block = block;
-      this.predecessors = predecessors;
-    }
+    for (ISSABasicBlock block : cfg) if (!live.get(block.getNumber())) dead.set(block.getNumber());
+    return dead;
   }
 
   /**
@@ -5035,7 +5001,7 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /** The phi folds on this thread's stack, breaking the guard-evaluates-its-own-phi cycle. */
-  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
+  static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
       ThreadLocal.withInitial(HashSetFactory::make);
 
   private static Object resolveComparableConstant(
