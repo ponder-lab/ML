@@ -305,9 +305,9 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
   }
 
   /**
-   * A key of a dict the map function builds by calling {@code dict}, whose keys the analysis does
-   * not read: the key's shape is its own {@code padded_shapes} entry, not the union of every entry,
-   * and its dtype, which the built dict would give, is unknown.
+   * A key of a dict the map function builds by calling {@code dict}: the key's shape is its own
+   * {@code padded_shapes} entry, not the union of every entry, and its dtype is the one the built
+   * dict holds under the key (wala/ML#1307).
    */
   @Test
   public void testLoadingMapBuiltDict()
@@ -321,9 +321,9 @@ public class TestDatasetGeneratorDict extends AbstractTensorTest {
             2,
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(new NumericDim(2), DynamicDim.INSTANCE, new NumericDim(1))),
+                    FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE, new NumericDim(1))),
                 new TensorType(
-                    UNKNOWN,
+                    FLOAT_32,
                     asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(1))))));
   }
 

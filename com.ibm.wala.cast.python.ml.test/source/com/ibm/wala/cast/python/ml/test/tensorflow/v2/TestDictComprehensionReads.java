@@ -203,7 +203,23 @@ public class TestDictComprehensionReads extends AbstractTensorTest {
   }
 
   /**
-   * A source with no known component at the key leaves nothing to bind, so the read falls back.
+   * A source built by a call of {@code dict} from zipped names and values holds the values under
+   * the names, so the read is the sliced value (wala/ML#1307).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testZippedKeys()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "zipped_keys_sink", 1, 1, Map.of(2, Set.of(AUDIOS_SLICED)));
+  }
+
+  /**
+   * A source whose keys are computed at run time has no known component at the key, which leaves
+   * nothing to bind, so the read falls back.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

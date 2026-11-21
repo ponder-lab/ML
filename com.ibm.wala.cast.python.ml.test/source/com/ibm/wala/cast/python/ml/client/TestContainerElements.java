@@ -19,6 +19,8 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,6 +58,9 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
 
   /** The fixture of dicts keyed by floats, bools, {@code None} and an unresolved key. */
   private static final String DICT_KEYS = "tf2_test_container_elements_dict_keys.py";
+
+  /** The fixture of a dict built by a call of {@code dict}. */
+  private static final String DICT_CALL = "tf2_test_container_elements_dict_call.py";
 
   /** The fixture of sets grown by {@code add}, {@code |=} and {@code update}. */
   private static final String SETS = "tf2_test_container_elements_sets.py";
@@ -780,6 +785,43 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
   @Test
   public void testElementTypesOfTuple() {
     assertEquals(Set.of(F32_2_3, I32_4), elementTypes(FILE, elements("sink_tuple")));
+  }
+
+  /**
+   * A dict built by a call of {@code dict} is the one container its value holds, with the call's
+   * values as its elements (wala/ML#1307).
+   */
+  @Test
+  public void testDictCall() {
+    ContainerElements elements = elements(DICT_CALL, "sink_dict_call");
+    assertEquals(OptionalInt.empty(), elements.getArity());
+    assertEquals(2, elements.getAllElements().size());
+    assertEquals(Set.of(F32_2_3, I32_4), elementTypes(DICT_CALL, elements));
+  }
+
+  /**
+   * The builtin a call of {@code dict} reaches allocates nothing and returns no value: the call's
+   * dictionary is supplied at the call (wala/ML#1307).
+   */
+  @Test
+  public void testDictCallBuiltinReturnsNoValue() {
+    List<CGNode> nodes =
+        builder(DICT_CALL).getCallGraph().stream()
+            .filter(
+                node ->
+                    node.getMethod()
+                        .getDeclaringClass()
+                        .getName()
+                        .toString()
+                        .equals("Lwala/builtin/dict"))
+            .toList();
+    assertFalse("Expecting the builtin's node.", nodes.isEmpty());
+    // The body is one instruction, a return of no value.
+    for (CGNode node : nodes) {
+      SSAInstruction[] body = node.getIR().getInstructions();
+      assertEquals(1, body.length);
+      assertTrue(body[0].toString(), ((SSAReturnInstruction) body[0]).returnsVoid());
+    }
   }
 
   /** A dict keyed by a float: its tensor value is an element. */

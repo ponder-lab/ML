@@ -59,7 +59,8 @@ public abstract class AbstractParser {
         "chr",
         "complex",
         "del",
-        "dict",
+        // No `dict`: it is a builtin with a summary in `BuiltinFunctions`, as `isinstance` is below
+        // (wala/ML#1307).
         "dir",
         "divmod",
         "eval",

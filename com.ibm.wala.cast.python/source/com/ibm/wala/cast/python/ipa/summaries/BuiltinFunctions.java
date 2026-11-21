@@ -584,7 +584,7 @@ public class BuiltinFunctions {
       this.cha = cha;
       this.ref = builtinFunction(name);
       this.builtinCode =
-          returnedType == null || name.equals("slice")
+          returnedType == null || name.equals("slice") || name.equals("dict")
               ? noopSummary(this, name)
               // `range` must return an iterable (non-empty) container so that loops and
               // comprehensions over it can recover element keys. See wala/ML#599.
@@ -820,6 +820,10 @@ public class BuiltinFunctions {
     // as before, except that a key of a configured element type (a tensor) becomes a
     // fresh allocation of that type at the call, so the slice has an allocation of its own.
     builtinFunctions.put("slice", Either.forLeft(TypeReference.Void));
+    // https://docs.python.org/3/library/stdtypes.html#dict
+    // The body returns nothing; the builder supplies the dictionary at the call site
+    // (`processDictResult`), allocated there and holding the call's values (wala/ML#1307).
+    builtinFunctions.put("dict", Either.forLeft(TypeReference.Void));
     builtinFunctions.put("__delete__", Either.forRight(2));
     // https://docs.python.org/3/library/functions.html#print
     builtinFunctions.put("print", Either.forLeft(TypeReference.Void));
