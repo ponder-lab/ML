@@ -777,6 +777,14 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(NpArange::new, NpArange::new);
     if (isType(type, NumpyTypes.PAD.getDeclaringClass()))
       return anchor.makeGenerator(NpPad::new, NpPad::new);
+    // `np.expand_dims`, `np.squeeze` and `np.clip` (wala/ML#1308): each allocates its own array,
+    // so a tensor made of one delegates here as a seeded result does.
+    if (isType(type, NumpyTypes.NP_EXPAND_DIMS.getDeclaringClass()))
+      return anchor.makeGenerator(NpExpandDims::new, NpExpandDims::new);
+    if (isType(type, NumpyTypes.NP_SQUEEZE.getDeclaringClass()))
+      return anchor.makeGenerator(NpSqueeze::new, NpSqueeze::new);
+    if (isType(type, NumpyTypes.NP_CLIP.getDeclaringClass()))
+      return anchor.makeGenerator(NpClip::new, NpClip::new);
     // `np.cumsum` (wala/ML#954): the running sum's shape and the promoted dtype of its input.
     if (isType(type, NumpyTypes.CUMSUM.getDeclaringClass()))
       return anchor.makeGenerator(NpCumsum::new, NpCumsum::new);
