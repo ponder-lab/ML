@@ -9,6 +9,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
+import com.ibm.wala.util.collections.Pair;
 import java.util.BitSet;
 import org.junit.Test;
 
@@ -58,5 +59,38 @@ public class BlockFeasibilityMemoTest extends TestPythonMLCallGraphShape {
       TensorGenerator.clearCaches(builder);
     }
     assertTrue(!TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
+  }
+
+  /**
+   * Under a phi fold, every block's verdict is the walk's, and the memo is neither read nor
+   * written, so no entry exists for the builder afterwards. The frame on the stack is of no phi,
+   * since no value number is 0, so the walk's folds answer as they do outside a fold.
+   */
+  @Test
+  public void testVerdictsUnderAPhiFoldBypassTheMemo() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        (PythonTensorAnalysisEngine) makeEngine("tf2_test_mode_dispatch.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    Pair<CGNode, Integer> frame = Pair.make(cg.getFakeRootNode(), 0);
+    TensorGenerator.PHI_FOLD_ON_STACK.get().add(frame);
+    try {
+      int dead = 0;
+      for (CGNode node : cg) {
+        IR ir = node.getIR();
+        if (ir == null) continue;
+        BitSet walked = TensorGenerator.walkBlockFeasibility(builder, node);
+        for (ISSABasicBlock block : ir.getControlFlowGraph())
+          assertEquals(
+              walked.get(block.getNumber()) ? Boolean.FALSE : null,
+              TensorGenerator.computeBlockFeasibility(builder, node, block));
+        dead += walked.cardinality();
+      }
+      assertTrue("The fixture has no decidably dead block.", dead > 0);
+      assertTrue(!TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
+    } finally {
+      TensorGenerator.PHI_FOLD_ON_STACK.get().remove(frame);
+      TensorGenerator.clearCaches(builder);
+    }
   }
 }

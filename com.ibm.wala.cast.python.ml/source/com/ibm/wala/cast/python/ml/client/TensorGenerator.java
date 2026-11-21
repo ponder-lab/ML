@@ -5001,7 +5001,7 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /** The phi folds on this thread's stack, breaking the guard-evaluates-its-own-phi cycle. */
-  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
+  static final ThreadLocal<Set<Pair<CGNode, Integer>>> PHI_FOLD_ON_STACK =
       ThreadLocal.withInitial(HashSetFactory::make);
 
   private static Object resolveComparableConstant(
