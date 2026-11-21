@@ -268,14 +268,11 @@ public class TestSubscriptGetitem extends AbstractTensorTest {
       if (!type.equals("Lscript " + FILE + "/Noted/call")) continue;
       for (int parameter : node.getIR().getParameterValueNumbers()) {
         String[] names = node.getIR().getLocalNames(0, parameter);
-        if (names == null || !Arrays.asList(names).contains("training")) continue;
+        if (!Arrays.asList(names).contains("training")) continue;
         PointerKey key =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, parameter);
         for (InstanceKey value : builder.getPointerAnalysis().getPointsToSet(key))
-          values.add(
-              value instanceof ConstantKey<?> constant && constant.getValue() != null
-                  ? constant.getValue()
-                  : value.toString());
+          values.add(((ConstantKey<?>) value).getValue());
       }
     }
     assertEquals(Set.of(Boolean.TRUE), values);
