@@ -805,18 +805,32 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testDictCallBuiltinReturnsNoValue() {
+    assertBuiltinReturnsNoValue(DICT_CALL, "Lwala/builtin/dict");
+  }
+
+  /**
+   * The builtin a slice reaches allocates nothing and returns no value: the slice's result is
+   * supplied at the call (wala/ML#916).
+   */
+  @Test
+  public void testSliceBuiltinReturnsNoValue() {
+    assertBuiltinReturnsNoValue(MUTATORS, "Lwala/builtin/slice");
+  }
+
+  /**
+   * Asserts that a script's call graph has a builtin's node and that each such node's body is one
+   * instruction, a return of no value.
+   *
+   * @param file The script.
+   * @param builtin The name of the builtin's class.
+   */
+  private static void assertBuiltinReturnsNoValue(String file, String builtin) {
     List<CGNode> nodes =
-        builder(DICT_CALL).getCallGraph().stream()
+        builder(file).getCallGraph().stream()
             .filter(
-                node ->
-                    node.getMethod()
-                        .getDeclaringClass()
-                        .getName()
-                        .toString()
-                        .equals("Lwala/builtin/dict"))
+                node -> node.getMethod().getDeclaringClass().getName().toString().equals(builtin))
             .toList();
     assertFalse("Expecting the builtin's node.", nodes.isEmpty());
-    // The body is one instruction, a return of no value.
     for (CGNode node : nodes) {
       SSAInstruction[] body = node.getIR().getInstructions();
       assertEquals(1, body.length);
