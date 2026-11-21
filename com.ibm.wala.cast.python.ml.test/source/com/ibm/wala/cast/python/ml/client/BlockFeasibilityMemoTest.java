@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.test.TestPythonMLCallGraphShape;
@@ -87,6 +88,40 @@ public class BlockFeasibilityMemoTest extends TestPythonMLCallGraphShape {
       assertFalse(TensorGenerator.BLOCK_FEASIBILITIES.containsKey(builder));
     } finally {
       TensorGenerator.PHI_FOLD_ON_STACK.get().remove(frame);
+      TensorGenerator.clearCaches(builder);
+    }
+  }
+
+  /**
+   * A walk during which a fold declined on an interim read is not memoized, so the next ask about
+   * the node walks it again. With a resolver installed and no query resolved, the first walk of one
+   * of the fixture's nodes has such a decline, and the walk that the second ask makes has none, so
+   * it is memoized.
+   */
+  @Test
+  public void testAWalkWithAnInterimDeclineIsNotMemoized() throws Exception {
+    PythonTensorAnalysisEngine engine =
+        (PythonTensorAnalysisEngine) makeEngine("tf2_test_reshape_round_trip.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph cg = builder.makeCallGraph(builder.getOptions());
+    WorklistTypeResolver.install(builder);
+    try {
+      int declined = 0;
+      for (CGNode node : cg) {
+        ISSABasicBlock entry = node.getIR().getControlFlowGraph().entry();
+        TensorGenerator.computeBlockFeasibility(builder, node, entry);
+        TensorGenerator.BlockFeasibilities feasibilities =
+            TensorGenerator.BLOCK_FEASIBILITIES.get(builder);
+        if (feasibilities.deadBlocks.containsKey(node)) continue;
+        declined++;
+        int walks = feasibilities.walks;
+        TensorGenerator.computeBlockFeasibility(builder, node, entry);
+        assertEquals(walks + 1, feasibilities.walks);
+        assertNotNull(feasibilities.deadBlocks.get(node));
+      }
+      assertNotEquals("The fixture has no walk with an interim decline.", 0, declined);
+    } finally {
+      WorklistTypeResolver.uninstall(builder, false);
       TensorGenerator.clearCaches(builder);
     }
   }
