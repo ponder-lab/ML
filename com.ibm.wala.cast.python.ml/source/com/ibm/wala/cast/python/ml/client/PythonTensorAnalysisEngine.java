@@ -3471,8 +3471,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * Adds {@link NoneType#INSTANCE} to each parameter of the analyzed program that a live call
    * passes {@code None}, when the same parameter of the same function receives tensors in some
    * context (<a href="https://github.com/wala/ML/issues/1040">wala/ML#1040</a>). A call in a block
-   * that is not decidably dead (as for wala/ML#968) passes {@code None} to a parameter when the
-   * argument it binds there is:
+   * that is not decidably dead (as for wala/ML#968), of a node that runs (as for wala/ML#1315),
+   * passes {@code None} to a parameter when the argument it binds there is:
    *
    * <ul>
    *   <li>the {@code None} constant, written at the call;
@@ -3494,12 +3494,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @param tt The solved analysis.
    * @param flowVarsByKey The dataflow variables by pointer key.
    * @param heapModel The heap model.
+   * @param deadNodes The call-graph nodes that never run, whose calls pass nothing.
    */
   private static void addNoneMembers(
       PropagationCallGraphBuilder builder,
       TensorTypeAnalysis tt,
       Map<PointerKey, PointsToSetVariable> flowVarsByKey,
-      HeapModel heapModel) {
+      HeapModel heapModel,
+      Set<CGNode> deadNodes) {
     CallGraph cg = builder.getCallGraph();
     Set<Pair<InstanceKey, String>> noneStores = noneStores(builder);
     // The dominators of each IR the guard reads, for this pass only.
@@ -3509,7 +3511,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       boolean changed = false;
       for (CGNode node : cg) {
         IR ir = node.getIR();
-        if (ir == null || !isProgramCode(node)) continue;
+        if (ir == null || !isProgramCode(node) || deadNodes.contains(node)) continue;
         for (ISSABasicBlock block : ir.getControlFlowGraph()) {
           if (Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block)))
             continue;
@@ -4368,6 +4370,74 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean isTensorFlowSummary(CGNode node) {
     String name = node.getMethod().getDeclaringClass().getName().toString();
     return name.startsWith("Ltensorflow/") || name.startsWith("L$tensorflow/");
+  }
+
+  /**
+   * The call-graph nodes that never run: those the root reaches only through call sites in
+   * decidably dead blocks (<a href="https://github.com/wala/ML/issues/1315">wala/ML#1315</a>). A
+   * function has a node for each context it is called in. Where a guard is false in one context of
+   * a caller, the node that only the dead arm calls stands for a call that never happens, and so
+   * does each node that only such a node calls. The pointer analysis still builds those nodes, and
+   * a value that the dead arm alone would supply has an empty points-to set in them.
+   *
+   * <p>A node runs when it has no caller, or when a node that runs reaches it: from a call site in
+   * a block that is not decidably dead, or by an edge that none of the caller's invoke instructions
+   * makes, such as the call that a subscript makes of {@code __getitem__}.
+   *
+   * @param builder The builder.
+   * @return The nodes that never run.
+   */
+  private static Set<CGNode> deadNodes(PropagationCallGraphBuilder builder) {
+    CallGraph cg = builder.getCallGraph();
+    Set<CGNode> live = HashSetFactory.make();
+    Deque<CGNode> work = new ArrayDeque<>();
+    for (CGNode node : cg)
+      if (cg.getPredNodeCount(node) == 0) {
+        live.add(node);
+        work.push(node);
+      }
+    while (!work.isEmpty()) {
+      CGNode node = work.pop();
+      Set<CGNode> unreached = targetsOfDeadSitesAlone(builder, node);
+      for (Iterator<CGNode> it = cg.getSuccNodes(node); it.hasNext(); ) {
+        CGNode successor = it.next();
+        if (!unreached.contains(successor) && live.add(successor)) work.push(successor);
+      }
+    }
+    Set<CGNode> dead = HashSetFactory.make();
+    for (CGNode node : cg) if (!live.contains(node)) dead.add(node);
+    return dead;
+  }
+
+  /**
+   * The callees that a node calls from decidably dead blocks and from no other block.
+   *
+   * @param builder The builder.
+   * @param node The caller.
+   * @return The callees that the node does not reach when it runs, empty if it has no IR.
+   */
+  private static Set<CGNode> targetsOfDeadSitesAlone(
+      PropagationCallGraphBuilder builder, CGNode node) {
+    IR ir = node.getIR();
+    if (ir == null) return Collections.emptySet();
+    CallGraph cg = builder.getCallGraph();
+    Set<CGNode> targets = HashSetFactory.make();
+    List<ISSABasicBlock> liveBlocks = new ArrayList<>();
+    for (ISSABasicBlock block : ir.getControlFlowGraph()) {
+      if (!Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block))) {
+        liveBlocks.add(block);
+        continue;
+      }
+      for (SSAInstruction inst : block)
+        if (inst instanceof SSAAbstractInvokeInstruction call)
+          targets.addAll(cg.getPossibleTargets(node, call.getCallSite()));
+    }
+    if (targets.isEmpty()) return targets;
+    for (ISSABasicBlock block : liveBlocks)
+      for (SSAInstruction inst : block)
+        if (inst instanceof SSAAbstractInvokeInstruction call)
+          targets.removeAll(cg.getPossibleTargets(node, call.getCallSite()));
+    return targets;
   }
 
   /**
@@ -5264,15 +5334,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // edges. The dataflow graph holds one edge per variable pair, so a binding a LIVE site in the
       // same node also induces (`if mode == "a": helper(x)` above an unconditional `helper(x)`)
       // must stay: only the dead site's own positional bindings that no live site shares go.
+      // Every call site of a node that never runs is dead, whatever its block (wala/ML#1315).
+      Set<CGNode> deadNodes = deadNodes(builder);
+      LOGGER.fine(() -> "Call-graph nodes that never run: " + deadNodes.size());
       int callSuppressions = 0;
       for (CGNode node : builder.getCallGraph()) {
         IR ir = node.getIR();
         if (ir == null) continue;
         Set<Pair<PointsToSetVariable, PointsToSetVariable>> liveBindings = HashSetFactory.make();
         List<SSAAbstractInvokeInstruction> deadCalls = new ArrayList<>();
+        boolean deadNode = deadNodes.contains(node);
         for (ISSABasicBlock block : ir.getControlFlowGraph()) {
           boolean dead =
-              Boolean.FALSE.equals(TensorGenerator.computeBlockFeasibility(builder, node, block));
+              deadNode
+                  || Boolean.FALSE.equals(
+                      TensorGenerator.computeBlockFeasibility(builder, node, block));
           for (SSAInstruction inst : block) {
             if (!(inst instanceof SSAAbstractInvokeInstruction call)) continue;
             if (dead) deadCalls.add(call);
@@ -5356,7 +5432,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       // A parameter's types are all the parameter receives only when a None that reaches it is
       // among them (wala/ML#1040).
-      addNoneMembers(builder, tt, flowVarsByKey, heapModel);
+      addNoneMembers(builder, tt, flowVarsByKey, heapModel, deadNodes);
       for (PointsToSetVariable fed : typeFeeds.keySet())
         LOGGER.fine(
             () ->
