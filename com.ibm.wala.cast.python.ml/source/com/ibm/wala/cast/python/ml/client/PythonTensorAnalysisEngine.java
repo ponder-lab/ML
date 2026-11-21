@@ -4391,7 +4391,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     CallGraph cg = builder.getCallGraph();
     Set<CGNode> live = HashSetFactory.make();
     Deque<CGNode> work = new ArrayDeque<>();
-    for (CGNode node : cg) if (cg.getPredNodeCount(node) == 0 && live.add(node)) work.push(node);
+    for (CGNode node : cg)
+      if (cg.getPredNodeCount(node) == 0) {
+        live.add(node);
+        work.push(node);
+      }
     while (!work.isEmpty()) {
       CGNode node = work.pop();
       Set<CGNode> unreached = targetsOfDeadSitesAlone(builder, node);
