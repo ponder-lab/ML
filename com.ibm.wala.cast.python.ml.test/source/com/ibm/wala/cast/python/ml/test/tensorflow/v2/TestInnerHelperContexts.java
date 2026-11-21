@@ -10,8 +10,9 @@ import org.junit.Test;
 
 /**
  * Tests a helper called inside another helper, which is called once with features and once with an
- * index (wala/ML#1305). The inner helper has one node for every call of the outer one, so what it
- * computes for the features joins what it computes for the index.
+ * index (wala/ML#1305). The outer helper passes its parameter on, so the inner one has a node for
+ * each call of the outer one, and what it computes for the features stays apart from what it
+ * computes for the index.
  */
 public class TestInnerHelperContexts extends AbstractTensorTest {
 
@@ -23,44 +24,16 @@ public class TestInnerHelperContexts extends AbstractTensorTest {
   /** The features as they run. */
   private static final TensorType FEATURES = TensorType.of(FLOAT_32, 5, 4);
 
-  /**
-   * What a value converted by {@code convert} reads: each call's shape with each call's dtype, and
-   * with an unknown dtype besides.
-   */
-  private static final Set<TensorType> CONVERTED_JOIN =
-      Set.of(
-          INDEX,
-          TensorType.of(FLOAT_32, 5),
-          TensorType.of(UNKNOWN, 5),
-          FEATURES,
-          TensorType.of(INT_32, 5, 4),
-          TensorType.of(UNKNOWN, 5, 4));
-
-  /**
-   * What a value copied by {@code copy_through} reads: each call's shape with each call's dtype.
-   */
-  private static final Set<TensorType> COPIED_JOIN =
-      Set.of(INDEX, TensorType.of(FLOAT_32, 5), FEATURES, TensorType.of(INT_32, 5, 4));
-
-  /**
-   * The index converted through the helper between: it reads the features' types beside its own.
-   *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 is fixed.
-   */
+  /** The index converted through the helper between reads its own type alone. */
   @Test
   public void testIndex() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_index", 1, 1, Map.of(2, CONVERTED_JOIN));
+    test(FILE, "consume_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 
-  /**
-   * The features converted through the helper between: they read the index's types beside their
-   * own.
-   *
-   * <p>TODO: Reads {@link #FEATURES} alone once wala/ML#1305 is fixed.
-   */
+  /** The features converted through the helper between read their own type alone. */
   @Test
   public void testFeatures() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_features", 1, 1, Map.of(2, CONVERTED_JOIN));
+    test(FILE, "consume_features", 1, 1, Map.of(2, Set.of(FEATURES)));
   }
 
   /**
@@ -72,54 +45,36 @@ public class TestInnerHelperContexts extends AbstractTensorTest {
     test(FILE, "consume_direct_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 
-  /**
-   * {@link #testIndex} with a targeted depth of 3, which does not lengthen the string of a program
-   * function's callee.
-   *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 is fixed.
-   */
+  /** {@link #testIndex} with a targeted depth of 3. */
   @Test
   public void testIndexDepth3() throws ClassHierarchyException, CancelException, IOException {
-    test(3, FILE, "consume_index", 1, 1, Map.of(2, CONVERTED_JOIN));
+    test(3, FILE, "consume_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 
-  /**
-   * {@link #testIndex} with a targeted depth of 4.
-   *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 is fixed.
-   */
+  /** {@link #testIndex} with a targeted depth of 4. */
   @Test
   public void testIndexDepth4() throws ClassHierarchyException, CancelException, IOException {
-    test(4, FILE, "consume_index", 1, 1, Map.of(2, CONVERTED_JOIN));
+    test(4, FILE, "consume_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 
   /**
-   * The issue's example: the index copied by {@code np.array} through the helper between.
-   *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 is fixed.
+   * The issue's example: the index copied by {@code np.array} through the helper between reads its
+   * own type alone.
    */
   @Test
   public void testCopiedIndex() throws ClassHierarchyException, CancelException, IOException {
-    test(FILE, "consume_copied_index", 1, 1, Map.of(2, COPIED_JOIN));
+    test(FILE, "consume_copied_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 
-  /**
-   * {@link #testCopiedIndex} with a targeted depth of 3.
-   *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 is fixed.
-   */
+  /** {@link #testCopiedIndex} with a targeted depth of 3. */
   @Test
   public void testCopiedIndexDepth3() throws ClassHierarchyException, CancelException, IOException {
-    test(3, FILE, "consume_copied_index", 1, 1, Map.of(2, COPIED_JOIN));
+    test(3, FILE, "consume_copied_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 
-  /**
-   * {@link #testCopiedIndex} with a targeted depth of 4.
-   *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 is fixed.
-   */
+  /** {@link #testCopiedIndex} with a targeted depth of 4. */
   @Test
   public void testCopiedIndexDepth4() throws ClassHierarchyException, CancelException, IOException {
-    test(4, FILE, "consume_copied_index", 1, 1, Map.of(2, COPIED_JOIN));
+    test(4, FILE, "consume_copied_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
 }
