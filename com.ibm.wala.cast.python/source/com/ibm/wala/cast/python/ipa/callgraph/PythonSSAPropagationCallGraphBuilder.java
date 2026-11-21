@@ -37,10 +37,12 @@ import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ipa.summaries.SummaryExactPositions;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
@@ -49,8 +51,10 @@ import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.ContainerMutations;
+import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -2997,6 +3001,32 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Calls the {@code __getitem__} of each receiver of a subscript whose class gives its instances
+     * one (wala/ML#1306); see {@link SubscriptCallOperator}. The read itself stays, so a receiver
+     * with no such method is read as before.
+     *
+     * @param read The property read.
+     */
+    private void processSubscriptCall(AstPropertyRead read) {
+      // Every property read of Python IR is a PythonPropertyRead, and each defines a value.
+      if (!((PythonPropertyRead) read).isSubscript()) return;
+      SymbolTable symtab = ir.getSymbolTable();
+      int object = read.getObjectRef();
+      PointerKey key = getPointerKeyForLocal(object);
+      // A constant, or an object this method allocates, is no instance that a constructor made.
+      if (contentsAreInvariant(symtab, du, object)) return;
+      int member = read.getMemberRef();
+      InstanceKey[] constantMember =
+          contentsAreInvariant(symtab, du, member)
+              ? getInvariantContents(symtab, du, node, member)
+              : null;
+      system.newSideEffect(
+          getBuilder()
+          .new SubscriptCallOperator(node, read.iIndex(), read.getDef(), member, constantMember),
+          key);
+    }
+
+    /**
      * Gives a read of an attribute {@link #descriptorAttributes} names the description of the
      * structure each receiver holds (wala/ML#1280); see {@link DescriptorAttribute}.
      *
@@ -3206,6 +3236,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       processElementRead(instruction);
       processAttributeRead(instruction);
       processDescriptorRead(instruction);
+      processSubscriptCall(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
@@ -6623,6 +6654,174 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public String toString() {
       return "element mirror at " + pc + " into " + target + " at " + path;
+    }
+  }
+
+  /** The name of the method a subscript of an instance calls. */
+  private static final String SUBSCRIPT_METHOD_NAME = "__getitem__";
+
+  /** The methods already made by {@link #subscriptCall}, by the calling method and the read. */
+  private final Map<Pair<IMethod, Integer>, IMethod> subscriptCalls = HashMapFactory.make();
+
+  /**
+   * The constructors already scanned by {@link #holdsSubscriptMethod}, each with whether it gives
+   * its instance a {@code __getitem__}.
+   */
+  private final Map<IMethod, Boolean> subscriptMethodHolders = HashMapFactory.make();
+
+  /**
+   * The method that stands for the call a subscript makes (wala/ML#1306): its second parameter is
+   * the subscripted instance and its third the key, and it calls the instance's {@code __getitem__}
+   * with the key and returns what the call returns. The call is an invoke instruction of the
+   * method's own body, so it is resolved, and given its context, as a call the program writes is.
+   *
+   * @param caller The method that holds the subscript.
+   * @param pc The index of the subscript's read in the method.
+   * @return The method, one for each read.
+   */
+  private IMethod subscriptCall(IMethod caller, int pc) {
+    return subscriptCalls.computeIfAbsent(
+        Pair.make(caller, pc),
+        k -> {
+          MethodReference ref =
+              MethodReference.findOrCreate(
+                  PythonTypes.CodeBody,
+                  Atom.findOrCreateUnicodeAtom(
+                      SUBSCRIPT_METHOD_NAME + "@" + pc + " of " + caller.getSignature()),
+                  AstMethodReference.fnDesc);
+          PythonSummary body = new PythonSummary(ref, 3);
+          int method = 4;
+          int result = 5;
+          int exception = 6;
+          body.addStatement(
+              PythonLanguage.Python.instructionFactory()
+                  .GetInstruction(
+                      0,
+                      method,
+                      2,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root,
+                          Atom.findOrCreateUnicodeAtom(SUBSCRIPT_METHOD_NAME),
+                          PythonTypes.Root)));
+          @SuppressWarnings({"unchecked", "rawtypes"})
+          Pair<String, Integer>[] keywords = new Pair[0];
+          body.addStatement(
+              new PythonInvokeInstruction(
+                  1,
+                  result,
+                  exception,
+                  new DynamicCallSiteReference(PythonTypes.CodeBody, 1),
+                  new int[] {method, 3},
+                  keywords));
+          body.addStatement(
+              PythonLanguage.Python.instructionFactory().ReturnInstruction(2, result, false));
+          return new PythonSummarizedFunction(
+              ref, body, getClassHierarchy().lookupClass(PythonTypes.CodeBody));
+        });
+  }
+
+  /**
+   * Whether an object was allocated by a constructor that gives its instance a {@code __getitem__}.
+   * A constructor gives its instance each method its class declares or inherits, and the other
+   * objects it allocates are the methods themselves, which no program subscripts.
+   *
+   * @param instance The object.
+   * @return {@code true} iff a constructor that stores a {@code __getitem__} allocated it.
+   */
+  private boolean holdsSubscriptMethod(InstanceKey instance) {
+    AllocationSiteInNode site =
+        com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode(instance);
+    if (site == null || !(site.getNode().getMethod() instanceof PythonConstructorFunction))
+      return false;
+    return subscriptMethodHolders.computeIfAbsent(
+        site.getNode().getMethod(),
+        constructor ->
+            Arrays.stream(site.getNode().getIR().getInstructions())
+                .anyMatch(
+                    s ->
+                        s instanceof SSAPutInstruction put
+                            && put.getDeclaredField()
+                                .getName()
+                                .toString()
+                                .equals(SUBSCRIPT_METHOD_NAME)));
+  }
+
+  /**
+   * Calls the {@code __getitem__} of each receiver of a subscript that holds one (wala/ML#1306),
+   * through the read's {@link #subscriptCall} method. The method's node has the context of the node
+   * that holds the subscript, so there is one for each node that reads, and the edge to it is at a
+   * call site of the read's own index, where the caller has no invoke instruction. The receiver and
+   * the key are bound to the method's parameters and its returned value to the read's result. A
+   * receiver that holds no {@code __getitem__} adds nothing. Equal for the same read, so the
+   * propagation system keeps one per read.
+   */
+  public final class SubscriptCallOperator extends UnaryOperator<PointsToSetVariable> {
+    private final CGNode node;
+    private final int pc;
+    private final int result;
+    private final int member;
+    private final InstanceKey[] constantMember;
+
+    private SubscriptCallOperator(
+        CGNode node, int pc, int result, int member, InstanceKey[] constantMember) {
+      this.node = node;
+      this.pc = pc;
+      this.result = result;
+      this.member = member;
+      this.constantMember = constantMember;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> call(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Calls a receiver's {@code __getitem__}, if it holds one.
+     *
+     * @param receiver A key the read's receiver may be.
+     */
+    private void call(InstanceKey receiver) {
+      if (!holdsSubscriptMethod(receiver)) return;
+      CGNode callee;
+      try {
+        callee =
+            getCallGraph().findOrCreateNode(subscriptCall(node.getMethod(), pc), node.getContext());
+      } catch (CancelException e) {
+        throw new CancelRuntimeException(e);
+      }
+      node.addTarget(new DynamicCallSiteReference(PythonTypes.CodeBody, pc), callee);
+      // A node that has been visited is skipped when the discovered nodes are next visited.
+      markDiscovered(callee);
+      getSystem().newConstraint(getPointerKeyForLocal(callee, 2), receiver);
+      PointerKey key = getPointerKeyForLocal(callee, 3);
+      if (constantMember != null)
+        for (InstanceKey constant : constantMember) getSystem().newConstraint(key, constant);
+      else getSystem().newConstraint(key, assignOperator, getPointerKeyForLocal(node, member));
+      getSystem()
+          .newConstraint(
+              getPointerKeyForLocal(node, result),
+              assignOperator,
+              getPointerKeyForReturnValue(callee));
+      getSystem()
+          .newConstraint(
+              getTrainingContextKey(callee), assignOperator, getTrainingContextKey(node));
+    }
+
+    @Override
+    public int hashCode() {
+      return node.hashCode() * 31 + pc;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof SubscriptCallOperator other && node.equals(other.node) && pc == other.pc;
+    }
+
+    @Override
+    public String toString() {
+      return "subscript call at " + pc + " in " + node;
     }
   }
 
