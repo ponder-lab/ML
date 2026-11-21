@@ -367,6 +367,33 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String NP_TRANSPOSE_SIGNATURE = "np.transpose()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.expand_dims.html (wala/ML#1308). */
+  public static final MethodReference NP_EXPAND_DIMS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/expand_dims")),
+          AstMethodReference.fnSelector);
+
+  private static final String NP_EXPAND_DIMS_SIGNATURE = "np.expand_dims()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.squeeze.html (wala/ML#1308). */
+  public static final MethodReference NP_SQUEEZE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/squeeze")),
+          AstMethodReference.fnSelector);
+
+  private static final String NP_SQUEEZE_SIGNATURE = "np.squeeze()";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.clip.html (wala/ML#1308). */
+  public static final MethodReference NP_CLIP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/clip")),
+          AstMethodReference.fnSelector);
+
+  private static final String NP_CLIP_SIGNATURE = "np.clip()";
+
   /** The `ndarray.transpose` method form (wala/ML#835). */
   public static final MethodReference NDARRAY_TRANSPOSE =
       MethodReference.findOrCreate(
@@ -587,6 +614,9 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE),
           Map.entry(NP_TRANSPOSE.getDeclaringClass(), NP_TRANSPOSE_SIGNATURE),
+          Map.entry(NP_EXPAND_DIMS.getDeclaringClass(), NP_EXPAND_DIMS_SIGNATURE),
+          Map.entry(NP_SQUEEZE.getDeclaringClass(), NP_SQUEEZE_SIGNATURE),
+          Map.entry(NP_CLIP.getDeclaringClass(), NP_CLIP_SIGNATURE),
           Map.entry(NDARRAY_TRANSPOSE.getDeclaringClass(), NDARRAY_TRANSPOSE_SIGNATURE),
           Map.entry(OUTER.getDeclaringClass(), OUTER_SIGNATURE),
           Map.entry(APPEND.getDeclaringClass(), APPEND_SIGNATURE),

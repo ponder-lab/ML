@@ -93,7 +93,7 @@ public class ExpandDims extends PassThroughUnaryTensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     int inputVn =
         this.getArgumentValueNumber(
-            builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName(), false);
+            builder, this.getInputParameterPosition(), this.getInputParameterName(), false);
     if (inputVn <= 0) return null;
     Set<List<Dimension<?>>> inputShapes = this.getShapes(builder, inputVn);
     if (inputShapes == null) return null;

@@ -119,6 +119,13 @@
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
         <new def="np_transpose_fn" class="Lnumpy/transpose"/>
         <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="x" value="np_transpose_fn"/>
+        <!-- wala/ML#1308: the shape functions and the clip a data-preparation prefix passes its arrays through. -->
+        <new def="np_expand_dims_fn" class="Lnumpy/expand_dims"/>
+        <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="np_expand_dims_fn"/>
+        <new def="np_squeeze_fn" class="Lnumpy/squeeze"/>
+        <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="x" value="np_squeeze_fn"/>
+        <new def="np_clip_fn" class="Lnumpy/clip"/>
+        <putfield class="LRoot" field="clip" fieldType="LRoot" ref="x" value="np_clip_fn"/>
         <new def="eye_fn" class="Lnumpy/eye"/>
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="x" value="eye_fn"/>
         <!-- wala/ML#1008: array constructors and reductions a data-preparation prefix builds its arrays with. -->
@@ -662,6 +669,54 @@
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.transpose.html. `np.transpose(a, axes)` permutes `a`'s dimensions by the constant `axes`, defaulting to full reversal; `NpTranspose` computes the output shape and passes the dtype through (wala/ML#835). Result is a fresh ndarray with the method fields re-wired, like `reshape`. -->
       <class name="transpose" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a axes">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.expand_dims.html -->
+      <!-- `np.expand_dims(a, axis)`: the input's shape with a size-1 axis inserted at the constant `axis`, and the input's dtype, both computed by `NpExpandDims` (wala/ML#1308). The result is a fresh ndarray with the method fields re-wired, since a pass-through return would alias the input. -->
+      <class name="expand_dims" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a axis">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.squeeze.html -->
+      <!-- `np.squeeze(a, axis=None)`: the input's shape without its size-1 axes, or without the ones the constant `axis` names, and the input's dtype, both computed by `NpSqueeze` (wala/ML#1308). -->
+      <class name="squeeze" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a axis">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.clip.html -->
+      <!-- `np.clip(a, a_min, a_max, out=None)`: the input's shape where each bound is `None` or a constant number, with the dtype NumPy gives the input beside such bounds, both computed by `NpClip` (wala/ML#1308). The `out` argument is not modeled: the result is a fresh ndarray whatever it is. -->
+      <class name="clip" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a a_min a_max out">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
