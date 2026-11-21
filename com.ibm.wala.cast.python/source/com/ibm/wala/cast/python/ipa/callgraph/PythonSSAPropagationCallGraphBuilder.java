@@ -160,7 +160,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
    * for (<a href="https://github.com/wala/ML/issues/1107">wala/ML#1107</a>). The one tuple holds
    * every key in its first field and every value in its second, so a copy {@code copy[k] = v} over
    * it writes each value under each key; this field lets the copy go field by field from the
-   * dictionary instead. Only {@code PythonConstraintVisitor#processPairedWrite} reads it.
+   * dictionary instead. {@code PythonConstraintVisitor#processPairedWrite} reads it, and so does a
+   * call of {@code dict} that is passed the pairs ({@code DictSourceOperator}, wala/ML#1307).
    */
   public static final String ITEMS_RECEIVER_FIELD = "__items_receiver__";
 
@@ -3995,6 +3996,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         processRoundResult(caller, call, constParams);
       if (target.getMethod().getDeclaringClass().getReference().equals(SUM_BUILTIN))
         processSumResult(caller, call, constParams);
+      if (target.getMethod().getDeclaringClass().getReference().equals(DICT_BUILTIN))
+        processDictResult(caller, call, constParams);
     }
   }
 
@@ -4026,6 +4029,250 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
     PointerKey receiver = getPointerKeyForLocal(caller, call.getUse(1));
     getSystem().newConstraint(def, new SliceResultOperator(caller, call.iIndex()), receiver);
+  }
+
+  /** The {@code dict} builtin. */
+  private static final TypeReference DICT_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.findOrCreate("Lwala/builtin/dict"));
+
+  /**
+   * Supplies the result of a {@code dict} builtin call (<a
+   * href="https://github.com/wala/ML/issues/1307">wala/ML#1307</a>): a dictionary allocated at the
+   * call, as a display's is at the display, that holds the call's values as <a
+   * href="https://docs.python.org/3/library/stdtypes.html#dict">{@code dict}</a> stores them. Each
+   * keyword argument is held under its name. A dictionary passed as the positional argument, or
+   * unpacked with {@code **}, gives each of its catalogued fields under the same name, as {@code
+   * copy} does (wala/ML#1082). A list or tuple passed as the positional argument gives, for each of
+   * its catalogued elements that is a pair, the pair's second member under each constant its first
+   * may be; a first member that is no constant gives nothing (<a
+   * href="https://github.com/wala/ML/issues/1222">wala/ML#1222</a>). The pair of another
+   * dictionary's {@code items()} gives that dictionary's fields, as a copy over it does
+   * (wala/ML#1107).
+   *
+   * <p>The builtin's body returns nothing, so the dictionary is one for each call rather than one
+   * for the body. Each value reaches its field through an assignment, an edge of the assignment
+   * graph, which a client's dataflow analysis may use as its flow graph.
+   *
+   * @param caller The node containing the call.
+   * @param call The {@code dict} call.
+   * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
+   */
+  private void processDictResult(
+      CGNode caller, PythonInvokeInstruction call, InstanceKey[][] constParams) {
+    if (!call.hasDef()) return;
+    int pc = call.iIndex();
+    InstanceKey dict =
+        getInstanceKeyForAllocation(caller, TypedSiteReference.at(pc, PythonTypes.dict));
+    if (dict == null) return;
+    getSystem().newConstraint(getPointerKeyForLocal(caller, call.getDef()), dict);
+    int positional = call.getNumberOfPositionalParameters();
+    if (positional > 1) readDictSource(caller, dict, pc, call.getUse(1), constParams, 1);
+    AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+    int index = positional;
+    for (String name : call.getKeywords()) {
+      // Read by position: two `**` arguments have the one name.
+      int argument = index++;
+      int use = call.getUse(argument);
+      if ("null".equals(name)) {
+        readDictSource(caller, dict, pc, use, constParams, argument);
+        continue;
+      }
+      IField field = resolveRootField(getClassHierarchy(), name);
+      if (field == null) continue;
+      getSystem()
+          .newConstraint(
+              factory.getPointerKeyForObjectCatalog(dict),
+              getInstanceKeyForConstant(PythonLanguage.Python.getConstantType(name), name));
+      PointerKey slot = factory.getPointerKeyForInstanceField(dict, field);
+      InstanceKey[] constants = argumentConstants(caller, use, constParams, argument);
+      if (constants != null)
+        for (InstanceKey constant : constants) getSystem().newConstraint(slot, constant);
+      else getSystem().newConstraint(slot, assignOperator, getPointerKeyForLocal(caller, use));
+    }
+  }
+
+  /**
+   * The keys of an argument that the call passes as instance keys: an invariant one's, or a
+   * constant's whose pointer key is implicit.
+   *
+   * @param caller The node containing the call.
+   * @param use The argument's value number.
+   * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
+   * @param index The argument's index among the call's arguments, the callee's being 0.
+   * @return The keys, or {@code null} when the argument has a pointer key to read.
+   */
+  private InstanceKey[] argumentConstants(
+      CGNode caller, int use, InstanceKey[][] constParams, int index) {
+    if (constParams != null && index < constParams.length && constParams[index] != null)
+      return constParams[index];
+    return implicitArgumentConstants(caller, use);
+  }
+
+  /**
+   * Reads an argument of a {@code dict} call that the dictionary takes entries from, a dictionary
+   * or a sequence of pairs, into the dictionary the call builds; see {@link #processDictResult}.
+   *
+   * @param caller The node containing the call.
+   * @param dict The dictionary the call builds.
+   * @param pc The call's instruction index.
+   * @param use The argument's value number.
+   * @param constParams The call's constant arguments, indexed by argument, or {@code null}.
+   * @param index The argument's index among the call's arguments, the callee's being 0.
+   */
+  private void readDictSource(
+      CGNode caller, InstanceKey dict, int pc, int use, InstanceKey[][] constParams, int index) {
+    DictSourceOperator operator =
+        new DictSourceOperator(DictSourceOperator.Stage.ARGUMENT, null, dict, pc);
+    InstanceKey[] constants = argumentConstants(caller, use, constParams, index);
+    if (constants != null) for (InstanceKey key : constants) operator.read(key);
+    else getSystem().newSideEffect(operator, getPointerKeyForLocal(caller, use));
+  }
+
+  /**
+   * The field a constant names, as a dictionary's key or a sequence's index does.
+   *
+   * @param name A key.
+   * @return The field, or {@code null} when the key is no string or number constant.
+   */
+  private IField namedField(InstanceKey name) {
+    if (!(name instanceof ConstantKey<?> constant)) return null;
+    Object value = constant.getValue();
+    if (!(value instanceof String) && !(value instanceof Number)) return null;
+    return resolveRootField(getClassHierarchy(), value.toString());
+  }
+
+  /**
+   * Whether a key is an instance of a class or of one of its subclasses.
+   *
+   * @param key A key.
+   * @param type The class.
+   * @return {@code true} iff it is.
+   */
+  private boolean isInstanceOf(InstanceKey key, TypeReference type) {
+    IClass c = getClassHierarchy().lookupClass(type);
+    return c != null && isInstanceOf(key, Set.of(c));
+  }
+
+  /**
+   * Fills the dictionary a {@code dict} call builds from an argument it takes entries from
+   * (wala/ML#1307), one stage for each level of the argument; see {@link #processDictResult}. Equal
+   * for the same stage, subject and dictionary.
+   */
+  private final class DictSourceOperator extends UnaryOperator<PointsToSetVariable> {
+
+    /** What the keys an operator reads are. */
+    private enum Stage {
+      /** The values the argument may be: a dictionary is copied, a sequence's catalog is read. */
+      ARGUMENT,
+      /** The catalogued indices of a sequence, the subject: each element is read. */
+      ELEMENTS,
+      /** The values an element may be: a sequence is a pair, whose first member is read. */
+      PAIR,
+      /** The values the first member of a pair, the subject, may be: a constant names a field. */
+      KEY,
+      /** The dictionaries an {@code items()} tuple stands for: each is copied. */
+      RECEIVER
+    }
+
+    private final Stage stage;
+    private final InstanceKey subject;
+    private final InstanceKey dict;
+    private final int pc;
+    private final Set<InstanceKey> read = HashSetFactory.make();
+
+    private DictSourceOperator(Stage stage, InstanceKey subject, InstanceKey dict, int pc) {
+      this.stage = stage;
+      this.subject = subject;
+      this.dict = dict;
+      this.pc = pc;
+    }
+
+    @Override
+    public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+      // A side effect: the entries reach the dictionary through the constraints registered here.
+      if (rhs.getValue() != null) rhs.getValue().foreach(i -> read(getSystem().getInstanceKey(i)));
+      return NOT_CHANGED;
+    }
+
+    /**
+     * Registers what one key gives the dictionary at this stage.
+     *
+     * @param key A key this stage reads.
+     */
+    private void read(InstanceKey key) {
+      if (!read.add(key)) return;
+      AstPointerKeyFactory factory = (AstPointerKeyFactory) getPointerKeyFactory();
+      IClassHierarchy cha = getClassHierarchy();
+      boolean sequence =
+          isInstanceOf(key, PythonTypes.list) || isInstanceOf(key, PythonTypes.tuple);
+      switch (stage) {
+        case ARGUMENT:
+          if (isInstanceOf(key, PythonTypes.dict)) copyDictInto(key, dict, pc);
+          else if (sequence)
+            getSystem()
+                .newSideEffect(
+                    new DictSourceOperator(Stage.ELEMENTS, key, dict, pc),
+                    factory.getPointerKeyForObjectCatalog(key));
+          break;
+        case ELEMENTS:
+          IField element = namedField(key);
+          if (element != null)
+            getSystem()
+                .newSideEffect(
+                    new DictSourceOperator(Stage.PAIR, null, dict, pc),
+                    factory.getPointerKeyForInstanceField(subject, element));
+          break;
+        case PAIR:
+          // The one tuple of an `items()` holds every key beside every value, so the dictionary it
+          // stands for is copied field by field instead (wala/ML#1107).
+          IField receiver = resolveRootField(cha, ITEMS_RECEIVER_FIELD);
+          IField first = resolveRootField(cha, "0");
+          if (itemsTuples.contains(key) && receiver != null)
+            getSystem()
+                .newSideEffect(
+                    new DictSourceOperator(Stage.RECEIVER, null, dict, pc),
+                    factory.getPointerKeyForInstanceField(key, receiver));
+          else if (sequence && first != null)
+            getSystem()
+                .newSideEffect(
+                    new DictSourceOperator(Stage.KEY, key, dict, pc),
+                    factory.getPointerKeyForInstanceField(key, first));
+          break;
+        case KEY:
+          IField name = namedField(key);
+          IField second = resolveRootField(cha, "1");
+          if (name == null || second == null) break;
+          getSystem().newConstraint(factory.getPointerKeyForObjectCatalog(dict), key);
+          getSystem()
+              .newConstraint(
+                  factory.getPointerKeyForInstanceField(dict, name),
+                  assignOperator,
+                  factory.getPointerKeyForInstanceField(subject, second));
+          break;
+        case RECEIVER:
+          copyDictInto(key, dict, pc);
+          break;
+      }
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(stage, subject, dict);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DictSourceOperator other
+          && other.stage == stage
+          && Objects.equals(other.subject, subject)
+          && other.dict.equals(dict);
+    }
+
+    @Override
+    public String toString() {
+      return "dict call at " + pc + ": " + stage + " of " + subject + " into " + dict;
+    }
   }
 
   /** The {@code enumerate} builtin. */

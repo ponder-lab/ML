@@ -54,6 +54,11 @@ def unknown_keys_sink(x):
     return x
 
 
+def zipped_keys_sink(x):
+    check(x, (1, 3, 1), tf.float32)
+    return x
+
+
 def keyword_sink(x):
     check(x, (1, 3, 1), tf.float32)
     return x
@@ -139,9 +144,15 @@ def cyclic(batch):
 
 
 def unknown_keys(names, values):
-    source = dict(zip(names, values))
+    source = dict(zip([name.strip() for name in names], values))
     sliced = {k: v[0:1] for k, v in source.items()}
     unknown_keys_sink(tf.expand_dims(sliced["audios"], -1))
+
+
+def zipped_keys(names, values):
+    source = dict(zip(names, values))
+    sliced = {k: v[0:1] for k, v in source.items()}
+    zipped_keys_sink(tf.expand_dims(sliced["audios"], -1))
 
 
 def keywords(**tensors):
@@ -220,4 +231,5 @@ for batch in records:
     two_callers(batch)
 
 unknown_keys(["audios"], [tf.ones((2, 3), dtype=tf.float32)])
+zipped_keys(["audios"], [tf.ones((2, 3), dtype=tf.float32)])
 keywords(audios=tf.ones((2, 3), dtype=tf.float32))
