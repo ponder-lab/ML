@@ -110,6 +110,34 @@ def by_two_unpackings_other(x):
     assert x.shape == (2,) and x.dtype == tf.int32
 
 
+def by_repeated_pair(x):
+    assert x.shape == (2, 4) and x.dtype == tf.float32
+
+
+def by_boolean_key(x):
+    assert x.shape == (2, 4) and x.dtype == tf.float32
+
+
+def by_none_key(x):
+    assert x.shape == (2, 4) and x.dtype == tf.float32
+
+
+def by_dictionary_pair(x):
+    assert x.shape == (2, 4) and x.dtype == tf.float32
+
+
+def by_object_source(x):
+    assert x is None
+
+
+def by_appended_pair(x):
+    assert x.shape == (2,) and x.dtype == tf.int32
+
+
+def by_indexed_store(x):
+    assert x.shape == (2,) and x.dtype == tf.int32
+
+
 def merge(first, second):
     return dict(**first, **second)
 
@@ -120,6 +148,23 @@ def build(first, second):
 
 def pair(key, value):
     return dict([(key, value)])
+
+
+def add(pairs, key, value):
+    pairs.append((key, value))
+
+
+class Holder:
+    def __setitem__(self, key, value):
+        pass
+
+    def __iter__(self):
+        return iter([])
+
+
+class First:
+    def __index__(self):
+        return 0
 
 
 boxes = tf.ones([2, 4])
@@ -161,3 +206,17 @@ by_constant_value({"boxes": boxes, "labels": labels}[names["key"]])
 merged = merge({"boxes": boxes}, {"labels": labels})
 by_two_unpackings(merged["boxes"])
 by_two_unpackings_other(merged["labels"])
+repeated = ("boxes", boxes)
+by_repeated_pair(dict([repeated, repeated])["boxes"])
+by_boolean_key(dict([(True, labels), ("true", boxes)])["true"])
+by_none_key(dict([(None, labels), ("null", boxes)])["null"])
+by_dictionary_pair(dict([{0: "boxes", 1: labels}, ("boxes", boxes)])["boxes"])
+held = Holder()
+held[0] = ("boxes", labels)
+by_object_source(dict(held).get("boxes"))
+grown = [("boxes", boxes)]
+add(grown, "labels", labels)
+by_appended_pair(dict(grown)["labels"])
+stored = [("labels", labels), ("labels", labels)]
+stored[First()] = ("labels", labels)
+by_indexed_store(dict(stored)["labels"])

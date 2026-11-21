@@ -149,4 +149,61 @@ public class TestDictCall extends AbstractTensorTest {
     test(FILE, "by_two_unpackings", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
     test(FILE, "by_two_unpackings_other", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
   }
+
+  /**
+   * A pair that a list holds twice is read once for each place, and the dictionary holds its value.
+   */
+  @Test
+  public void testRepeatedPair() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "by_repeated_pair", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * A pair whose key is a constant that is neither a string nor a number, {@code True} or {@code
+   * None}, gives nothing: a read keyed by the string the analysis prints the constant as, {@code
+   * "true"} or {@code "null"}, finds that string's pair alone.
+   */
+  @Test
+  public void testKeyThatNamesNoField()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "by_boolean_key", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+    test(FILE, "by_none_key", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * A dictionary among the pairs is no pair of its values, since its keys are what it gives: the
+   * value it holds under {@code 1} does not reach the key it holds under {@code 0}.
+   */
+  @Test
+  public void testDictionaryAsPair() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "by_dictionary_pair", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+  }
+
+  /**
+   * An iterable object that is no dictionary, list or tuple gives nothing, a pair it holds under an
+   * index included, since its {@code __iter__} decides what it gives. The read of the pair's key is
+   * no tensor.
+   */
+  @Test
+  public void testObjectAsSource() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "by_object_source", 0, 0);
+  }
+
+  /**
+   * A pair that a callee appends to the list is read beside the pairs the list was written with.
+   */
+  @Test
+  public void testAppendedPair() throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "by_appended_pair", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * A pair stored into the list under an index that is no constant, an object with an {@code
+   * __index__}, gives nothing, and the pairs the list was written with are read.
+   */
+  @Test
+  public void testPairStoredByObjectIndex()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "by_indexed_store", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
 }

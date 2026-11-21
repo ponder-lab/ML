@@ -20,7 +20,6 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.SSAInstruction;
-import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import java.io.File;
 import java.util.ArrayList;
@@ -806,18 +805,23 @@ public class TestContainerElements extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testDictCallBuiltinReturnsNoValue() {
-    int nodes = 0;
-    for (CGNode node : builder(DICT_CALL).getCallGraph())
-      if (node.getMethod().getDeclaringClass().getName().toString().equals("Lwala/builtin/dict")) {
-        nodes++;
-        for (SSAInstruction instruction : node.getIR().getInstructions()) {
-          if (instruction == null) continue;
-          assertFalse(instruction.toString(), instruction instanceof SSANewInstruction);
-          if (instruction instanceof SSAReturnInstruction)
-            assertTrue(instruction.toString(), ((SSAReturnInstruction) instruction).returnsVoid());
-        }
-      }
-    assertTrue("Expecting the builtin's node.", nodes > 0);
+    List<CGNode> nodes =
+        builder(DICT_CALL).getCallGraph().stream()
+            .filter(
+                node ->
+                    node.getMethod()
+                        .getDeclaringClass()
+                        .getName()
+                        .toString()
+                        .equals("Lwala/builtin/dict"))
+            .toList();
+    assertFalse("Expecting the builtin's node.", nodes.isEmpty());
+    // The body is one instruction, a return of no value.
+    for (CGNode node : nodes) {
+      SSAInstruction[] body = node.getIR().getInstructions();
+      assertEquals(1, body.length);
+      assertTrue(body[0].toString(), ((SSAReturnInstruction) body[0]).returnsVoid());
+    }
   }
 
   /** A dict keyed by a float: its tensor value is an element. */
