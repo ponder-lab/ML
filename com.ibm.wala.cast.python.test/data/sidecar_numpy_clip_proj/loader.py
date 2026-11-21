@@ -21,6 +21,24 @@ def load_clip_by_array(path):
     return np.clip(data, np.zeros((3, 1, 1), dtype=np.float64), 5)
 
 
+def load_clip_by_upper_array(path):
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    return np.clip(data, 0, np.ones((3, 1, 1), dtype=np.float64))
+
+
+def load_clip_from_below(path):
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    return np.clip(data, 0, None)
+
+
+def load_clip_by_float(path):
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    return np.clip(data, 0.5, 5)
+
+
 def load_expanded(path):
     with open(path, "rb") as f:
         data = pickle.load(f)

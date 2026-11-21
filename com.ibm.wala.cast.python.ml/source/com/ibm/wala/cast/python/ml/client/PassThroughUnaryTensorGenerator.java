@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
-import static com.ibm.wala.cast.python.util.Util.findAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
 
 import com.ibm.wala.cast.loader.AstMethod;
@@ -11,7 +10,6 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -376,7 +374,7 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    * arrays of different dtypes (wala/ML#1309): TensorFlow makes {@code int32} of a Python integer
    * and {@code float32} of a Python float, and NumPy makes {@code int64} and {@code float64}. This
    * family's dtype read is TensorFlow's, so a generator for a NumPy function does not use it for
-   * such an input.
+   * such an input. The generator has an input position.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for the argument read.
    * @return {@code true} iff a member of the input's points-to set is a number, a list or a tuple,
@@ -384,23 +382,19 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    *     members.
    */
   protected boolean inputMayBePythonNumberOrSequence(PropagationCallGraphBuilder builder) {
-    if (getInputParameterPosition() == UNDEFINED_PARAMETER_POSITION) return false;
     DType builtin =
         this.getArgumentScalarBuiltinDType(
             builder, getInputParameterPosition(), getInputParameterName());
     // A Python `bool` is a boolean in both libraries.
     if (builtin != null && builtin != DType.BOOL) return true;
-    OrdinalSet<InstanceKey> pts =
-        this.getArgumentPointsToSet(builder, getInputParameterPosition(), getInputParameterName());
-    if (pts == null) return false;
-    for (InstanceKey ik : pts) {
+    for (InstanceKey ik :
+        this.getArgumentPointsToSet(
+            builder, getInputParameterPosition(), getInputParameterName())) {
       if (ik instanceof ConstantKey) {
         if (((ConstantKey<?>) ik).getValue() instanceof Number) return true;
         continue;
       }
-      AllocationSiteInNode asin = findAllocationSiteInNode(ik);
-      if (asin == null) continue;
-      TypeReference reference = asin.concreteType().getReference();
+      TypeReference reference = ik.concreteType().getReference();
       if (reference.equals(list) || reference.equals(tuple)) return true;
     }
     return false;

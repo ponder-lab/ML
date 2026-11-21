@@ -26,6 +26,30 @@
     },
     {
       "module": "loader.py",
+      "function": "load_clip_by_upper_array",
+      "variable": "data",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "The pickle holds a float32 array of four rows of three."
+    },
+    {
+      "module": "loader.py",
+      "function": "load_clip_from_below",
+      "variable": "data",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "The pickle holds a float32 array of four rows of three."
+    },
+    {
+      "module": "loader.py",
+      "function": "load_clip_by_float",
+      "variable": "data",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "The pickle holds a float32 array of four rows of three."
+    },
+    {
+      "module": "loader.py",
       "function": "load_expanded",
       "variable": "data",
       "dtype": "float32",

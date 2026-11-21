@@ -80,6 +80,22 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
   }
 
   /**
+   * A Python boolean given to {@code np.expand_dims}, the constant and one that the {@code bool}
+   * builtin returns: both libraries convert it to a boolean array, so the dtype is read.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBooleanInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "expanded_boolean", 1, 1, Map.of(2, Set.of(TensorType.of(BOOL, 1))));
+    test(FIXTURE, "expanded_true", 1, 1, Map.of(2, Set.of(TensorType.of(BOOL, 1))));
+  }
+
+  /**
    * {@code np.squeeze} with no axis, with a positional one and with a keyword one: the argument's
    * shape without the size-1 axes, or without the named one, and the argument's dtype.
    *
@@ -98,8 +114,9 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
 
   /**
    * {@code np.clip} with bounds that leave the array's dtype as it is: integers and {@code None}
-   * beside a floating-point array, a float beside one, and integers an integral array's dtype
-   * holds.
+   * beside a floating-point array, a float beside one, an integer the front end folds from a sum,
+   * integers beside a complex array, any number beside a double-precision array, and integers an
+   * integral array's dtype holds.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -113,14 +130,25 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
     test(FIXTURE, "clipped_from_below", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
     test(FIXTURE, "clipped_by_keywords", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
     test(FIXTURE, "clipped_by_negative", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+    test(FIXTURE, "clipped_by_folded", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
+    test(FIXTURE, "clipped_complex", 1, 1, Map.of(2, Set.of(TensorType.of(COMPLEX_64, 2, 2))));
+    test(FIXTURE, "clipped_doubles", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 3))));
+    test(
+        FIXTURE,
+        "clipped_doubles_by_floats",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 3))));
     test(FIXTURE, "clipped_integers", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 2, 2))));
     test(FIXTURE, "clipped_bytes", 1, 1, Map.of(2, Set.of(TensorType.of(UINT_8, 2, 2))));
   }
 
   /**
    * {@code np.clip} with bounds NumPy promotes the array with: a float beside an integral array
-   * gives {@code float64}, and a number the array's dtype does not hold gives an unknown dtype. The
-   * shape is the array's in each.
+   * gives {@code float64}, and a number the array's dtype does not hold gives an unknown dtype: a
+   * negative or a wide integer beside {@code uint8}, one of more than 32 bits beside {@code int32},
+   * and an integer of more than 16 bits or a float of a magnitude past single precision beside
+   * {@code float32}. The shape is the array's in each.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -143,11 +171,24 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 2))));
     test(FIXTURE, "clipped_by_wide_integer", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 4))));
+    test(
+        FIXTURE, "clipped_by_wide_negative", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 4))));
+    test(FIXTURE, "clipped_by_wide_float", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 4))));
+    test(FIXTURE, "clipped_bytes_by_wide", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 2))));
+    test(
+        FIXTURE, "clipped_integers_by_wide", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 2))));
+    test(
+        FIXTURE,
+        "clipped_integers_by_wide_negative",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UNKNOWN, 2, 2))));
   }
 
   /**
-   * {@code np.clip} with a bound that is an array: the bound may broadcast the result to a shape
-   * that is not the clipped array's, and its dtype may be the result's, so both are unknown.
+   * {@code np.clip} with a bound that is an array, the lower one or the upper one: the bound may
+   * broadcast the result to a shape that is not the clipped array's, and its dtype may be the
+   * result's, so both are unknown.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -158,6 +199,49 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
   public void testClipByArray()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(FIXTURE, "clipped_by_array", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(
+        FIXTURE,
+        "clipped_by_upper_array",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * {@code np.clip} with a bound the analysis does not read as a number or {@code None}, one with
+   * no value it can read and a boolean: the bound is not known to be a scalar, so the shape and the
+   * dtype are unknown.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testClipByUnreadBound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "clipped_by_unread", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(
+        FIXTURE,
+        "clipped_by_booleans",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * An iteration over {@code np.clip}'s result: the element's generator reads the result's shapes
+   * through the generator's legacy view, and the row has the result's shape without its first axis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testClipResultIteration()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(FIXTURE, "clipped_row", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
   }
 
   /**
@@ -182,7 +266,8 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
 
   /**
    * {@code np.clip} of a value that only the sidecar types, beside bounds that leave every numeric
-   * dtype as it is: the feed forwards the argument's shape and dtype.
+   * dtype as it is, two narrow integers or one and {@code None}: the feed forwards the argument's
+   * shape and dtype.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -200,11 +285,20 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+    test(
+        FILES,
+        "driver.py",
+        "fed_clip_from_below",
+        PROJECT,
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
   }
 
   /**
    * {@code np.clip} of a value that only the sidecar types, beside a negative bound, which some
-   * dtypes do not hold: the feed forwards the argument's shape alone, and the dtype is unknown.
+   * dtypes do not hold, or a float, which promotes an integral one: the feed forwards the
+   * argument's shape alone, and the dtype is unknown.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -222,11 +316,19 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(UNKNOWN, 4, 3))));
+    test(
+        FILES,
+        "driver.py",
+        "fed_clip_by_float",
+        PROJECT,
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UNKNOWN, 4, 3))));
   }
 
   /**
-   * {@code np.clip} of a value that only the sidecar types, beside a bound that is an array: no
-   * feed is declared, and the shape and the dtype are unknown.
+   * {@code np.clip} of a value that only the sidecar types, beside a bound that is an array, the
+   * lower one or the upper one: no feed is declared, and the shape and the dtype are unknown.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -240,6 +342,14 @@ public class TestNumpyExpandDimsSqueezeClip extends AbstractTensorTest {
         FILES,
         "driver.py",
         "fed_clip_by_array",
+        PROJECT,
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test(
+        FILES,
+        "driver.py",
+        "fed_clip_by_upper_array",
         PROJECT,
         1,
         1,

@@ -23,9 +23,8 @@ import java.util.Set;
  * nothing on it:
  *
  * <ul>
- *   <li>A bound that is omitted, {@code None} or a constant number is a scalar, and the result has
- *       the array's shape. Any other bound may be an array of a higher rank, and the shape is
- *       unknown.
+ *   <li>A bound that is {@code None} or a constant number is a scalar, and the result has the
+ *       array's shape. Any other bound may be an array of a higher rank, and the shape is unknown.
  *   <li>A constant number takes the array's dtype where that dtype holds it, as an integer does in
  *       a floating-point array. A float beside an integral array gives {@code float64}. A number
  *       the array's dtype does not hold, as {@code -1} in a {@code uint8} array, gives a wider
@@ -65,29 +64,26 @@ public class NpClip extends ClipByValue {
    * @param position The bound's positional index, excluding the callable.
    * @param name The bound's keyword.
    * @return The bound's constant numbers, a {@link Long} for an integer and a {@link Double} for a
-   *     float, with an empty member for a bound that is omitted or {@code None}; or {@code null}
-   *     when the bound may be anything else.
+   *     float, with an empty member for a bound that is {@code None}; or {@code null} when the
+   *     bound may be anything else, or is not read.
    */
   private Set<Optional<Number>> getBound(
       PropagationCallGraphBuilder builder, int position, String name) {
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, position, name);
-    // An empty set is an omitted bound or one supplied with a value the analysis cannot read, and
-    // only the first imposes nothing (wala/ML#865).
-    if (pts == null || pts.isEmpty())
-      return Boolean.FALSE.equals(this.isArgumentSyntacticallySupplied(builder, position, name))
-          ? Set.of(Optional.empty())
-          : null;
+    // An empty set is a bound with a value the analysis cannot read. It is an omitted bound too,
+    // which NumPy accepts only from 2.1 on, where the bound may instead be passed under another
+    // keyword that is not read here, so neither is taken to impose nothing.
+    if (pts.isEmpty()) return null;
     Set<Optional<Number>> ret = new HashSet<>();
     for (InstanceKey ik : pts) {
       if (!(ik instanceof ConstantKey)) return null;
       Object value = ((ConstantKey<?>) ik).getValue();
       if (value == null) ret.add(Optional.empty());
-      else if (value instanceof Double || value instanceof Float)
-        ret.add(Optional.of(((Number) value).doubleValue()));
-      else if (value instanceof Long
-          || value instanceof Integer
-          || value instanceof Short
-          || value instanceof Byte) ret.add(Optional.of(((Number) value).longValue()));
+      // A number written in the program is a `Long` or a `Double`, and one the front end folded
+      // from an expression is an `Integer` or a `Double`.
+      else if (value instanceof Double) ret.add(Optional.of((Double) value));
+      else if (value instanceof Long || value instanceof Integer)
+        ret.add(Optional.of(((Number) value).longValue()));
       else return null;
     }
     return ret;
@@ -128,10 +124,10 @@ public class NpClip extends ClipByValue {
     if (bound.get() instanceof Double) {
       // A Python float is a double, which every integral dtype promotes to (wala/ML#814).
       if (dtype.isIntegral()) return DType.FLOAT64;
+      // A magnitude that single precision does not hold gives double precision under NumPy's
+      // value-based casting.
       double magnitude = Math.abs(bound.get().doubleValue());
-      // An infinity and a NaN are held by every floating-point dtype.
-      boolean finite = !Double.isNaN(magnitude) && !Double.isInfinite(magnitude);
-      return single && finite && magnitude > Float.MAX_VALUE ? DType.UNKNOWN : dtype;
+      return single && magnitude > Float.MAX_VALUE ? DType.UNKNOWN : dtype;
     }
     long value = bound.get().longValue();
     boolean held;
@@ -145,20 +141,19 @@ public class NpClip extends ClipByValue {
   }
 
   /**
-   * The array's shapes beside scalar bounds, and the unknown shape beside any other.
+   * The legacy view of {@link #getDefaultShapeResult}.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The result's shapes, or {@code null} when they are unknown.
+   * @return The result's shapes, or {@code null} when any of them is unknown.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    if (this.getLowerBound(builder) == null || this.getUpperBound(builder) == null) return null;
-    return super.getDefaultShapes(builder);
+    return this.getDefaultShapeResult(builder).toLegacy();
   }
 
   /**
-   * The record view of {@link #getDefaultShapes}: the array's own record beside scalar bounds, so a
-   * partial input stays partial (wala/ML#718), and the unknown shape beside any other.
+   * The array's shapes beside scalar bounds, and the unknown shape beside any other. The array's
+   * own record is returned, so a partial input stays partial (wala/ML#718).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The result's shapes.
@@ -201,10 +196,10 @@ public class NpClip extends ClipByValue {
 
   /**
    * The feed forwards the array's whole type only beside bounds that leave every numeric dtype as
-   * it is: omitted ones, {@code None}, and integers that the narrowest dtype holds. Beside any
-   * other constant number it forwards the shape alone, and the dtype read from the array stands,
-   * and beside a bound that may be an array it declares none (wala/ML#682). It declares none over
-   * an input that may be a Python number, list or tuple either, whose dtype the conversion decides
+   * it is: {@code None} and integers that the narrowest dtype holds. Beside any other constant
+   * number it forwards the shape alone, and the dtype read from the array stands, and beside a
+   * bound that may be an array it declares none (wala/ML#682). It declares none over an input that
+   * may be a Python number, list or tuple either, whose dtype the conversion decides
    * (wala/ML#1309). A boolean array beside an integer bound, which NumPy promotes to an integer
    * dtype, is forwarded as it is, as it is through the element-wise operations.
    *
