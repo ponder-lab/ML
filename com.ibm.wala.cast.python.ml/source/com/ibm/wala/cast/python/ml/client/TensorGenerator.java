@@ -4620,14 +4620,12 @@ public abstract class TensorGenerator implements Cloneable {
    * taken. The blocks it does not reach are the decidably dead ones.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
-   * @param node The {@link CGNode} to walk.
-   * @return The numbers of the node's decidably dead blocks, empty if the node has no IR.
+   * @param node The {@link CGNode} to walk, which has an IR.
+   * @return The numbers of the node's decidably dead blocks.
    */
   static BitSet walkBlockFeasibility(PropagationCallGraphBuilder builder, CGNode node) {
     BitSet dead = new BitSet();
-    IR ir = node.getIR();
-    if (ir == null) return dead;
-    SSACFG cfg = ir.getControlFlowGraph();
+    SSACFG cfg = node.getIR().getControlFlowGraph();
     BitSet live = new BitSet();
     // A worklist, not a recursion: a body of a few thousand sequential branches is a path of as
     // many blocks (wala/ML#981).
