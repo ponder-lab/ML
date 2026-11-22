@@ -84,12 +84,10 @@ public class ForwardingCallStringSelector extends CallStringContextSelector {
   public static boolean passesParameterOn(CGNode caller, CallSiteReference site) {
     IR ir = caller.getIR();
     if (ir == null) return false;
-    // Use 0 is the called function, and value 1 is the caller's own function object.
+    // Use 0 is the called function.
     for (SSAAbstractInvokeInstruction call : ir.getCalls(site))
-      for (int i = 1; i < call.getNumberOfUses(); i++) {
-        int use = call.getUse(i);
-        if (use > 1 && ir.getSymbolTable().isParameter(use)) return true;
-      }
+      for (int i = 1; i < call.getNumberOfUses(); i++)
+        if (ir.getSymbolTable().isParameter(call.getUse(i))) return true;
     return false;
   }
 

@@ -48,7 +48,7 @@ public class TestMethodHelperContexts extends AbstractTensorTest {
    * own. A call a function makes to itself keeps one site, since a second would unroll the
    * recursion by one call whose nodes merge again below it.
    *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 separates a recursive helper's callers.
+   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1318 separates a recursive helper's callers.
    */
   @Test
   public void testWalkedIndex() throws ClassHierarchyException, CancelException, IOException {
@@ -66,7 +66,7 @@ public class TestMethodHelperContexts extends AbstractTensorTest {
    * recursive calls have one node for both of the method's calls, so the index reads the features'
    * types beside its own, as for {@link #testWalkedIndex}.
    *
-   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 separates a recursive helper's callers.
+   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1318 separates a recursive helper's callers.
    */
   @Test
   public void testTickedIndex() throws ClassHierarchyException, CancelException, IOException {
