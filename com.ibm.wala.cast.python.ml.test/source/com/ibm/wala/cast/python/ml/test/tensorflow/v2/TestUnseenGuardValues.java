@@ -201,6 +201,16 @@ public class TestUnseenGuardValues extends AbstractTensorTest {
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
+  /**
+   * A callee whose only fall-off block, after a statement, a constant guard of its own never
+   * reaches returns True alone, so the guard on its result is still decided.
+   */
+  @Test
+  public void testControlGuardOnDeadFallOffStatementDecided()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_implicit_none_guard.py", "consume_never_in_logged_mode", 0, 0, Map.of());
+  }
+
   @Test
   public void testAfterGuardOnImplicitNone()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

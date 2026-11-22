@@ -2,7 +2,15 @@
 # result is taken only sometimes, and the code after the guard's `break` runs.
 import tensorflow as tf
 
-calls = {"after": 0, "loop": 0, "recursive": 0, "logged": 0, "log": 0, "bare": 0}
+calls = {
+    "after": 0,
+    "loop": 0,
+    "recursive": 0,
+    "logged": 0,
+    "log": 0,
+    "bare": 0,
+    "mode": 0,
+}
 
 
 def consume_after_guard(t):
@@ -140,4 +148,20 @@ for step in range(5):
         break
     consume_after_bare_guard(tf.ones([2, 3]))
 
-assert calls["logged"] == 4 and calls["bare"] == 4
+
+def consume_never_in_logged_mode(t):
+    raise AssertionError("never called")
+
+
+def always_in_logged_mode(mode):
+    if mode == "train":
+        return True
+    calls["mode"] += 1
+
+
+for step in range(2):
+    if always_in_logged_mode("train"):
+        continue
+    consume_never_in_logged_mode(tf.ones([2, 3]))
+
+assert calls["logged"] == 4 and calls["bare"] == 4 and calls["mode"] == 0
