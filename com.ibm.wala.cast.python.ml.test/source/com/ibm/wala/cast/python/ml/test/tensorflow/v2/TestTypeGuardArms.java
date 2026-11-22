@@ -203,8 +203,13 @@ public class TestTypeGuardArms extends AbstractTensorTest {
 
   /**
    * {@code x.dtype is np.float64} compares a dtype with a type object, which are never the same
-   * object, so the guard is not decided as {@code ==} would be. The test is left undecided: both
-   * the float64 argument and the conversion reach the result.
+   * object, so the conversion never runs and the result is the float64 argument alone at run time.
+   *
+   * <p>The test is left undecided, so the conversion's float32 also reaches the result: the front
+   * end lowers {@code is} as {@code ==}, under which an equal dtype would decide the guard true.
+   *
+   * <p>TODO: Read float64 alone once the front end lowers an identity test as one
+   * (https://github.com/wala/ML/issues/1078).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

@@ -4835,8 +4835,9 @@ public abstract class TensorGenerator implements Cloneable {
                   + ".");
       return null;
     }
-    // A dtype tested for truth, as `if x.dtype:`, reads as a NumPy dtype's own truth, which is not
-    // that of a nonzero value.
+    // A dtype declines here. Record equality would decide two equal dtypes true, which an identity
+    // test lowered as `==` does not satisfy (wala/ML#1078), and a dtype tested for truth, as
+    // `if x.dtype:`, is not a nonzero constant, though every NumPy and TensorFlow dtype is true.
     if (left instanceof DTypeConstant || right instanceof DTypeConstant) return null;
     if (!(branch.getOperator() instanceof IConditionalBranchInstruction.Operator)) return null;
     switch ((IConditionalBranchInstruction.Operator) branch.getOperator()) {
@@ -5244,6 +5245,15 @@ public abstract class TensorGenerator implements Cloneable {
       if (generator == null) return null;
       dtypes = memoizedDTypes(builder, generator);
     } catch (RuntimeException e) {
+      LOGGER.fine(
+          () ->
+              "Dtype fold of vn "
+                  + vn
+                  + " in "
+                  + describe(node)
+                  + " declined on "
+                  + e.getClass().getSimpleName()
+                  + ".");
       return null;
     } finally {
       inProgress.remove(frame);
