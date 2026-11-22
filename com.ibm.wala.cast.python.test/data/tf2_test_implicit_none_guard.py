@@ -24,6 +24,33 @@ def should_stop(value):
         return True
 
 
+def consume_never(t):
+    raise AssertionError("never called")
+
+
+def always(value):
+    return True
+
+
+def consume_never_looped(t):
+    raise AssertionError("never called")
+
+
+def always_looped(value):
+    while True:
+        return True
+
+
+for step in range(2):
+    if always_looped(step):
+        continue
+    consume_never_looped(tf.ones([2, 3]))
+
+for step in range(2):
+    if always(step):
+        continue
+    consume_never(tf.ones([2, 3]))
+
 for step in range(5):
     consume_before_guard(tf.ones([2, 3]))
     if should_stop(step):

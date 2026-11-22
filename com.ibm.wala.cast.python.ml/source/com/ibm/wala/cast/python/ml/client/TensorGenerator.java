@@ -5131,32 +5131,88 @@ public abstract class TensorGenerator implements Cloneable {
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
     if (!(only instanceof ConstantKey)) return null;
-    // A field's one constant stands for a read of it only when every write of it is seen, as in the
-    // receiver-field fold above.
-    if (def instanceof PythonPropertyRead read && readMayTakeUnseenValue(builder, node, read)) {
+    // The one constant stands for the operand only when every value that reaches it is seen: a
+    // write of a field it reads, a callee's return, or an argument a caller passes for it.
+    if (mayTakeUnseenValue(builder, node, vn, HashSetFactory.make())) {
       LOGGER.fine(
           () ->
-              "A write of the field "
-                  + read
-                  + " reads in "
-                  + describe(node)
-                  + " stores a value no points-to set holds; the guard declines.");
-      return null;
-    }
-    // A call's one constant stands for its result only when every way its callees return is seen:
-    // a callee that falls off its end returns `None`, which no points-to set holds.
-    if (def instanceof SSAAbstractInvokeInstruction call
-        && mayReturnUnseenValue(builder, node, call, HashSetFactory.make())) {
-      LOGGER.fine(
-          () ->
-              "A callee of "
-                  + call
+              "Value "
+                  + vn
                   + " in "
                   + describe(node)
-                  + " may return a value no points-to set holds; the guard declines.");
+                  + " may take a value no points-to set holds; the guard declines.");
       return null;
     }
     return ((ConstantKey<?>) only).getValue();
+  }
+
+  /**
+   * The argument a call passes by keyword for a parameter, matched by the parameter's name.
+   *
+   * @param callee The callee.
+   * @param vn The parameter's value number in the callee.
+   * @param call The call.
+   * @return The argument's value number, {@code 0} when the call passes none by keyword, or {@link
+   *     #AMBIGUOUS_ARGUMENT} when the call is not one whose keywords can be read.
+   */
+  private static int keywordArgument(CGNode callee, int vn, SSAAbstractInvokeInstruction call) {
+    if (!(call instanceof PythonInvokeInstruction pyCall) || pyCall.firstStarredPosition() > 0)
+      return AMBIGUOUS_ARGUMENT;
+    String[] names = callee.getIR().getLocalNames(0, vn);
+    if (names == null) return AMBIGUOUS_ARGUMENT;
+    for (String keyword : pyCall.getKeywords())
+      for (String name : names) if (keyword.equals(name)) return pyCall.getUse(keyword);
+    return 0;
+  }
+
+  /** How many values {@link #mayTakeUnseenValue} reads before it answers that one may be unseen. */
+  private static final int UNSEEN_VALUE_WALK_LIMIT = 64;
+
+  /**
+   * Decides whether a value may take a value no points-to set holds, so that its points-to set does
+   * not stand for every value it takes (wala/ML#1320, wala/ML#1321): a property read with a write
+   * of such a value ({@link #readMayTakeUnseenValue}), a call whose callee may return one ({@link
+   * #mayReturnUnseenValue}), a φ with such an operand, or a parameter for which a caller passes
+   * one. A walk longer than {@link #UNSEEN_VALUE_WALK_LIMIT} values answers that one may be.
+   *
+   * @param builder The builder.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @param visited The values already read; grown.
+   * @return Whether such a value may reach the value.
+   */
+  private static boolean mayTakeUnseenValue(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited) {
+    if (node.getIR() == null || !visited.add(Pair.make(node, vn))) return false;
+    if (visited.size() > UNSEEN_VALUE_WALK_LIMIT) return true;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof PythonPropertyRead read) return readMayTakeUnseenValue(builder, node, read);
+    if (def instanceof SSAAbstractInvokeInstruction call)
+      return mayReturnUnseenValue(builder, node, call, HashSetFactory.make());
+    if (def instanceof SSAPhiInstruction phi) {
+      for (int i = 0; i < phi.getNumberOfUses(); i++)
+        if (mayTakeUnseenValue(builder, node, phi.getUse(i), visited)) return true;
+      return false;
+    }
+    if (def != null) return false;
+    int position = parameterPosition(node, vn);
+    if (position < 0) return false;
+    CallGraph cg = builder.getCallGraph();
+    for (Iterator<CGNode> callers = cg.getPredNodes(node); callers.hasNext(); ) {
+      CGNode caller = callers.next();
+      if (caller.getIR() == null) continue;
+      for (Iterator<CallSiteReference> sites = cg.getPossibleSites(caller, node); sites.hasNext(); )
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next())) {
+          int argument = callerArgumentValueNumber(call, position);
+          if (argument == AMBIGUOUS_ARGUMENT) argument = keywordArgument(node, vn, call);
+          if (argument == AMBIGUOUS_ARGUMENT) return true;
+          if (argument > 0 && mayTakeUnseenValue(builder, caller, argument, visited)) return true;
+        }
+    }
+    return false;
   }
 
   /**
@@ -5209,7 +5265,8 @@ public abstract class TensorGenerator implements Cloneable {
   /**
    * Decides whether a call may return a value the points-to analysis does not hold: a callee of the
    * program's code with a normal path to its exit that returns no value, which returns {@code
-   * None}, or that returns a value whose points-to set is empty. A synthetic callee, as a
+   * None}, or that returns a value whose points-to set is empty. A path through a block a constant
+   * guard never takes ({@link #computeBlockFeasibility}) is not one. A synthetic callee, as a
    * trampoline, is decided by the callees it calls in turn.
    *
    * @param builder The builder.
@@ -5236,14 +5293,44 @@ public abstract class TensorGenerator implements Cloneable {
         continue;
       }
       SSACFG cfg = ir.getControlFlowGraph();
+      Set<ISSABasicBlock> reached = reachedFromEntry(cfg);
       for (ISSABasicBlock exiting : cfg.getNormalPredecessors(cfg.exit())) {
+        // A block no path from the entry reaches, as the one after `while True:`, returns nothing;
+        // nor does one a constant guard never takes.
+        if (!reached.contains(exiting)) continue;
+        if (Boolean.FALSE.equals(computeBlockFeasibility(builder, callee, exiting))) continue;
         int last = exiting.getLastInstructionIndex();
         SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
+        // Nor does a jump to the exit a constant guard never takes, as the one out of `while
+        // True:`,
+        // whose target is the exit's index, -1.
+        if (instruction instanceof SSAConditionalBranchInstruction branch
+            && branch.getTarget() < 0
+            && Boolean.FALSE.equals(evaluateBranchComparison(builder, callee, branch))) continue;
         if (!(instruction instanceof SSAReturnInstruction ret) || ret.returnsVoid()) return true;
         if (holdsNoObject(pa, callee, ret.getResult())) return true;
       }
     }
     return false;
+  }
+
+  /**
+   * The blocks a path from the entry reaches, over normal and exceptional edges.
+   *
+   * @param cfg The control-flow graph.
+   * @return The blocks reached.
+   */
+  private static Set<ISSABasicBlock> reachedFromEntry(SSACFG cfg) {
+    Set<ISSABasicBlock> reached = HashSetFactory.make();
+    Deque<ISSABasicBlock> work = new ArrayDeque<>();
+    work.push(cfg.entry());
+    reached.add(cfg.entry());
+    while (!work.isEmpty())
+      for (Iterator<ISSABasicBlock> it = cfg.getSuccNodes(work.pop()); it.hasNext(); ) {
+        ISSABasicBlock successor = it.next();
+        if (reached.add(successor)) work.push(successor);
+      }
+    return reached;
   }
 
   /**
@@ -5884,9 +5971,8 @@ public abstract class TensorGenerator implements Cloneable {
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
     if (!(only instanceof ConstantKey)) return null;
-    // As in the guard fold: a call's one constant does not stand for a callee's unseen return.
-    if (caller.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call
-        && mayReturnUnseenValue(builder, caller, call, HashSetFactory.make())) return null;
+    // As in the guard fold: the one constant does not stand for a value no points-to set holds.
+    if (mayTakeUnseenValue(builder, caller, vn, HashSetFactory.make())) return null;
     return ((ConstantKey<?>) only).getValue();
   }
 
