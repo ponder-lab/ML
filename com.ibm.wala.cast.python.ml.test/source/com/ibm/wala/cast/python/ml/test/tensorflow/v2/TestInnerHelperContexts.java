@@ -77,4 +77,26 @@ public class TestInnerHelperContexts extends AbstractTensorTest {
   public void testCopiedIndexDepth4() throws ClassHierarchyException, CancelException, IOException {
     test(4, FILE, "consume_copied_index", 1, 1, Map.of(2, Set.of(INDEX)));
   }
+
+  /**
+   * The index at a targeted depth of 0, which keeps the framework methods context-insensitive even
+   * under a program caller with two sites: their one node per method reads both calls' shapes. With
+   * a depth of at least 3 under such a caller, the index reads its own type alone.
+   */
+  @Test
+  public void testIndexDepth0() throws ClassHierarchyException, CancelException, IOException {
+    test(0, FILE, "consume_index", 1, 1, Map.of(2, Set.of(INDEX, TensorType.of(INT_32, 5, 4))));
+  }
+
+  /** {@link #testIndexDepth0} for the index copied by {@code np.array}. */
+  @Test
+  public void testCopiedIndexDepth0() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        0,
+        FILE,
+        "consume_copied_index",
+        1,
+        1,
+        Map.of(2, Set.of(INDEX, TensorType.of(INT_32, 5, 4))));
+  }
 }

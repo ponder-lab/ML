@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -104,9 +105,7 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
     engine.performAnalysis(builder);
     PythonTensorAnalysisEngine.ResolverCensus census = engine.getResolverCensus();
     assertTrue("The resolver ran to completion.", census.complete());
-    assertTrue(
-        "The resolver found " + census.cyclicQueries() + " queries on a cycle.",
-        census.cyclicQueries() > 0);
+    assertNotEquals("The resolver found no query on a cycle.", 0, census.cyclicQueries());
   }
 
   /**

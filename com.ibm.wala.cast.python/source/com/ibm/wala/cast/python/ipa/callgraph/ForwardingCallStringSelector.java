@@ -60,6 +60,21 @@ public class ForwardingCallStringSelector extends CallStringContextSelector {
   }
 
   /**
+   * Whether a call from the given node into the given method recurses: the method is the node's own
+   * or one whose call site is on the node's call string.
+   *
+   * @param caller The calling node.
+   * @param target The called method.
+   * @return Whether {@code target} is {@code caller}'s method or a method of its call string.
+   */
+  private static boolean recurses(CGNode caller, IMethod target) {
+    if (target.equals(caller.getMethod())) return true;
+    CallString cs = (CallString) caller.getContext().get(CALL_STRING);
+    if (cs != null) for (IMethod method : cs.getMethods()) if (target.equals(method)) return true;
+    return false;
+  }
+
+  /**
    * Whether the call at the given site passes one of the caller's own parameters on as an argument.
    *
    * @param caller The calling node.
@@ -81,9 +96,9 @@ public class ForwardingCallStringSelector extends CallStringContextSelector {
   @Override
   protected int getLength(CGNode caller, CallSiteReference site, IMethod target) {
     if (!isProgramFunction(caller)) return callStringLength(caller) >= 2 ? 2 : 1;
-    // A function calling itself keeps one site: a second would unroll its recursion by one call,
-    // whose nodes merge again below it.
-    if (target.equals(caller.getMethod())) return 1;
+    // A call into a function already on the caller's string, the caller's own among them, keeps one
+    // site: a second would unroll the recursion by one call, whose nodes merge again below it.
+    if (recurses(caller, target)) return 1;
     return passesParameterOn(caller, site) ? 2 : 1;
   }
 }

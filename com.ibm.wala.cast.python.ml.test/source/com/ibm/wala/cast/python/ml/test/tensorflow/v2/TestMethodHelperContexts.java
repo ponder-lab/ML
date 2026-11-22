@@ -60,4 +60,22 @@ public class TestMethodHelperContexts extends AbstractTensorTest {
         Map.of(
             2, Set.of(INDEX, TensorType.of(FLOAT_32, 5), FEATURES, TensorType.of(INT_32, 5, 4))));
   }
+
+  /**
+   * The index converted by two helpers that call each other, the first called by a method: their
+   * recursive calls have one node for both of the method's calls, so the index reads the features'
+   * types beside its own, as for {@link #testWalkedIndex}.
+   *
+   * <p>TODO: Reads {@link #INDEX} alone once wala/ML#1305 separates a recursive helper's callers.
+   */
+  @Test
+  public void testTickedIndex() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        FILE,
+        "consume_ticked_index",
+        1,
+        1,
+        Map.of(
+            2, Set.of(INDEX, TensorType.of(FLOAT_32, 5), FEATURES, TensorType.of(INT_32, 5, 4))));
+  }
 }

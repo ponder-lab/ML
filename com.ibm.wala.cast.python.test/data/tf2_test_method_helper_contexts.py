@@ -19,6 +19,10 @@ def consume_walked_index(t):
     assert t.dtype == np.int32 and t.shape == (5,)
 
 
+def consume_ticked_index(t):
+    assert t.dtype == np.int32 and t.shape == (5,)
+
+
 def to_numpy(data):
     if isinstance(data, list):
         return np.array(data)
@@ -33,6 +37,16 @@ def walk(data, n):
     if n > 0:
         return walk(data, n - 1)
     return to_numpy(data)
+
+
+def tick(data, n):
+    if n > 0:
+        return tock(data, n - 1)
+    return to_numpy(data)
+
+
+def tock(data, n):
+    return tick(data, n)
 
 
 class Graph:
@@ -79,3 +93,16 @@ consume_helper_index(helper_index)
 
 _, walked_index = Walker(features, graph_index).sample()
 consume_walked_index(walked_index)
+
+
+class Ticker:
+    def __init__(self, x, index):
+        self.x = x
+        self.index = index
+
+    def sample(self):
+        return tick(self.x, 2), tick(self.index, 2)
+
+
+_, ticked_index = Ticker(features, graph_index).sample()
+consume_ticked_index(ticked_index)
