@@ -2329,11 +2329,11 @@ final class WorklistTypeResolver {
      * Decides whether a recomputation holds a shape the component does not hold.
      *
      * @param settled The value the query holds.
-     * @param value The value it recomputed to, or {@code null}.
+     * @param value The value it recomputed to, which is of the kind of the value held.
      * @return Whether the recomputation made a shape.
      */
     boolean makesShape(Object settled, Object value) {
-      if (!(settled instanceof ShapeResult) || !(value instanceof ShapeResult)) return false;
+      if (!(settled instanceof ShapeResult)) return false;
       return !this.held.keySet().containsAll(((ShapeResult) value).members());
     }
 
@@ -2502,7 +2502,7 @@ final class WorklistTypeResolver {
     log.add(first);
     print += printDelta(first);
     seen.put(print, 1);
-    Set<Object> recomputed = this.checkSkips ? HashSetFactory.make(targets) : null;
+    Set<Object> recomputed = this.checkSkips ? new LinkedHashSet<>(targets) : null;
     Growth growth = new Growth();
     for (Object key : scc) growth.hold(this.state.get(key));
     // The writes whose readers are still to recompute, and the queries among them that hold an
@@ -2512,7 +2512,6 @@ final class WorklistTypeResolver {
     int replaced = 0;
     while (true) {
       List<Object> readers = this.readersWithin(last, positions, imposed);
-      if (readers.isEmpty()) break;
       spent += readers.size();
       if (!joining && spent > budget) {
         joining = true;
@@ -2549,9 +2548,12 @@ final class WorklistTypeResolver {
       this.orbits++;
       List<Object[]> settled = this.settleOrbit(orbit, changed, probeFilter);
       if (settled.isEmpty()) {
-        // Every query already holds its orbit's value, and still the orbit goes on.
+        // Every query already holds its orbit's value, and still the orbit goes on. Some query of
+        // the component is not left to join yet: one that is only grows, and an orbit of them all
+        // would have each written back to a value it held.
         joining = true;
-        if (this.joinSettled.addAll(scc)) this.joinedComponents++;
+        this.joinSettled.addAll(scc);
+        this.joinedComponents++;
         if (probeFilter != null)
           LOGGER.fine("CANON-PROBE a component of " + scc.size() + " joins at an orbit.");
         continue;
@@ -2569,12 +2571,14 @@ final class WorklistTypeResolver {
       seen.put(print, 0);
     }
     // The check mode: at a fixpoint reached by replacement, each query the pass recomputed on the
-    // component recomputes to the value it holds.
+    // component recomputes to the value it holds. No guard decides the check: the iteration runs in
+    // an unguarded pass only.
     if (recomputed != null && !joining)
-      for (Object key : scc)
-        if (recomputed.contains(key)
-            && this.cyclicCause(key) == null
-            && this.checkStanding(key, true)) this.checkedFixpointQueries++;
+      for (Object key : recomputed)
+        if (this.cyclicCause(key) == null) {
+          this.checkStanding(key, true);
+          this.checkedFixpointQueries++;
+        }
     return replaced;
   }
 
@@ -2970,7 +2974,7 @@ final class WorklistTypeResolver {
     Object settled = this.state.get(key);
     if (value != null
         && !value.equals(settled)
-        && !(isBottomValue(value) && !isBottomValue(settled))
+        && !isBottomValue(value)
         && !(this.joinSettled.contains(key)
             && (this.pinnedAtSettlement.contains(key)
                 || (this.widenedAtSettlement.contains(key)
@@ -3662,8 +3666,8 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Meets two query values of the same kind: the members both hold, with the unknown remainder only
-   * when both have it. The legacy null dtype is ⊤, so the other value is the meet.
+   * Meets two values of one query, which are of one kind: the members both hold, with the unknown
+   * remainder only when both have it. The legacy null dtype is ⊤, so the other value is the meet.
    *
    * @param first A value.
    * @param second Another value.
@@ -3672,29 +3676,27 @@ final class WorklistTypeResolver {
   private static Object meet(Object first, Object second) {
     if (first == NULL_DTYPE) return second;
     if (second == NULL_DTYPE) return first;
-    if (first instanceof ShapeResult && second instanceof ShapeResult)
+    if (first instanceof ShapeResult)
       return ((ShapeResult) first).intersection((ShapeResult) second);
-    if (first instanceof Set && second instanceof Set) {
-      EnumSet<DType> both = EnumSet.noneOf(DType.class);
-      for (Object dtype : (Set<?>) first)
-        if (((Set<?>) second).contains(dtype)) both.add((DType) dtype);
-      return both;
-    }
-    return second;
+    @SuppressWarnings("unchecked")
+    Set<DType> held = (Set<DType>) first;
+    EnumSet<DType> both = EnumSet.noneOf(DType.class);
+    both.addAll(held);
+    both.retainAll((Set<?>) second);
+    return both;
   }
 
   /**
-   * Widens a settled value by a recomputation of it: {@link ShapeResult#widening} for shapes, and
-   * the join for any other kind, whose values are of a finite number.
+   * Widens a settled value by a recomputation of it ({@link ShapeResult#widening}). Both are
+   * shapes: only a query whose recomputation made a shape is widened ({@link Growth#makesShape}),
+   * and the values of any other kind are of a finite number.
    *
    * @param settled The settled value.
    * @param value The recomputation.
    * @return The widened value.
    */
   private static Object widening(Object settled, Object value) {
-    if (settled instanceof ShapeResult && value instanceof ShapeResult)
-      return ((ShapeResult) settled).widening((ShapeResult) value);
-    return join(settled, value);
+    return ((ShapeResult) settled).widening((ShapeResult) value);
   }
 
   /**
@@ -3721,13 +3723,9 @@ final class WorklistTypeResolver {
    */
   private static Set<List<Dimension<?>>> madeByWidening(
       Object settled, Object value, Object widened) {
-    Set<List<Dimension<?>>> made = HashSetFactory.make();
-    if (settled instanceof ShapeResult
-        && value instanceof ShapeResult
-        && widened instanceof ShapeResult)
-      for (List<Dimension<?>> member : ((ShapeResult) widened).members())
-        if (!((ShapeResult) settled).members().contains(member)
-            && !((ShapeResult) value).members().contains(member)) made.add(member);
+    Set<List<Dimension<?>>> made = HashSetFactory.make(((ShapeResult) widened).members());
+    made.removeAll(((ShapeResult) settled).members());
+    made.removeAll(((ShapeResult) value).members());
     return made;
   }
 

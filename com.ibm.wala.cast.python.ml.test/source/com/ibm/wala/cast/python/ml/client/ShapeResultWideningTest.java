@@ -17,8 +17,8 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * Tests {@link ShapeResult#widening} and the covering of one shape by another it rests on
- * (wala/ML#1293).
+ * Tests {@link ShapeResult#widening}, the covering of one shape by another it rests on, and {@link
+ * ShapeResult#intersection} (wala/ML#1293).
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
@@ -217,5 +217,21 @@ public class ShapeResultWideningTest {
     // A member that covers another is not one of the given shapes, so both stay.
     ShapeResult dynamic = ShapeResult.of(Set.of(shape(4, 3), shape(D, 3)));
     assertSame(dynamic, dynamic.withoutCoveredBy(Set.of(shape(2, U, 4))));
+  }
+
+  /**
+   * An intersection holds the shapes both results hold, and an unknown remainder only when both
+   * have one.
+   */
+  @Test
+  public void testIntersection() {
+    ShapeResult both = ShapeResult.of(Set.of(shape(2), shape(3)));
+    assertSame(both, both.intersection(ShapeResult.of(Set.of(shape(2), shape(3)))));
+    assertEquals(one(2), both.intersection(one(2)));
+    assertEquals(ShapeResult.bottom(), one(2).intersection(one(3)));
+    ShapeResult open = one(2).union(ShapeResult.unknown());
+    assertEquals(one(2), open.intersection(both));
+    assertEquals(one(2), both.intersection(open));
+    assertEquals(open, open.intersection(both.union(ShapeResult.unknown())));
   }
 }
