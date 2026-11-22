@@ -4835,6 +4835,9 @@ public abstract class TensorGenerator implements Cloneable {
                   + ".");
       return null;
     }
+    // A dtype tested for truth, as `if x.dtype:`, is unequal to the zero the branch tests it
+    // against, and every NumPy and TensorFlow dtype is true. The front end compares a condition's
+    // value with zero alone, so no branch compares two dtypes.
     if (!(branch.getOperator() instanceof IConditionalBranchInstruction.Operator)) return null;
     switch ((IConditionalBranchInstruction.Operator) branch.getOperator()) {
       case EQ:
@@ -5066,6 +5069,8 @@ public abstract class TensorGenerator implements Cloneable {
       Object left = resolveComparableConstant(builder, node, binop.getUse(0), env, visited);
       Object right = resolveComparableConstant(builder, node, binop.getUse(1), env, visited);
       if (left == null || right == null) return null;
+      if (left instanceof DTypeConstant || right instanceof DTypeConstant)
+        return compareDTypes(left, right, (CAstBinaryOp) binop.getOperator());
       Boolean outcome;
       switch ((CAstBinaryOp) binop.getOperator()) {
         case EQ:
@@ -5105,6 +5110,13 @@ public abstract class TensorGenerator implements Cloneable {
       if (rank != null) return rank;
     }
 
+    // A dtype predicate `x.dtype` folds to the base's one dtype (wala/ML#1053), so a conversion
+    // guarded by `if x.dtype == np.float64:` is dead for an argument that is never float64.
+    if (def instanceof PythonPropertyRead) {
+      DType dtype = resolveDTypePredicate(builder, node, (PythonPropertyRead) def);
+      if (dtype != null) return new DTypeConstant(dtype);
+    }
+
     // A `len(v)` over a shape vector folds to the vector's common rank, as a rank predicate does:
     // the matrix round trip's guards `if len(tensor.shape) == 0:` and `if len(orig_shape_list) ==
     // 2:` decide when the vector's rank is known, and the infeasible arm otherwise returns the
@@ -5113,6 +5125,13 @@ public abstract class TensorGenerator implements Cloneable {
     if (def instanceof PythonInvokeInstruction invoke) {
       Integer rank = resolveLenOfShapeVector(builder, node, invoke);
       if (rank != null) return rank;
+    }
+
+    // An `isinstance(x, list)` test folds when the objects `x` may be decide it (wala/ML#1053), so
+    // a conversion guarded by it is dead for an argument of another type.
+    if (def instanceof PythonInvokeInstruction invoke) {
+      Integer instance = resolveIsInstance(builder, node, invoke);
+      if (instance != null) return instance;
     }
 
     // A receiver-field read folds when every instance holds the same single constant in the
@@ -5130,7 +5149,287 @@ public abstract class TensorGenerator implements Cloneable {
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
-    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+    if (only instanceof ConstantKey) return ((ConstantKey<?>) only).getValue();
+    // A dtype token, as `np.float64` or `tf.float64`, folds to the dtype it names (wala/ML#1053).
+    DType token = dtypeOfToken(builder, only);
+    return token == null ? null : new DTypeConstant(token);
+  }
+
+  /**
+   * A dtype as the branch fold compares it: the dtype of an array or tensor ({@link
+   * #resolveDTypePredicate}) or the one a token names ({@link #dtypeOfToken}). It equals no other
+   * kind of constant, and {@link #compareDTypes} decides a comparison over it.
+   *
+   * @param dtype The dtype.
+   */
+  private record DTypeConstant(DType dtype) {}
+
+  /**
+   * Resolves a dtype predicate operand, {@code x.dtype}, to the base's one dtype (wala/ML#1053),
+   * read through the engine as {@link #resolveRankPredicate} reads a rank.
+   *
+   * <p>Declines (returns {@code null}) when the base may have more than one creator ({@link
+   * TensorGeneratorFactory#mayHaveSeveralCreators}), since the generator reads only the first one;
+   * when the read is empty, which is the engine's interim ⊥ or no tensor; and unless the read holds
+   * one known dtype.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for dtype resolution.
+   * @param node The {@link CGNode} whose IR defines the operand.
+   * @param read The {@code dtype} property read.
+   * @return The base's dtype, or {@code null} when the operand is not a dtype predicate or the
+   *     base's dtype is not one known dtype.
+   */
+  private static DType resolveDTypePredicate(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
+    if (!"dtype".equals(resolvePropertyName(builder, node, read))) return null;
+    return dtypeOfValue(builder, node, read.getObjectRef());
+  }
+
+  /**
+   * The one known dtype of a value, for {@link #resolveDTypePredicate}. A φ's is the dtype its
+   * feasible arms agree on, so a value an earlier guard decides is not converted, as {@code x}
+   * after {@code if isinstance(x, list): x = np.array(x)} for an array, keeps its argument's dtype.
+   * Any other value's is its creator's.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for dtype resolution.
+   * @param node The {@link CGNode} whose IR defines the value.
+   * @param vn The value number.
+   * @return The dtype, or {@code null} when the value has no one known dtype.
+   */
+  private static DType dtypeOfValue(PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (node.getDU().getDef(vn) instanceof SSAPhiInstruction phi) {
+      Pair<CGNode, Integer> frame = Pair.make(node, vn);
+      Set<Pair<CGNode, Integer>> onStack = PHI_FOLD_ON_STACK.get();
+      if (!onStack.add(frame)) {
+        FOLD_REENTRIES.get()[0]++;
+        noteGuardDecision();
+        return null;
+      }
+      try {
+        DType agreed = null;
+        for (int i = 0; i < phi.getNumberOfUses(); i++) {
+          if (Boolean.FALSE.equals(computePhiArmFeasibility(builder, node, phi, i))) continue;
+          DType arm = dtypeOfValue(builder, node, phi.getUse(i));
+          if (arm == null || (agreed != null && agreed != arm)) return null;
+          agreed = arm;
+        }
+        return agreed;
+      } finally {
+        onStack.remove(frame);
+      }
+    }
+    // Under the engine only, as the len fold: the creator's generator walks to the callers, whose
+    // reachable blocks evaluate their guards, and those may ask this fold again.
+    if (WorklistTypeResolver.active(builder) == null) return null;
+    PointerKey basePK = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (builder.getPropagationSystem().isImplicit(basePK)) return null;
+    PointsToSetVariable baseVar = builder.getPropagationSystem().findOrCreatePointsToSet(basePK);
+    if (TensorGeneratorFactory.mayHaveSeveralCreators(baseVar, builder)) return null;
+    // A re-entry has no answer yet, and declines as the len fold's does (RANK_FOLDS_REENTERED).
+    Pair<CGNode, Integer> frame = Pair.make(node, vn);
+    Set<Pair<CGNode, Integer>> inProgress = RANK_FOLDS_IN_PROGRESS.get();
+    if (inProgress.contains(frame)) {
+      RANK_FOLDS_REENTERED.get().add(frame);
+      FOLD_REENTRIES.get()[0]++;
+      noteGuardDecision();
+      if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
+      return null;
+    }
+    inProgress.add(frame);
+    Set<DType> dtypes;
+    try {
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(baseVar, builder);
+      if (generator == null) return null;
+      dtypes = memoizedDTypes(builder, generator);
+    } catch (RuntimeException e) {
+      LOGGER.fine(
+          () ->
+              "Dtype fold of vn "
+                  + vn
+                  + " in "
+                  + describe(node)
+                  + " declined on "
+                  + e.getClass().getSimpleName()
+                  + ".");
+      return null;
+    } finally {
+      inProgress.remove(frame);
+      RANK_FOLDS_REENTERED.get().remove(frame);
+    }
+    if (dtypes == null) return null;
+    if (dtypes.isEmpty()) {
+      // An interim ⊥ defers the evaluating query to the settlement pass, as a rank read's does.
+      if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
+      return null;
+    }
+    if (dtypes.size() != 1) return null;
+    DType only = dtypes.iterator().next();
+    return only == UNKNOWN ? null : only;
+  }
+
+  /**
+   * The dtype a dtype token names: the object a TensorFlow or NumPy dtype field holds ({@link
+   * #dtypeOfModuleField}), or a NumPy scalar type ({@link NumpyTypes#SCALAR_TYPE_TO_DTYPE}).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis holds the fields.
+   * @param token The value.
+   * @return The dtype, or {@code null} when the value is no such token.
+   */
+  private static DType dtypeOfToken(PropagationCallGraphBuilder builder, InstanceKey token) {
+    DType field = dtypeOfModuleField(builder, token);
+    if (field != null) return field;
+    return NumpyTypes.SCALAR_TYPE_TO_DTYPE.get(token.concreteType().getReference());
+  }
+
+  /** The type the {@code isinstance} builtin's summary is declared on. */
+  private static final String ISINSTANCE_BUILTIN_TYPE_NAME = "Lwala/builtin/isinstance";
+
+  /**
+   * The classes an {@code isinstance} test is decided against, by the type of the class object: the
+   * {@code list}, {@code tuple} and {@code dict} builtins and NumPy's {@code ndarray}, each to the
+   * type of its instances.
+   */
+  private static final Map<String, TypeReference> INSTANCE_TYPE_OF_CLASS =
+      Map.of(
+          "Lwala/builtin/list", PythonTypes.list,
+          "Lwala/builtin/tuple", PythonTypes.tuple,
+          "Lwala/builtin/dict", PythonTypes.dict,
+          "Lnumpy/ndarray_constructor", NumpyTypes.NDARRAY_TYPE);
+
+  /**
+   * Resolves an {@code isinstance(x, C)} call to {@code 1} or {@code 0} when the objects {@code x}
+   * may be decide it (wala/ML#1053), so a conversion guarded by {@code if isinstance(x, list):} is
+   * dead for an argument that is an array.
+   *
+   * <p>{@code C} must be one class of {@link #INSTANCE_TYPE_OF_CLASS}, and each object {@code x}
+   * may be must be of a type no program class can extend: a list, tuple, dict, NumPy array or
+   * constant. A φ's objects are its feasible arms'. The test holds when every object is of {@code
+   * C}'s instance type, and fails when none is. A value or φ arm whose points-to set is empty, as
+   * the value of a call nothing models, declines, since a verdict read from the other arms' objects
+   * would cut the arm that value takes. An object a nonempty points-to set does not hold is not
+   * seen, so where one may reach {@code x} beside the objects it holds, the outcome is read from
+   * those objects alone.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the call.
+   * @param node The {@link CGNode} whose IR holds the call.
+   * @param invoke The call.
+   * @return {@code 1} or {@code 0}, or {@code null} when the call is not such a test or the objects
+   *     do not decide it.
+   */
+  private static Integer resolveIsInstance(
+      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction invoke) {
+    // Exactly `isinstance(x, C)`: the callable plus two positional arguments.
+    if (invoke.getNumberOfUses() != 3) return null;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets.isEmpty()) return null;
+    for (CGNode target : targets)
+      if (!ISINSTANCE_BUILTIN_TYPE_NAME.equals(
+          target.getMethod().getDeclaringClass().getReference().getName().toString())) return null;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    InstanceKey classObject =
+        onlyKeyWithoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, invoke.getUse(2))));
+    if (classObject == null) return null;
+    TypeReference instanceType =
+        INSTANCE_TYPE_OF_CLASS.get(classObject.concreteType().getReference().getName().toString());
+    if (instanceType == null) return null;
+    Set<InstanceKey> objects = HashSetFactory.make();
+    if (!feasibleObjects(builder, node, invoke.getUse(1), objects) || objects.isEmpty())
+      return null;
+    boolean all = true;
+    boolean none = true;
+    for (InstanceKey object : objects) {
+      TypeReference type =
+          object instanceof ConstantKey ? null : object.concreteType().getReference();
+      if (type != null && !INSTANCE_TYPE_OF_CLASS.containsValue(type)) return null;
+      if (instanceType.equals(type)) none = false;
+      else all = false;
+    }
+    Integer outcome = all ? Integer.valueOf(1) : none ? Integer.valueOf(0) : null;
+    LOGGER.fine(
+        () ->
+            "The isinstance fold in "
+                + describe(node)
+                + " reads "
+                + objects.size()
+                + " objects against "
+                + instanceType
+                + ": "
+                + outcome
+                + ".");
+    return outcome;
+  }
+
+  /**
+   * Gathers the objects a value may be, for {@link #resolveIsInstance}: a φ's are its feasible
+   * arms', and any other value's its points-to set's.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis holds the sets.
+   * @param node The {@link CGNode} whose IR defines the value.
+   * @param vn The value number.
+   * @param objects The objects gathered; grown.
+   * @return {@code false} when the objects are not known: a φ's arms re-enter the guard being
+   *     decided, or a value's points-to set is empty.
+   */
+  private static boolean feasibleObjects(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<InstanceKey> objects) {
+    if (node.getDU().getDef(vn) instanceof SSAPhiInstruction phi) {
+      Pair<CGNode, Integer> frame = Pair.make(node, vn);
+      Set<Pair<CGNode, Integer>> onStack = PHI_FOLD_ON_STACK.get();
+      if (!onStack.add(frame)) {
+        FOLD_REENTRIES.get()[0]++;
+        noteGuardDecision();
+        return false;
+      }
+      try {
+        for (int i = 0; i < phi.getNumberOfUses(); i++) {
+          if (Boolean.FALSE.equals(computePhiArmFeasibility(builder, node, phi, i))) continue;
+          if (!feasibleObjects(builder, node, phi.getUse(i), objects)) return false;
+        }
+        return true;
+      } finally {
+        onStack.remove(frame);
+      }
+    }
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    // An empty set holds no object the value may be, as for the value of a call nothing models.
+    boolean any = false;
+    for (InstanceKey object :
+        withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))) {
+      objects.add(object);
+      any = true;
+    }
+    return any;
+  }
+
+  /**
+   * Decides a comparison one of whose operands is a {@link DTypeConstant}, or declines with {@code
+   * null}. An array's or tensor's dtype compares equal to a token of the same dtype, NumPy's or
+   * TensorFlow's, and unequal to one of another. The front end lowers {@code is} as {@code ==} and
+   * {@code is not} as {@code !=}, and {@code x.dtype is np.float64} is never true, so only an
+   * outcome both operators share is decided: two different dtypes are neither equal nor the same
+   * object. Two equal dtypes, a dtype beside another kind of constant (such as a string naming it),
+   * and any other operator decline.
+   *
+   * @param left The left operand.
+   * @param right The right operand.
+   * @param operator The comparison.
+   * @return {@code 1} or {@code 0} for a decided comparison, or {@code null}.
+   */
+  private static Integer compareDTypes(Object left, Object right, CAstBinaryOp operator) {
+    if (!(left instanceof DTypeConstant l) || !(right instanceof DTypeConstant r)) return null;
+    if (l.dtype() == r.dtype()) return null;
+    switch (operator) {
+      case EQ:
+      case STRICT_EQ:
+        return 0;
+      case NE:
+      case STRICT_NE:
+        return 1;
+      default:
+        return null;
+    }
   }
 
   /**
@@ -7797,6 +8096,44 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
+   * The dtype a module's dtype field names, when a value is the object such a field holds, as
+   * {@code tf.float32} or {@code np.float32} is. The owner allocation may be a {@code
+   * TENSORFLOW_TYPE} (when the dtype came from {@code tf.float32}) or a {@code NUMPY_TYPE} (when it
+   * came from {@code np.float32}); both are allocated in the same synthetic import-method node that
+   * allocates the dtype itself.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis holds the fields.
+   * @param instanceKey The value.
+   * @return The dtype, or {@code null} when no module's dtype field holds the value.
+   */
+  static DType dtypeOfModuleField(PropagationCallGraphBuilder builder, InstanceKey instanceKey) {
+    if (!(instanceKey instanceof AllocationSiteInNode)) return null;
+    CGNode importNode = ((AllocationSiteInNode) instanceKey).getNode();
+    if (importNode == null) return null;
+    LOGGER.fine("Found import node of interest: " + describe(importNode) + ".");
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    for (TypeReference ownerType :
+        new TypeReference[] {TENSORFLOW_TYPE, TensorFlowTypes.NUMPY_TYPE}) {
+      InstanceKey ownerIK =
+          pointerAnalysis
+              .getHeapModel()
+              .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, ownerType));
+
+      // Check dtype literals.
+      for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+        IField field = builder.getClassHierarchy().resolveField(entry.getKey());
+        if (field == null) continue;
+        PointerKey pk =
+            pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(ownerIK, field);
+        OrdinalSet<InstanceKey> pts = withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
+        if (pts != null)
+          for (InstanceKey ik : pts) if (ik.equals(instanceKey)) return entry.getValue();
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns the possible dtypes of the tensor returned by this generator.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
@@ -7853,53 +8190,18 @@ public abstract class TensorGenerator implements Cloneable {
       // allocation may be a TENSORFLOW_TYPE (when the dtype came from `tf.float32`) or a
       // NUMPY_TYPE (when it came from `np.float32`); both are allocated in the same synthetic
       // import-method node that allocates the dtype itself.
-      boolean found = false;
-      if (instanceKey instanceof AllocationSiteInNode) {
-        CGNode importNode = ((AllocationSiteInNode) instanceKey).getNode();
-
-        if (importNode != null) {
-          LOGGER.fine("Found import node of interest: " + describe(importNode) + ".");
-          for (TypeReference ownerType :
-              new TypeReference[] {TENSORFLOW_TYPE, TensorFlowTypes.NUMPY_TYPE}) {
-            InstanceKey ownerIK =
-                pointerAnalysis
-                    .getHeapModel()
-                    .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, ownerType));
-
-            // Check dtype literals.
-            for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
-              FieldReference fieldRef = entry.getKey();
-              DType dtype = entry.getValue();
-              IField field = builder.getClassHierarchy().resolveField(fieldRef);
-
-              if (field != null) {
-                PointerKey pk =
-                    pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(ownerIK, field);
-
-                OrdinalSet<InstanceKey> pts =
-                    withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
-                if (pts != null) {
-                  for (InstanceKey ik : pts)
-                    if (ik.equals(instanceKey)) {
-                      ret.add(dtype);
-                      LOGGER.fine(
-                          "Found dtype: "
-                              + dtype
-                              + " for source: "
-                              + describe(this.getSource())
-                              + " from dType: "
-                              + describe(instanceKey)
-                              + ".");
-                      found = true;
-                      break;
-                    }
-                }
-              }
-              if (found) break;
-            }
-            if (found) break;
-          }
-        }
+      DType fieldDType = dtypeOfModuleField(builder, instanceKey);
+      boolean found = fieldDType != null;
+      if (found) {
+        ret.add(fieldDType);
+        LOGGER.fine(
+            "Found dtype: "
+                + fieldDType
+                + " for source: "
+                + describe(this.getSource())
+                + " from dType: "
+                + describe(instanceKey)
+                + ".");
       }
 
       if (found) continue;
