@@ -60,15 +60,22 @@ public class ForwardingCallStringSelector extends CallStringContextSelector {
   }
 
   /**
-   * Whether a call from the given node into the given method recurses: the method is the node's own
-   * or one whose call site is on the node's call string.
+   * Whether a call from the given node into the given method recurses: the method is the node's
+   * own, one that encloses it, or one whose call site is on the node's call string. A comprehension
+   * or a nested function runs in its enclosing function's context, so its call into that function,
+   * as {@code {k: walk(v) for k, v in d.items()}} in {@code walk} makes, recurses as a call of the
+   * function into itself does.
    *
    * @param caller The calling node.
    * @param target The called method.
-   * @return Whether {@code target} is {@code caller}'s method or a method of its call string.
+   * @return Whether {@code target} is {@code caller}'s method, a method enclosing it, or a method
+   *     of its call string.
    */
   private static boolean recurses(CGNode caller, IMethod target) {
     if (target.equals(caller.getMethod())) return true;
+    String enclosing = target.getDeclaringClass().getName().toString() + "/";
+    if (caller.getMethod().getDeclaringClass().getName().toString().startsWith(enclosing))
+      return true;
     CallString cs = (CallString) caller.getContext().get(CALL_STRING);
     if (cs != null) for (IMethod method : cs.getMethods()) if (target.equals(method)) return true;
     return false;
