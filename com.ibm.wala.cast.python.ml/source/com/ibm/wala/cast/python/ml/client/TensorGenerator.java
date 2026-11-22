@@ -5130,7 +5130,152 @@ public abstract class TensorGenerator implements Cloneable {
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
-    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+    if (!(only instanceof ConstantKey)) return null;
+    // A field's one constant stands for a read of it only when every write of it is seen, as in the
+    // receiver-field fold above.
+    if (def instanceof PythonPropertyRead read && readMayTakeUnseenValue(builder, node, read)) {
+      LOGGER.fine(
+          () ->
+              "A write of the field "
+                  + read
+                  + " reads in "
+                  + describe(node)
+                  + " stores a value no points-to set holds; the guard declines.");
+      return null;
+    }
+    // A call's one constant stands for its result only when every way its callees return is seen:
+    // a callee that falls off its end returns `None`, which no points-to set holds.
+    if (def instanceof SSAAbstractInvokeInstruction call
+        && mayReturnUnseenValue(builder, node, call, HashSetFactory.make())) {
+      LOGGER.fine(
+          () ->
+              "A callee of "
+                  + call
+                  + " in "
+                  + describe(node)
+                  + " may return a value no points-to set holds; the guard declines.");
+      return null;
+    }
+    return ((ConstantKey<?>) only).getValue();
+  }
+
+  /**
+   * Decides whether a property read may take a value no points-to set holds: one of the objects it
+   * reads from has a write of the property that stores such a value ({@link #hasUnseenWrite}). A
+   * read whose member is no string constant may read any field, and is decided so.
+   *
+   * @param builder The builder.
+   * @param node The node whose IR holds the read.
+   * @param read The read.
+   * @return Whether such a value may reach the read.
+   */
+  private static boolean readMayTakeUnseenValue(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (!st.isStringConstant(read.getMemberRef())) return true;
+    String field = st.getStringValue(read.getMemberRef());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (InstanceKey object :
+        withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef()))))
+      if (hasUnseenWrite(builder, object, field)) return true;
+    return false;
+  }
+
+  /**
+   * Decides whether a write of a field on an object stores a value the points-to analysis does not
+   * hold, so that the field's points-to set does not stand for every value it takes. A value an
+   * unmodeled call returns, as a key of a parsed configuration, has an empty set. So does a write
+   * through a member that is not a string constant, which may name the field.
+   *
+   * @param builder The builder.
+   * @param object The object whose field is read.
+   * @param field The field's name.
+   * @return Whether such a write may reach the field.
+   */
+  private static boolean hasUnseenWrite(
+      PropagationCallGraphBuilder builder, InstanceKey object, String field) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    PropertyWriteIndex index = propertyWriteIndex(builder);
+    for (PropertyWriteSite write : index.byAttribute().getOrDefault(field, List.of())) {
+      if (!pointsTo(pa, write.node(), write.object(), object)) continue;
+      if (holdsNoObject(pa, write.node(), write.value())) return true;
+    }
+    for (PropertyWriteSite write : index.nonConstantMember())
+      if (pointsTo(pa, write.node(), write.object(), object)) return true;
+    return false;
+  }
+
+  /**
+   * Decides whether a call may return a value the points-to analysis does not hold: a callee of the
+   * program's code with a normal path to its exit that returns no value, which returns {@code
+   * None}, or that returns a value whose points-to set is empty. A synthetic callee, as a
+   * trampoline, is decided by the callees it calls in turn.
+   *
+   * @param builder The builder.
+   * @param node The caller.
+   * @param call The call.
+   * @param visited The callees already decided; grown.
+   * @return Whether such a return may reach the call's result.
+   */
+  private static boolean mayReturnUnseenValue(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      Set<CGNode> visited) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+      if (!visited.add(callee)) continue;
+      IR ir = callee.getIR();
+      if (ir == null) continue;
+      if (!(callee.getMethod() instanceof AstMethod)) {
+        for (SSAInstruction instruction : ir.getInstructions())
+          if (instruction instanceof SSAAbstractInvokeInstruction inner
+              && inner.hasDef()
+              && mayReturnUnseenValue(builder, callee, inner, visited)) return true;
+        continue;
+      }
+      SSACFG cfg = ir.getControlFlowGraph();
+      for (ISSABasicBlock exiting : cfg.getNormalPredecessors(cfg.exit())) {
+        int last = exiting.getLastInstructionIndex();
+        SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
+        if (!(instruction instanceof SSAReturnInstruction ret) || ret.returnsVoid()) return true;
+        if (holdsNoObject(pa, callee, ret.getResult())) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Decides whether a value of a node points to an object.
+   *
+   * @param pa The pointer analysis.
+   * @param node The node.
+   * @param vn The value number.
+   * @param object The object.
+   * @return Whether the value's points-to set holds the object.
+   */
+  private static boolean pointsTo(
+      PointerAnalysis<InstanceKey> pa, CGNode node, int vn, InstanceKey object) {
+    for (InstanceKey held :
+        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))))
+      if (held.equals(object)) return true;
+    return false;
+  }
+
+  /**
+   * Decides whether a value of a node points to no object, apart from the keys only the client
+   * makes.
+   *
+   * @param pa The pointer analysis.
+   * @param node The node.
+   * @param vn The value number.
+   * @return Whether the value's points-to set is empty.
+   */
+  private static boolean holdsNoObject(PointerAnalysis<InstanceKey> pa, CGNode node, int vn) {
+    return withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))
+        .isEmpty();
   }
 
   /**
@@ -5195,6 +5340,16 @@ public abstract class TensorGenerator implements Cloneable {
       }
       if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) {
         LOGGER.fine(() -> "ATTR-FOLD click-default field value for " + fn + " declines.");
+        return null;
+      }
+      if (hasUnseenWrite(builder, objIK, fn)) {
+        LOGGER.fine(
+            () ->
+                "ATTR-FOLD a write of "
+                    + fn
+                    + " on "
+                    + describe(asin)
+                    + " stores a value no points-to set holds; declines.");
         return null;
       }
       Object value = ((ConstantKey<?>) only).getValue();
@@ -5728,7 +5883,11 @@ public abstract class TensorGenerator implements Cloneable {
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
-    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+    if (!(only instanceof ConstantKey)) return null;
+    // As in the guard fold: a call's one constant does not stand for a callee's unseen return.
+    if (caller.getDU().getDef(vn) instanceof SSAAbstractInvokeInstruction call
+        && mayReturnUnseenValue(builder, caller, call, HashSetFactory.make())) return null;
+    return ((ConstantKey<?>) only).getValue();
   }
 
   /**
