@@ -5358,7 +5358,11 @@ public abstract class TensorGenerator implements Cloneable {
       // again, as a recursive callee's does; that answer is not known, so it declines.
       Set<CGNode> inProgress = UNSEEN_RETURNS_IN_PROGRESS.get();
       if (!inProgress.add(callee)) {
+        // Marked as the other folds' re-entries are, so a walk that reads this answer is not
+        // memoized as if it were the callee's alone.
+        FOLD_REENTRIES.get()[0]++;
         noteGuardDecision();
+        if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
         return true;
       }
       try {
