@@ -2,7 +2,7 @@
 # result is taken only sometimes, and the code after the guard's `break` runs.
 import tensorflow as tf
 
-calls = {"after": 0, "loop": 0, "recursive": 0}
+calls = {"after": 0, "loop": 0, "recursive": 0, "logged": 0, "log": 0, "bare": 0}
 
 
 def consume_after_guard(t):
@@ -89,4 +89,55 @@ for step in range(5):
     for item in [1]:
         consume_in_loop_after_guard(tf.ones([2, 3]))
 
-assert calls == {"after": 4, "loop": 4, "recursive": 0}
+assert (calls["after"], calls["loop"], calls["recursive"]) == (4, 4, 0)
+
+
+def consume_never_in_mode(t):
+    raise AssertionError("never called")
+
+
+def always_in_mode(mode):
+    if mode == "train":
+        return True
+
+
+for step in range(2):
+    if always_in_mode("train"):
+        continue
+    consume_never_in_mode(tf.ones([2, 3]))
+
+
+def consume_after_logged_guard(t):
+    assert t.shape == (2, 3) and t.dtype == tf.float32
+    calls["logged"] += 1
+
+
+def logged_stop(value):
+    if value > 3:
+        return True
+    calls["log"] += 1
+
+
+for step in range(5):
+    if logged_stop(step):
+        break
+    consume_after_logged_guard(tf.ones([2, 3]))
+
+
+def consume_after_bare_guard(t):
+    assert t.shape == (2, 3) and t.dtype == tf.float32
+    calls["bare"] += 1
+
+
+def bare_stop(value):
+    if value > 3:
+        return True
+    return
+
+
+for step in range(5):
+    if bare_stop(step):
+        break
+    consume_after_bare_guard(tf.ones([2, 3]))
+
+assert calls["logged"] == 4 and calls["bare"] == 4

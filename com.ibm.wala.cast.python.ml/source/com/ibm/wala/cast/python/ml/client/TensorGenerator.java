@@ -5218,7 +5218,7 @@ public abstract class TensorGenerator implements Cloneable {
       CGNode node,
       int vn,
       Set<Pair<CGNode, Integer>> visited) {
-    if (node.getIR() == null || !visited.add(Pair.make(node, vn))) return false;
+    if (!visited.add(Pair.make(node, vn))) return false;
     if (visited.size() > UNSEEN_VALUE_WALK_LIMIT) return true;
     // A value no points-to set holds an object for is unseen whatever defines it, as a key of a
     // parsed configuration that reaches a φ or an argument is.
