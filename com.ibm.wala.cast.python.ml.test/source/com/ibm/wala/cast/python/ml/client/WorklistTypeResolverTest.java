@@ -4,10 +4,13 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 
+import com.ibm.wala.cast.python.ml.client.WorklistTypeResolver.RecomputationCause;
+import com.ibm.wala.cast.python.ml.client.WorklistTypeResolver.RecomputationOutcome;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import java.util.ArrayList;
@@ -332,6 +335,10 @@ public class WorklistTypeResolverTest {
         });
 
     assertEquals(scalar, engine.demand("GUARD_G", transfers.get(0), true));
+    assertEquals(
+        engine.settlementCensus(),
+        2,
+        engine.recomputations(RecomputationCause.STALE, RecomputationOutcome.KEPT));
   }
 
   /**
@@ -470,6 +477,318 @@ public class WorklistTypeResolverTest {
 
     assertEquals(
         scalar.union(vector).union(matrix), engine.demand("SELF_A", transfers.get(0), true));
+    assertEquals(
+        engine.settlementCensus(),
+        1,
+        engine.recomputations(RecomputationCause.OWN_WRITE, RecomputationOutcome.REPLACED));
+  }
+
+  /**
+   * Runs one more settlement pass, by demanding a cycle of two new queries that each hold a scalar.
+   *
+   * @param engine The engine.
+   * @param name The name the two queries start with.
+   */
+  private static void settleAnotherCycle(WorklistTypeResolver engine, String name) {
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read(name + "_2", transfers.get(1), true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read(name + "_1", transfers.get(0), true);
+          return scalar;
+        });
+    engine.demand(name + "_1", transfers.get(0), true);
+  }
+
+  /**
+   * The settlement census counts a value that moves back and forth between passes (wala/ML#1293).
+   * Two queries on a cycle each take the other's settled value, and a pass recomputes both against
+   * the state it found, so each pass swaps the two values. In the first swap, one query has no
+   * settled recomputation standing, and the other is stale: it consumed its partner's value before
+   * the partner had one. Each later swap is caused by the partner's write-back alone, and gives
+   * each query back the value its previous replacement replaced.
+   */
+  @Test
+  public void testCensusCountsValuesMovingBackAndForth() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+    engine.countRestoredValues(true);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          Object partner = engine.read("SWAP_B", transfers.get(1), true);
+          return engine.isSettling() ? partner : scalar;
+        });
+    transfers.add(
+        () -> {
+          Object partner = engine.read("SWAP_A", transfers.get(0), true);
+          return engine.isSettling() ? partner : vector;
+        });
+
+    assertEquals(vector, engine.demand("SWAP_A", transfers.get(0), true));
+    String first = engine.settlementCensus();
+    assertTrue(
+        first,
+        first.endsWith(
+            "recomputations by cause: stale: 0 the same, 1 replaced (0 restored), 0 kept; on a"
+                + " cycle with no settled recomputation standing: 0 the same, 1 replaced (0"
+                + " restored), 0 kept"));
+
+    settleAnotherCycle(engine, "SWAP_C");
+    assertEquals(scalar, engine.demand("SWAP_A", transfers.get(0), true));
+    assertEquals(vector, engine.demand("SWAP_B", transfers.get(1), true));
+    settleAnotherCycle(engine, "SWAP_D");
+    assertEquals(vector, engine.demand("SWAP_A", transfers.get(0), true));
+
+    String census = engine.settlementCensus();
+    // The two later passes replaced both queries, and each replacement restored a value.
+    assertEquals(
+        census,
+        4,
+        engine.recomputations(RecomputationCause.READ_SETTLED, RecomputationOutcome.REPLACED));
+    assertEquals(census, 4, engine.restored(RecomputationCause.READ_SETTLED));
+    // Each of the other two cycles has one query with no settled recomputation standing and one
+    // stale query, and both kept their values.
+    assertEquals(
+        census, 2, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.SAME));
+    assertEquals(
+        census, 2, engine.recomputations(RecomputationCause.STALE, RecomputationOutcome.SAME));
+    assertEquals(census, 0, engine.restored(RecomputationCause.NO_RECORD));
+    assertEquals(census, 0, engine.restored(RecomputationCause.STALE));
+    assertTrue(census, census.contains("; 0 passes replaced nothing; "));
+    assertTrue(
+        census,
+        census.endsWith(
+            "recomputations by cause: stale: 2 the same, 1 replaced (0 restored), 0 kept; on a"
+                + " cycle with no settled recomputation standing: 2 the same, 1 replaced (0"
+                + " restored), 0 kept; on a cycle with reads only settlement passes wrote since: 0"
+                + " the same, 4 replaced (4 restored), 0 kept"));
+  }
+
+  /**
+   * The settlement census tells a query the pass recomputes at its transfer's request from a reader
+   * the pass recomputes because the first one's value changed (wala/ML#1293). Neither is on a
+   * cycle.
+   */
+  @Test
+  public void testCensusCountsRequestedAndChangedReads() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.countRestoredValues(false);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    Supplier<Object> leaf =
+        () -> {
+          engine.requestSettledRecomputation();
+          return engine.isSettling() ? vector : scalar;
+        };
+    Supplier<Object> reader = () -> engine.read("CAUSE_LEAF", leaf, true);
+
+    assertEquals(vector, engine.demand("CAUSE_READER", reader, true));
+    String census = engine.settlementCensus();
+    // An engine that does not count restored values leaves them out of the line.
+    assertTrue(
+        census,
+        census.endsWith(
+            "recomputations by cause: requested: 0 the same, 1 replaced, 0 kept; reading a query"
+                + " the pass changed: 0 the same, 1 replaced, 0 kept"));
+    for (RecomputationCause cause : RecomputationCause.values())
+      for (RecomputationOutcome outcome : RecomputationOutcome.values())
+        assertEquals(
+            census,
+            outcome == RecomputationOutcome.REPLACED
+                    && (cause == RecomputationCause.REQUESTED
+                        || cause == RecomputationCause.CHANGED_READ)
+                ? 1
+                : 0,
+            engine.recomputations(cause, outcome));
+  }
+
+  /** The settlement census of an engine that recomputed nothing names no cause (wala/ML#1293). */
+  @Test
+  public void testCensusOfNoRecomputationNamesNoCause() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    assertEquals(scalar, engine.demand("NONE_Q", () -> scalar, true));
+
+    String census = engine.settlementCensus();
+    assertTrue(census, census.endsWith("recomputations by cause: none"));
+  }
+
+  /**
+   * The settlement census counts the reader of a query the closing step of a pass promotes
+   * (wala/ML#1021, wala/ML#1293). The query's recomputation defers under a re-entry and stands at
+   * ⊥, so the step gives it the unknown-marked element and sweeps its readers. That sweep is not a
+   * full one: it targets no query for a request or for its cycle, so the promoted query is not
+   * recomputed again and its reader is, as one reading a query the pass changed.
+   */
+  @Test
+  public void testCensusCountsReaderOfPromotedDeferral() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+    engine.countRestoredValues(false);
+
+    int[] runs = {0};
+    Supplier<Object> leaf =
+        () -> {
+          runs[0]++;
+          engine.requestSettledRecomputation();
+          engine.noteReentryDeferralAtSettlement();
+          return ShapeResult.bottom();
+        };
+    Supplier<Object> reader = () -> engine.read("DEFER_LEAF", leaf, true);
+
+    assertEquals(ShapeResult.unknown(), engine.demand("DEFER_READER", reader, true));
+    // The evaluation and the full sweep's recomputation, and none by the closing step's sweep.
+    assertEquals(2, runs[0]);
+    String census = engine.settlementCensus();
+    assertTrue(
+        census,
+        census.endsWith(
+            "recomputations by cause: requested: 1 the same, 0 replaced, 0 kept; reading a query"
+                + " the pass changed: 0 the same, 1 replaced, 0 kept"));
+  }
+
+  /**
+   * The settlement census counts a recomputation of a query that has no settled value yet
+   * (wala/ML#1293). A query whose evaluation demands another one runs a settlement pass before its
+   * own value is written, and the pass recomputes it at its request. A recomputation to ⊥ replaces
+   * the missing value, since no settled value stands to be kept over it.
+   */
+  @Test
+  public void testCensusCountsBottomOverNoSettledValue() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+    engine.countRestoredValues(false);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          if (engine.isSettling()) return ShapeResult.bottom();
+          engine.requestSettledRecomputation();
+          engine.demand("UNSET_INNER", transfers.get(1), true);
+          return scalar;
+        });
+    transfers.add(() -> scalar);
+
+    assertEquals(scalar, engine.demand("UNSET_OUTER", transfers.get(0), true));
+    String census = engine.settlementCensus();
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.REQUESTED, RecomputationOutcome.REPLACED));
+    assertEquals(
+        census, 0, engine.recomputations(RecomputationCause.REQUESTED, RecomputationOutcome.KEPT));
+  }
+
+  /**
+   * The settlement census counts a recomputation that throws for a query with no settled value yet
+   * as one to the same value (wala/ML#1293): the recomputation keeps the settled value, and there
+   * is none.
+   */
+  @Test
+  public void testCensusCountsThrowOverNoSettledValue() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+    engine.countRestoredValues(false);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          if (engine.isSettling()) throw new IllegalArgumentException("No value at settlement.");
+          engine.requestSettledRecomputation();
+          engine.demand("THROW_INNER", transfers.get(1), true);
+          return scalar;
+        });
+    transfers.add(() -> scalar);
+
+    assertEquals(scalar, engine.demand("THROW_OUTER", transfers.get(0), true));
+    String census = engine.settlementCensus();
+    assertEquals(
+        census, 1, engine.recomputations(RecomputationCause.REQUESTED, RecomputationOutcome.SAME));
+    assertEquals(
+        census,
+        0,
+        engine.recomputations(RecomputationCause.REQUESTED, RecomputationOutcome.REPLACED));
+  }
+
+  /**
+   * The settlement census tells a read an evaluation wrote from a read only settlement passes wrote
+   * (wala/ML#1293). A query on a cycle reads a third query only when it is recomputed at
+   * settlement, so the third query is first evaluated inside that recomputation, after the clock
+   * the recomputation's record holds. The next pass finds the record older than an evaluation's
+   * write and recomputes the query, to the same value. The pass after that skips it.
+   *
+   * <p>That one recomputation is a skip the engine misses, and not a value it needs: the record
+   * holds the clock at the recomputation's entry, and the read is evaluated after it but before it
+   * is consumed. A change that skips it moves this test's second-pass counts, and is an
+   * improvement.
+   */
+  @Test
+  public void testCensusCountsReadFirstEvaluatedAtSettlement() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+    engine.countRestoredValues(true);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] runs = {0};
+    Supplier<Object> late = () -> scalar;
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          runs[0]++;
+          engine.read("LATE_B", transfers.get(1), true);
+          if (engine.isSettling()) engine.read("LATE_READ", late, true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("LATE_A", transfers.get(0), true);
+          return scalar;
+        });
+
+    assertEquals(scalar, engine.demand("LATE_A", transfers.get(0), true));
+    assertEquals(
+        engine.settlementCensus(),
+        0,
+        engine.recomputations(RecomputationCause.READ_EVALUATED, RecomputationOutcome.SAME));
+
+    settleAnotherCycle(engine, "LATE_C");
+    int afterSecondPass = runs[0];
+    String census = engine.settlementCensus();
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.READ_EVALUATED, RecomputationOutcome.SAME));
+    assertTrue(
+        census,
+        census.contains(
+            "on a cycle with a read an evaluation or a promotion wrote since: 1 the same, 0"
+                + " replaced (0 restored), 0 kept"));
+
+    settleAnotherCycle(engine, "LATE_D");
+    assertEquals(afterSecondPass, runs[0]);
+    census = engine.settlementCensus();
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.READ_EVALUATED, RecomputationOutcome.SAME));
+    assertEquals(
+        census,
+        0,
+        engine.recomputations(RecomputationCause.READ_SETTLED, RecomputationOutcome.SAME));
+    assertTrue(census, census.contains("; 3 passes replaced nothing; "));
   }
 
   /** With the skip off, a later settlement pass recomputes a settled cycle, as before the skip. */
@@ -509,6 +828,11 @@ public class WorklistTypeResolverTest {
     engine.demand("OFF_R", others.get(0), true);
 
     assertTrue(runs[0] > afterFirstDemand);
+    // The first pass recomputed the cycle for other causes, and the second for the skip being off.
+    assertEquals(
+        engine.settlementCensus(),
+        4,
+        engine.recomputations(RecomputationCause.SKIP_OFF, RecomputationOutcome.SAME));
   }
 
   /**
@@ -577,6 +901,47 @@ public class WorklistTypeResolverTest {
     engine.demand("CHECK_R", others.get(0), true);
 
     assertTrue(engine.checkedSkips() > 0);
+  }
+
+  /**
+   * The skip's check mode finds no settlement target outside the region a pass is restricted to
+   * (wala/ML#1176). The pass after a cycle settles skips it and drops it from the queries whose
+   * records may not stand, so the pass after that leaves it outside the region. The check mode
+   * walks it there, verifies its skip again, and finds no cause to recompute it.
+   */
+  @Test
+  public void testSkipCheckModeWalksSettledCycleOutsideRegion() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    settleAnotherCycle(engine, "OUTSIDE_FIRST");
+    settleAnotherCycle(engine, "OUTSIDE_SECOND");
+    long checked = engine.checkedSkips();
+    settleAnotherCycle(engine, "OUTSIDE_THIRD");
+
+    // The first cycle's two queries and the second's.
+    assertEquals(checked + 4, engine.checkedSkips());
+  }
+
+  /**
+   * The skip's check mode fails when a query with a cause to recompute lies outside the region a
+   * pass is restricted to (wala/ML#1176): the restricted pass alone would let its settled value
+   * stand. The test hook stamps a query of a settled cycle as written without marking it, so the
+   * cycle is not among the queries the region is seeded with. Both of its queries are then targets,
+   * the one written and its reader, and the failure names the first in the component.
+   */
+  @Test
+  public void testSkipCheckModeFailsOnTargetOutsideRegion() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    settleAnotherCycle(engine, "LEFT_FIRST");
+    settleAnotherCycle(engine, "LEFT_SECOND");
+    engine.stampUnmarkedForTest("LEFT_FIRST_1");
+
+    AssertionError error =
+        assertThrows(AssertionError.class, () -> settleAnotherCycle(engine, "LEFT_THIRD"));
+
+    assertEquals("A settlement target lies outside the region: LEFT_FIRST_2.", error.getMessage());
   }
 
   /**

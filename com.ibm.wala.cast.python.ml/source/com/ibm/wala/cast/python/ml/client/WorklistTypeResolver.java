@@ -21,6 +21,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
@@ -246,7 +247,7 @@ final class WorklistTypeResolver {
 
   /**
    * The logical clock of state writes, for the settlement pass's skip of a query whose inputs have
-   * not changed since its last settled recomputation. See {@link #settledInputsUnchanged}.
+   * not changed since its last settled recomputation. See {@link #cyclicCause}.
    */
   private long clock;
 
@@ -324,9 +325,9 @@ final class WorklistTypeResolver {
       !"false".equals(System.getProperty(RESTRICT_SETTLEMENT_PROPERTY));
 
   /**
-   * The queries for which {@link #settledInputsUnchanged} may be false: a superset, kept by the
-   * writes that can make it false (registration, a stamp of the query or of a settled read, and
-   * every settled recomputation), and shrunk only when the predicate is observed true.
+   * The queries for which {@link #cyclicCause} may give a cause: a superset, kept by the writes
+   * that can give one (registration, a stamp of the query or of a settled read, and every settled
+   * recomputation), and shrunk only when it is observed to give none.
    */
   private final Set<Object> settleDirty = HashSetFactory.make();
 
@@ -378,6 +379,86 @@ final class WorklistTypeResolver {
       settledSkips,
       guardedSettledSkips,
       checkedSkips;
+
+  /** Why a settlement sweep recomputes a query, for the settlement census (wala/ML#1293). */
+  enum RecomputationCause {
+    /** The query consumed a value that grew after it was consumed. */
+    STALE("stale"),
+
+    /** The query's transfer withheld an arm that depends on the settled state. */
+    REQUESTED("requested"),
+
+    /** The query read a query the pass in progress replaced or promoted. */
+    CHANGED_READ("reading a query the pass changed"),
+
+    /** The query is on a cycle and the skip is off. */
+    SKIP_OFF("on a cycle with the skip off"),
+
+    /** The query is on a cycle and no settled recomputation of it stands. */
+    NO_RECORD("on a cycle with no settled recomputation standing"),
+
+    /** The query is on a cycle and was written after its last settled recomputation began. */
+    OWN_WRITE("on a cycle and written since"),
+
+    /**
+     * The query is on a cycle, and an evaluation or a promotion wrote a read of its last settled
+     * recomputation after that recomputation began.
+     */
+    READ_EVALUATED("on a cycle with a read an evaluation or a promotion wrote since"),
+
+    /**
+     * The query is on a cycle, and nothing but the write-backs of settlement passes wrote the reads
+     * of its last settled recomputation after that recomputation began.
+     */
+    READ_SETTLED("on a cycle with reads only settlement passes wrote since");
+
+    /** The cause as the census line words it. */
+    private final String description;
+
+    RecomputationCause(String description) {
+      this.description = description;
+    }
+  }
+
+  /** What a settled recomputation did to the query's settled value, for the settlement census. */
+  enum RecomputationOutcome {
+    /** The recomputation returned the settled value. */
+    SAME,
+
+    /** The recomputation's value replaced the settled value. */
+    REPLACED,
+
+    /** The recomputation returned ⊥ over a settled value that is not ⊥, which stays. */
+    KEPT
+  }
+
+  /** The settled recomputations by {@link RecomputationCause} and {@link RecomputationOutcome}. */
+  private final long[][] recomputationsByCause =
+      new long[RecomputationCause.values().length][RecomputationOutcome.values().length];
+
+  /**
+   * The replacements, by {@link RecomputationCause}, that gave a query back the value its previous
+   * replacement by a settlement pass had replaced: a value moving back and forth between passes.
+   */
+  private final long[] restoredByCause = new long[RecomputationCause.values().length];
+
+  /**
+   * The hash code of the value each query's last replacement by a settlement pass replaced, or
+   * {@code null} when the census does not count restored values. The map holds a hash code and not
+   * the value, so it keeps no replaced value alive, and a restored count is over by any two
+   * different values with one hash code. It has an entry for every query a pass ever replaced, so
+   * it is kept only when the census line is logged.
+   */
+  private Map<Object, Integer> replacedBySettlement =
+      SETTLEMENT_CENSUS.isLoggable(Level.FINE) ? HashMapFactory.make() : null;
+
+  /**
+   * The settlement passes that replaced no value, and the time the sweeps' recomputations took. No
+   * sweep runs inside another's recomputations, so no time is counted twice: {@link
+   * #recomputeSettled} runs a transfer as an evaluation, a generator's query inside an evaluation
+   * is a {@link #read}, and only {@link #demand} runs a solve.
+   */
+  private long unchangedSettlementPasses, sweepRecomputeNanos;
 
   /**
    * The walk census (wala/ML#1176): for the pure-cycle promotion and for the settlement sweep, the
@@ -1356,7 +1437,39 @@ final class WorklistTypeResolver {
         + this.checkedSkips
         + " checked, of which "
         + this.guardDecidedCheckedSkips
-        + " a guard decided)";
+        + " a guard decided); "
+        + this.unchangedSettlementPasses
+        + " passes replaced nothing; recomputations took "
+        + TimeUnit.NANOSECONDS.toMillis(this.sweepRecomputeNanos)
+        + " ms; recomputations by cause: "
+        + this.causeCensus();
+  }
+
+  /**
+   * Describes the settled recomputations by cause and outcome, leaving out a cause with none.
+   *
+   * @return The description.
+   */
+  private String causeCensus() {
+    List<String> causes = new ArrayList<>();
+    for (RecomputationCause cause : RecomputationCause.values()) {
+      long[] outcomes = this.recomputationsByCause[cause.ordinal()];
+      if (Arrays.stream(outcomes).sum() == 0) continue;
+      causes.add(
+          cause.description
+              + ": "
+              + outcomes[RecomputationOutcome.SAME.ordinal()]
+              + " the same, "
+              + outcomes[RecomputationOutcome.REPLACED.ordinal()]
+              + " replaced"
+              + (this.replacedBySettlement == null
+                  ? ""
+                  : " (" + this.restoredByCause[cause.ordinal()] + " restored)")
+              + ", "
+              + outcomes[RecomputationOutcome.KEPT.ordinal()]
+              + " kept");
+    }
+    return causes.isEmpty() ? "none" : String.join("; ", causes);
   }
 
   /**
@@ -1671,6 +1784,7 @@ final class WorklistTypeResolver {
       this.settlementRequested.clear();
       this.reentryDeferredAtSettlement.clear();
     }
+    if (replaced == 0) this.unchangedSettlementPasses++;
     if (replaced > 0) {
       int count = replaced;
       LOGGER.fine(() -> "Canonicalization replaced " + count + " settled values.");
@@ -1764,6 +1878,8 @@ final class WorklistTypeResolver {
     this.sweepWalkNanos += System.nanoTime() - walkStart;
     this.sweepCondensedQueries += condensedQueries(sccs, region);
     if (region != null && this.checkSkips) this.checkedSweepRegion = region;
+    // The cause of each target of the component in hand, for the census.
+    Map<Object, RecomputationCause> causes = HashMapFactory.make();
     try {
       for (List<Object> scc : sccs) {
         boolean cyclic =
@@ -1771,27 +1887,34 @@ final class WorklistTypeResolver {
                 || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
         if (cyclic) this.noteCyclic(scc, region, full);
         List<Object> targets = new ArrayList<>();
+        if (!causes.isEmpty()) causes.clear();
         // Beyond the cyclic-SCC and changed-read criteria, an ever-stale reader is targeted (its
         // join history can hold artifacts of the since-grown consumption even after re-evaluation
         // caught it up), and so is a settlement-requested query (its transfer withheld a
         // finality-dependent arm that must now fire against the settled state). wala/ML#758.
         long selectStart = System.nanoTime();
-        for (Object key : scc)
-          if ((full && (this.staleReaders.contains(key) || this.settlementRequested.contains(key)))
-              || this.readsAny(key, changed)) targets.add(key);
-          else if (full && cyclic) {
-            // A cyclic query whose inputs have not changed since its last settled recomputation
-            // would recompute to the value it settled at, which the write-back below would leave
-            // in place.
-            if (!this.settledInputsUnchanged(key)) targets.add(key);
-            else {
-              this.settleDirty.remove(key);
-              this.dirtyCyclic.remove(key);
-              this.settledSkips++;
-              if (this.guardedSettlement) this.guardedSettledSkips++;
-              if (this.checkSkips) this.checkSkip(key);
-            }
+        for (Object key : scc) {
+          RecomputationCause cause;
+          if (full && this.staleReaders.contains(key)) cause = RecomputationCause.STALE;
+          else if (full && this.settlementRequested.contains(key))
+            cause = RecomputationCause.REQUESTED;
+          else if (this.readsAny(key, changed)) cause = RecomputationCause.CHANGED_READ;
+          // A cyclic query whose inputs have not changed since its last settled recomputation
+          // would recompute to the value it settled at, which the write-back below would leave
+          // in place.
+          else if (full && cyclic) cause = this.cyclicCause(key);
+          else continue;
+          if (cause != null) {
+            targets.add(key);
+            causes.put(key, cause);
+          } else {
+            this.settleDirty.remove(key);
+            this.dirtyCyclic.remove(key);
+            this.settledSkips++;
+            if (this.guardedSettlement) this.guardedSettledSkips++;
+            if (this.checkSkips) this.checkSkip(key);
           }
+        }
         this.sweepSelectNanos += System.nanoTime() - selectStart;
         if (full && probeFilter != null)
           for (Object key : scc) {
@@ -1815,13 +1938,15 @@ final class WorklistTypeResolver {
                         + " edges="
                         + this.reads.getOrDefault(key, Collections.emptySet()).size());
           }
+        // The check mode selects over the whole graph, so a target outside the region is a query
+        // the restricted pass alone would have left unrecomputed.
         if (region != null && this.checkSkips)
           for (Object key : scc)
-            if (!region.contains(key)
-                && (targets.contains(key) || (full && cyclic && !this.settledInputsUnchanged(key))))
+            if (!region.contains(key) && targets.contains(key))
               throw new AssertionError("A settlement target lies outside the region: " + key + ".");
         if (targets.isEmpty()) continue;
         Map<Object, Object> replacements = HashMapFactory.make();
+        long recomputeStart = System.nanoTime();
         for (Object key : targets) {
           // The clock at the entry of the attempt that completes: an unwound attempt reruns, and
           // the writes the pending chain makes before the rerun precede every read the rerun
@@ -1841,14 +1966,27 @@ final class WorklistTypeResolver {
           }
           this.recordSettledRecomputation(key, entry[0]);
         }
+        this.sweepRecomputeNanos += System.nanoTime() - recomputeStart;
         for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
           Object key = replacement.getKey();
           Object value = replacement.getValue();
           Object settled = this.state.get(key);
           if (probeFilter != null && String.valueOf(key).contains(probeFilter))
             LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
-          if (value == null || value.equals(settled)) continue;
-          if (isBottomValue(value) && !isBottomValue(settled)) continue;
+          int cause = causes.get(key).ordinal();
+          if (value == null || value.equals(settled)) {
+            this.recomputationsByCause[cause][RecomputationOutcome.SAME.ordinal()]++;
+            continue;
+          }
+          if (isBottomValue(value) && !isBottomValue(settled)) {
+            this.recomputationsByCause[cause][RecomputationOutcome.KEPT.ordinal()]++;
+            continue;
+          }
+          this.recomputationsByCause[cause][RecomputationOutcome.REPLACED.ordinal()]++;
+          if (this.replacedBySettlement != null
+              && Integer.valueOf(value.hashCode())
+                  .equals(this.replacedBySettlement.put(key, Objects.hashCode(settled))))
+            this.restoredByCause[cause]++;
           this.putState(key, value);
           this.stamp(key, false);
           changed.add(key);
@@ -2046,30 +2184,36 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Decides whether a query may be skipped by the settlement pass in progress: its last settled
-   * recomputation stands, nothing but the pass's own write-back of that recomputation has written
-   * the query since, and none of the queries that recomputation read has been written since it
-   * began. A transfer is a function of the values its reads return, given the final call graph and
-   * pointer analysis and the generators' write-once caches, so the recomputation would return the
-   * value the query settled at. That holds for a pass inside a generator guard too, since a record
-   * stands only for a recomputation no guard around its pass decided ({@link
-   * #recordSettledRecomputation}). There a recomputation made again could be cut at a frame that is
-   * open around this pass, and the skip keeps the value the query settled at with no such cut.
+   * Finds why the settlement pass in progress recomputes a query on a cycle, or that it may skip
+   * the query: its last settled recomputation stands, nothing but the pass's own write-back of that
+   * recomputation has written the query since, and none of the queries that recomputation read has
+   * been written since it began. A transfer is a function of the values its reads return, given the
+   * final call graph and pointer analysis and the generators' write-once caches, so the
+   * recomputation would return the value the query settled at. That holds for a pass inside a
+   * generator guard too, since a record stands only for a recomputation no guard around its pass
+   * decided ({@link #recordSettledRecomputation}). There a recomputation made again could be cut at
+   * a frame that is open around this pass, and the skip keeps the value the query settled at with
+   * no such cut.
    *
    * @param key The query.
-   * @return {@code true} iff the query's recomputation can be skipped.
+   * @return The cause, or {@code null} when the query's recomputation can be skipped.
    */
-  private boolean settledInputsUnchanged(Object key) {
-    if (!this.skipEnabled) return false;
+  private RecomputationCause cyclicCause(Object key) {
+    if (!this.skipEnabled) return RecomputationCause.SKIP_OFF;
     Long at = this.settledAt.get(key);
-    if (at == null) return false;
+    if (at == null) return RecomputationCause.NO_RECORD;
     // A query that read itself had its own write-back as an input; any other query only its writes
     // by an evaluation or a promotion.
     Map<Object, Long> own = this.settledSelfReaders.contains(key) ? this.stamps : this.selfStamps;
-    if (own.getOrDefault(key, 0L) > at) return false;
-    for (Object read : this.settledReads.get(key))
-      if (this.stamps.getOrDefault(read, 0L) > at) return false;
-    return true;
+    if (own.getOrDefault(key, 0L) > at) return RecomputationCause.OWN_WRITE;
+    boolean written = false;
+    for (Object read : this.settledReads.get(key)) {
+      if (this.stamps.getOrDefault(read, 0L) <= at) continue;
+      // Every write moves `stamps`, and a write other than a settlement write-back `selfStamps`.
+      if (this.selfStamps.getOrDefault(read, 0L) > at) return RecomputationCause.READ_EVALUATED;
+      written = true;
+    }
+    return written ? RecomputationCause.READ_SETTLED : null;
   }
 
   /**
@@ -2141,6 +2285,19 @@ final class WorklistTypeResolver {
   }
 
   /**
+   * Stamps a query as an evaluation's write does, without marking it or its settled readers as
+   * queries whose skip may no longer hold. For a test of the check mode's walk outside a restricted
+   * pass's region: no scheduling reaches this state.
+   *
+   * @param key The query.
+   */
+  void stampUnmarkedForTest(Object key) {
+    long now = ++this.clock;
+    this.stamps.put(key, now);
+    this.selfStamps.put(key, now);
+  }
+
+  /**
    * Bumps a value's version without re-enqueueing its readers, as a change made while they are on
    * the stack does, so only the staleness scan can find them. For a test of {@link
    * #enqueueStaleReaders}.
@@ -2167,6 +2324,37 @@ final class WorklistTypeResolver {
    */
   void disableSkipCheck() {
     this.checkSkips = false;
+  }
+
+  /**
+   * Sets whether the settlement census counts restored values for this engine, whatever is logged.
+   *
+   * @param count Whether to count them.
+   */
+  void countRestoredValues(boolean count) {
+    this.replacedBySettlement = count ? HashMapFactory.make() : null;
+  }
+
+  /**
+   * Returns how many settled recomputations had a cause and an outcome.
+   *
+   * @param cause The cause.
+   * @param outcome The outcome.
+   * @return The number of such recomputations.
+   */
+  long recomputations(RecomputationCause cause, RecomputationOutcome outcome) {
+    return this.recomputationsByCause[cause.ordinal()][outcome.ordinal()];
+  }
+
+  /**
+   * Returns how many replacements with a cause gave a query back the value its previous replacement
+   * by a settlement pass had replaced.
+   *
+   * @param cause The cause.
+   * @return The number of such replacements.
+   */
+  long restored(RecomputationCause cause) {
+    return this.restoredByCause[cause.ordinal()];
   }
 
   /**
