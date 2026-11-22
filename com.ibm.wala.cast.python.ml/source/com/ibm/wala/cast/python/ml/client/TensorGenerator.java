@@ -37,6 +37,8 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstGlobalWrite;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
@@ -642,6 +644,9 @@ public abstract class TensorGenerator implements Cloneable {
     // entries never expire on their own; a shard running several whole-project analyses in one JVM
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
+    UNSEEN_EXITS.remove(builder);
+    UNSEEN_WRITES.remove(builder);
+    UNSEEN_GLOBAL_WRITES.remove(builder);
     DictComprehensionComponent.clearComprehensions(builder);
     ElementWiseOperation.clearPythonNumbers(builder);
     FIELD_PUT_INDEX.remove(builder);
@@ -5149,10 +5154,358 @@ public abstract class TensorGenerator implements Cloneable {
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
-    if (only instanceof ConstantKey) return ((ConstantKey<?>) only).getValue();
-    // A dtype token, as `np.float64` or `tf.float64`, folds to the dtype it names (wala/ML#1053).
-    DType token = dtypeOfToken(builder, only);
-    return token == null ? null : new DTypeConstant(token);
+    // The operand's value: a constant's, or the dtype a token names (wala/ML#1053).
+    Object value;
+    if (only instanceof ConstantKey) value = ((ConstantKey<?>) only).getValue();
+    else {
+      DType token = dtypeOfToken(builder, only);
+      if (token == null) return null;
+      value = new DTypeConstant(token);
+    }
+    // The one value stands for the operand only when every value that reaches it is seen: a write
+    // of a field it reads, a callee's return, or an argument a caller passes for it.
+    if (mayTakeUnseenValue(builder, node, vn, HashSetFactory.make())) {
+      LOGGER.fine(
+          () ->
+              "Value "
+                  + vn
+                  + " in "
+                  + describe(node)
+                  + " may take a value no points-to set holds; the guard declines.");
+      return null;
+    }
+    return value;
+  }
+
+  /**
+   * The argument a call passes by keyword for a parameter, matched by the parameter's name.
+   *
+   * @param callee The callee.
+   * @param vn The parameter's value number in the callee.
+   * @param call The call.
+   * @return The argument's value number, {@code 0} when the call passes none by keyword, or {@link
+   *     #AMBIGUOUS_ARGUMENT} when the call is not one whose keywords can be read.
+   */
+  private static int keywordArgument(CGNode callee, int vn, SSAAbstractInvokeInstruction call) {
+    if (!(call instanceof PythonInvokeInstruction pyCall) || pyCall.firstStarredPosition() > 0)
+      return AMBIGUOUS_ARGUMENT;
+    String[] names = callee.getIR().getLocalNames(0, vn);
+    if (names == null) return AMBIGUOUS_ARGUMENT;
+    for (String keyword : pyCall.getKeywords())
+      for (String name : names) if (keyword.equals(name)) return pyCall.getUse(keyword);
+    return 0;
+  }
+
+  /** How many values {@link #mayTakeUnseenValue} reads before it answers that one may be unseen. */
+  private static final int UNSEEN_VALUE_WALK_LIMIT = 64;
+
+  /**
+   * Decides whether a value may take a value no points-to set holds, so that its points-to set does
+   * not stand for every value it takes (wala/ML#1320, wala/ML#1321): a property read with a write
+   * of such a value ({@link #readMayTakeUnseenValue}), a global read with one ({@link
+   * #globalHasUnseenWrite}), a call whose callee may return one ({@link #mayReturnUnseenValue}), a
+   * φ with such an operand, or a parameter for which a caller passes one. A walk longer than {@link
+   * #UNSEEN_VALUE_WALK_LIMIT} values answers that one may be.
+   *
+   * @param builder The builder.
+   * @param node The node whose IR defines the value.
+   * @param vn The value number.
+   * @param visited The values already read; grown.
+   * @return Whether such a value may reach the value.
+   */
+  private static boolean mayTakeUnseenValue(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited) {
+    if (!visited.add(Pair.make(node, vn))) return false;
+    if (visited.size() > UNSEEN_VALUE_WALK_LIMIT) return true;
+    // A value no points-to set holds an object for is unseen whatever defines it, as a key of a
+    // parsed configuration that reaches a φ or an argument is.
+    if (holdsNoObject(builder.getPointerAnalysis(), node, vn)) return true;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof PythonPropertyRead read) return readMayTakeUnseenValue(builder, node, read);
+    if (def instanceof AstGlobalRead global)
+      return globalHasUnseenWrite(builder, global.getGlobalName());
+    if (def instanceof SSAAbstractInvokeInstruction call)
+      return mayReturnUnseenValue(builder, node, call, HashSetFactory.make());
+    if (def instanceof SSAPhiInstruction phi) {
+      for (int i = 0; i < phi.getNumberOfUses(); i++)
+        if (mayTakeUnseenValue(builder, node, phi.getUse(i), visited)) return true;
+      return false;
+    }
+    if (def != null) return false;
+    int position = parameterPosition(node, vn);
+    if (position < 0) return false;
+    CallGraph cg = builder.getCallGraph();
+    for (Iterator<CGNode> callers = cg.getPredNodes(node); callers.hasNext(); ) {
+      CGNode caller = callers.next();
+      if (caller.getIR() == null) continue;
+      for (Iterator<CallSiteReference> sites = cg.getPossibleSites(caller, node); sites.hasNext(); )
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next())) {
+          int argument = callerArgumentValueNumber(call, position);
+          if (argument == AMBIGUOUS_ARGUMENT) argument = keywordArgument(node, vn, call);
+          if (argument == AMBIGUOUS_ARGUMENT) return true;
+          if (argument > 0 && mayTakeUnseenValue(builder, caller, argument, visited)) return true;
+        }
+    }
+    return false;
+  }
+
+  /**
+   * Decides whether a property read may take a value no points-to set holds: one of the objects it
+   * reads from has a write of the property that stores such a value ({@link #hasUnseenWrite}). A
+   * read whose member is no string constant may read any field, and is decided so.
+   *
+   * @param builder The builder.
+   * @param node The node whose IR holds the read.
+   * @param read The read.
+   * @return Whether such a value may reach the read.
+   */
+  private static boolean readMayTakeUnseenValue(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead read) {
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (!st.isStringConstant(read.getMemberRef())) return true;
+    String field = st.getStringValue(read.getMemberRef());
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (InstanceKey object :
+        withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef()))))
+      if (hasUnseenWrite(builder, object, field)) return true;
+    return false;
+  }
+
+  /**
+   * Decides whether a write of a field on an object stores a value the points-to analysis does not
+   * hold, so that the field's points-to set does not stand for every value it takes. A value an
+   * unmodeled call returns, as a key of a parsed configuration, has an empty set. So does a write
+   * through a member that is not a string constant, which may name the field.
+   *
+   * @param builder The builder.
+   * @param object The object whose field is read.
+   * @param field The field's name.
+   * @return Whether such a write may reach the field.
+   */
+  private static boolean hasUnseenWrite(
+      PropagationCallGraphBuilder builder, InstanceKey object, String field) {
+    return UNSEEN_WRITES
+        .computeIfAbsent(builder, b -> new java.util.concurrent.ConcurrentHashMap<>())
+        .computeIfAbsent(
+            Pair.make(object, field), k -> computeHasUnseenWrite(builder, object, field));
+  }
+
+  /** Per builder, the memo of {@link #hasUnseenWrite}, which reads the final pointer analysis. */
+  private static final Map<PropagationCallGraphBuilder, Map<Pair<InstanceKey, String>, Boolean>>
+      UNSEEN_WRITES = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** Per builder, the globals some write of which stores a value no points-to set holds. */
+  private static final Map<PropagationCallGraphBuilder, Set<String>> UNSEEN_GLOBAL_WRITES =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Decides whether a write of a global stores a value no points-to set holds, as {@code DEBUG =
+   * json.loads(text)["debug"]} does, so that the global's points-to set does not stand for every
+   * value it takes. One scan of the call graph per builder.
+   *
+   * @param builder The builder.
+   * @param global The global's name.
+   * @return Whether such a write may reach the global.
+   */
+  private static boolean globalHasUnseenWrite(PropagationCallGraphBuilder builder, String global) {
+    return UNSEEN_GLOBAL_WRITES
+        .computeIfAbsent(
+            builder,
+            b -> {
+              PointerAnalysis<InstanceKey> pa = b.getPointerAnalysis();
+              Set<String> unseen = HashSetFactory.make();
+              for (CGNode candidate : b.getCallGraph()) {
+                IR ir = candidate.getIR();
+                if (ir == null) continue;
+                for (SSAInstruction instruction : ir.getInstructions())
+                  if (instruction instanceof AstGlobalWrite write
+                      && holdsNoObject(pa, candidate, write.getVal()))
+                    unseen.add(write.getGlobalName());
+              }
+              return unseen;
+            })
+        .contains(global);
+  }
+
+  /**
+   * Computes {@link #hasUnseenWrite}.
+   *
+   * @param builder The builder.
+   * @param object The object whose field is read.
+   * @param field The field's name.
+   * @return Whether such a write may reach the field.
+   */
+  private static boolean computeHasUnseenWrite(
+      PropagationCallGraphBuilder builder, InstanceKey object, String field) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    PropertyWriteIndex index = propertyWriteIndex(builder);
+    for (PropertyWriteSite write : index.byAttribute().getOrDefault(field, List.of())) {
+      if (!pointsTo(pa, write.node(), write.object(), object)) continue;
+      if (holdsNoObject(pa, write.node(), write.value())) return true;
+    }
+    for (PropertyWriteSite write : index.nonConstantMember())
+      if (pointsTo(pa, write.node(), write.object(), object)) return true;
+    return false;
+  }
+
+  /**
+   * Decides whether a call may return a value the points-to analysis does not hold: a callee of the
+   * program's code with a normal path to its exit that returns no value, which returns {@code
+   * None}, or that returns a value whose points-to set is empty. A path through a block a constant
+   * guard never takes ({@link #computeBlockFeasibility}) is not one. A synthetic callee, as a
+   * trampoline, is decided by the callees it calls in turn.
+   *
+   * @param builder The builder.
+   * @param node The caller.
+   * @param call The call.
+   * @param visited The callees already decided; grown.
+   * @return Whether such a return may reach the call's result.
+   */
+  private static boolean mayReturnUnseenValue(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      Set<CGNode> visited) {
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+      if (!visited.add(callee)) continue;
+      IR ir = callee.getIR();
+      if (ir == null) continue;
+      if (!(callee.getMethod() instanceof AstMethod)) {
+        for (SSAInstruction instruction : ir.getInstructions())
+          if (instruction instanceof SSAAbstractInvokeInstruction inner
+              && inner.hasDef()
+              && mayReturnUnseenValue(builder, callee, inner, visited)) return true;
+        continue;
+      }
+      List<ISSABasicBlock> exits = unseenExits(builder, callee);
+      if (exits.isEmpty()) continue;
+      // Deciding an exit's block reads the callee's guards, which may ask for this callee's return
+      // again, as a recursive callee's does; that answer is not known, so it declines.
+      Set<CGNode> inProgress = UNSEEN_RETURNS_IN_PROGRESS.get();
+      if (!inProgress.add(callee)) {
+        // Marked as the other folds' re-entries are, so a walk that reads this answer is not
+        // memoized as if it were the callee's alone.
+        FOLD_REENTRIES.get()[0]++;
+        noteGuardDecision();
+        if (!isObservationFinal(builder)) INTERIM_GUARD_DECLINES.get()[0]++;
+        return true;
+      }
+      try {
+        for (ISSABasicBlock exiting : exits) {
+          // A block a constant guard never takes returns nothing; nor does a jump to the exit a
+          // constant guard never takes, as the one out of `while True:`, whose target is -1.
+          if (Boolean.FALSE.equals(computeBlockFeasibility(builder, callee, exiting))) continue;
+          int last = exiting.getLastInstructionIndex();
+          SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
+          if (instruction instanceof SSAConditionalBranchInstruction branch
+              && branch.getTarget() < 0
+              && Boolean.FALSE.equals(evaluateBranchComparison(builder, callee, branch))) continue;
+          return true;
+        }
+      } finally {
+        inProgress.remove(callee);
+      }
+    }
+    return false;
+  }
+
+  /** The callees whose return {@link #mayReturnUnseenValue} is deciding, on this thread. */
+  private static final ThreadLocal<Set<CGNode>> UNSEEN_RETURNS_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  /** Per builder, the memo of {@link #unseenExits}. */
+  private static final Map<PropagationCallGraphBuilder, Map<CGNode, List<ISSABasicBlock>>>
+      UNSEEN_EXITS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The blocks of a callee that reach its exit from the entry, over a normal edge, without
+   * returning a value the points-to analysis holds: one that ends in no return, or in a return of
+   * no value, which returns {@code None}, or of a value with an empty points-to set. A block no
+   * path from the entry reaches, as the one after a {@code while True:} loop, is not one. The
+   * blocks depend on the final pointer analysis alone, so they are memoized per builder.
+   *
+   * @param builder The builder.
+   * @param callee The callee, of the program's code.
+   * @return The blocks.
+   */
+  private static List<ISSABasicBlock> unseenExits(
+      PropagationCallGraphBuilder builder, CGNode callee) {
+    Map<CGNode, List<ISSABasicBlock>> memo =
+        UNSEEN_EXITS.computeIfAbsent(builder, b -> new java.util.concurrent.ConcurrentHashMap<>());
+    return memo.computeIfAbsent(
+        callee,
+        c -> {
+          PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+          IR ir = c.getIR();
+          SSACFG cfg = ir.getControlFlowGraph();
+          Set<ISSABasicBlock> reached = reachedFromEntry(cfg);
+          List<ISSABasicBlock> exits = new ArrayList<>();
+          for (ISSABasicBlock exiting : cfg.getNormalPredecessors(cfg.exit())) {
+            if (!reached.contains(exiting)) continue;
+            int last = exiting.getLastInstructionIndex();
+            SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
+            if (instruction instanceof SSAReturnInstruction ret
+                && !ret.returnsVoid()
+                && !holdsNoObject(pa, c, ret.getResult())) continue;
+            exits.add(exiting);
+          }
+          return exits;
+        });
+  }
+
+  /**
+   * The blocks a path from the entry reaches, over normal and exceptional edges.
+   *
+   * @param cfg The control-flow graph.
+   * @return The blocks reached.
+   */
+  private static Set<ISSABasicBlock> reachedFromEntry(SSACFG cfg) {
+    Set<ISSABasicBlock> reached = HashSetFactory.make();
+    Deque<ISSABasicBlock> work = new ArrayDeque<>();
+    work.push(cfg.entry());
+    reached.add(cfg.entry());
+    while (!work.isEmpty())
+      for (Iterator<ISSABasicBlock> it = cfg.getSuccNodes(work.pop()); it.hasNext(); ) {
+        ISSABasicBlock successor = it.next();
+        if (reached.add(successor)) work.push(successor);
+      }
+    return reached;
+  }
+
+  /**
+   * Decides whether a value of a node points to an object.
+   *
+   * @param pa The pointer analysis.
+   * @param node The node.
+   * @param vn The value number.
+   * @param object The object.
+   * @return Whether the value's points-to set holds the object.
+   */
+  private static boolean pointsTo(
+      PointerAnalysis<InstanceKey> pa, CGNode node, int vn, InstanceKey object) {
+    for (InstanceKey held :
+        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))))
+      if (held.equals(object)) return true;
+    return false;
+  }
+
+  /**
+   * Decides whether a value of a node points to no object, apart from the keys only the client
+   * makes.
+   *
+   * @param pa The pointer analysis.
+   * @param node The node.
+   * @param vn The value number.
+   * @return Whether the value's points-to set is empty.
+   */
+  private static boolean holdsNoObject(PointerAnalysis<InstanceKey> pa, CGNode node, int vn) {
+    return withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))
+        .isEmpty();
   }
 
   /**
@@ -5494,6 +5847,16 @@ public abstract class TensorGenerator implements Cloneable {
       }
       if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) {
         LOGGER.fine(() -> "ATTR-FOLD click-default field value for " + fn + " declines.");
+        return null;
+      }
+      if (hasUnseenWrite(builder, objIK, fn)) {
+        LOGGER.fine(
+            () ->
+                "ATTR-FOLD a write of "
+                    + fn
+                    + " on "
+                    + describe(asin)
+                    + " stores a value no points-to set holds; declines.");
         return null;
       }
       Object value = ((ConstantKey<?>) only).getValue();
@@ -6027,7 +6390,10 @@ public abstract class TensorGenerator implements Cloneable {
     // A `@click.option` default decides no guard (wala/ML#971): it is the value of the one
     // invocation that passes no option, not the only binding the command line admits.
     if (PythonSSAPropagationCallGraphBuilder.isClickDefault(only)) return null;
-    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+    if (!(only instanceof ConstantKey)) return null;
+    // As in the guard fold: the one constant does not stand for a value no points-to set holds.
+    if (mayTakeUnseenValue(builder, caller, vn, HashSetFactory.make())) return null;
+    return ((ConstantKey<?>) only).getValue();
   }
 
   /**
