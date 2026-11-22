@@ -24,6 +24,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.ForwardingCallStringSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder.DescriptorAttribute;
@@ -80,7 +81,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallerSiteContext;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IConditionalBranchInstruction;
@@ -175,8 +175,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private final String targetFramework;
 
   /**
-   * The k-CFA depth applied to the targeted context selector. See {@link
-   * #DEFAULT_TARGETED_CFA_DEPTH}.
+   * The k-CFA depth applied to the targeted context selector. Unless it is 0, it is a floor: under
+   * a program caller whose own string has two sites, the depth is at least 3 (wala/ML#1305). See
+   * {@link #DEFAULT_TARGETED_CFA_DEPTH}.
    */
   private final int targetedCfaDepth;
 
@@ -194,8 +195,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /**
    * Validates the requested k-CFA depth for the targeted context selector. The depth is the
-   * call-string length passed to {@link nCFAContextSelector}, so it must be non-negative (0 is
-   * context-insensitive; higher values are deeper).
+   * call-string length of the targeted {@link CallStringContextSelector}, so it must be
+   * non-negative (0 is context-insensitive; higher values are deeper).
    *
    * @param targetedCfaDepth The requested depth.
    * @return {@code targetedCfaDepth} unchanged when valid.
@@ -1335,8 +1336,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             Map.of("as_list", TensorFlowTypes.STATIC_TENSOR_SHAPE_AS_LIST)));
 
     final ContextSelector base = builder.getContextSelector();
+    // A program function whose own string has two sites (it was called with one of its caller's
+    // parameters, see `ForwardingCallStringSelector`) gives the framework methods it calls at
+    // least three, so the second site still separates its callers after the call it makes
+    // (wala/ML#1305).
     final ContextSelector targetedCFA =
-        new nCFAContextSelector(this.targetedCfaDepth, new ContextInsensitiveSelector());
+        new CallStringContextSelector(new ContextInsensitiveSelector()) {
+          @Override
+          protected int getLength(CGNode caller, CallSiteReference site, IMethod target) {
+            int depth = PythonTensorAnalysisEngine.this.targetedCfaDepth;
+            // Depth 0 stays context-insensitive.
+            return depth > 0
+                    && ForwardingCallStringSelector.isProgramFunction(caller)
+                    && ForwardingCallStringSelector.callStringLength(caller) >= 2
+                ? Math.max(depth, 3)
+                : depth;
+          }
+        };
     final IClass modelClass = cha.lookupClass(TensorFlowTypes.MODEL.getDeclaringClass());
     final IClass comprehensionClass = cha.lookupClass(PythonTypes.comprehension);
     final IClass filterClass = cha.lookupClass(PythonTypes.filter);
@@ -1618,7 +1634,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @param pointerKey The local pointer key of the ⊤ value.
    * @param node The call-graph node holding the value.
    * @param valueNumber The value number within {@code node}.
-   * @param callStringLength The (saturated) call-string length of {@code node}'s context, equal to
+   * @param callStringLength The (saturated) call-string length of {@code node}'s context, at least
    *     the configured {@code targetedCfaDepth}.
    */
   public record DepthLimitedResult(
@@ -5663,7 +5679,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       CGNode node = key.getNode();
       if (!receivesTargetedContext(node.getMethod(), modelClass)) continue;
       int length = measureCallStringLength(node.getContext());
-      if (length == targetedCfaDepth)
+      // A string may be longer than the depth under a program caller with two sites
+      // (wala/ML#1305), and is then saturated at its own budget.
+      if (length >= targetedCfaDepth)
         depthLimitedResults.add(new DepthLimitedResult(key, node, key.getValueNumber(), length));
     }
 

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -29,6 +30,9 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
 
   /** As {@link #FILE}, with one function shared by two maps. */
   private static final String SHARED = "tf2_test_dataset_shared_leaf_reads.py";
+
+  /** As {@link #SHARED}, with both maps calling the shared function through one forwarder. */
+  private static final String FORWARDED = "tf2_test_dataset_shared_leaf_reads_forwarded.py";
 
   /** The features, passed through every transformation of the chain, keep their type. */
   @Test
@@ -67,17 +71,51 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
   }
 
   /**
-   * One function shared by two maps returns, at each, the leaves both maps hand it, so the leaves
-   * of each map's element read the other's: their readings form a cycle, which the resolver
-   * converges. Read directly, the cycle recursed until the stack overflowed. The features read as
-   * the join of the element at both maps, through the batch between them; at run time they are
-   * {@code (1, 2, 3)}.
+   * One function shared by two maps returns the leaves each map hands it. Each map's call of it has
+   * a node of its own, since the map passes its own parameters on (wala/ML#1305), so the features
+   * read their run-time type, {@code (1, 2, 3)}, alone.
    */
   @Test
   public void testSharedFunctionFeatures()
       throws ClassHierarchyException, CancelException, IOException {
+    test(SHARED, "consume", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 2, 3))));
+  }
+
+  /** As {@link #testSharedFunctionFeatures()}, for the labels, {@code (1, 2)} at run time. */
+  @Test
+  public void testSharedFunctionLabels()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(SHARED, "consume_label", 1, 1, Map.of(2, Set.of(TENSOR_1_2_INT32)));
+  }
+
+  /**
+   * The function shared by two maps, called through one forwarder, has one node for both maps: the
+   * last two sites of its string, the forwarder's call of it and the map's call of the forwarder,
+   * are the same at both. It returns, at each map, the leaves both maps hand it, so the leaves of
+   * each map's element read the other's, and their readings form a cycle, which the resolver
+   * converges. Read directly, the cycle recursed until the stack overflowed (wala/ML#1270).
+   *
+   * @throws Exception On analysis failure.
+   */
+  @Test
+  public void testForwardedReadingsFormACycle() throws Exception {
+    PythonTensorAnalysisEngine engine = makeEngine(Collections.<File>emptyList(), FORWARDED);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    engine.performAnalysis(builder);
+    PythonTensorAnalysisEngine.ResolverCensus census = engine.getResolverCensus();
+    assertTrue("The resolver ran to completion.", census.complete());
+    assertNotEquals("The resolver found no query on a cycle.", 0, census.cyclicQueries());
+  }
+
+  /**
+   * The features at the maps of {@link #testForwardedReadingsFormACycle()} read as the join of the
+   * element at both maps, through the batch between them; at run time they are {@code (1, 2, 3)}.
+   */
+  @Test
+  public void testForwardedFeatures() throws ClassHierarchyException, CancelException, IOException {
     test(
-        SHARED,
+        FORWARDED,
         "consume",
         1,
         1,
@@ -89,12 +127,11 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 1, 3))));
   }
 
-  /** As {@link #testSharedFunctionFeatures()}, for the labels, {@code (1, 2)} at run time. */
+  /** As {@link #testForwardedFeatures()}, for the labels, {@code (1, 2)} at run time. */
   @Test
-  public void testSharedFunctionLabels()
-      throws ClassHierarchyException, CancelException, IOException {
+  public void testForwardedLabels() throws ClassHierarchyException, CancelException, IOException {
     test(
-        SHARED,
+        FORWARDED,
         "consume_label",
         1,
         1,
