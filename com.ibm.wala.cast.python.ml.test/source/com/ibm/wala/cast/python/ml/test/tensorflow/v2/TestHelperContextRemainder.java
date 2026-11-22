@@ -24,17 +24,10 @@ public class TestHelperContextRemainder extends AbstractTensorTest {
   private static final TensorType FEATURES = TensorType.of(FLOAT_32, 5, 4);
 
   /**
-   * What the index reads through either shape: each call's shape with each call's dtype, and with
-   * an unknown dtype besides.
+   * What the index reads through the joined converter: each call's type. The conversion of a list
+   * is dead for either array (wala/ML#1053), so the arrays pass through it as they are.
    */
-  private static final Set<TensorType> JOINED =
-      Set.of(
-          INDEX,
-          TensorType.of(FLOAT_32, 5),
-          TensorType.of(UNKNOWN, 5),
-          FEATURES,
-          TensorType.of(INT_32, 5, 4),
-          TensorType.of(UNKNOWN, 5, 4));
+  private static final Set<TensorType> JOINED = Set.of(INDEX, FEATURES);
 
   /**
    * The index converted through a helper that passes a slice of its parameter on: the converter has
