@@ -37,6 +37,8 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstGlobalWrite;
 import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
@@ -642,6 +644,9 @@ public abstract class TensorGenerator implements Cloneable {
     // entries never expire on their own; a shard running several whole-project analyses in one JVM
     // exhausted its heap on them (wala/ML#1021).
     PROPERTY_WRITE_INDEX.remove(builder);
+    UNSEEN_EXITS.remove(builder);
+    UNSEEN_WRITES.remove(builder);
+    UNSEEN_GLOBAL_WRITES.remove(builder);
     DictComprehensionComponent.clearComprehensions(builder);
     ElementWiseOperation.clearPythonNumbers(builder);
     FIELD_PUT_INDEX.remove(builder);
@@ -5171,9 +5176,10 @@ public abstract class TensorGenerator implements Cloneable {
   /**
    * Decides whether a value may take a value no points-to set holds, so that its points-to set does
    * not stand for every value it takes (wala/ML#1320, wala/ML#1321): a property read with a write
-   * of such a value ({@link #readMayTakeUnseenValue}), a call whose callee may return one ({@link
-   * #mayReturnUnseenValue}), a φ with such an operand, or a parameter for which a caller passes
-   * one. A walk longer than {@link #UNSEEN_VALUE_WALK_LIMIT} values answers that one may be.
+   * of such a value ({@link #readMayTakeUnseenValue}), a global read with one ({@link
+   * #globalHasUnseenWrite}), a call whose callee may return one ({@link #mayReturnUnseenValue}), a
+   * φ with such an operand, or a parameter for which a caller passes one. A walk longer than {@link
+   * #UNSEEN_VALUE_WALK_LIMIT} values answers that one may be.
    *
    * @param builder The builder.
    * @param node The node whose IR defines the value.
@@ -5190,6 +5196,8 @@ public abstract class TensorGenerator implements Cloneable {
     if (visited.size() > UNSEEN_VALUE_WALK_LIMIT) return true;
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof PythonPropertyRead read) return readMayTakeUnseenValue(builder, node, read);
+    if (def instanceof AstGlobalRead global)
+      return globalHasUnseenWrite(builder, global.getGlobalName());
     if (def instanceof SSAAbstractInvokeInstruction call)
       return mayReturnUnseenValue(builder, node, call, HashSetFactory.make());
     if (def instanceof SSAPhiInstruction phi) {
@@ -5251,6 +5259,59 @@ public abstract class TensorGenerator implements Cloneable {
    */
   private static boolean hasUnseenWrite(
       PropagationCallGraphBuilder builder, InstanceKey object, String field) {
+    return UNSEEN_WRITES
+        .computeIfAbsent(builder, b -> new java.util.concurrent.ConcurrentHashMap<>())
+        .computeIfAbsent(
+            Pair.make(object, field), k -> computeHasUnseenWrite(builder, object, field));
+  }
+
+  /** Per builder, the memo of {@link #hasUnseenWrite}, which reads the final pointer analysis. */
+  private static final Map<PropagationCallGraphBuilder, Map<Pair<InstanceKey, String>, Boolean>>
+      UNSEEN_WRITES = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** Per builder, the globals some write of which stores a value no points-to set holds. */
+  private static final Map<PropagationCallGraphBuilder, Set<String>> UNSEEN_GLOBAL_WRITES =
+      Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Decides whether a write of a global stores a value no points-to set holds, as {@code DEBUG =
+   * json.loads(text)["debug"]} does, so that the global's points-to set does not stand for every
+   * value it takes. One scan of the call graph per builder.
+   *
+   * @param builder The builder.
+   * @param global The global's name.
+   * @return Whether such a write may reach the global.
+   */
+  private static boolean globalHasUnseenWrite(PropagationCallGraphBuilder builder, String global) {
+    return UNSEEN_GLOBAL_WRITES
+        .computeIfAbsent(
+            builder,
+            b -> {
+              PointerAnalysis<InstanceKey> pa = b.getPointerAnalysis();
+              Set<String> unseen = HashSetFactory.make();
+              for (CGNode candidate : b.getCallGraph()) {
+                IR ir = candidate.getIR();
+                if (ir == null) continue;
+                for (SSAInstruction instruction : ir.getInstructions())
+                  if (instruction instanceof AstGlobalWrite write
+                      && holdsNoObject(pa, candidate, write.getVal()))
+                    unseen.add(write.getGlobalName());
+              }
+              return unseen;
+            })
+        .contains(global);
+  }
+
+  /**
+   * Computes {@link #hasUnseenWrite}.
+   *
+   * @param builder The builder.
+   * @param object The object whose field is read.
+   * @param field The field's name.
+   * @return Whether such a write may reach the field.
+   */
+  private static boolean computeHasUnseenWrite(
+      PropagationCallGraphBuilder builder, InstanceKey object, String field) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     PropertyWriteIndex index = propertyWriteIndex(builder);
     for (PropertyWriteSite write : index.byAttribute().getOrDefault(field, List.of())) {
@@ -5280,7 +5341,6 @@ public abstract class TensorGenerator implements Cloneable {
       CGNode node,
       SSAAbstractInvokeInstruction call,
       Set<CGNode> visited) {
-    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
       if (!visited.add(callee)) continue;
       IR ir = callee.getIR();
@@ -5292,26 +5352,76 @@ public abstract class TensorGenerator implements Cloneable {
               && mayReturnUnseenValue(builder, callee, inner, visited)) return true;
         continue;
       }
-      SSACFG cfg = ir.getControlFlowGraph();
-      Set<ISSABasicBlock> reached = reachedFromEntry(cfg);
-      for (ISSABasicBlock exiting : cfg.getNormalPredecessors(cfg.exit())) {
-        // A block no path from the entry reaches, as the one after `while True:`, returns nothing;
-        // nor does one a constant guard never takes.
-        if (!reached.contains(exiting)) continue;
-        if (Boolean.FALSE.equals(computeBlockFeasibility(builder, callee, exiting))) continue;
-        int last = exiting.getLastInstructionIndex();
-        SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
-        // Nor does a jump to the exit a constant guard never takes, as the one out of `while
-        // True:`,
-        // whose target is the exit's index, -1.
-        if (instruction instanceof SSAConditionalBranchInstruction branch
-            && branch.getTarget() < 0
-            && Boolean.FALSE.equals(evaluateBranchComparison(builder, callee, branch))) continue;
-        if (!(instruction instanceof SSAReturnInstruction ret) || ret.returnsVoid()) return true;
-        if (holdsNoObject(pa, callee, ret.getResult())) return true;
+      List<ISSABasicBlock> exits = unseenExits(builder, callee);
+      if (exits.isEmpty()) continue;
+      // Deciding an exit's block reads the callee's guards, which may ask for this callee's return
+      // again, as a recursive callee's does; that answer is not known, so it declines.
+      Set<CGNode> inProgress = UNSEEN_RETURNS_IN_PROGRESS.get();
+      if (!inProgress.add(callee)) {
+        noteGuardDecision();
+        return true;
+      }
+      try {
+        for (ISSABasicBlock exiting : exits) {
+          // A block a constant guard never takes returns nothing; nor does a jump to the exit a
+          // constant guard never takes, as the one out of `while True:`, whose target is -1.
+          if (Boolean.FALSE.equals(computeBlockFeasibility(builder, callee, exiting))) continue;
+          int last = exiting.getLastInstructionIndex();
+          SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
+          if (instruction instanceof SSAConditionalBranchInstruction branch
+              && branch.getTarget() < 0
+              && Boolean.FALSE.equals(evaluateBranchComparison(builder, callee, branch))) continue;
+          return true;
+        }
+      } finally {
+        inProgress.remove(callee);
       }
     }
     return false;
+  }
+
+  /** The callees whose return {@link #mayReturnUnseenValue} is deciding, on this thread. */
+  private static final ThreadLocal<Set<CGNode>> UNSEEN_RETURNS_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  /** Per builder, the memo of {@link #unseenExits}. */
+  private static final Map<PropagationCallGraphBuilder, Map<CGNode, List<ISSABasicBlock>>>
+      UNSEEN_EXITS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The blocks of a callee that reach its exit from the entry, over a normal edge, without
+   * returning a value the points-to analysis holds: one that ends in no return, or in a return of
+   * no value, which returns {@code None}, or of a value with an empty points-to set. A block no
+   * path from the entry reaches, as the one after a {@code while True:} loop, is not one. The
+   * blocks depend on the final pointer analysis alone, so they are memoized per builder.
+   *
+   * @param builder The builder.
+   * @param callee The callee, of the program's code.
+   * @return The blocks.
+   */
+  private static List<ISSABasicBlock> unseenExits(
+      PropagationCallGraphBuilder builder, CGNode callee) {
+    Map<CGNode, List<ISSABasicBlock>> memo =
+        UNSEEN_EXITS.computeIfAbsent(builder, b -> new java.util.concurrent.ConcurrentHashMap<>());
+    return memo.computeIfAbsent(
+        callee,
+        c -> {
+          PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+          IR ir = c.getIR();
+          SSACFG cfg = ir.getControlFlowGraph();
+          Set<ISSABasicBlock> reached = reachedFromEntry(cfg);
+          List<ISSABasicBlock> exits = new ArrayList<>();
+          for (ISSABasicBlock exiting : cfg.getNormalPredecessors(cfg.exit())) {
+            if (!reached.contains(exiting)) continue;
+            int last = exiting.getLastInstructionIndex();
+            SSAInstruction instruction = last < 0 ? null : ir.getInstructions()[last];
+            if (instruction instanceof SSAReturnInstruction ret
+                && !ret.returnsVoid()
+                && !holdsNoObject(pa, c, ret.getResult())) continue;
+            exits.add(exiting);
+          }
+          return exits;
+        });
   }
 
   /**

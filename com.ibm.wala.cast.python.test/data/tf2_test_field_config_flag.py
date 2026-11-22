@@ -13,6 +13,10 @@ def consume_unguarded(t):
     assert t.shape == (2, 3) and t.dtype == tf.float32
 
 
+def consume_method_checked(t):
+    assert t.shape == (2, 3) and t.dtype == tf.float32
+
+
 def consume_checked(t):
     assert t.shape == (2, 3) and t.dtype == tf.float32
 
@@ -38,9 +42,46 @@ class Holder:
             return True
         return False
 
+    def check_method(self, flag, t):
+        if flag:
+            consume_method_checked(t)
+            return True
+        return False
+
+    def run_method_checked(self, t):
+        return self.check_method(self.flag, t)
+
     def run_checked(self, t):
         return check(self.flag, t)
 
 
 assert Holder(config_text='{"flag": true}').run_checked(tf.ones([2, 3]))
+assert Holder(config_text='{"flag": true}').run_method_checked(tf.ones([2, 3]))
 assert Holder(config_text='{"flag": true}').run(tf.ones([2, 3]))
+
+
+def consume_mode(t):
+    assert t.shape == (2, 3) and t.dtype == tf.float32
+
+
+def reset_mode():
+    global MODE
+    MODE = False
+
+
+def configure_mode(text):
+    global MODE
+    MODE = json.loads(text)["mode"]
+
+
+def run_mode(t):
+    global MODE
+    if MODE:
+        consume_mode(t)
+        return True
+    return False
+
+
+reset_mode()
+configure_mode('{"mode": true}')
+assert run_mode(tf.ones([2, 3]))

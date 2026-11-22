@@ -2,7 +2,7 @@
 # result is taken only sometimes, and the code after the guard's `break` runs.
 import tensorflow as tf
 
-calls = {"after": 0, "loop": 0}
+calls = {"after": 0, "loop": 0, "recursive": 0}
 
 
 def consume_after_guard(t):
@@ -51,6 +51,36 @@ for step in range(2):
         continue
     consume_never(tf.ones([2, 3]))
 
+
+def consume_after_recursive_guard(t):
+    assert t.shape == (2, 3) and t.dtype == tf.float32
+    calls["recursive"] += 1
+
+
+def done(n):
+    if n == 0:
+        return True
+    if done(n - 1):
+        return True
+
+
+def ping(n):
+    if n <= 0:
+        return True
+    if pong(n - 1):
+        return True
+
+
+def pong(n):
+    if ping(n):
+        return True
+
+
+for step in range(3):
+    if done(step) and ping(step):
+        continue
+    consume_after_recursive_guard(tf.ones([2, 3]))
+
 for step in range(5):
     consume_before_guard(tf.ones([2, 3]))
     if should_stop(step):
@@ -59,4 +89,4 @@ for step in range(5):
     for item in [1]:
         consume_in_loop_after_guard(tf.ones([2, 3]))
 
-assert calls == {"after": 4, "loop": 4}
+assert calls == {"after": 4, "loop": 4, "recursive": 0}

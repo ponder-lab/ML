@@ -70,6 +70,39 @@ public class TestUnseenGuardValues extends AbstractTensorTest {
   }
 
   @Test
+  public void testMethodFieldReadFromParsedConfig()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_field_config_flag.py",
+        "consume_method_checked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
+  public void testGuardOnRecursiveCalleesEnds()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_implicit_none_guard.py",
+        "consume_after_recursive_guard",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
+  public void testGlobalWrittenFromParsedConfig()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_field_config_flag.py",
+        "consume_mode",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
   public void testAfterGuardOnImplicitNone()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
