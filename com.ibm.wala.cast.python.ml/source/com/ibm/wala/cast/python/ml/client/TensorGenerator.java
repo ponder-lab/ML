@@ -4835,10 +4835,9 @@ public abstract class TensorGenerator implements Cloneable {
                   + ".");
       return null;
     }
-    // A dtype declines here. Record equality would decide two equal dtypes true, which an identity
-    // test lowered as `==` does not satisfy (wala/ML#1078), and a dtype tested for truth, as
-    // `if x.dtype:`, is not a nonzero constant, though every NumPy and TensorFlow dtype is true.
-    if (left instanceof DTypeConstant || right instanceof DTypeConstant) return null;
+    // A dtype tested for truth, as `if x.dtype:`, is unequal to the zero the branch tests it
+    // against, and every NumPy and TensorFlow dtype is true. The front end compares a condition's
+    // value with zero alone, so no branch compares two dtypes.
     if (!(branch.getOperator() instanceof IConditionalBranchInstruction.Operator)) return null;
     switch ((IConditionalBranchInstruction.Operator) branch.getOperator()) {
       case EQ:
@@ -5198,7 +5197,6 @@ public abstract class TensorGenerator implements Cloneable {
    * @return The dtype, or {@code null} when the value has no one known dtype.
    */
   private static DType dtypeOfValue(PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    if (vn <= 0) return null;
     if (node.getDU().getDef(vn) instanceof SSAPhiInstruction phi) {
       Pair<CGNode, Integer> frame = Pair.make(node, vn);
       Set<Pair<CGNode, Integer>> onStack = PHI_FOLD_ON_STACK.get();
@@ -5226,7 +5224,6 @@ public abstract class TensorGenerator implements Cloneable {
     PointerKey basePK = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (builder.getPropagationSystem().isImplicit(basePK)) return null;
     PointsToSetVariable baseVar = builder.getPropagationSystem().findOrCreatePointsToSet(basePK);
-    if (baseVar == null) return null;
     if (TensorGeneratorFactory.mayHaveSeveralCreators(baseVar, builder)) return null;
     // A re-entry has no answer yet, and declines as the len fold's does (RANK_FOLDS_REENTERED).
     Pair<CGNode, Integer> frame = Pair.make(node, vn);
@@ -5307,9 +5304,11 @@ public abstract class TensorGenerator implements Cloneable {
    * <p>{@code C} must be one class of {@link #INSTANCE_TYPE_OF_CLASS}, and each object {@code x}
    * may be must be of a type no program class can extend: a list, tuple, dict, NumPy array or
    * constant. A φ's objects are its feasible arms'. The test holds when every object is of {@code
-   * C}'s instance type, and fails when none is. An object the points-to set does not hold, as a
-   * value an unmodeled call returns, is not seen, so where one may reach {@code x} beside the
-   * objects it holds, the outcome is read from those objects alone.
+   * C}'s instance type, and fails when none is. A value or φ arm whose points-to set is empty, as
+   * the value of a call nothing models, declines, since a verdict read from the other arms' objects
+   * would cut the arm that value takes. An object a nonempty points-to set does not hold is not
+   * seen, so where one may reach {@code x} beside the objects it holds, the outcome is read from
+   * those objects alone.
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the call.
    * @param node The {@link CGNode} whose IR holds the call.
@@ -5320,9 +5319,9 @@ public abstract class TensorGenerator implements Cloneable {
   private static Integer resolveIsInstance(
       PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction invoke) {
     // Exactly `isinstance(x, C)`: the callable plus two positional arguments.
-    if (invoke.getNumberOfUses() != 3 || invoke.getNumberOfReturnValues() == 0) return null;
+    if (invoke.getNumberOfUses() != 3) return null;
     Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
-    if (targets == null || targets.isEmpty()) return null;
+    if (targets.isEmpty()) return null;
     for (CGNode target : targets)
       if (!ISINSTANCE_BUILTIN_TYPE_NAME.equals(
           target.getMethod().getDeclaringClass().getReference().getName().toString())) return null;
@@ -5369,12 +5368,11 @@ public abstract class TensorGenerator implements Cloneable {
    * @param node The {@link CGNode} whose IR defines the value.
    * @param vn The value number.
    * @param objects The objects gathered; grown.
-   * @return {@code false} when a φ's arms re-enter the guard being decided, so the objects are not
-   *     known.
+   * @return {@code false} when the objects are not known: a φ's arms re-enter the guard being
+   *     decided, or a value's points-to set is empty.
    */
   private static boolean feasibleObjects(
       PropagationCallGraphBuilder builder, CGNode node, int vn, Set<InstanceKey> objects) {
-    if (vn <= 0) return false;
     if (node.getDU().getDef(vn) instanceof SSAPhiInstruction phi) {
       Pair<CGNode, Integer> frame = Pair.make(node, vn);
       Set<Pair<CGNode, Integer>> onStack = PHI_FOLD_ON_STACK.get();
@@ -5394,10 +5392,15 @@ public abstract class TensorGenerator implements Cloneable {
       }
     }
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    // An empty set holds no object the value may be, as for the value of a call nothing models.
+    boolean any = false;
     for (InstanceKey object :
-        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))))
+        withoutClientOnlyKeys(
+            pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))) {
       objects.add(object);
-    return true;
+      any = true;
+    }
+    return any;
   }
 
   /**
