@@ -85,3 +85,22 @@ def run_mode(t):
 reset_mode()
 configure_mode('{"mode": true}')
 assert run_mode(tf.ones([2, 3]))
+
+
+def consume_phi_checked(t):
+    assert t.shape == (2, 3) and t.dtype == tf.float32
+
+
+def check_phi(flag, t):
+    if flag:
+        consume_phi_checked(t)
+        return True
+    return False
+
+
+def pick_flag(text):
+    flag = json.loads(text)["flag"] if len(text) > 2 else False
+    return check_phi(flag, tf.ones([2, 3]))
+
+
+assert pick_flag('{"flag": true}')

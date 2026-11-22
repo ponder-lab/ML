@@ -103,6 +103,17 @@ public class TestUnseenGuardValues extends AbstractTensorTest {
   }
 
   @Test
+  public void testParameterFromMergeOfParsedConfig()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_field_config_flag.py",
+        "consume_phi_checked",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
   public void testAfterGuardOnImplicitNone()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
