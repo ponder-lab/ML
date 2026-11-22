@@ -22,6 +22,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstContextInsensitiveSSAContextInterprete
 import com.ibm.wala.cast.ir.ssa.AstIRFactory;
 import com.ibm.wala.cast.loader.AstDynamicField;
 import com.ibm.wala.cast.python.ipa.callgraph.BareDecoratorTargetSelector;
+import com.ibm.wala.cast.python.ipa.callgraph.ForwardingCallStringSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonClassMethodTrampolineTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonInstanceKeys;
@@ -68,7 +69,6 @@ import com.ibm.wala.ipa.callgraph.impl.DefaultEntrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.ZeroXInstanceKeys;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.cha.SeqClassHierarchyFactory;
@@ -1018,7 +1018,7 @@ public abstract class PythonAnalysisEngine<T>
 
     builder.setContextSelector(
         new TrampolineReceiverContextSelector(
-            new nCFAContextSelector(1, new ContextInsensitiveSelector())));
+            new ForwardingCallStringSelector(new ContextInsensitiveSelector())));
 
     builder.setInstanceKeys(
         new PythonScopeMappingInstanceKeys(
