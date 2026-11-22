@@ -4,6 +4,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
@@ -920,6 +921,27 @@ public class WorklistTypeResolverTest {
 
     // The first cycle's two queries and the second's.
     assertEquals(checked + 4, engine.checkedSkips());
+  }
+
+  /**
+   * The skip's check mode fails when a query with a cause to recompute lies outside the region a
+   * pass is restricted to (wala/ML#1176): the restricted pass alone would let its settled value
+   * stand. The test hook stamps a query of a settled cycle as written without marking it, so the
+   * cycle is not among the queries the region is seeded with. Both of its queries are then targets,
+   * the one written and its reader, and the failure names the first in the component.
+   */
+  @Test
+  public void testSkipCheckModeFailsOnTargetOutsideRegion() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    settleAnotherCycle(engine, "LEFT_FIRST");
+    settleAnotherCycle(engine, "LEFT_SECOND");
+    engine.stampUnmarkedForTest("LEFT_FIRST_1");
+
+    AssertionError error =
+        assertThrows(AssertionError.class, () -> settleAnotherCycle(engine, "LEFT_THIRD"));
+
+    assertEquals("A settlement target lies outside the region: LEFT_FIRST_2.", error.getMessage());
   }
 
   /**

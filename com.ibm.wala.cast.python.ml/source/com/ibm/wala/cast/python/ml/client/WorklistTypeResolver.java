@@ -247,7 +247,7 @@ final class WorklistTypeResolver {
 
   /**
    * The logical clock of state writes, for the settlement pass's skip of a query whose inputs have
-   * not changed since its last settled recomputation. See {@link #settledInputsUnchanged}.
+   * not changed since its last settled recomputation. See {@link #cyclicCause}.
    */
   private long clock;
 
@@ -325,9 +325,9 @@ final class WorklistTypeResolver {
       !"false".equals(System.getProperty(RESTRICT_SETTLEMENT_PROPERTY));
 
   /**
-   * The queries for which {@link #settledInputsUnchanged} may be false: a superset, kept by the
-   * writes that can make it false (registration, a stamp of the query or of a settled read, and
-   * every settled recomputation), and shrunk only when the predicate is observed true.
+   * The queries for which {@link #cyclicCause} may give a cause: a superset, kept by the writes
+   * that can give one (registration, a stamp of the query or of a settled read, and every settled
+   * recomputation), and shrunk only when it is observed to give none.
    */
   private final Set<Object> settleDirty = HashSetFactory.make();
 
@@ -1938,10 +1938,11 @@ final class WorklistTypeResolver {
                         + " edges="
                         + this.reads.getOrDefault(key, Collections.emptySet()).size());
           }
+        // The check mode selects over the whole graph, so a target outside the region is a query
+        // the restricted pass alone would have left unrecomputed.
         if (region != null && this.checkSkips)
           for (Object key : scc)
-            if (!region.contains(key)
-                && (targets.contains(key) || (full && cyclic && !this.settledInputsUnchanged(key))))
+            if (!region.contains(key) && targets.contains(key))
               throw new AssertionError("A settlement target lies outside the region: " + key + ".");
         if (targets.isEmpty()) continue;
         Map<Object, Object> replacements = HashMapFactory.make();
@@ -2183,26 +2184,16 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Decides whether a query may be skipped by the settlement pass in progress: its last settled
-   * recomputation stands, nothing but the pass's own write-back of that recomputation has written
-   * the query since, and none of the queries that recomputation read has been written since it
-   * began. A transfer is a function of the values its reads return, given the final call graph and
-   * pointer analysis and the generators' write-once caches, so the recomputation would return the
-   * value the query settled at. That holds for a pass inside a generator guard too, since a record
-   * stands only for a recomputation no guard around its pass decided ({@link
-   * #recordSettledRecomputation}). There a recomputation made again could be cut at a frame that is
-   * open around this pass, and the skip keeps the value the query settled at with no such cut.
-   *
-   * @param key The query.
-   * @return {@code true} iff the query's recomputation can be skipped.
-   */
-  private boolean settledInputsUnchanged(Object key) {
-    return this.cyclicCause(key) == null;
-  }
-
-  /**
-   * Finds why the settlement pass in progress recomputes a query on a cycle, by the conditions of
-   * {@link #settledInputsUnchanged}.
+   * Finds why the settlement pass in progress recomputes a query on a cycle, or that it may skip
+   * the query: its last settled recomputation stands, nothing but the pass's own write-back of that
+   * recomputation has written the query since, and none of the queries that recomputation read has
+   * been written since it began. A transfer is a function of the values its reads return, given the
+   * final call graph and pointer analysis and the generators' write-once caches, so the
+   * recomputation would return the value the query settled at. That holds for a pass inside a
+   * generator guard too, since a record stands only for a recomputation no guard around its pass
+   * decided ({@link #recordSettledRecomputation}). There a recomputation made again could be cut at
+   * a frame that is open around this pass, and the skip keeps the value the query settled at with
+   * no such cut.
    *
    * @param key The query.
    * @return The cause, or {@code null} when the query's recomputation can be skipped.
@@ -2291,6 +2282,19 @@ final class WorklistTypeResolver {
    */
   void lagRecordForTest(Object reader, Object key) {
     this.readVersions.get(reader).merge(key, -1, Integer::sum);
+  }
+
+  /**
+   * Stamps a query as an evaluation's write does, without marking it or its settled readers as
+   * queries whose skip may no longer hold. For a test of the check mode's walk outside a restricted
+   * pass's region: no scheduling reaches this state.
+   *
+   * @param key The query.
+   */
+  void stampUnmarkedForTest(Object key) {
+    long now = ++this.clock;
+    this.stamps.put(key, now);
+    this.selfStamps.put(key, now);
   }
 
   /**
