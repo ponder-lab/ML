@@ -407,6 +407,51 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
+   * A segment sum whose {@code num_segments} is an element of a computed tensor, {@code
+   * (tf.reduce_max(ids, keepdims=True) + 1)[0]}: the element has no static value, so TensorFlow's
+   * static shape reports {@code None} for the leading axis, which reads as dynamic (wala/ML#1225).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentCountFromComputedElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_segment_runtime_count.py",
+        "consume_computed_segments",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
+   * A segment sum whose {@code num_segments} is an element of a constant, {@code
+   * tf.constant([4])[0]}: TensorFlow folds it, so the leading axis is fixed, and the analysis,
+   * which does not compute it, reads it as unresolved (wala/ML#1225).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentCountFromConstantElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_segment_runtime_count.py",
+        "consume_constant_segments",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
    * A segment sum whose {@code num_segments} is a dataset leaf's element read by a constant index,
    * {@code t[0]} inside a {@code map} function: TensorFlow's static shape reports {@code None} for
    * the leading axis, so it reads as dynamic, although the element is allocated at the read as an

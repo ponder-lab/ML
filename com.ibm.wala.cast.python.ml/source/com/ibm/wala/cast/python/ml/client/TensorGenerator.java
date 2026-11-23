@@ -5898,10 +5898,31 @@ public abstract class TensorGenerator implements Cloneable {
         withoutClientOnlyKeys(
             pa.getPointsToSet(
                 pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef())))) {
-      if (!TensorFlowTypes.TENSOR_TYPE.equals(receiver.concreteType().getReference())) return false;
+      if (!isFoldableReceiver(receiver)) {
+        LOGGER.finer(() -> "Not a foldable receiver of an indexed element: " + receiver + ".");
+        return false;
+      }
       any = true;
     }
     return any;
+  }
+
+  /**
+   * Decides whether an object is a tensor whose integer subscript TensorFlow folds at trace time
+   * where it can: the result of {@code tf.shape}, whose element on a known axis is static, or a
+   * constant (wala/ML#1225). An element of a computed tensor has no static value, so its sizes are
+   * {@code None}.
+   *
+   * @param receiver The object a subscript reads.
+   * @return Whether it is a {@code tf.shape} result or a constant.
+   */
+  private static boolean isFoldableReceiver(InstanceKey receiver) {
+    if (!(receiver instanceof AllocationSiteInNode allocation)
+        || !TensorFlowTypes.TENSOR_TYPE.equals(receiver.concreteType().getReference()))
+      return false;
+    TypeReference op = allocation.getNode().getMethod().getDeclaringClass().getReference();
+    return op.equals(TensorFlowTypes.SHAPE_OF.getDeclaringClass())
+        || op.equals(CONSTANT.getDeclaringClass());
   }
 
   /** The type the {@code len} builtin's summary is declared on. */
