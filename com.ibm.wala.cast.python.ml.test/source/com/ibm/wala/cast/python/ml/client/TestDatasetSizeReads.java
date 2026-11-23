@@ -45,13 +45,11 @@ public class TestDatasetSizeReads extends AbstractTensorTest {
   }
 
   /**
-   * The analysis computes a dataset's sizes 2,144 times for this fixture. With one call site for
-   * the calls a summary makes, it computed them 866 times: once for each of its 14 datasets, the
-   * source, the twelve transformations and the batch, and once for each of the 852 views of the
-   * batch over one receiver. A second site (wala/ML#1305) gives each map's {@code double} a node of
-   * its own. Computed at every read, the sizes were computed 3,464,886 times, each dataset once per
-   * path to it, which is what the bound guards against. The check mode recomputes every kept value
-   * it returns, so the count says nothing under it.
+   * The analysis computes a dataset's sizes 866 times for this fixture: once for each of its 14
+   * datasets, the source, the twelve transformations and the batch, and once for each of the 852
+   * views of the batch over one receiver. Computed at every read, they were computed 3,464,886
+   * times, each dataset once per path to it. The check mode recomputes every kept value it returns,
+   * so the count says nothing under it.
    *
    * @throws Exception On analysis failure.
    */
@@ -66,7 +64,7 @@ public class TestDatasetSizeReads extends AbstractTensorTest {
     assertTrue("The analysis reads a dataset's sizes.", computations > 0);
     assertTrue(
         "The analysis computed a dataset's sizes " + computations + " times.",
-        computations <= 5000);
+        computations <= 2000);
   }
 
   /**
@@ -79,11 +77,10 @@ public class TestDatasetSizeReads extends AbstractTensorTest {
   }
 
   /**
-   * The analysis computes a dataset's sizes 1,495 times for the fixture whose element is read under
-   * a rank fold, and 859 times with one call site for the calls a summary makes (wala/ML#1305).
-   * Computed at every read made while the fold is in progress, they were computed 138,871 times,
-   * each dataset once per path to it. The check mode recomputes every kept value it returns, so the
-   * count says nothing under it.
+   * The analysis computes a dataset's sizes 859 times for the fixture whose element is read under a
+   * rank fold. Computed at every read made while the fold is in progress, they were computed
+   * 138,871 times, each dataset once per path to it. The check mode recomputes every kept value it
+   * returns, so the count says nothing under it.
    *
    * @throws Exception On analysis failure.
    */
@@ -98,7 +95,7 @@ public class TestDatasetSizeReads extends AbstractTensorTest {
     assertTrue("The analysis reads a dataset's sizes.", computations > 0);
     assertTrue(
         "The analysis computed a dataset's sizes " + computations + " times.",
-        computations <= 5000);
+        computations <= 2000);
   }
 
   /** With no guard in progress, a computation in which no guard decided answers for any frame. */
