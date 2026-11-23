@@ -5288,15 +5288,79 @@ public abstract class TensorGenerator implements Cloneable {
    */
   private static boolean hasUnseenWrite(
       PropagationCallGraphBuilder builder, InstanceKey object, String field) {
-    return UNSEEN_WRITES
-        .computeIfAbsent(builder, b -> new java.util.concurrent.ConcurrentHashMap<>())
-        .computeIfAbsent(
-            Pair.make(object, field), k -> computeHasUnseenWrite(builder, object, field));
+    UnseenWriteTargets targets =
+        UNSEEN_WRITES.computeIfAbsent(builder, TensorGenerator::newUnseenWriteTargets);
+    return targets.throughNonConstantMember().contains(object)
+        || targets
+            .byField()
+            .computeIfAbsent(field, f -> unseenWriteTargets(builder, f))
+            .contains(object);
   }
 
-  /** Per builder, the memo of {@link #hasUnseenWrite}, which reads the final pointer analysis. */
-  private static final Map<PropagationCallGraphBuilder, Map<Pair<InstanceKey, String>, Boolean>>
-      UNSEEN_WRITES = Collections.synchronizedMap(new WeakHashMap<>());
+  /**
+   * The objects a field write may store a value the points-to analysis does not hold in, for a
+   * builder: per field, those a write of the field stores such a value in, computed when the field
+   * is first asked of; and those a write through a member that is not a string constant reaches,
+   * which may name any field. Collected once from the writes, so a field asked of many objects does
+   * not scan its writes once per object.
+   *
+   * @param byField The objects per field.
+   * @param throughNonConstantMember The objects a write through a non-constant member reaches.
+   */
+  private record UnseenWriteTargets(
+      Map<String, Set<InstanceKey>> byField, Set<InstanceKey> throughNonConstantMember) {}
+
+  /**
+   * Collects the objects a write through a member that is not a string constant reaches, and an
+   * empty memo of the objects per field ({@link UnseenWriteTargets}).
+   *
+   * @param builder The builder.
+   * @return The builder's targets.
+   */
+  private static UnseenWriteTargets newUnseenWriteTargets(PropagationCallGraphBuilder builder) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Set<InstanceKey> reached = HashSetFactory.make();
+    for (PropertyWriteSite write : propertyWriteIndex(builder).nonConstantMember())
+      for (InstanceKey object : pointsToSet(pa, write.node(), write.object())) reached.add(object);
+    return new UnseenWriteTargets(new ConcurrentHashMap<>(), reached);
+  }
+
+  /**
+   * Collects the objects a write of a field stores a value the points-to analysis does not hold in:
+   * the objects of each write whose stored value points to no object.
+   *
+   * @param builder The builder.
+   * @param field The field's name.
+   * @return The objects.
+   */
+  private static Set<InstanceKey> unseenWriteTargets(
+      PropagationCallGraphBuilder builder, String field) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Set<InstanceKey> ret = HashSetFactory.make();
+    for (PropertyWriteSite write :
+        propertyWriteIndex(builder).byAttribute().getOrDefault(field, List.of()))
+      if (holdsNoObject(pa, write.node(), write.value()))
+        for (InstanceKey object : pointsToSet(pa, write.node(), write.object())) ret.add(object);
+    return ret;
+  }
+
+  /**
+   * The points-to set of a value of a node, apart from the keys only the client makes.
+   *
+   * @param pa The pointer analysis.
+   * @param node The node.
+   * @param vn The value number.
+   * @return The set.
+   */
+  private static Iterable<InstanceKey> pointsToSet(
+      PointerAnalysis<InstanceKey> pa, CGNode node, int vn) {
+    return withoutClientOnlyKeys(
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)));
+  }
+
+  /** Per builder, the objects of {@link #hasUnseenWrite}, read from the final pointer analysis. */
+  private static final Map<PropagationCallGraphBuilder, UnseenWriteTargets> UNSEEN_WRITES =
+      Collections.synchronizedMap(new WeakHashMap<>());
 
   /** Per builder, the globals some write of which stores a value no points-to set holds. */
   private static final Map<PropagationCallGraphBuilder, Set<String>> UNSEEN_GLOBAL_WRITES =
@@ -5329,27 +5393,6 @@ public abstract class TensorGenerator implements Cloneable {
               return unseen;
             })
         .contains(global);
-  }
-
-  /**
-   * Computes {@link #hasUnseenWrite}.
-   *
-   * @param builder The builder.
-   * @param object The object whose field is read.
-   * @param field The field's name.
-   * @return Whether such a write may reach the field.
-   */
-  private static boolean computeHasUnseenWrite(
-      PropagationCallGraphBuilder builder, InstanceKey object, String field) {
-    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    PropertyWriteIndex index = propertyWriteIndex(builder);
-    for (PropertyWriteSite write : index.byAttribute().getOrDefault(field, List.of())) {
-      if (!pointsTo(pa, write.node(), write.object(), object)) continue;
-      if (holdsNoObject(pa, write.node(), write.value())) return true;
-    }
-    for (PropertyWriteSite write : index.nonConstantMember())
-      if (pointsTo(pa, write.node(), write.object(), object)) return true;
-    return false;
   }
 
   /**
@@ -5474,23 +5517,6 @@ public abstract class TensorGenerator implements Cloneable {
         if (reached.add(successor)) work.push(successor);
       }
     return reached;
-  }
-
-  /**
-   * Decides whether a value of a node points to an object.
-   *
-   * @param pa The pointer analysis.
-   * @param node The node.
-   * @param vn The value number.
-   * @param object The object.
-   * @return Whether the value's points-to set holds the object.
-   */
-  private static boolean pointsTo(
-      PointerAnalysis<InstanceKey> pa, CGNode node, int vn, InstanceKey object) {
-    for (InstanceKey held :
-        withoutClientOnlyKeys(pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn))))
-      if (held.equals(object)) return true;
-    return false;
   }
 
   /**
