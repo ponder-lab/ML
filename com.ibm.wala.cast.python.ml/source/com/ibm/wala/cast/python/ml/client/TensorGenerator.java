@@ -1271,6 +1271,10 @@ public abstract class TensorGenerator implements Cloneable {
             Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
 
             for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
+              // An element read off a tensor by an integer index, as `tf.shape(x)[0]`, carries no
+              // evidence of `None` (wala/ML#1225): TensorFlow folds a shape's element where the
+              // axis is known. The position resolves as it did before the element had an object.
+              if (isIndexedElement(instanceFieldIK)) continue;
               if (instanceFieldIK instanceof ConstantKey) {
                 // We have a constant key.
                 ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
@@ -5866,6 +5870,23 @@ public abstract class TensorGenerator implements Cloneable {
     Object folded = constant;
     LOGGER.fine(() -> "ATTR-FOLD " + fn + " => " + folded + " in " + describe(node) + ".");
     return constant;
+  }
+
+  /**
+   * Decides whether an object is the tensor a subscript by an integer allocates, at the subscript's
+   * own instruction in the program's code (wala/ML#1225).
+   *
+   * @param ik The object.
+   * @return Whether its allocation site is a property read.
+   */
+  static boolean isIndexedElement(InstanceKey ik) {
+    if (!(ik instanceof AllocationSiteInNode allocation)
+        || !TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference())) return false;
+    CGNode node = allocation.getNode();
+    if (node.getMethod().isWalaSynthetic() || node.getIR() == null) return false;
+    SSAInstruction[] instructions = node.getIR().getInstructions();
+    int pc = allocation.getSite().getProgramCounter();
+    return pc >= 0 && pc < instructions.length && instructions[pc] instanceof AstPropertyRead;
   }
 
   /** The type the {@code len} builtin's summary is declared on. */

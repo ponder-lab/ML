@@ -151,7 +151,10 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
    *       {@link DynamicDim} when that axis is dynamic; and an {@link UnresolvedDim} otherwise. It
    *       is resolved where the call is made, through the parameters that forward it.
    *   <li>Failing that, a tensor is a {@link DynamicDim}, since TensorFlow's static shape reports
-   *       {@code None} for a tensor whose value is not known at trace time.
+   *       {@code None} for a tensor whose value is not known at trace time. An element read off a
+   *       tensor by an integer index, as an element of {@code tf.shape(x)} the reads above do not
+   *       resolve, is not: TensorFlow folds a shape's element at trace time where the axis is
+   *       known, so the element carries no evidence of {@code None} (wala/ML#1225).
    *   <li>Any other value, such as a Python {@code int} the analysis did not compute, is a fixed
    *       size, an {@link UnresolvedDim}.
    * </ul>
@@ -175,8 +178,8 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
     if (pts != null)
       for (InstanceKey ik : pts)
-        if (TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference()))
-          return DynamicDim.INSTANCE;
+        if (TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference())
+            && !isIndexedElement(ik)) return DynamicDim.INSTANCE;
     return UnresolvedDim.INSTANCE;
   }
 

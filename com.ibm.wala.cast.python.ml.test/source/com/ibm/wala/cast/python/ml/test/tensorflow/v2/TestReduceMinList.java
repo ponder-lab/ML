@@ -55,13 +55,11 @@ public class TestReduceMinList extends AbstractTensorTest {
 
   /**
    * Control: a list literal item-assigned before the read, read through a parameter and an
-   * arithmetic allocation as the shape element is, both of its writes shape elements with no
-   * points-to set, so the read resolves by the list's writes alone. The list's first write is the
-   * int32 height; the element at run time is the int64 depth the assignment stored. The read must
-   * not take the first write for the element: the list declines, and the element reads as no
-   * tensor, master's reading, since neither write has a points-to set for the heap to resolve. The
-   * sound join over a non-escaping list literal's writes is wala/ML#1028; this pin moves when it
-   * lands.
+   * arithmetic allocation as the shape element is. The list's first write is the int32 height; the
+   * element at run time is the int64 depth the assignment stored. The read must not take the first
+   * write for the element alone. Each write is an element of a tensor's shape, which allocates a
+   * tensor (wala/ML#1225), so the element reads as the join of both writes' scalars, which holds
+   * the int64 the run takes.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
@@ -70,6 +68,11 @@ public class TestReduceMinList extends AbstractTensorTest {
   @Test
   public void testListReassignedBeforeRead()
       throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_reduce_min_list.py", "consume_reassigned", 0, 0, Map.of());
+    test(
+        "tf2_test_reduce_min_list.py",
+        "consume_reassigned",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32, SCALAR_TENSOR_OF_INT64)));
   }
 }

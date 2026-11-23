@@ -1248,6 +1248,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // So is an ndarray's shape's element, `a.shape[k]` (wala/ML#1159).
     elementTypes.put(NumpyTypes.STATIC_ARRAY_SHAPE, PythonTypes.PYTHON_INT);
     builder.setFreshElementTypes(elementTypes);
+    // A tensor's element read by an index, as `c[0]` or `tf.shape(c)[0]`, is a tensor one rank
+    // down:
+    // before, its value pointed to nothing, so a merge with a Python scalar read as the scalar
+    // alone
+    // (wala/ML#1225). Iterating a tensor keeps its binding.
+    builder.setFreshIndexedElementTypes(
+        Map.of(TensorFlowTypes.TENSOR_TYPE, TensorFlowTypes.TENSOR_TYPE));
     // The `dict` that `tf.data.Dataset.map` hands its function beside the receiver exists only when
     // the receiver's element structure may be a dict, so a map function over a dataset of any other
     // element sees no container (wala/ML#1088).

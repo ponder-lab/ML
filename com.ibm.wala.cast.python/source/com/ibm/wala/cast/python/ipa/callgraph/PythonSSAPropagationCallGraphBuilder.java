@@ -590,6 +590,24 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * The receiver types whose element read by a constant integer index allocates (wala/ML#1225),
+   * each mapped to the type of the element, beside the {@link #freshElementTypes}. Iterating such a
+   * receiver, or subscripting it by a value held in a variable, which may be a mask, binds as
+   * before. Empty by default; see {@link #setFreshIndexedElementTypes}.
+   */
+  private Map<TypeReference, TypeReference> freshIndexedElementTypes = Collections.emptyMap();
+
+  /**
+   * Names the receiver types whose element read by an index allocates (wala/ML#1225); see {@link
+   * #freshIndexedElementTypes}.
+   *
+   * @param types Each receiver type mapped to the type of the element.
+   */
+  public void setFreshIndexedElementTypes(Map<TypeReference, TypeReference> types) {
+    this.freshIndexedElementTypes = types == null ? Collections.emptyMap() : Map.copyOf(types);
+  }
+
+  /**
    * The attributes the model attaches to each instance of an array type, per attribute name the
    * summary class of the attached method (wala/ML#1009). A fresh array the builder allocates (a
    * slice's or an arithmetic result's) receives them, so it dispatches as an array a summary
@@ -3089,6 +3107,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           else if (!(index instanceof Long) && !(index instanceof Integer)) return;
         } else if (du.getDef(member) instanceof SSANewInstruction)
           types = getBuilder().axisResultTypes();
+        // An element read by a constant integer index allocates for the indexed types too. A
+        // member held in a variable may be a mask or an index array, which keeps the rank.
+        if (types == getBuilder().freshElementTypes
+            && symtab.isConstant(member)
+            && !getBuilder().freshIndexedElementTypes.isEmpty()) {
+          Map<TypeReference, TypeReference> indexed = new HashMap<>(types);
+          getBuilder().freshIndexedElementTypes.forEach(indexed::putIfAbsent);
+          types = indexed;
+        }
       }
       if (types.isEmpty()) return;
       int object = read.getObjectRef();
