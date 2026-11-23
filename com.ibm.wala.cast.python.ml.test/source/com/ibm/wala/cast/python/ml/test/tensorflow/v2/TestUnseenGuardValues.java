@@ -232,4 +232,20 @@ public class TestUnseenGuardValues extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
+
+  /**
+   * A field a write through a member that is no string constant may set to a parsed value, {@code
+   * settings[name] = json.loads("true")} with {@code name} a loop variable, is not decided from the
+   * constructor's {@code False}, so the guarded arm runs (wala/ML#1324).
+   */
+  @Test
+  public void testFieldWrittenThroughNonConstantMember()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_field_subscript_write.py",
+        "consume_set_flag",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
 }
