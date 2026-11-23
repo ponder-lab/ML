@@ -12767,7 +12767,7 @@ public abstract class TensorGenerator implements Cloneable {
                       + " spreads a starred argument over pos="
                       + paramPos
                       + "; reading the callee's parameter.");
-          if (besideStarred == null) besideStarred = OrdinalSet.empty();
+          besideStarred = OrdinalSet.empty();
           continue;
         }
         // Only a Python invoke carries the positional/keyword structure this analysis reads; a

@@ -159,4 +159,30 @@ public class TestStarForwarding extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6, 4))));
   }
+
+  /**
+   * One Keras layer object reached through two starred forwards, from two wrapper objects: each
+   * call reads the input its own forward passes (wala/ML#1322).
+   */
+  @Test
+  public void testSharedLayerForwardedTwice()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_twice_star_a", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
+    test(
+        KERAS_FILE,
+        "consume_twice_star_b",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6, 4))));
+  }
+
+  /**
+   * A starred call that also names the input by keyword, {@code self.rnn(*args, inputs=x)}: the
+   * keyword answers for the parameter, as it does without the star (wala/ML#1322).
+   */
+  @Test
+  public void testStarredCallWithKeywordInput()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_star_keyword_input", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
+  }
 }
