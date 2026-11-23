@@ -12756,10 +12756,7 @@ public abstract class TensorGenerator implements Cloneable {
         // the pointer analysis binds through the unpack, answers for it, joined with what the
         // other callers pass.
         if (callInstr instanceof PythonInvokeInstruction starredCall
-            && (paramName == null || starredCall.getUse(paramName) == -1)
-            && paramPos >= 0
-            && starredCall.firstStarredPosition() > 0
-            && paramPos + 1 >= starredCall.firstStarredPosition()) {
+            && spreadsOverParameter(starredCall, paramName, paramPos)) {
           LOGGER.fine(
               () ->
                   "getArgumentPointsToSet: caller "
@@ -12867,6 +12864,24 @@ public abstract class TensorGenerator implements Cloneable {
     }
 
     return besideStarred == null ? OrdinalSet.empty() : besideStarred;
+  }
+
+  /**
+   * Decides whether a starred argument of a call spreads over a parameter: one sits at or before
+   * the parameter's slot, and no keyword argument names the parameter (wala/ML#1322). The slot's
+   * use is then the spread sequence or a later argument, never the parameter's value.
+   *
+   * @param call The call.
+   * @param paramName The parameter's name, or {@code null} when it is read by position only.
+   * @param paramPos The parameter's 0-based position, {@code self} excluded.
+   * @return Whether a starred argument spreads over the parameter.
+   */
+  private static boolean spreadsOverParameter(
+      PythonInvokeInstruction call, String paramName, int paramPos) {
+    if (paramPos < 0) return false;
+    if (paramName != null && call.getUse(paramName) != -1) return false;
+    int firstStarred = call.firstStarredPosition();
+    return firstStarred > 0 && paramPos + 1 >= firstStarred;
   }
 
   private int getArgumentValueNumber(CGNode node, int parameterPosition) {
