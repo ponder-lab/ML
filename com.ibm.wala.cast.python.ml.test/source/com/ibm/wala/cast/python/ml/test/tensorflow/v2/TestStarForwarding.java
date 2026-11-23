@@ -142,4 +142,21 @@ public class TestStarForwarding extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(KERAS_FILE, "consume_explicit", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
   }
+
+  /**
+   * One Keras layer object called both through a starred forward and directly: each call reads the
+   * input its own caller passes, since the two calls reach the layer's call through different
+   * trampolines (wala/ML#1322).
+   */
+  @Test
+  public void testSharedLayerCalledBothWays()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_shared_star", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
+    test(
+        KERAS_FILE,
+        "consume_shared_direct",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6, 4))));
+  }
 }

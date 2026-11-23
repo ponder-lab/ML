@@ -59,3 +59,26 @@ consume_star(Star()(tf.ones([2, 3, 5])))
 consume_star_kw(StarKw()(tf.ones([2, 3, 5]), training=False))
 consume_star_dense(StarDense()(tf.ones([2, 5])))
 consume_explicit(Explicit()(tf.ones([2, 3, 5])))
+
+
+# One layer object reached both through a starred forward and directly: each call reads its own input.
+def consume_shared_star(t):
+    assert t.shape == (2, 3, 4)
+
+
+def consume_shared_direct(t):
+    assert t.shape == (2, 6, 4)
+
+
+class SharedStar(tf.keras.layers.Layer):
+    def __init__(self, rnn):
+        super().__init__()
+        self.rnn = rnn
+
+    def call(self, *args):
+        return self.rnn(*args)
+
+
+shared_rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+consume_shared_star(SharedStar(shared_rnn)(tf.ones([2, 3, 5])))
+consume_shared_direct(shared_rnn(tf.ones([2, 6, 5])))
