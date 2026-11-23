@@ -12750,6 +12750,24 @@ public abstract class TensorGenerator implements Cloneable {
         // synthetic summary `<call>` (a plain SSA invoke) binds its arguments straight onto the
         // callee frame, so it must fall through to the callee-parameter fallback below rather
         // than counting as an analyzed-but-argless caller (wala/ML#799).
+        // A starred argument at or before the parameter's slot spreads a sequence over the
+        // parameters, so the slot's use is the sequence or a later argument, never the
+        // parameter's value (wala/ML#1322, as for wala/ML#751). The callee's own parameter, which
+        // the pointer analysis binds through the unpack, answers it instead.
+        if (callInstr instanceof PythonInvokeInstruction starredCall
+            && (paramName == null || starredCall.getUse(paramName) == -1)
+            && paramPos >= 0
+            && starredCall.firstStarredPosition() > 0
+            && paramPos + 1 >= starredCall.firstStarredPosition()) {
+          LOGGER.fine(
+              () ->
+                  "getArgumentPointsToSet: caller "
+                      + describe(caller)
+                      + " spreads a starred argument over pos="
+                      + paramPos
+                      + "; reading the callee's parameter.");
+          continue;
+        }
         if (callInstr instanceof PythonInvokeInstruction) callAnalyzed = true;
 
         if (callInstr instanceof PythonInvokeInstruction) {
