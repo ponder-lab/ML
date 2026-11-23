@@ -72,6 +72,9 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
    * converges. Read directly, the cycle recursed until the stack overflowed. The features read as
    * the join of the element at both maps, through the batch between them; at run time they are
    * {@code (1, 2, 3)}.
+   *
+   * <p>TODO: The features read {@code (1, 2, 3)} float32 alone once
+   * https://github.com/wala/ML/issues/1305 is fixed.
    */
   @Test
   public void testSharedFunctionFeatures()
@@ -89,7 +92,12 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
                 TensorType.of(FLOAT_32, 1, 3))));
   }
 
-  /** As {@link #testSharedFunctionFeatures()}, for the labels, {@code (1, 2)} at run time. */
+  /**
+   * As {@link #testSharedFunctionFeatures()}, for the labels, {@code (1, 2)} at run time.
+   *
+   * <p>TODO: The labels read {@code (1, 2)} int32 alone once https://github.com/wala/ML/issues/1305
+   * is fixed.
+   */
   @Test
   public void testSharedFunctionLabels()
       throws ClassHierarchyException, CancelException, IOException {

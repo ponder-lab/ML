@@ -714,7 +714,11 @@ public class TestDecoratedMethods extends AbstractTensorTest {
    * the other's arguments. The shape-unknown float32 twin beside the scalar is the wrapper's own
    * forwarding arm: {@code len(args) >= 1} over the empty varargs tuple is not folded by the branch
    * decider, so the arm's cast of a missing {@code args[0]} still reaches the function with the
-   * cast's dtype and no shape. That arm is a separate gap; the dtype is float32 throughout.
+   * cast's dtype and no shape, joined in from the other decorated function's call. The dtype is
+   * float32 throughout.
+   *
+   * <p>TODO: The parameter reads the float32 scalar alone once
+   * https://github.com/wala/ML/issues/1305 separates the two calls of the wrapper.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.

@@ -62,6 +62,9 @@ public class TestBuiltinLayerSubclassApply extends AbstractTensorTest {
    * different sizes: the factory's {@code cls(n)} is the constructor's one call, and its size is
    * the factory's parameter, so each application gets the join of both sizes rather than one size
    * alone.
+   *
+   * <p>TODO: {@code consume_made_six} reads {@code (2, 6)} alone and {@code consume_made_seven}
+   * {@code (2, 7)} alone once https://github.com/wala/ML/issues/1305 is fixed.
    */
   @Test
   public void testFactoryJoinsSizes() throws ClassHierarchyException, CancelException, IOException {
