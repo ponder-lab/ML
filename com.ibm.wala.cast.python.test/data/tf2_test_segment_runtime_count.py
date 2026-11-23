@@ -83,3 +83,19 @@ leading = (0, 0)
 starred = aggregate_starred(*leading, tf.shape(x)[0], tf.shape(y)[0])
 assert starred.shape == (5, 6)
 consume_starred(starred)
+
+
+# A `num_segments` read off a dataset leaf by a constant index inside a `map` function: TensorFlow's
+# static shape reports `None` there, though the run's count is 2.
+def consume_leaf_segments(x):
+    assert x.shape.as_list() == [None, 6]
+
+
+def reduce_by_leaf(t):
+    out = tf.math.unsorted_segment_sum(tf.ones([4, 6]), tf.constant([0, 1, 1, 0]), t[0])
+    consume_leaf_segments(out)
+    return out
+
+
+for leaf_out in tf.data.Dataset.from_tensors(tf.constant([2, 3])).map(reduce_by_leaf):
+    assert leaf_out.shape == (2, 6)

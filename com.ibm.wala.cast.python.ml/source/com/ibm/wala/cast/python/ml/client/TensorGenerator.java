@@ -1274,7 +1274,7 @@ public abstract class TensorGenerator implements Cloneable {
               // An element read off a tensor by an integer index, as `tf.shape(x)[0]`, carries no
               // evidence of `None` (wala/ML#1225): TensorFlow folds a shape's element where the
               // axis is known. The position resolves as it did before the element had an object.
-              if (isIndexedElement(instanceFieldIK)) continue;
+              if (isIndexedElement(builder, instanceFieldIK)) continue;
               if (instanceFieldIK instanceof ConstantKey) {
                 // We have a constant key.
                 ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
@@ -5873,20 +5873,35 @@ public abstract class TensorGenerator implements Cloneable {
   }
 
   /**
-   * Decides whether an object is the tensor a subscript by an integer allocates, at the subscript's
-   * own instruction in the program's code (wala/ML#1225).
+   * Decides whether an object is the tensor a subscript of a tensor by an integer allocates, at the
+   * subscript's own instruction in the program's code (wala/ML#1225): its allocation site is a
+   * property read every receiver of which is a tensor. A dataset leaf's element is allocated at
+   * such a read too (wala/ML#164), and its sizes may be {@code None} at trace time, so a read whose
+   * receivers include one is not such an element.
    *
+   * @param builder The builder whose pointer analysis holds the receivers.
    * @param ik The object.
-   * @return Whether its allocation site is a property read.
+   * @return Whether the object is an integer subscript's element of a tensor.
    */
-  static boolean isIndexedElement(InstanceKey ik) {
+  static boolean isIndexedElement(PropagationCallGraphBuilder builder, InstanceKey ik) {
     if (!(ik instanceof AllocationSiteInNode allocation)
         || !TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference())) return false;
     CGNode node = allocation.getNode();
     if (node.getMethod().isWalaSynthetic() || node.getIR() == null) return false;
     SSAInstruction[] instructions = node.getIR().getInstructions();
     int pc = allocation.getSite().getProgramCounter();
-    return pc >= 0 && pc < instructions.length && instructions[pc] instanceof AstPropertyRead;
+    if (pc < 0 || pc >= instructions.length || !(instructions[pc] instanceof AstPropertyRead read))
+      return false;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    boolean any = false;
+    for (InstanceKey receiver :
+        withoutClientOnlyKeys(
+            pa.getPointsToSet(
+                pa.getHeapModel().getPointerKeyForLocal(node, read.getObjectRef())))) {
+      if (!TensorFlowTypes.TENSOR_TYPE.equals(receiver.concreteType().getReference())) return false;
+      any = true;
+    }
+    return any;
   }
 
   /** The type the {@code len} builtin's summary is declared on. */

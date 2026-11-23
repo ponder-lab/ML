@@ -407,6 +407,33 @@ public class TestUnknownRankGaps extends AbstractTensorTest {
   }
 
   /**
+   * A segment sum whose {@code num_segments} is a dataset leaf's element read by a constant index,
+   * {@code t[0]} inside a {@code map} function: TensorFlow's static shape reports {@code None} for
+   * the leading axis, so it reads as dynamic, although the element is allocated at the read as an
+   * integer subscript of a tensor is (wala/ML#1225). The unresolved member beside it is master's
+   * reading as well.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSegmentCountFromDatasetLeafElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_segment_runtime_count.py",
+        "consume_leaf_segments",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6))),
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
    * A softmax over a segment reduction chosen by a branch, whose {@code num_segments} is {@code
    * tf.shape(x)[0]}: rank 2, with 6 as its trailing axis (wala/ML#1160). At run time the leading
    * axis is 5, but these reductions are anchored on their summaries' own nodes rather than on a

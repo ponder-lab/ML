@@ -59,7 +59,8 @@ public class TestReduceMinList extends AbstractTensorTest {
    * element at run time is the int64 depth the assignment stored. The read must not take the first
    * write for the element alone. Each write is an element of a tensor's shape, which allocates a
    * tensor (wala/ML#1225), so the element reads as the join of both writes' scalars, which holds
-   * the int64 the run takes.
+   * the int64 the run takes. That join over a non-escaping list literal's writes is the reading
+   * wala/ML#1028 asks for, here reached because the writes now have objects.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.

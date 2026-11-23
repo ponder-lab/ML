@@ -179,7 +179,7 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
     if (pts != null)
       for (InstanceKey ik : pts)
         if (TensorFlowTypes.TENSOR_TYPE.equals(ik.concreteType().getReference())
-            && !isIndexedElement(ik)) return DynamicDim.INSTANCE;
+            && !isIndexedElement(builder, ik)) return DynamicDim.INSTANCE;
     return UnresolvedDim.INSTANCE;
   }
 
