@@ -104,4 +104,42 @@ public class TestStarForwarding extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FILE, "dict_kw_sink", 1, 1, Map.of(2, Set.of(T4)));
   }
+
+  /** The fixture whose layers forward {@code *args} to a wrapped Keras layer (wala/ML#1322). */
+  private static final String KERAS_FILE = "tf2_test_star_forwarding_keras_layer.py";
+
+  /** A Keras LSTM's output, {@code (2, 3, 4)} at run time. */
+  private static final TensorType LSTM_OUTPUT = TensorType.of(FLOAT_32, 2, 3, 4);
+
+  /**
+   * A layer forwarding {@code *args} to a Keras LSTM gives it the tensor the starred tuple holds,
+   * so the LSTM's output has its shape, rather than reading the tuple itself as a tensor of one
+   * more axis, which no recurrent layer takes (wala/ML#1322).
+   */
+  @Test
+  public void testStarForwardedToKerasLayer()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_star", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
+  }
+
+  /** As {@link #testStarForwardedToKerasLayer()}, with {@code **kwargs} forwarded beside it. */
+  @Test
+  public void testStarAndKeywordsForwardedToKerasLayer()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_star_kw", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
+  }
+
+  /** As {@link #testStarForwardedToKerasLayer()}, for a {@code Dense} layer. */
+  @Test
+  public void testStarForwardedToDenseLayer()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_star_dense", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 7))));
+  }
+
+  /** The control: the same LSTM called with the argument explicitly. */
+  @Test
+  public void testExplicitArgumentToKerasLayer()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(KERAS_FILE, "consume_explicit", 1, 1, Map.of(2, Set.of(LSTM_OUTPUT)));
+  }
 }
