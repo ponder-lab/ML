@@ -83,3 +83,43 @@ leading = (0, 0)
 starred = aggregate_starred(*leading, tf.shape(x)[0], tf.shape(y)[0])
 assert starred.shape == (5, 6)
 consume_starred(starred)
+
+
+# A `num_segments` read off a dataset leaf by a constant index inside a `map` function: TensorFlow's
+# static shape reports `None` there, though the run's count is 2.
+def consume_leaf_segments(x):
+    assert x.shape.as_list() == [None, 6]
+
+
+def reduce_by_leaf(t):
+    out = tf.math.unsorted_segment_sum(tf.ones([4, 6]), tf.constant([0, 1, 1, 0]), t[0])
+    consume_leaf_segments(out)
+    return out
+
+
+for leaf_out in tf.data.Dataset.from_tensors(tf.constant([2, 3])).map(reduce_by_leaf):
+    assert leaf_out.shape == (2, 6)
+
+
+# A `num_segments` that is an element of a computed tensor has no static value, so TensorFlow's
+# static shape reports `None` for the leading axis; an element of a constant has one.
+def consume_computed_segments(x):
+    assert x.shape.as_list() == [None, 6]
+
+
+def consume_constant_segments(x):
+    assert x.shape.as_list() == [4, 6]
+
+
+@tf.function
+def reduce_by_element_counts(data, ids):
+    computed = tf.math.unsorted_segment_sum(
+        data, ids, (tf.reduce_max(ids, keepdims=True) + 1)[0]
+    )
+    consume_computed_segments(computed)
+    constant = tf.math.unsorted_segment_sum(data, ids, tf.constant([4])[0])
+    consume_constant_segments(constant)
+    return computed, constant
+
+
+reduce_by_element_counts(tf.ones([5, 6]), tf.constant([0, 1, 1, 0, 2]))
