@@ -1,0 +1,115 @@
+# Test https://github.com/wala/ML/issues/1322: a layer whose `call` forwards `*args` (and `**kwargs`)
+# to a wrapped Keras layer gives the wrapped layer the argument the starred tuple holds.
+import tensorflow as tf
+
+
+def consume_star(t):
+    assert t.shape == (2, 3, 4)
+
+
+def consume_star_kw(t):
+    assert t.shape == (2, 3, 4)
+
+
+def consume_star_dense(t):
+    assert t.shape == (2, 7)
+
+
+def consume_explicit(t):
+    assert t.shape == (2, 3, 4)
+
+
+class Star(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+
+    def call(self, *args):
+        return self.rnn(*args)
+
+
+class StarKw(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+
+    def call(self, *args, **kwargs):
+        return self.rnn(*args, **kwargs)
+
+
+class StarDense(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.dense = tf.keras.layers.Dense(7)
+
+    def call(self, *args):
+        return self.dense(*args)
+
+
+class Explicit(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+
+    def call(self, inputs):
+        return self.rnn(inputs)
+
+
+consume_star(Star()(tf.ones([2, 3, 5])))
+consume_star_kw(StarKw()(tf.ones([2, 3, 5]), training=False))
+consume_star_dense(StarDense()(tf.ones([2, 5])))
+consume_explicit(Explicit()(tf.ones([2, 3, 5])))
+
+
+# One layer object reached both through a starred forward and directly: each call reads its own input.
+def consume_shared_star(t):
+    assert t.shape == (2, 3, 4)
+
+
+def consume_shared_direct(t):
+    assert t.shape == (2, 6, 4)
+
+
+class SharedStar(tf.keras.layers.Layer):
+    def __init__(self, rnn):
+        super().__init__()
+        self.rnn = rnn
+
+    def call(self, *args):
+        return self.rnn(*args)
+
+
+shared_rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+consume_shared_star(SharedStar(shared_rnn)(tf.ones([2, 3, 5])))
+consume_shared_direct(shared_rnn(tf.ones([2, 6, 5])))
+
+
+# One layer object reached through two starred forwards: its call reads both inputs.
+def consume_twice_star_a(t):
+    assert t.shape == (2, 3, 4)
+
+
+def consume_twice_star_b(t):
+    assert t.shape == (2, 6, 4)
+
+
+twice_rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+consume_twice_star_a(SharedStar(twice_rnn)(tf.ones([2, 3, 5])))
+consume_twice_star_b(SharedStar(twice_rnn)(tf.ones([2, 6, 5])))
+
+
+# A starred call that also names the input by keyword: the keyword answers.
+def consume_star_keyword_input(t):
+    assert t.shape == (2, 3, 4)
+
+
+class StarKeywordInput(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+        self.rnn = tf.keras.layers.LSTM(4, return_sequences=True)
+
+    def call(self, x, *args):
+        return self.rnn(*args, inputs=x)
+
+
+consume_star_keyword_input(StarKeywordInput()(tf.ones([2, 3, 5])))

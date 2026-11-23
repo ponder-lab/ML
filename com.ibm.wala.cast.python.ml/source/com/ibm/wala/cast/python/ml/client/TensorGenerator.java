@@ -12734,6 +12734,10 @@ public abstract class TensorGenerator implements Cloneable {
       return ret;
     }
 
+    // What the callers other than a starred one pass, when a starred caller was skipped; the
+    // callee's own parameter then answers, joined with them (wala/ML#1322).
+    OrdinalSet<InstanceKey> besideStarred = null;
+
     // Strategy 3: Caller Analysis
     // Walk the call-graph edges to the invocations dispatching to this node, then look up the
     // arguments passed at those call sites in each caller's IR.
@@ -12746,6 +12750,23 @@ public abstract class TensorGenerator implements Cloneable {
           getCallerInvokes(builder, node)) {
         CGNode caller = callerInvoke.fst;
         SSAAbstractInvokeInstruction callInstr = callerInvoke.snd;
+        // A starred argument at or before the parameter's slot spreads a sequence over the
+        // parameters, so the slot's use is the sequence or a later argument, never the
+        // parameter's value (wala/ML#1322, as for wala/ML#751). The callee's own parameter, which
+        // the pointer analysis binds through the unpack, answers for it, joined with what the
+        // other callers pass.
+        if (callInstr instanceof PythonInvokeInstruction starredCall
+            && spreadsOverParameter(starredCall, paramName, paramPos)) {
+          LOGGER.fine(
+              () ->
+                  "getArgumentPointsToSet: caller "
+                      + describe(caller)
+                      + " spreads a starred argument over pos="
+                      + paramPos
+                      + "; reading the callee's parameter.");
+          besideStarred = OrdinalSet.empty();
+          continue;
+        }
         // Only a Python invoke carries the positional/keyword structure this analysis reads; a
         // synthetic summary `<call>` (a plain SSA invoke) binds its arguments straight onto the
         // callee frame, so it must fall through to the callee-parameter fallback below rather
@@ -12808,11 +12829,12 @@ public abstract class TensorGenerator implements Cloneable {
         }
       }
 
-      if (found) {
+      if (besideStarred != null) besideStarred = combinedPts;
+      else if (found) {
         return combinedPts;
       }
       // If we analyzed the call but couldn't find the argument, it likely wasn't provided.
-      if (callAnalyzed) {
+      else if (callAnalyzed) {
         LOGGER.fine(
             () ->
                 "getArgumentPointsToSet: caller analysis of "
@@ -12837,11 +12859,29 @@ public abstract class TensorGenerator implements Cloneable {
       OrdinalSet<InstanceKey> pts =
           withoutClientOnlyKeys(builder.getPointerAnalysis().getPointsToSet(pk));
       if (pts != null && !pts.isEmpty()) {
-        return pts;
+        return besideStarred == null ? pts : OrdinalSet.unify(besideStarred, pts);
       }
     }
 
-    return OrdinalSet.empty();
+    return besideStarred == null ? OrdinalSet.empty() : besideStarred;
+  }
+
+  /**
+   * Decides whether a starred argument of a call spreads over a parameter: one sits at or before
+   * the parameter's slot, and no keyword argument names the parameter (wala/ML#1322). The slot's
+   * use is then the spread sequence or a later argument, never the parameter's value.
+   *
+   * @param call The call.
+   * @param paramName The parameter's name, or {@code null} when it is read by position only.
+   * @param paramPos The parameter's 0-based position, {@code self} excluded.
+   * @return Whether a starred argument spreads over the parameter.
+   */
+  private static boolean spreadsOverParameter(
+      PythonInvokeInstruction call, String paramName, int paramPos) {
+    if (paramPos < 0) return false;
+    if (paramName != null && call.getUse(paramName) != -1) return false;
+    int firstStarred = call.firstStarredPosition();
+    return firstStarred > 0 && paramPos + 1 >= firstStarred;
   }
 
   private int getArgumentValueNumber(CGNode node, int parameterPosition) {
