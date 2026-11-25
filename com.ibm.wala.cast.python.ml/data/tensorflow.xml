@@ -5336,7 +5336,7 @@
         </method>
       </class>
       <class name="Add" allocatable="true" super="Ltensorflow/keras/layers/Layer">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Add#__call__. Keras requires the inputs to share a shape, so the sum has the first input's type, as `tf.math.add_n` models it (wala/ML#1327). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Add#__call__. The sum is read as the first input converted to a tensor (wala/ML#1327). That is exact when the inputs share a shape and a dtype that is not floating or is float32. It misses Keras's broadcast of the inputs, of a size-1 axis or of a lower-rank input, and its cast of floating inputs to the layer's compute dtype, float32 by default (wala/ML#1329). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <getfield class="Llist" field="0" fieldType="LRoot" ref="inputs" def="x"/>
           <new def="z" class="Ltensorflow/functions/convert_to_tensor"/>
