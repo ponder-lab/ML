@@ -3035,17 +3035,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // type for it; pin a tensor of unknown rank instead, which keeps the result
             // tensor-classified without asserting a wrong shape.
             int shapeVn = call.getUse(param);
-            SSAInstruction shapeDef = src.getDU().getDef(shapeVn);
-            boolean literalContainer =
-                shapeDef instanceof SSANewInstruction
-                    && (((SSANewInstruction) shapeDef)
-                            .getNewSite()
-                            .getDeclaredType()
-                            .equals(PythonTypes.list)
-                        || ((SSANewInstruction) shapeDef)
-                            .getNewSite()
-                            .getDeclaredType()
-                            .equals(PythonTypes.tuple));
+            boolean literalContainer = isLiteralContainer(src, shapeVn);
             PointerKey defKey =
                 builder
                     .getPointerAnalysis()
@@ -3203,12 +3193,32 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // call graph's IR via an unconditional debug print (wala/ML#573), and an implicit key has
         // no explicit dataflow variable to pin.
         if (builder.getPropagationSystem().isImplicit(receiverKey)) continue;
+        // `TensorType.shapeArg` reads a literal list or tuple's element writes. Any other shape
+        // argument, such as `y.shape` or a shape computed elsewhere, has none, and `shapeArg` would
+        // read it as a rank-0 shape. Since `set_shape` never changes the value it is called on, the
+        // receiver keeps the type that flows to it instead (wala/ML#1334).
+        if (!isLiteralContainer(caller, call.getUse(1))) continue;
         targets.put(
             builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
             Collections.singleton(TensorType.shapeArg(caller, call.getUse(1), builder)));
       }
     }
     return targets;
+  }
+
+  /**
+   * Whether a value is a list or tuple a literal builds, the only shape argument whose elements
+   * {@link TensorType#shapeArg} can read.
+   *
+   * @param node The node whose IR defines the value.
+   * @param vn The value.
+   * @return {@code true} iff a {@code new} of a list or tuple defines it.
+   */
+  private static boolean isLiteralContainer(CGNode node, int vn) {
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof SSANewInstruction)) return false;
+    TypeReference type = ((SSANewInstruction) def).getNewSite().getDeclaredType();
+    return type.equals(PythonTypes.list) || type.equals(PythonTypes.tuple);
   }
 
   private Set<PointsToSetVariable> getKeysDefinedByCall(
