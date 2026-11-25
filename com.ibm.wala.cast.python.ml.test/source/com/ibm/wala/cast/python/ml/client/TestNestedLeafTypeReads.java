@@ -70,8 +70,9 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
    * One function shared by two maps returns, at each, the leaves both maps hand it, so the leaves
    * of each map's element read the other's: their readings form a cycle, which the resolver
    * converges. Read directly, the cycle recursed until the stack overflowed. The features read as
-   * the join of the element at both maps, through the batch between them; at run time they are
-   * {@code (1, 2, 3)}.
+   * the join of the element at both maps, through the batch between them, and each turn of the
+   * cycle adds an axis, so the growth widening reads the unknown shape; at run time they are {@code
+   * (1, 2, 3)}.
    *
    * <p>TODO: The features read {@code (1, 2, 3)} float32 alone once
    * https://github.com/wala/ML/issues/1305 is fixed.
@@ -79,17 +80,7 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
   @Test
   public void testSharedFunctionFeatures()
       throws ClassHierarchyException, CancelException, IOException {
-    test(
-        SHARED,
-        "consume",
-        1,
-        1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 1, 2, 3),
-                TensorType.of(FLOAT_32, 1, 2, 2, 3),
-                TensorType.of(FLOAT_32, 1, 3))));
+    test(SHARED, "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -101,12 +92,6 @@ public class TestNestedLeafTypeReads extends AbstractTensorTest {
   @Test
   public void testSharedFunctionLabels()
       throws ClassHierarchyException, CancelException, IOException {
-    test(
-        SHARED,
-        "consume_label",
-        1,
-        1,
-        Map.of(
-            2, Set.of(TENSOR_1_2_INT32, TensorType.of(INT_32, 1, 2, 2), TensorType.of(INT_32, 1))));
+    test(SHARED, "consume_label", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT32)));
   }
 }
