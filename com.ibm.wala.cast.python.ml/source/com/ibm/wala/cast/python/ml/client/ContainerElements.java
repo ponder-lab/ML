@@ -153,7 +153,9 @@ final class ContainerElements {
       int index = getMappedIndex(builder, container);
       if (type.equals(list) && (mutations.allLists() || mutations.lists().contains(index)))
         unpositioned = true;
-      if (mutations.allOpen() || mutations.open().contains(index)) complete = false;
+      if (mutations.allOpen()
+          || (mutations.allDictsAndSetsOpen() && !type.equals(list))
+          || mutations.open().contains(index)) complete = false;
     }
 
     // The channels that hold elements whose position is unknown are element keys of every

@@ -43,7 +43,7 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * An unreached {@code words.add} on a set built in the same function leaves a list elsewhere
+   * An unreached {@code words.add} on a set built in the same function leaves a dict elsewhere
    * complete.
    *
    * @throws Exception if the fixture cannot be analyzed.
@@ -54,7 +54,7 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * An unreached {@code tf.keras.backend.update} leaves a list elsewhere complete.
+   * An unreached {@code tf.keras.backend.update} leaves a dict elsewhere complete.
    *
    * @throws Exception if the fixture cannot be analyzed.
    */
@@ -206,7 +206,7 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * An unreached {@code counts.update} on a dict built by the {@code dict} builtin leaves a list
+   * An unreached {@code counts.update} on a dict built by the {@code dict} builtin leaves a dict
    * elsewhere complete, though another function defines a {@code dict} of its own inside it.
    *
    * <p>TODO: https://github.com/wala/ML/issues/1196; the nested definition makes the builtin look
@@ -217,5 +217,38 @@ public class TestUnreachedAdds extends TestPythonMLCallGraphShape {
   @Test(expected = AssertionError.class)
   public void testNestedBuiltinNameReceiver() throws Exception {
     assertTrue(consumed("tf2_test_unreached_adds_nested_builtin.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code update} on what a module function returns leaves a list complete, since no
+   * list has the method (wala/ML#1328).
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testDictMethodOnCallLeavesLists() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_list_call.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code update} on a global that holds a list leaves the list complete, since no
+   * list has the method (wala/ML#1328).
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testDictMethodOnListGlobal() throws Exception {
+    assertTrue(consumed("tf2_test_unreached_adds_list_global.py").isComplete());
+  }
+
+  /**
+   * An unreached {@code extend} on what a module function returns may add an element to any list
+   * (wala/ML#1328).
+   *
+   * @throws Exception if the fixture cannot be analyzed.
+   */
+  @Test
+  public void testListMethodOnCall() throws Exception {
+    assertFalse(consumed("tf2_test_unreached_adds_list_extend.py").isComplete());
   }
 }

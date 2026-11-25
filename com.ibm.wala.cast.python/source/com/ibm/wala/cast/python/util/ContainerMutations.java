@@ -76,6 +76,8 @@ import java.util.stream.Collectors;
  * @param open The instance keys, by the same index, of the lists, dicts and sets it may add an
  *     element to under a key the analysis does not record.
  * @param allOpen Whether it may so add an element to any list, dict or set at all.
+ * @param allDictsAndSetsOpen Whether it may so add an element to any dict or set at all, by a
+ *     method no list has (wala/ML#1328).
  */
 public record ContainerMutations(
     IntSet lists,
@@ -83,7 +85,8 @@ public record ContainerMutations(
     IntSet unappended,
     boolean allUnappended,
     IntSet open,
-    boolean allOpen) {
+    boolean allOpen,
+    boolean allDictsAndSetsOpen) {
 
   private static final Logger LOGGER = Logger.getLogger(ContainerMutations.class.getName());
 
@@ -151,6 +154,48 @@ public record ContainerMutations(
           "setdefault",
           "__ior__");
 
+  /**
+   * The adding methods ({@link #ADDING_METHODS}) that only a dict or a set has: a call of one
+   * cannot change a list, whatever its receiver is (wala/ML#1328).
+   */
+  private static final Set<String> DICT_OR_SET_METHODS =
+      Set.of("add", "update", "setdefault", "__ior__");
+
+  /** What a mutation may do to a container. */
+  private enum Mutation {
+    /** It may change a list's length or the order of its elements. */
+    REPOSITION,
+
+    /**
+     * It may also add an element to a list, dict or set under a key the analysis does not record.
+     */
+    ADD,
+
+    /**
+     * It may add an element to a dict or set under a key the analysis does not record, by a method
+     * no list has ({@link #DICT_OR_SET_METHODS}), and so changes no list.
+     */
+    ADD_TO_DICT_OR_SET;
+
+    /**
+     * Whether it may change a list.
+     *
+     * @return {@code true} iff it may change a list.
+     */
+    boolean changesLists() {
+      return this != ADD_TO_DICT_OR_SET;
+    }
+
+    /**
+     * Whether it may add an element the analysis does not record.
+     *
+     * @return {@code true} iff it may add one.
+     */
+    boolean adds() {
+      return this != REPOSITION;
+    }
+  }
+
   /** The mutations {@link #of} is collecting. */
   private static final class Marks {
 
@@ -172,17 +217,20 @@ public record ContainerMutations(
     /** See {@link #allOpen}. */
     boolean allOpen;
 
+    /** See {@link #allDictsAndSetsOpen}. */
+    boolean allDictsAndSetsOpen;
+
     /**
      * Marks the containers a local may point to.
      *
      * @param pa The pointer analysis.
      * @param node The local's node.
      * @param vn The local.
-     * @param adds Whether the mutation may also add an element the analysis does not record.
+     * @param mutation What the mutation may do.
      */
-    void mark(PointerAnalysis<InstanceKey> pa, CGNode node, int vn, boolean adds) {
+    void mark(PointerAnalysis<InstanceKey> pa, CGNode node, int vn, Mutation mutation) {
       for (InstanceKey ik : pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, vn)))
-        mark(pa, ik, adds);
+        mark(pa, ik, mutation);
     }
 
     /**
@@ -190,16 +238,17 @@ public record ContainerMutations(
      *
      * @param pa The pointer analysis.
      * @param ik The container.
-     * @param adds Whether the mutation may also add an element the analysis does not record.
+     * @param mutation What the mutation may do.
      */
-    void mark(PointerAnalysis<InstanceKey> pa, InstanceKey ik, boolean adds) {
+    void mark(PointerAnalysis<InstanceKey> pa, InstanceKey ik, Mutation mutation) {
       TypeReference type = ik.concreteType().getReference();
       int index = pa.getInstanceKeyMapping().getMappedIndex(ik);
       if (type.equals(list)) {
+        if (!mutation.changesLists()) return;
         this.lists.add(index);
         this.unappended.add(index);
       }
-      if (adds && isMutable(type)) this.open.add(index);
+      if (mutation.adds() && isMutable(type)) this.open.add(index);
     }
 
     /**
@@ -239,14 +288,16 @@ public record ContainerMutations(
     }
 
     /**
-     * Marks every list and, when {@code adds}, every list, dict and set.
+     * Marks every container the mutation may change.
      *
-     * @param adds Whether the mutation may also add an element the analysis does not record.
+     * @param mutation What the mutation may do.
      */
-    void markAll(boolean adds) {
-      this.allLists = true;
-      this.allUnappended = true;
-      if (adds) this.allOpen = true;
+    void markAll(Mutation mutation) {
+      if (mutation.changesLists()) {
+        this.allLists = true;
+        this.allUnappended = true;
+        if (mutation.adds()) this.allOpen = true;
+      } else this.allDictsAndSetsOpen = true;
     }
   }
 
@@ -384,20 +435,20 @@ public record ContainerMutations(
             && (isRepositioning(symtab, read.getMemberRef())
                 || isAdding(symtab, read.getMemberRef())))
           if (isAppendCall(symtab, du, read)) marks.markAppended(pa, node, read.getObjectRef());
-          else marks.mark(pa, node, read.getObjectRef(), isAdding(symtab, read.getMemberRef()));
+          else marks.mark(pa, node, read.getObjectRef(), mutation(symtab, read.getMemberRef()));
         else if (instruction instanceof AstPropertyWrite write
             && !symtab.isConstant(write.getMemberRef())) {
           // `d[k] = t` or `l[i] = t` with a key the analysis may not name, unless the body also
           // stores the value in the append contents, as a comprehension's body does (wala/ML#1178).
           if (storesInAppendContents(ir, symtab, write))
             marks.markMirrored(pa, node, write.getObjectRef());
-          else marks.mark(pa, node, write.getObjectRef(), true);
+          else marks.mark(pa, node, write.getObjectRef(), Mutation.ADD);
         } else if (instruction instanceof SSABinaryOpInstruction binary
             && (binary.getOperator() == IBinaryOpInstruction.Operator.ADD
                 || binary.getOperator() == IBinaryOpInstruction.Operator.MUL
                 || binary.getOperator() == IBinaryOpInstruction.Operator.OR))
           // `l += m`, `l *= n` and `s |= t` mutate the left operand in place.
-          marks.mark(pa, node, binary.getUse(0), true);
+          marks.mark(pa, node, binary.getUse(0), Mutation.ADD);
         else if (instruction instanceof SSAAbstractInvokeInstruction invoke) {
           Set<CGNode> targets =
               builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
@@ -409,22 +460,23 @@ public record ContainerMutations(
                 // be any list.
                 if (pa.getPointsToSet(
                         pa.getHeapModel().getPointerKeyForLocal(node, invoke.getUse(1)))
-                    .isEmpty()) marks.markAll(false);
-                else marks.mark(pa, node, invoke.getUse(1), false);
-            } else if (deletesSubscript(node.getMethod(), invoke)) marks.markAll(false);
+                    .isEmpty()) marks.markAll(Mutation.REPOSITION);
+                else marks.mark(pa, node, invoke.getUse(1), Mutation.REPOSITION);
+            } else if (deletesSubscript(node.getMethod(), invoke))
+              marks.markAll(Mutation.REPOSITION);
           } else if (calls(targets, SLICE_BUILTIN)) {
             // A slice, `l[i:j]`, read or assigned, is a call of the slice builtin on the list. A
             // read leaves the list as it is (wala/ML#1250).
             if (invoke.getNumberOfUses() > 1 && !isSliceRead(invoke))
-              marks.mark(pa, node, invoke.getUse(1), true);
+              marks.mark(pa, node, invoke.getUse(1), Mutation.ADD);
           } else if (callee instanceof AstPropertyRead method
               && isRepositioning(symtab, method.getMemberRef())) {
             // `list.append(l, x)`: the list is an argument, not the receiver.
             for (int i = 1; i < invoke.getNumberOfUses(); i++)
-              marks.mark(pa, node, invoke.getUse(i), true);
+              marks.mark(pa, node, invoke.getUse(i), Mutation.ADD);
           } else if (program && targets.isEmpty() && !isNonResizing(pa, node, callee, libraries))
             for (int i = 1; i < invoke.getNumberOfUses(); i++)
-              marks.mark(pa, node, invoke.getUse(i), true);
+              marks.mark(pa, node, invoke.getUse(i), Mutation.ADD);
         }
       }
     }
@@ -435,7 +487,8 @@ public record ContainerMutations(
         marks.unappended,
         marks.allUnappended,
         marks.open,
-        marks.allOpen);
+        marks.allOpen,
+        marks.allDictsAndSetsOpen);
   }
 
   /**
@@ -504,7 +557,7 @@ public record ContainerMutations(
           ir = builder.getAnalysisCache().getIR(method);
         } catch (RuntimeException e) {
           LOGGER.log(Level.FINE, e, () -> "Cannot read the IR of unreached " + method + ".");
-          marks.markAll(true);
+          marks.markAll(Mutation.ADD);
           return;
         }
         if (ir == null) continue;
@@ -517,13 +570,14 @@ public record ContainerMutations(
             if (invoke.getNumberOfUses() > 2) {
               if (!deletesByName(symtab, invoke)
                   && !isBuiltHere(program, du, du.getDef(invoke.getUse(1))))
-                markReceiver(program, method, symtab, du, invoke.getUse(1), marks, false);
-            } else if (deletesSubscript(method, invoke)) marks.markAll(false);
+                markReceiver(
+                    program, method, symtab, du, invoke.getUse(1), marks, Mutation.REPOSITION);
+            } else if (deletesSubscript(method, invoke)) marks.markAll(Mutation.REPOSITION);
           }
           if (!(instruction instanceof AstPropertyRead read)
               || !(isRepositioning(symtab, read.getMemberRef())
                   || isAdding(symtab, read.getMemberRef()))) continue;
-          boolean adds = isAdding(symtab, read.getMemberRef());
+          Mutation mutation = mutation(symtab, read.getMemberRef());
           SSAInstruction receiver = du.getDef(read.getObjectRef());
           // A container the body builds itself is none the analysis allocates, and a function of
           // a library registered as resizing no list resizes none (wala/ML#1182).
@@ -536,7 +590,7 @@ public record ContainerMutations(
                   du,
                   receiver,
                   symtab.getStringValue(read.getMemberRef()))) continue;
-          markReceiver(program, method, symtab, du, read.getObjectRef(), marks, adds);
+          markReceiver(program, method, symtab, du, read.getObjectRef(), marks, mutation);
         }
       }
     }
@@ -553,7 +607,7 @@ public record ContainerMutations(
    * @param du The body's def-use.
    * @param vn The receiver.
    * @param marks The mutations, which this adds to.
-   * @param adds Whether the mutation may also add an element the analysis does not record.
+   * @param mutation What the mutation may do.
    */
   private static void markReceiver(
       Program program,
@@ -562,8 +616,8 @@ public record ContainerMutations(
       DefUse du,
       int vn,
       Marks marks,
-      boolean adds) {
-    markReceiver(program, method, symtab, du, vn, marks, adds, new HashSet<>());
+      Mutation mutation) {
+    markReceiver(program, method, symtab, du, vn, marks, mutation, new HashSet<>());
   }
 
   /**
@@ -576,7 +630,7 @@ public record ContainerMutations(
    * @param du The body's def-use.
    * @param vn The receiver.
    * @param marks The mutations, which this adds to.
-   * @param adds Whether the mutation may also add an element the analysis does not record.
+   * @param mutation What the mutation may do.
    * @param fields The field names already marked for this receiver, so a store of one field into
    *     another ends.
    */
@@ -587,16 +641,17 @@ public record ContainerMutations(
       DefUse du,
       int vn,
       Marks marks,
-      boolean adds,
+      Mutation mutation,
       Set<String> fields) {
     PropagationCallGraphBuilder builder = program.builder;
     SSAInstruction receiver = du.getDef(vn);
     if (receiver instanceof AstLexicalRead lexical) {
       for (Access access : lexical.getAccesses())
         if (access.valueNumber() == vn)
-          markLexicalWrites(builder, access.variableName(), access.variableDefiner(), marks, adds);
+          markLexicalWrites(
+              builder, access.variableName(), access.variableDefiner(), marks, mutation);
     } else if (receiver instanceof AstGlobalRead global)
-      markGlobalWrites(builder, global.getGlobalName(), marks, adds);
+      markGlobalWrites(builder, global.getGlobalName(), marks, mutation);
     else if (receiver instanceof AstPropertyRead read
         && symtab.isStringConstant(read.getMemberRef())
         && program.readsPlainAttribute(
@@ -612,10 +667,10 @@ public record ContainerMutations(
       for (InstanceKey value : values)
         if (!isMutable(value.concreteType().getReference())
             && !value.concreteType().getName().toString().startsWith("Lscript ")) {
-          marks.markAll(adds);
+          marks.markAll(mutation);
           return;
         }
-      for (InstanceKey value : values) marks.mark(builder.getPointerAnalysis(), value, adds);
+      for (InstanceKey value : values) marks.mark(builder.getPointerAnalysis(), value, mutation);
       for (Store store : program.unreachedStores(field, owner))
         if (!isBuiltHere(program, store.du(), store.du().getDef(store.value())))
           markReceiver(
@@ -625,13 +680,13 @@ public record ContainerMutations(
               store.du(),
               store.value(),
               marks,
-              adds,
+              mutation,
               fields);
     } else if (receiver == null && symtab.isParameter(vn) && program.isUnnamedFunction(method)) {
       // A function nothing names is called only from outside the program, with none of its lists.
     }
     // A parameter, or a value the body computes: it may be any container.
-    else marks.markAll(adds);
+    else marks.markAll(mutation);
   }
 
   /**
@@ -1223,10 +1278,14 @@ public record ContainerMutations(
    * @param name The variable's name.
    * @param definer The name of the method whose frame defines the variable.
    * @param marks The mutations, which this adds to.
-   * @param adds Whether the mutation may also add an element the analysis does not record.
+   * @param mutation What the mutation may do.
    */
   private static void markLexicalWrites(
-      PropagationCallGraphBuilder builder, String name, String definer, Marks marks, boolean adds) {
+      PropagationCallGraphBuilder builder,
+      String name,
+      String definer,
+      Marks marks,
+      Mutation mutation) {
     for (CGNode node : builder.getCallGraph()) {
       IR ir = node.getIR();
       if (ir == null) continue;
@@ -1234,7 +1293,7 @@ public record ContainerMutations(
         if (instruction instanceof AstLexicalWrite write)
           for (Access access : write.getAccesses())
             if (name.equals(access.variableName()) && definer.equals(access.variableDefiner()))
-              marks.mark(builder.getPointerAnalysis(), node, access.valueNumber(), adds);
+              marks.mark(builder.getPointerAnalysis(), node, access.valueNumber(), mutation);
     }
   }
 
@@ -1247,10 +1306,10 @@ public record ContainerMutations(
    * @param builder The builder.
    * @param name The global's name, as its read names it.
    * @param marks The mutations, which this adds to.
-   * @param adds Whether the mutation may also add an element the analysis does not record.
+   * @param mutation What the mutation may do.
    */
   private static void markGlobalWrites(
-      PropagationCallGraphBuilder builder, String name, Marks marks, boolean adds) {
+      PropagationCallGraphBuilder builder, String name, Marks marks, Mutation mutation) {
     String bare = getBareName(name);
     for (CGNode node : builder.getCallGraph()) {
       IR ir = node.getIR();
@@ -1258,11 +1317,11 @@ public record ContainerMutations(
       for (SSAInstruction instruction : ir.getInstructions())
         if (instruction instanceof AstGlobalWrite write) {
           if (bare.equals(getBareName(write.getGlobalName())))
-            marks.mark(builder.getPointerAnalysis(), node, write.getVal(), adds);
+            marks.mark(builder.getPointerAnalysis(), node, write.getVal(), mutation);
         } else if (instruction instanceof AstLexicalWrite write)
           for (Access access : write.getAccesses())
             if (bare.equals(access.variableName()) && isModule(access.variableDefiner()))
-              marks.mark(builder.getPointerAnalysis(), node, access.valueNumber(), adds);
+              marks.mark(builder.getPointerAnalysis(), node, access.valueNumber(), mutation);
     }
   }
 
@@ -1353,6 +1412,21 @@ public record ContainerMutations(
   private static boolean isAdding(SymbolTable symtab, int member) {
     return symtab.isStringConstant(member)
         && ADDING_METHODS.contains(symtab.getStringValue(member));
+  }
+
+  /**
+   * What a call of a repositioning ({@link #REPOSITIONING_LIST_METHODS}) or adding ({@link
+   * #ADDING_METHODS}) method may do.
+   *
+   * @param symtab The symbol table.
+   * @param member The member's value number, the name of such a method.
+   * @return What it may do.
+   */
+  private static Mutation mutation(SymbolTable symtab, int member) {
+    if (!isAdding(symtab, member)) return Mutation.REPOSITION;
+    return DICT_OR_SET_METHODS.contains(symtab.getStringValue(member))
+        ? Mutation.ADD_TO_DICT_OR_SET
+        : Mutation.ADD;
   }
 
   /**

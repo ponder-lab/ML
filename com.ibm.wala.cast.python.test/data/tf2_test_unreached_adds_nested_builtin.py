@@ -1,6 +1,7 @@
 # A function the call graph does not reach may still run. Its `update` on a dict the `dict` builtin
 # builds adds to that dict alone, though another function defines a `dict` of its own inside it,
-# which binds the name in that function's scope only.
+# which binds the name in that function's scope only. The container consumed is a dict, which an
+# `update` may reach, since no list has the method (https://github.com/wala/ML/issues/1328).
 
 
 def consume(c):
@@ -21,6 +22,6 @@ def count(tokens):
 
 
 make_lookup()
-values = [1, 2]
-assert len(values) == 2 and values[0] == 1
+values = {"a": 1, "b": 2}
+assert len(values) == 2 and values["a"] == 1
 consume(values)
