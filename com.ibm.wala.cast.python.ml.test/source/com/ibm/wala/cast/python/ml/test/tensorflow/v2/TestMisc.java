@@ -539,6 +539,32 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * A {@code set_shape} whose shape argument is another tensor's {@code shape}, no list or tuple
+   * literal, leaves the receiver's type as it flows (wala/ML#1334).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSetShapeFromShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_set_shape_from_shape.py",
+        "consume_logits",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 3))));
+    test(
+        "tf2_test_set_shape_from_shape.py",
+        "consume_labels",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /**
    * Regression guard for the {@code @dataclass} half of <a
    * href="https://github.com/wala/ML/issues/205">wala/ML#205</a>: a module containing a {@code
    * @dataclass} definition loads and analyzes without a front-end parse error. The dataclass is
