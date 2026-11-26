@@ -181,6 +181,20 @@ public class TestSparseTensors extends AbstractTensorTest {
             3, Set.of(TENSOR_2_2_INT32.asSparse())));
   }
 
+  /**
+   * The sum of a sparse tensor whose {@code values} the analysis cannot read, a result of the
+   * unmodeled {@code tf.sparse.reduce_sum}, and a {@code float32} sparse tensor. The sum's dtype
+   * read reports the unknown dtype, and the engine's dtype fill then takes the other operand's
+   * {@code float32}, as at run time; the shape comes from {@code dense_shape}. Before this, the
+   * dtype read threw a {@link NullPointerException} (<a
+   * href="https://github.com/wala/ML/issues/1343">wala/ML#1343</a>).
+   */
+  @Test
+  public void testSparseAddUnreadableValues()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sparse_add8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse())));
+  }
+
   @Test
   public void testSparseEye7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

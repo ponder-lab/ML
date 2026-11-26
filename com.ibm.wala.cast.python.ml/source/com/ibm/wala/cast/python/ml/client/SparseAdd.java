@@ -161,7 +161,15 @@ public class SparseAdd extends ElementWiseOperation {
           PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
           OrdinalSet<InstanceKey> fieldPointsTo =
               withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
-          ret.addAll(this.getDTypesOfValue(builder, fieldPointsTo));
+          Set<DType> sub = this.getDTypesOfValue(builder, fieldPointsTo);
+          // An empty or unreadable `values` contributes an unknown dtype beside the members that
+          // resolved, leaving a partial union rather than erasing them (wala/ML#862,
+          // wala/ML#1343).
+          if (sub == null) {
+            ret.add(DType.UNKNOWN);
+            continue;
+          }
+          ret.addAll(sub);
         }
       }
     }
