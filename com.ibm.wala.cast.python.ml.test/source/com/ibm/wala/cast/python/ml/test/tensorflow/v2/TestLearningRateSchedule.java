@@ -54,4 +54,32 @@ public class TestLearningRateSchedule extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test(FIXTURE, "DirectOnly.__call__", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_INT64)));
   }
+
+  /**
+   * A {@code TensorBoard} callback passed to {@code fit} calls the schedule with the optimizer's
+   * {@code int64} step count at each epoch's end, beside the {@code float32} the optimizer passes
+   * when it applies gradients (<a href="https://github.com/wala/ML/issues/1341">wala/ML#1341</a>).
+   */
+  @Test
+  public void testTensorBoardCallsSchedule()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_tensorboard_lr.py",
+        "Schedule.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT64, SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /** Without a {@code TensorBoard} callback, only the optimizer calls the schedule. */
+  @Test
+  public void testScheduleWithoutTensorBoard()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_tensorboard_lr.py",
+        "Untracked.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
 }

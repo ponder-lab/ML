@@ -862,6 +862,20 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String LEARNING_RATE_STEP_SIGNATURE =
       "tf.keras.optimizers.Optimizer._decayed_lr/step";
 
+  /**
+   * The optimizer's step count that a {@code TensorBoard} callback passes to the learning-rate
+   * schedule (wala/ML#1341), allocated by the summary of the callback's {@code on_epoch_end}.
+   */
+  public static final MethodReference OPTIMIZER_ITERATIONS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/optimizers/iterations")),
+          AstMethodReference.fnSelector);
+
+  private static final String OPTIMIZER_ITERATIONS_SIGNATURE =
+      "tf.keras.optimizers.Optimizer.iterations";
+
   /** https://www.tensorflow.org/api_docs/python/tf/constant. */
   public static final MethodReference CONSTANT =
       MethodReference.findOrCreate(
@@ -3439,6 +3453,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(FIXED_LEN_FEATURE.getDeclaringClass(), FIXED_LEN_FEATURE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(LEARNING_RATE_STEP.getDeclaringClass(), LEARNING_RATE_STEP_SIGNATURE),
+          Map.entry(OPTIMIZER_ITERATIONS.getDeclaringClass(), OPTIMIZER_ITERATIONS_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONE_HOT.getDeclaringClass(), ONE_HOT_SIGNATURE),
           Map.entry(UNIFORM.getDeclaringClass(), UNIFORM_SIGNATURE),
