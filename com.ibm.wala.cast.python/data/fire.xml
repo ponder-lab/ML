@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- Python Fire model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="fire" allocatable="true">
+      <method name="import" static="true" descriptor="()Lfire;">
+        <new def="x" class="Lfire"/>
+        <!-- https://google.github.io/python-fire/guide/ -->
+        <new def="Fire" class="Lfire/Fire"/>
+        <putfield class="LRoot" field="Fire" fieldType="LRoot" ref="x" value="Fire"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="fire">
+      <class name="Fire" allocatable="true">
+        <!-- https://google.github.io/python-fire/guide/#exposing-a-function. A script run without command-line arguments has its component called with none, so the call reaches the component with each parameter at its default (wala/ML#1336). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self component command name serialize">
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="component" def="v"/>
+          <return value="v"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>
