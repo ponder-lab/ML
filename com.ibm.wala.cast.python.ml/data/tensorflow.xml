@@ -146,6 +146,11 @@
         <putfield class="LRoot" field="Nadam" fieldType="LRoot" ref="optimizers" value="optimizers_Nadam"/>
         <new def="optimizers_Ftrl" class="Ltensorflow/keras/optimizers/class/Ftrl"/>
         <putfield class="LRoot" field="Ftrl" fieldType="LRoot" ref="optimizers" value="optimizers_Ftrl"/>
+        <!-- `tf.keras.callbacks` (wala/ML#1341): the `TensorBoard` callback, which logs the learning rate of the optimizer of the model it is given. -->
+        <new def="callbacks" class="Lobject"/>
+        <putfield class="LRoot" field="callbacks" fieldType="LRoot" ref="keras" value="callbacks"/>
+        <new def="callbacks_TensorBoard" class="Ltensorflow/keras/callbacks/class/TensorBoard"/>
+        <putfield class="LRoot" field="TensorBoard" fieldType="LRoot" ref="callbacks" value="callbacks_TensorBoard"/>
         <!-- `tf.keras.utils` (wala/ML#997, wala/ML#996) and the `serialize`/`deserialize`/`get` functions of the `layers`, `constraints`, `initializers` and `regularizers` modules (wala/ML#996). -->
         <new def="utils" class="Lobject"/>
         <putfield class="LRoot" field="utils" fieldType="LRoot" ref="keras" value="utils"/>
@@ -3493,6 +3498,13 @@
           <return value="res"/>
         </method>
       </class>
+      <!-- The optimizer's step count, `iterations`, which a `TensorBoard` callback passes the learning rate as it is (wala/ML#1341), typed by `OptimizerIterations`. -->
+      <class name="iterations" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/keras/constraints">
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/constraints/Constraint (wala/ML#996): the base class a user constraint extends; its `__call__` is the user's. -->
@@ -4172,9 +4184,37 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/keras/callbacks/class">
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/callbacks/TensorBoard, with its TensorFlow 2.9 constructor parameters (wala/ML#1341): constructs the callback and its `on_epoch_end`. -->
+      <class name="TensorBoard" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self log_dir histogram_freq write_graph write_images write_steps_per_second update_freq profile_batch embeddings_freq embeddings_metadata">
+          <new def="res" class="Ltensorflow/keras/callbacks/TensorBoard"/>
+          <new def="on_epoch_end" class="Ltensorflow/keras/callbacks/tensorboard_on_epoch_end"/>
+          <putfield class="LRoot" field="callback" fieldType="LRoot" ref="on_epoch_end" value="res"/>
+          <putfield class="LRoot" field="on_epoch_end" fieldType="LRoot" ref="res" value="on_epoch_end"/>
+          <return value="res"/>
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/keras/callbacks">
       <!-- The object `fit` returns (wala/ML#997); its `epoch` and `history` fields are not modeled. -->
       <class name="History" allocatable="true"></class>
+      <!-- A `TensorBoard` callback (wala/ML#1341). Its `on_epoch_end`, which `fit` calls after setting the callback's `model` (wala/ML#1244), is a method object that holds the callback. -->
+      <class name="TensorBoard" allocatable="true"></class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/callbacks/TensorBoard (wala/ML#1341): at each epoch's end, Keras 2.9's `TensorBoard._collect_learning_rate` calls a learning-rate schedule of the model's optimizer with the optimizer's `iterations`, an `int64` scalar it does not cast (`lr_schedule(self.model.optimizer.iterations)`). A learning rate that is a number is not callable, and the call reaches nothing. The callback's other logging is not modeled. -->
+      <class name="tensorboard_on_epoch_end" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self epoch logs">
+          <getfield class="LRoot" field="callback" fieldType="LRoot" ref="self" def="callback"/>
+          <getfield class="LRoot" field="model" fieldType="LRoot" ref="callback" def="model"/>
+          <getfield class="LRoot" field="optimizer" fieldType="LRoot" ref="model" def="optimizer"/>
+          <getfield class="LRoot" field="learning_rate" fieldType="LRoot" ref="optimizer" def="lr"/>
+          <new def="iterations_fn" class="Ltensorflow/keras/optimizers/iterations"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="iterations_fn" numArgs="1" def="iterations"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="lr" arg1="iterations" numArgs="2" def="logged"/>
+          <new def="none" class="Lobject"/>
+          <return value="none"/>
+        </method>
+      </class>
       <!-- The holder the hook summaries below join a `callbacks` list's elements through (wala/ML#1244). -->
       <class name="CallbackHolder" allocatable="true"></class>
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/callbacks/Callback. The hooks `fit` calls on each callback it is passed (wala/ML#1244), after setting the callback's `model` to the model being trained, as `set_model` does. A callback is an element of the `callbacks` list: its first eight positions, or an element appended or of unknown position. Each hook a callback defines is called once, with an `int` of unknown value for an epoch or batch index, since it is a different one on each call (as `StaticTensorShape.as_list` allocates its sizes, wala/ML#1104), and a `dict` of logs; `on_batch_begin` and `on_batch_end` are the older names Keras still calls for a training batch. -->

@@ -619,6 +619,10 @@ public class TensorGeneratorFactory {
     if (isType(type, TensorFlowTypes.LEARNING_RATE_STEP.getDeclaringClass()))
       return anchor.makeGenerator(LearningRateStep::new, LearningRateStep::new);
 
+    // The step count a `TensorBoard` callback passes to the learning-rate schedule (wala/ML#1341).
+    if (isType(type, TensorFlowTypes.OPTIMIZER_ITERATIONS.getDeclaringClass()))
+      return anchor.makeGenerator(OptimizerIterations::new, OptimizerIterations::new);
+
     // The Sequential registrations live here so one entry serves both dispatch routes
     // (wala/ML#817): the constructor type takes the `Model` treatment, and the instance's call
     // node — `Sequential/__call__`, not `Model/__call__` — takes the layer-list fold, which is the
