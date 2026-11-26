@@ -576,6 +576,30 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
   }
 
   /**
+   * The prefix of the globals holding the defaults of a function defined in the given context: the
+   * names of the enclosing entities, outermost first, each followed by {@code /}. The script
+   * contributes its signature, which names its path, so same-named functions of two scripts, of two
+   * classes or of two enclosing functions get globals of their own (wala/ML#1337).
+   *
+   * @param context The context the function is defined in.
+   * @return The prefix; empty when no entity encloses the context.
+   */
+  private static String defaultsPrefix(WalkContext context) {
+    LinkedList<String> names = new LinkedList<>();
+    CAstEntity previous = null;
+    for (WalkContext c = context; c != null && !(c instanceof RootContext); c = c.getParent()) {
+      CAstEntity entity = c.entity();
+      if (entity == null || entity == previous) continue;
+      previous = entity;
+      names.addFirst(
+          entity.getKind() == CAstEntity.SCRIPT_ENTITY ? entity.getSignature() : entity.getName());
+    }
+    StringBuilder prefix = new StringBuilder();
+    for (String name : names) prefix.append(name).append('/');
+    return prefix.toString();
+  }
+
+  /**
    * The order in which scripts matching a module path are preferred: the one with the fewest path
    * components ahead of the match, which is the one nearest the root the path is written from (a
    * script named exactly by the path has none), then a package over a module of the same path in
@@ -1905,13 +1929,10 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         int arg = 0;
         defaultVars = new CAstNode[defaults.size()];
         defaultCode = new CAstNode[defaults.size()];
-        // A method's default globals carry the declaring class's name: every Keras layer defines
-        // `call`, so the unqualified `call_default_<k>` would union all classes' defaults into one
-        // global (wala/ML#743).
-        String defaultsPrefix =
-            context.entity() != null && context.entity().getKind() == CAstEntity.TYPE_ENTITY
-                ? context.entity().getName() + "_"
-                : "";
+        // A function's default globals carry the scope that defines it: every Keras layer defines
+        // `call` (wala/ML#743), and every script of a project may define `main` (wala/ML#1337), so
+        // an unqualified `main_default_<k>` would union all their defaults into one global.
+        String defaultsPrefix = defaultsPrefix(context);
         for (expr dflt : defaults) {
           String name = defaultsPrefix + functionName + "_default_" + arg;
           context.root().addGlobal(name);
