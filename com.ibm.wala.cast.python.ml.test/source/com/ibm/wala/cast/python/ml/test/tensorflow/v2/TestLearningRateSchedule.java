@@ -82,4 +82,20 @@ public class TestLearningRateSchedule extends AbstractTensorTest {
         1,
         Map.of(3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
+
+  /**
+   * The same through {@code from tensorflow.keras.callbacks import TensorBoard}, with the callback
+   * constructed from a {@code **} spread (<a
+   * href="https://github.com/wala/ML/issues/1341">wala/ML#1341</a>).
+   */
+  @Test
+  public void testImportedTensorBoardCallsSchedule()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_tensorboard_lr2.py",
+        "Imported.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT64, SCALAR_TENSOR_OF_FLOAT32)));
+  }
 }
