@@ -1,0 +1,27 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- json model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="json" allocatable="true">
+      <method name="import" static="true" descriptor="()Ljson;">
+        <new def="x" class="Ljson"/>
+        <!-- https://docs.python.org/3/library/json.html -->
+        <new def="load" class="Ljson/functions/load"/>
+        <putfield class="LRoot" field="load" fieldType="LRoot" ref="x" value="load"/>
+        <new def="loads" class="Ljson/functions/load"/>
+        <putfield class="LRoot" field="loads" fieldType="LRoot" ref="x" value="loads"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="json/functions">
+      <!-- `load` and `loads` read one document from a file or a string. The document is modeled as a mapping whose contents the analysis does not know (`LUntrackedDict` in `yaml.xml`, wala/ML#1339), the common case of a configuration file. -->
+      <class name="load" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self fp">
+          <new def="document" class="LUntrackedDict"/>
+          <return value="document"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>

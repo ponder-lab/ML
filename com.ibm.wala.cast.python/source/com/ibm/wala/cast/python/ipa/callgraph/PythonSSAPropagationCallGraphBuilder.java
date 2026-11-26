@@ -7505,9 +7505,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       IClass dict = cha.lookupClass(PythonTypes.dict);
       if (dict == null) return;
       for (InstanceKey receiver : receivers) {
-        if (receiver == null || !cha.isSubclassOf(receiver.concreteType(), dict)) continue;
+        if (receiver == null) continue;
+        boolean untracked =
+            receiver.concreteType().getReference().equals(PythonTypes.untrackedDict);
+        if (!untracked && !cha.isSubclassOf(receiver.concreteType(), dict)) continue;
         if (!read.add(receiver)) continue;
         logger.fine(() -> "dict " + kind + " at " + pc + " in " + node + " on " + receiver);
+        if (untracked) readUntracked(receiver);
         switch (kind) {
           case FIELD -> readField(receiver);
           case ITEMS -> items(receiver);
@@ -7515,6 +7519,41 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           case COPY -> copy(receiver);
         }
       }
+    }
+
+    /**
+     * A read of a dictionary whose contents the analysis does not know ({@link
+     * PythonTypes#untrackedDict}, wala/ML#1339): what it yields is unknown, so the read yields an
+     * untracked dictionary allocated at the call, beside what the read yields otherwise. That is
+     * the value of {@code d.pop(key, default)} and {@code d.get(key, default)}, the values of
+     * {@code d.items()} and the copy {@code d.copy()} returns. Since it is a dictionary, a read of
+     * it is unknown in turn, so a nested configuration stays unknown at every level. An update
+     * writes nothing the analysis reads.
+     *
+     * @param receiver The untracked dictionary.
+     */
+    private void readUntracked(InstanceKey receiver) {
+      if (kind == Kind.UPDATE) return;
+      InstanceKey unknown =
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.untrackedDict));
+      if (unknown == null) return;
+      if (kind != Kind.ITEMS) {
+        getSystem().newConstraint(resultKey, unknown);
+        return;
+      }
+      InstanceKey list =
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.list));
+      InstanceKey tuple =
+          getInstanceKeyForAllocation(node, TypedSiteReference.at(pc, PythonTypes.tuple));
+      IField one = resolveRootField(getClassHierarchy(), "1");
+      if (list == null || tuple == null || one == null) return;
+      // The list and its tuple are the ones `items` allocates for a tracked receiver, so the value
+      // slot joins the unknown value with any catalogued ones.
+      getSystem()
+          .newConstraint(
+              ((AstPointerKeyFactory) getPointerKeyFactory())
+                  .getPointerKeyForInstanceField(tuple, one),
+              unknown);
     }
 
     /** {@code d.pop(key, default)} and {@code d.get(key, default)}: the field, and the default. */

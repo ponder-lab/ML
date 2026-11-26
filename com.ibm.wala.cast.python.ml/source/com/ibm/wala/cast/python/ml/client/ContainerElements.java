@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.types.PythonTypes.untrackedDict;
 import static com.ibm.wala.cast.python.util.Util.parseIntOrNull;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
@@ -109,12 +110,15 @@ final class ContainerElements {
                 ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                     .getPointerKeyForObjectCatalog(container));
     TypeReference type = container.concreteType().getReference();
-    boolean keyed = type.equals(dict);
+    // A dictionary a library built from data the analysis does not read has keys the catalog does
+    // not name (wala/ML#1339).
+    boolean untracked = type.equals(untrackedDict);
+    boolean keyed = type.equals(dict) || untracked;
 
     TreeSet<Integer> indices = new TreeSet<>();
     Set<String> fieldNames = new LinkedHashSet<>();
     boolean unpositioned = false;
-    boolean complete = true;
+    boolean complete = !untracked;
 
     if (catalog != null)
       for (InstanceKey name : catalog) {

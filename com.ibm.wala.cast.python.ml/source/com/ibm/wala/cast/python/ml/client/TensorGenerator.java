@@ -1236,7 +1236,8 @@ public abstract class TensorGenerator implements Cloneable {
           // the element is a dimension whose value TensorFlow's static shape reports as `None`.
           boolean[] tensorValued = new boolean[elementCount];
           // The positions an element of which may be an element of an ndarray, such as `sizes[0]`
-          // (wala/ML#1158): a fixed runtime integer the analysis did not compute.
+          // (wala/ML#1158), or a value read off a dictionary the analysis does not read
+          // (wala/ML#1339): a fixed runtime integer the analysis did not compute.
           boolean[] ndarrayValued = new boolean[elementCount];
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
@@ -1342,6 +1343,19 @@ public abstract class TensorGenerator implements Cloneable {
                   LOGGER.fine(
                       () ->
                           "Ndarray-valued shape element at position "
+                              + fieldIndex
+                              + ": "
+                              + describe(instanceFieldIK)
+                              + ".");
+                  ndarrayValued[fieldIndex] = true;
+                } else if (innerReference.equals(PythonTypes.untrackedDict)) {
+                  // A value read off a dictionary the analysis does not read, such as a size a
+                  // configuration file sets (wala/ML#1339). A shape position accepts only an
+                  // integer, so it is one of a fixed size the analysis did not compute, and the
+                  // position reads as unresolved (wala/ML#721), as an ndarray element does.
+                  LOGGER.fine(
+                      () ->
+                          "Untracked shape element at position "
                               + fieldIndex
                               + ": "
                               + describe(instanceFieldIK)
