@@ -161,7 +161,11 @@ public class SparseAdd extends ElementWiseOperation {
           PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
           OrdinalSet<InstanceKey> fieldPointsTo =
               withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
-          ret.addAll(this.getDTypesOfValue(builder, fieldPointsTo));
+          Set<DType> sub = this.getDTypesOfValue(builder, fieldPointsTo);
+          // An empty or unreadable `values` is an unknown dtype, as an empty `dense_shape` is an
+          // unknown shape above: the whole sum's dtype is then unknown (wala/ML#1343).
+          if (sub == null) return EnumSet.of(DType.UNKNOWN);
+          ret.addAll(sub);
         }
       }
     }
