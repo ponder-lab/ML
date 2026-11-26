@@ -1,0 +1,4 @@
+dataset:
+  use_tf: true
+  batch_size: 2
+scale: 0.5

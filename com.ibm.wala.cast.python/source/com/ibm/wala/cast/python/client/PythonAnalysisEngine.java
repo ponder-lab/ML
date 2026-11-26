@@ -133,7 +133,9 @@ public abstract class PythonAnalysisEngine<T>
         "time.xml",
         "random.xml",
         "cv2.xml",
-        "glob.xml"
+        "glob.xml",
+        "yaml.xml",
+        "json.xml"
       };
 
   protected PythonSSAPropagationCallGraphBuilder builder;

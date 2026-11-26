@@ -6,6 +6,7 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -219,6 +220,11 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
       if (value instanceof Boolean) return Optional.of(Boolean.TRUE.equals(value) ? 1 : 0);
       return Optional.empty();
     }
+
+    // A value read off a dictionary the analysis does not read, such as a size a configuration file
+    // sets, is an integer of unknown value (wala/ML#1339).
+    if (instanceKey.concreteType().getReference().equals(PythonTypes.untrackedDict))
+      return Optional.empty();
 
     throw new IllegalArgumentException(
         "Cannot get integer value from non-constant InstanceKey: " + describe(instanceKey) + ".");

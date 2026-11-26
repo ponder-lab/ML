@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<!-- PyYAML model -->
+<summary-spec>
+  <classloader name="PythonLoader">
+    <!-- A dictionary a library builds from data the analysis does not read, such as a YAML or JSON document (wala/ML#1339). The analysis knows none of its keys or values: a `pop` or `get` on it yields an unknown value beside the default, and a container query reads it as open. It is a `dict`, so the dictionary methods apply to it. -->
+    <class name="UntrackedDict" super="Ldict" allocatable="true"></class>
+    <class name="yaml" allocatable="true">
+      <method name="import" static="true" descriptor="()Lyaml;">
+        <new def="x" class="Lyaml"/>
+        <!-- https://pyyaml.org/wiki/PyYAMLDocumentation -->
+        <new def="safe_load" class="Lyaml/functions/load"/>
+        <putfield class="LRoot" field="safe_load" fieldType="LRoot" ref="x" value="safe_load"/>
+        <new def="load" class="Lyaml/functions/load"/>
+        <putfield class="LRoot" field="load" fieldType="LRoot" ref="x" value="load"/>
+        <new def="full_load" class="Lyaml/functions/load"/>
+        <putfield class="LRoot" field="full_load" fieldType="LRoot" ref="x" value="full_load"/>
+        <new def="unsafe_load" class="Lyaml/functions/load"/>
+        <putfield class="LRoot" field="unsafe_load" fieldType="LRoot" ref="x" value="unsafe_load"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="yaml/functions">
+      <!-- `safe_load`, `load`, `full_load` and `unsafe_load` read one document from a stream or a string. The document is modeled as a mapping whose contents the analysis does not know (wala/ML#1339), the common case of a configuration file. -->
+      <class name="load" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self stream Loader">
+          <new def="document" class="LUntrackedDict"/>
+          <return value="document"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>

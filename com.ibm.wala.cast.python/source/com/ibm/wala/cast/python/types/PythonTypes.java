@@ -127,6 +127,15 @@ public class PythonTypes extends AstTypeReference {
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ldict"));
 
   /**
+   * A dictionary a library builds from data the analysis does not read, such as the document {@code
+   * yaml.safe_load} or {@code json.load} returns (<a
+   * href="https://github.com/wala/ML/issues/1339">wala/ML#1339</a>). Its keys and values are
+   * unknown, so a read of it yields another such dictionary, standing for a value of any kind.
+   */
+  public static final TypeReference untrackedDict =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("LUntrackedDict"));
+
+  /**
    * Python's {@code str}. A value of this type whose value is not a literal points to one
    * type-level instance key, as {@link #PYTHON_INT} does (wala/ML#1232).
    */
