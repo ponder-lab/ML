@@ -126,6 +126,7 @@ public abstract class PythonAnalysisEngine<T>
         "pytest.xml",
         "click.xml",
         "abseil.xml",
+        "fire.xml",
         "copy.xml",
         "collections.xml",
         "tqdm.xml",

@@ -1992,4 +1992,15 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(20), new NumericDim(2))))));
   }
+
+  /**
+   * A script that hands its {@code main} to {@code fire.Fire} has {@code main} called, with its
+   * parameter at its default, so the tensor {@code main} passes on is typed (wala/ML#1336).
+   *
+   * @throws Exception On analysis error.
+   */
+  @Test
+  public void testFireMain() throws Exception {
+    test("tf2_test_fire_main.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
 }

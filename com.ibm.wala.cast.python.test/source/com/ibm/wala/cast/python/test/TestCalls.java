@@ -358,4 +358,36 @@ public class TestCalls extends TestJythonCallGraphShape {
 
     verifyGraphAssertions(callGraph, ABSEIL_ASSERTIONS);
   }
+
+  protected static final List<GraphAssertion> FIRE_ASSERTIONS =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script fire_calls.py"}),
+          new GraphAssertion("script fire_calls.py", new String[] {"fire/Fire"}),
+          new GraphAssertion("fire/Fire", new String[] {"script fire_calls.py/main"}));
+
+  /** A function handed to {@code fire.Fire} is called (wala/ML#1336). */
+  @Test
+  public void testFireCalls()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = this.makeEngine("fire_calls.py");
+    PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+    verifyGraphAssertions(callGraph, FIRE_ASSERTIONS);
+  }
+
+  protected static final List<GraphAssertion> FIRE_ASSERTIONS2 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script fire_calls2.py"}),
+          new GraphAssertion("script fire_calls2.py", new String[] {"fire/Fire"}),
+          new GraphAssertion("fire/Fire", new String[] {"script fire_calls2.py/main"}));
+
+  /** The same call, with {@code Fire} imported from {@code fire} (wala/ML#1336). */
+  @Test
+  public void testFireCalls2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = this.makeEngine("fire_calls2.py");
+    PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+    verifyGraphAssertions(callGraph, FIRE_ASSERTIONS2);
+  }
 }
