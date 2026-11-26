@@ -56,6 +56,7 @@ import com.ibm.wala.cast.python.ml.client.NpZeros;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -1434,6 +1435,52 @@ public class TestConstructors extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 3))));
+  }
+
+  /**
+   * Two scripts of the same file name in different directories each define {@code main} and run it
+   * without arguments, one with a {@code None} batch size as its first default and the other with a
+   * Boolean. A union of the two functions' default globals gives the batch size the Boolean as
+   * well, which the batch-size read cannot take (<a
+   * href="https://github.com/wala/ML/issues/1337">wala/ML#1337</a>).
+   *
+   * <p>The batch size is {@code bs or 2}, which keeps {@code bs}'s {@code None} among its values
+   * (<a href="https://github.com/wala/ML/issues/1338">wala/ML#1338</a>), so the batch also reads
+   * with an unknown batch axis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testParamDefaultCollision3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String[] files = {
+      "defaults_collision/first/tf2_test_defaults.py",
+      "defaults_collision/second/tf2_test_defaults.py"
+    };
+    test(
+        files,
+        "first/tf2_test_defaults.py",
+        "consume",
+        "defaults_collision",
+        1,
+        1,
+        // TODO: wala/ML#1338, `TENSOR_2_3_FLOAT32` alone once `bs or 2` drops the `None`.
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_2_3_FLOAT32,
+                new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))))));
+    test(
+        files,
+        "second/tf2_test_defaults.py",
+        "consume2",
+        "defaults_collision",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 7, 5))));
   }
 
   /**
