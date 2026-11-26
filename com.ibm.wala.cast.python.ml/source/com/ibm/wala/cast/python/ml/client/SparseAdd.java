@@ -162,9 +162,13 @@ public class SparseAdd extends ElementWiseOperation {
           OrdinalSet<InstanceKey> fieldPointsTo =
               withoutClientOnlyKeys(pointerAnalysis.getPointsToSet(pk));
           Set<DType> sub = this.getDTypesOfValue(builder, fieldPointsTo);
-          // An empty or unreadable `values` is an unknown dtype, as an empty `dense_shape` is an
-          // unknown shape above: the whole sum's dtype is then unknown (wala/ML#1343).
-          if (sub == null) return EnumSet.of(DType.UNKNOWN);
+          // An empty or unreadable `values` contributes an unknown dtype beside the members that
+          // resolved, leaving a partial union rather than erasing them (wala/ML#862,
+          // wala/ML#1343).
+          if (sub == null) {
+            ret.add(DType.UNKNOWN);
+            continue;
+          }
           ret.addAll(sub);
         }
       }
