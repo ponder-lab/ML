@@ -1,4 +1,4 @@
-# The sibling script of `first/tf2_test_defaults_first.py` for wala/ML#1337.
+# The sibling script of `first/tf2_test_defaults.py` for wala/ML#1337.
 import tensorflow as tf
 
 

@@ -1,6 +1,6 @@
-# Probe for wala/ML#1337: this script and `second/tf2_test_defaults_second.py` each define `main`,
-# with a `None` default here and a `False` default there at the same position. A union of their
-# defaults gives the batch size here the other script's `False`.
+# Probe for wala/ML#1337: this script and `second/tf2_test_defaults.py`, of the same file name,
+# each define `main`, with a `None` default here and a `False` default there at the same position.
+# A union of their defaults gives the batch size here the other script's `False`.
 import tensorflow as tf
 
 

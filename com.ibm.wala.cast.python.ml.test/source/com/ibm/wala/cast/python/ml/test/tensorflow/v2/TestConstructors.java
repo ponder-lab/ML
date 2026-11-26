@@ -1438,9 +1438,10 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
-   * Two scripts each define {@code main} and run it without arguments, one with an integer batch
-   * size as its first default and the other with a Boolean. A union of the two functions' default
-   * globals gives the batch size the Boolean as well, which the batch-size read cannot take (<a
+   * Two scripts of the same file name in different directories each define {@code main} and run it
+   * without arguments, one with a {@code None} batch size as its first default and the other with a
+   * Boolean. A union of the two functions' default globals gives the batch size the Boolean as
+   * well, which the batch-size read cannot take (<a
    * href="https://github.com/wala/ML/issues/1337">wala/ML#1337</a>).
    *
    * <p>The batch size is {@code bs or 2}, which keeps {@code bs}'s {@code None} among its values
@@ -1456,12 +1457,12 @@ public class TestConstructors extends AbstractTensorTest {
   public void testParamDefaultCollision3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     String[] files = {
-      "defaults_collision/first/tf2_test_defaults_first.py",
-      "defaults_collision/second/tf2_test_defaults_second.py"
+      "defaults_collision/first/tf2_test_defaults.py",
+      "defaults_collision/second/tf2_test_defaults.py"
     };
     test(
         files,
-        "first/tf2_test_defaults_first.py",
+        "first/tf2_test_defaults.py",
         "consume",
         "defaults_collision",
         1,
@@ -1474,7 +1475,7 @@ public class TestConstructors extends AbstractTensorTest {
                 new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(3))))));
     test(
         files,
-        "second/tf2_test_defaults_second.py",
+        "second/tf2_test_defaults.py",
         "consume2",
         "defaults_collision",
         1,

@@ -67,6 +67,7 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -579,7 +580,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
    * The prefix of the globals holding the defaults of a function defined in the given context: the
    * names of the enclosing entities, outermost first, each followed by {@code /}. The script
    * contributes its signature, which names its path, so same-named functions of two scripts, of two
-   * classes or of two enclosing functions get globals of their own (wala/ML#1337).
+   * classes or of two enclosing functions get globals of their own (wala/ML#1337). A script under
+   * no entry of the PYTHONPATH has no signature and contributes its name instead.
    *
    * @param context The context the function is defined in.
    * @return The prefix; empty when no entity encloses the context.
@@ -592,7 +594,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       if (entity == null || entity == previous) continue;
       previous = entity;
       names.addFirst(
-          entity.getKind() == CAstEntity.SCRIPT_ENTITY ? entity.getSignature() : entity.getName());
+          entity.getKind() == CAstEntity.SCRIPT_ENTITY
+              ? Objects.requireNonNullElse(entity.getSignature(), entity.getName())
+              : entity.getName());
     }
     StringBuilder prefix = new StringBuilder();
     for (String name : names) prefix.append(name).append('/');
@@ -1484,7 +1488,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
       CAstVisitor v = new CAstVisitor(child, parser);
       // A method definition's visit returns its parameter-default initialization block (the
-      // assignments to the `<class>_<method>_default_<k>` globals) when the method has defaults.
+      // assignments to the `<scope>/<method>_default_<k>` globals) when the method has defaults.
       // Those must execute in the scope that executes the class definition, matching Python's
       // def-time default evaluation; discarding them left every method-default global empty
       // (wala/ML#743). Only function-definition returns are collected: other members' returned
