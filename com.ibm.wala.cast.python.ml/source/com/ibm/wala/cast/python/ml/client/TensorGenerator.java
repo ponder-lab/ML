@@ -8325,11 +8325,14 @@ public abstract class TensorGenerator implements Cloneable {
         // declaring class, before that degrade, exactly as the `tf.constant` arm below detects its
         // result by its containing method. `float32` is the documented default of `floatx()`, but
         // `tf.keras.backend.set_floatx` can change it program-wide, so the token takes each value
-        // `floatx()` may return where this generator's value is made: the default, and what a
-        // reachable `set_floatx` may set there, the unknown dtype for a value it cannot read
-        // (wala/ML#871). This is the same adopter contract as the API-default arms (wala/ML#804,
-        // wala/ML#809): emit a documented default only where its override is determinately absent.
-        Set<DType> floatx = KerasFloatx.at(builder, this.getNode());
+        // `floatx()` may have returned when it was called: the default, and what a reachable
+        // `set_floatx` may set there, the unknown dtype for a value it cannot read (wala/ML#871).
+        // It
+        // is asked at the node that allocated it, which a call between a `set_floatx` and its
+        // restore reaches, not where it is later passed. This is the same adopter contract as the
+        // API-default arms (wala/ML#804, wala/ML#809): emit a documented default only where its
+        // override is determinately absent.
+        Set<DType> floatx = KerasFloatx.at(builder, asin.getNode());
         LOGGER.fine(
             () ->
                 "Found dtypes: "

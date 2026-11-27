@@ -218,7 +218,8 @@ public class KerasApplicationCall extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Keras models compute in the floating-point default whatever the input dtype, as `DenseCall`
     // assumes for layers: `floatx()`, which a reachable `set_floatx` may change (wala/ML#871).
-    return KerasFloatx.at(builder, this.getNode());
+    // The model reads `floatx()` when it is created.
+    return KerasFloatx.atCreation(builder, () -> this.getArgumentPointsToSet(builder, 0, "self"));
   }
 
   @Override

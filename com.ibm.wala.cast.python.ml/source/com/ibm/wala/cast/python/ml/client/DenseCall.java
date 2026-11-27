@@ -511,9 +511,13 @@ public class DenseCall extends TensorGenerator {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // A Keras layer like Dense outputs its compute dtype whatever the input dtype: `floatx()`
-    // under the default policy, `float32` unless a reachable `set_floatx` may change it
-    // (wala/ML#871).
-    return KerasFloatx.at(builder, this.getNode());
+    // under the default policy, read when the layer is created, `float32` unless a reachable
+    // `set_floatx` may change it there (wala/ML#871).
+    return KerasFloatx.atCreation(
+        builder,
+        () ->
+            this.getArgumentPointsToSet(
+                builder, Parameters.SELF.getIndex(), Parameters.SELF.getName()));
   }
 
   @Override

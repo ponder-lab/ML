@@ -5031,7 +5031,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // already indexes it. `call` and not `__call__`: the cast happens inside Keras's own
       // `Layer.__call__`, which a user-written `__call__` replaces rather than passes through.
       //
-      // The compute dtype is what `floatx()` may return where the body runs (wala/ML#871).
+      // The compute dtype is what `floatx()` returned when the layer, the body's receiver, was
+      // created (wala/ML#871).
       Map<PointsToSetVariable, Set<DType>> computeDTypeCasts = HashMapFactory.make();
       for (PointsToSetVariable v : parameters) {
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
@@ -5039,7 +5040,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (!isAppliedKerasCallBody(owner)) continue;
         if (owner.getIR().getNumberOfParameters() < 3) continue;
         if (owner.getIR().getParameter(2) == lpk.getValueNumber())
-          computeDTypeCasts.put(v, KerasFloatx.at(builder, owner));
+          computeDTypeCasts.put(
+              v,
+              KerasFloatx.atCreation(
+                  builder,
+                  () ->
+                      builder
+                          .getPointerAnalysis()
+                          .getPointsToSet(
+                              builder
+                                  .getPointerAnalysis()
+                                  .getHeapModel()
+                                  .getPointerKeyForLocal(owner, owner.getIR().getParameter(1)))));
       }
       LOGGER.fine(() -> "wala/ML#821 Keras call input destinations: " + computeDTypeCasts.size());
 

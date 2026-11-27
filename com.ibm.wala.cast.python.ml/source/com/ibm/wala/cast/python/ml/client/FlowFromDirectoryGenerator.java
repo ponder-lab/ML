@@ -108,8 +108,9 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Both positions take the generator's `dtype`, whose default is `floatx()`: images through the
     // iterator's `dtype` parameter, labels through the same cast under the common `class_mode`s.
-    // That is `float32` unless a reachable `set_floatx` may change it (wala/ML#871).
-    return KerasFloatx.at(builder, this.getNode());
+    // That is `float32` unless a reachable `set_floatx` may change it where the generator was
+    // created, which is when it reads `floatx()` (wala/ML#871).
+    return KerasFloatx.atCreation(builder, () -> this.getArgumentPointsToSet(builder, 0, "self"));
   }
 
   /**

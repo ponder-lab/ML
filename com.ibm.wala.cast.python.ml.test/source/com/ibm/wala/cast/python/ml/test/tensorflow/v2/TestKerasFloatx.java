@@ -25,6 +25,8 @@ public class TestKerasFloatx extends AbstractTensorTest {
 
   private static final String SCOPED = "tf2_test_floatx_scoped.py";
 
+  private static final String CREATED_IN_SCOPE = "tf2_test_floatx_created_in_scope.py";
+
   /**
    * An {@code Input} without a {@code dtype}, after an unrestored {@code set_floatx("float64")}.
    *
@@ -122,6 +124,103 @@ public class TestKerasFloatx extends AbstractTensorTest {
   @Test
   public void testScopedOutside() throws ClassHierarchyException, CancelException, IOException {
     test(SCOPED, "consume_outside", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * A layer created between a {@code set_floatx("float64")} and its restore, called after the
+   * restore: Keras read {@code floatx()} when it created the layer, so the output is {@code
+   * float64}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCreatedInScopeOutput()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        CREATED_IN_SCOPE,
+        "consume_output",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(FLOAT_64, 2, 3))));
+  }
+
+  /**
+   * A weight a user layer adds without a {@code dtype} in {@code build}, where the layer was
+   * created between a {@code set_floatx("float64")} and its restore and is built after the restore:
+   * the weight takes the dtype the layer read when it was created.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCreatedInScopeWeight()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        CREATED_IN_SCOPE,
+        "consume_weight",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3), TensorType.of(FLOAT_64, 2, 3))));
+  }
+
+  /**
+   * A user layer's {@code call} input, which Keras casts to the compute dtype the layer read when
+   * it was created, between a {@code set_floatx("float64")} and its restore, though it is called
+   * after the restore.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCreatedInScopeCallInput()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        CREATED_IN_SCOPE,
+        "consume_call_input",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2), TensorType.of(FLOAT_64, 2, 2))));
+  }
+
+  /**
+   * A {@code floatx()} token taken between a {@code set_floatx("float64")} and its restore, passed
+   * as a {@code dtype} after the restore: the token holds the value {@code floatx()} returned.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCreatedInScopeToken()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        CREATED_IN_SCOPE,
+        "consume_token_use",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2), TensorType.of(FLOAT_64, 2, 2))));
+  }
+
+  /**
+   * A {@code Dense} output outside a function whose restore an exception can skip, to a handler in
+   * the same function, which leaves its setting in effect everywhere.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSkippedRestore() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_floatx_skipped_restore.py",
+        "consume_outside",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4), TensorType.of(FLOAT_64, 2, 4))));
   }
 
   /**

@@ -115,7 +115,8 @@ public class EmbeddingCall extends TensorGenerator {
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return KerasFloatx.at(builder, this.getNode());
+    // The layer reads `floatx()` when it is created (wala/ML#871).
+    return KerasFloatx.atCreation(builder, () -> this.getArgumentPointsToSet(builder, 0, "self"));
   }
 
   /**

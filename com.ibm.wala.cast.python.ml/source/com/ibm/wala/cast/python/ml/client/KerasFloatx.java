@@ -6,6 +6,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -28,6 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 /**
@@ -47,6 +49,12 @@ import java.util.logging.Logger;
  *
  * <p>The query is flow-insensitive within its scope: a node it reaches may run before the call as
  * well as after, so the default is always among the values.
+ *
+ * <p>Keras reads {@code floatx()} when it creates an object and keeps the value: a layer's dtype
+ * policy, which its weights, its output and the cast of its {@code call} input follow, an image
+ * data generator's dtype, a {@code floatx()} token. A use of such an object is therefore asked at
+ * the nodes that created it ({@link #atCreation}), and only a value read when the API is called,
+ * such as an {@code Input}'s, at the node making the call ({@link #at}).
  */
 public final class KerasFloatx {
 
@@ -87,6 +95,28 @@ public final class KerasFloatx {
     Set<DType> ret = EnumSet.copyOf(floatx.global);
     for (Pair<Set<CGNode>, Set<DType>> s : floatx.scoped)
       if (node == null || s.fst.contains(node)) ret.addAll(s.snd);
+    return ret;
+  }
+
+  /**
+   * The values {@code floatx()} may have returned where the given objects were created.
+   *
+   * @param builder The builder whose call graph and pointer analysis are final.
+   * @param objects Supplies the objects; read only where {@code floatx()} may vary, and the values
+   *     any node may see where it gives none, or an object whose creating node is unknown.
+   * @return The dtypes, as {@link #at} gives them.
+   */
+  public static Set<DType> atCreation(
+      PropagationCallGraphBuilder builder, Supplier<OrdinalSet<InstanceKey>> objects) {
+    if (at(builder, null) == DEFAULT) return DEFAULT;
+    OrdinalSet<InstanceKey> keys = objects.get();
+    if (keys == null || keys.isEmpty()) return at(builder, null);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    for (InstanceKey key : keys)
+      ret.addAll(
+          key instanceof AllocationSiteInNode allocation
+              ? at(builder, allocation.getNode())
+              : at(builder, null));
     return ret;
   }
 
@@ -236,8 +266,11 @@ public final class KerasFloatx {
   }
 
   /**
-   * The calls on the normal paths from {@code call} to {@code restore}, or {@code null} when some
-   * normal path from {@code call} reaches the exit without passing {@code restore}.
+   * The calls on the paths from {@code call} to {@code restore}, or {@code null} when some path
+   * from {@code call} reaches the exit without passing {@code restore}. A path follows normal edges
+   * and exceptional edges to a handler in the function, so a restore an exception can skip is no
+   * restore; an exceptional edge to the exit, an exception leaving the function, is not followed,
+   * since the scoping assumes normal completion.
    */
   private static List<SSAAbstractInvokeInstruction> callsBetween(
       SSACFG cfg, IR ir, SSAInstruction call, SSAInstruction restore) {
@@ -259,7 +292,10 @@ public final class KerasFloatx {
     worklist.add(start);
     while (!worklist.isEmpty()) {
       ISSABasicBlock block = worklist.remove();
-      for (ISSABasicBlock next : cfg.getNormalSuccessors(block)) {
+      List<ISSABasicBlock> successors = new ArrayList<>(cfg.getNormalSuccessors(block));
+      for (ISSABasicBlock handler : cfg.getExceptionalSuccessors(block))
+        if (!handler.isExitBlock()) successors.add(handler);
+      for (ISSABasicBlock next : successors) {
         if (next.equals(end)) continue;
         if (next.isExitBlock()) return null;
         if (seen.add(next)) {

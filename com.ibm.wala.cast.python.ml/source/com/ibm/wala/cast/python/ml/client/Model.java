@@ -200,6 +200,8 @@ public class Model extends TensorGenerator {
    * @return A set of weight dtypes.
    */
   Set<DType> getWeightDTypes(PropagationCallGraphBuilder builder) {
-    return KerasFloatx.at(builder, this.getNode());
+    // Each layer read `floatx()` when it was created, which this model does not trace, so the
+    // values any node may see.
+    return KerasFloatx.at(builder, null);
   }
 }

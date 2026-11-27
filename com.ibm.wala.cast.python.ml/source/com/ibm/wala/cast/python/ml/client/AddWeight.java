@@ -92,6 +92,8 @@ public class AddWeight extends TensorTypeAllocator {
    */
   @Override
   protected Set<DType> getApiDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return KerasFloatx.at(builder, this.getNode());
+    // The layer read `floatx()` when it was created, which this does not trace, so the values any
+    // node may see.
+    return KerasFloatx.at(builder, null);
   }
 }

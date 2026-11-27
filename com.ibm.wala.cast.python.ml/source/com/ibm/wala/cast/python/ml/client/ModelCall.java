@@ -745,9 +745,15 @@ public class ModelCall extends TensorGenerator {
       }
     }
 
-    // If we couldn't find any dtypes, default to the compute dtype, `floatx()`, which a reachable
-    // `set_floatx` may change (wala/ML#871).
-    if (outputDTypes.isEmpty()) outputDTypes.addAll(KerasFloatx.at(builder, this.getNode()));
+    // If we couldn't find any dtypes, default to the compute dtype, `floatx()` as the model read it
+    // when it was created, which a reachable `set_floatx` may change (wala/ML#871).
+    if (outputDTypes.isEmpty())
+      outputDTypes.addAll(
+          KerasFloatx.atCreation(
+              builder,
+              () ->
+                  this.getArgumentPointsToSet(
+                      builder, Parameters.SELF.getIndex(), Parameters.SELF.getName())));
 
     return outputDTypes;
   }
