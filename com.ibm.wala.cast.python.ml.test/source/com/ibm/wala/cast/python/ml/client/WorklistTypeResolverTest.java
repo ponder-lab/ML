@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -12,12 +13,20 @@ import static org.junit.Assume.assumeFalse;
 import com.ibm.wala.cast.python.ml.client.WorklistTypeResolver.RecomputationCause;
 import com.ibm.wala.cast.python.ml.client.WorklistTypeResolver.RecomputationOutcome;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -113,13 +122,46 @@ public class WorklistTypeResolverTest {
    */
   @Test
   public void testCaughtExceptionNamesItsCaller() {
+    List<String> messages =
+        finely(
+            () -> {
+              WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+              engine.demand(
+                  "E",
+                  () -> {
+                    throw new IllegalArgumentException("synthetic");
+                  },
+                  true);
+            });
+
+    String line =
+        messages.stream().filter(m -> m.startsWith("Worklist transfer IAE")).findFirst().orElse("");
+    assertTrue(line, line.contains(WorklistTypeResolverTest.class.getName() + ".lambda$"));
+    assertTrue(line, line.contains(" called from " + WorklistTypeResolver.class.getName() + "."));
+    assertTrue(line, line.endsWith("treating as ⊤."));
+  }
+
+  /** The lock the tests that raise the resolver's logging level share. */
+  private static final Object FINE_LOGGING = new Object();
+
+  /**
+   * Runs a body with the resolver's fine logging on, and returns the messages the body's thread
+   * logged. The level is one for every thread, so the tests that raise it take turns, and a message
+   * another test's thread logs meanwhile is kept apart from the body's.
+   *
+   * @param body The body.
+   * @return The messages, in the order they were logged.
+   */
+  private static List<String> finely(Runnable body) {
     Logger logger = Logger.getLogger(WorklistTypeResolver.class.getName());
-    List<String> messages = new ArrayList<>();
+    Map<Long, List<String>> messages = new ConcurrentHashMap<>();
     Handler handler =
         new Handler() {
           @Override
           public void publish(LogRecord record) {
-            messages.add(record.getMessage());
+            messages
+                .computeIfAbsent(record.getLongThreadID(), thread -> new ArrayList<>())
+                .add(String.valueOf(record.getMessage()));
           }
 
           @Override
@@ -128,30 +170,182 @@ public class WorklistTypeResolverTest {
           @Override
           public void close() {}
         };
-    Level old = logger.getLevel();
-    logger.setLevel(Level.FINE);
-    logger.addHandler(handler);
+    synchronized (FINE_LOGGING) {
+      Level old = logger.getLevel();
+      logger.setLevel(Level.FINE);
+      logger.addHandler(handler);
+      try {
+        body.run();
+      } finally {
+        logger.removeHandler(handler);
+        logger.setLevel(old);
+      }
+    }
+    return messages.getOrDefault(Thread.currentThread().threadId(), List.of());
+  }
+
+  /**
+   * Tells what a probe's message says of a query, with the value it names as one of two the test
+   * holds or as another.
+   *
+   * @param message The message.
+   * @param scalar The first value.
+   * @param vector The second value.
+   * @return The message up to its value, and which value that is.
+   */
+  private static String valueNamed(String message, ShapeResult scalar, ShapeResult vector) {
+    String head = message.substring(0, message.indexOf(" := "));
+    String value = message.substring(message.indexOf(" := ") + 4);
+    return head
+        + " := "
+        + (value.equals(String.valueOf(scalar))
+            ? "a scalar"
+            : value.equals(String.valueOf(vector)) ? "a vector" : "another");
+  }
+
+  /**
+   * The probe property names the queries whose recomputations, writes and orbit values a settlement
+   * pass logs (wala/ML#1293), and while it is set a pass logs each component it leaves to join. A
+   * query the property does not name is not logged. The four cycles here are those of {@link
+   * #testIterationSettlesSwapToJoin}, {@link #testIterationDropsValueOnlyTheCycleSustains}, {@link
+   * #testIterationJoinsPastBudget} and {@link #testIterationJoinsAtOrbitItsMeetLeaves}, and all of
+   * them are in this one test because the property is the process's.
+   */
+  @Test(timeout = 60000)
+  public void testProbeLogsIterationOfQueriesItNames() {
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<ShapeResult> held = List.of(scalar.union(vector), scalar, scalar, scalar);
+    String property = "ariadne.typeResolution.canonProbe";
+    String old = System.getProperty(property);
+    System.setProperty(property, "PROBED_");
+    List<String> messages;
     try {
-      WorklistTypeResolver engine = WorklistTypeResolver.install(null);
-      engine.demand(
-          "E",
-          () -> {
-            throw new IllegalArgumentException("synthetic");
-          },
-          true);
+      messages =
+          finely(
+              () -> {
+                WorklistTypeResolver swapping = WorklistTypeResolver.install(null);
+                swapping.disableSkipCheck();
+                for (String name : List.of("PROBED_SWAP_", "APART_SWAP_"))
+                  swapping.demand(
+                      name + 0,
+                      ring(swapping, name, List.of(scalar, vector), (i, read) -> read, new int[1])
+                          .get(0),
+                      true);
+
+                WorklistTypeResolver dropping = WorklistTypeResolver.install(null);
+                dropping.disableSkipCheck();
+                dropping.demand(
+                    "PROBED_DROP_0",
+                    ring(dropping, "PROBED_DROP_", held, (i, read) -> read, new int[1]).get(0),
+                    true);
+
+                WorklistTypeResolver joining = WorklistTypeResolver.install(null);
+                joining.disableSkipCheck();
+                joining.setIterationBudget(0, 0);
+                joining.demand(
+                    "PROBED_PAST_0",
+                    ring(joining, "PROBED_PAST_", held, (i, read) -> read, new int[1]).get(0),
+                    true);
+
+                WorklistTypeResolver leaving = WorklistTypeResolver.install(null);
+                leaving.disableSkipCheck();
+                leaving.demand(
+                    "PROBED_LEFT_0",
+                    ring(
+                            leaving,
+                            "PROBED_LEFT_",
+                            List.of(scalar, scalar),
+                            (i, read) ->
+                                read.members().containsAll(vector.members())
+                                    ? scalar
+                                    : scalar.union(vector),
+                            new int[1])
+                        .get(0),
+                    true);
+              });
     } finally {
-      logger.removeHandler(handler);
-      logger.setLevel(old);
+      restore(property, old);
     }
 
-    String line =
+    String logged = String.join("\n", messages);
+    assertEquals(logged, 0, messages.stream().filter(m -> m.contains("APART_")).count());
+    // The swap: the pass's step, the step that swaps back, and the step from the orbit's join.
+    assertEquals(
+        logged,
+        List.of(
+            "CANON-PROBE orbit join PROBED_SWAP_0 := another",
+            "CANON-PROBE orbit join PROBED_SWAP_1 := another",
+            "CANON-PROBE recompute PROBED_SWAP_0 := a scalar",
+            "CANON-PROBE recompute PROBED_SWAP_0 := a vector",
+            "CANON-PROBE recompute PROBED_SWAP_0 := another",
+            "CANON-PROBE recompute PROBED_SWAP_1 := a scalar",
+            "CANON-PROBE recompute PROBED_SWAP_1 := a vector",
+            "CANON-PROBE recompute PROBED_SWAP_1 := another",
+            "CANON-PROBE write PROBED_SWAP_0 := a scalar",
+            "CANON-PROBE write PROBED_SWAP_0 := a vector",
+            "CANON-PROBE write PROBED_SWAP_1 := a scalar",
+            "CANON-PROBE write PROBED_SWAP_1 := a vector"),
         messages.stream()
-            .filter(m -> m != null && m.startsWith("Worklist transfer IAE"))
-            .findFirst()
-            .orElse("");
-    assertTrue(line, line.contains(WorklistTypeResolverTest.class.getName() + ".lambda$"));
-    assertTrue(line, line.contains(" called from " + WorklistTypeResolver.class.getName() + "."));
-    assertTrue(line, line.endsWith("treating as ⊤."));
+            .filter(m -> m.contains("PROBED_SWAP_"))
+            .map(m -> valueNamed(m, scalar, vector))
+            .sorted()
+            .toList());
+    // The value that only moves around its ring is dropped at one query, the one that holds it
+    // when the orbit closes.
+    assertEquals(
+        logged,
+        List.of("CANON-PROBE orbit meet PROBED_DROP_0 := a scalar"),
+        messages.stream()
+            .filter(m -> m.startsWith("CANON-PROBE orbit ") && m.contains("PROBED_DROP_"))
+            .map(m -> valueNamed(m, scalar, vector))
+            .toList());
+    assertEquals(
+        logged,
+        List.of(
+            "CANON-PROBE a component of 4 joins past its budget.",
+            "CANON-PROBE a component of 2 joins at an orbit."),
+        messages.stream().filter(m -> m.startsWith("CANON-PROBE a component of ")).toList());
+  }
+
+  /**
+   * The resolver logs the query it widens for making new shapes, with the value the query held, the
+   * value its recomputation returned and the value the widening gives (wala/ML#1293). The cycle is
+   * that of {@link #testIterationWidensSizeThatKeepsGrowing}.
+   */
+  @Test(timeout = 60000)
+  public void testWideningOfGrowingQueryIsLogged() {
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    List<String> messages =
+        finely(
+            () -> {
+              WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+              engine.disableSkipCheck();
+              List<Supplier<Object>> transfers =
+                  ring(
+                      engine,
+                      "LOGGED_SIZE_",
+                      List.of(first, first, first),
+                      (index, read) -> index == 1 ? longer(read) : read,
+                      new int[1]);
+              assertEquals(widened, engine.demand("LOGGED_SIZE_0", transfers.get(0), true));
+            });
+
+    // The query made the vectors of one, two and three sizes, and the fourth is one too many.
+    ShapeResult held = ShapeResult.of(Set.of(List.of(new NumericDim(3))));
+    ShapeResult made = ShapeResult.of(Set.of(List.of(new NumericDim(4))));
+    assertEquals(
+        String.join("\n", messages),
+        List.of(
+            "Widening LOGGED_SIZE_1, which keeps making new shapes: "
+                + held
+                + " by "
+                + made
+                + " gives "
+                + widened
+                + "."),
+        messages.stream().filter(m -> m.contains(", which keeps making new shapes: ")).toList());
   }
 
   /**
@@ -389,11 +583,14 @@ public class WorklistTypeResolverTest {
   /**
    * A settled cyclic query whose partner the settlement pass rewrote is recomputed by the next
    * pass, as before: the partner's settled-arm value is a read that changed after the query's own
-   * settled recomputation began.
+   * settled recomputation began. That is what a pass that does not iterate leaves, as a pass inside
+   * a generator guard does not; {@link #testIterationSettlesRewrittenPartnerInOnePass} is the same
+   * cycle in a pass that iterates.
    */
   @Test
   public void testSettledCycleRecomputedWhenPartnerRewritten() {
     WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableIteration();
 
     ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
     ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
@@ -431,12 +628,14 @@ public class WorklistTypeResolverTest {
   /**
    * A settled cyclic query that reads itself is recomputed by the next pass after the pass wrote it
    * back, as before: its own written value is an input of its recomputation, though the engine
-   * records no read edge from a query to itself.
+   * records no read edge from a query to itself. That is what a pass that does not iterate leaves;
+   * {@link #testIterationReachesSelfReaderFixpoint} is the same cycle in a pass that iterates.
    */
   @Test
   public void testSelfReadingCycleRecomputedAfterOwnWriteBack() {
     WorklistTypeResolver engine = WorklistTypeResolver.install(null);
     engine.disableSkipCheck();
+    engine.disableIteration();
 
     ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
     ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
@@ -511,13 +710,16 @@ public class WorklistTypeResolverTest {
    * the state it found, so each pass swaps the two values. In the first swap, one query has no
    * settled recomputation standing, and the other is stale: it consumed its partner's value before
    * the partner had one. Each later swap is caused by the partner's write-back alone, and gives
-   * each query back the value its previous replacement replaced.
+   * each query back the value its previous replacement replaced. That is what passes that do not
+   * iterate leave; {@link #testIterationSettlesSwapToJoin} is the same cycle in a pass that
+   * iterates.
    */
   @Test
   public void testCensusCountsValuesMovingBackAndForth() {
     WorklistTypeResolver engine = WorklistTypeResolver.install(null);
     engine.disableSkipCheck();
     engine.countRestoredValues(true);
+    engine.disableIteration();
 
     ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
     ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
@@ -571,6 +773,1715 @@ public class WorklistTypeResolverTest {
                 + " cycle with no settled recomputation standing: 2 the same, 1 replaced (0"
                 + " restored), 0 kept; on a cycle with reads only settlement passes wrote since: 0"
                 + " the same, 4 replaced (4 restored), 0 kept"));
+  }
+
+  /**
+   * Makes a ring of queries. Before the state is settled each holds its initial value, and once it
+   * is settled each takes its predecessor's value, changed by the ring's function.
+   *
+   * @param engine The engine.
+   * @param name The name the queries start with; the index of each follows.
+   * @param initial The initial value of each query.
+   * @param settled The function of a query's index and its predecessor's value.
+   * @param runs A counter of the transfers' runs.
+   * @return The transfers.
+   */
+  private static List<Supplier<Object>> ring(
+      WorklistTypeResolver engine,
+      String name,
+      List<ShapeResult> initial,
+      BiFunction<Integer, ShapeResult, ShapeResult> settled,
+      int[] runs) {
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    int size = initial.size();
+    for (int i = 0; i < size; i++) {
+      int index = i;
+      int previous = (i + size - 1) % size;
+      transfers.add(
+          () -> {
+            runs[0]++;
+            ShapeResult read =
+                (ShapeResult) engine.read(name + previous, transfers.get(previous), true);
+            return engine.isSettling() ? settled.apply(index, read) : initial.get(index);
+          });
+    }
+    return transfers;
+  }
+
+  /**
+   * Makes a ring of four queries with a fifth beside it. Once the state is settled each query of
+   * the ring takes its predecessor's value, and the fifth takes a function of one ring query's
+   * value. The ring's first query reads the fifth and ignores its value, so the five are one
+   * component.
+   *
+   * @param engine The engine.
+   * @param name The name the queries start with; the index of each follows, and the fifth's is 4.
+   * @param initial The initial value of each of the five queries.
+   * @param source The index of the ring query the fifth reads.
+   * @param side The function of that query's value.
+   * @return The transfers.
+   */
+  private static List<Supplier<Object>> ringWithSide(
+      WorklistTypeResolver engine,
+      String name,
+      List<ShapeResult> initial,
+      int source,
+      Function<ShapeResult, ShapeResult> side) {
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    for (int i = 0; i < 4; i++) {
+      int index = i;
+      int previous = (i + 3) % 4;
+      transfers.add(
+          () -> {
+            if (index == 0) engine.read(name + 4, transfers.get(4), true);
+            Object read = engine.read(name + previous, transfers.get(previous), true);
+            return engine.isSettling() ? read : initial.get(index);
+          });
+    }
+    transfers.add(
+        () -> {
+          ShapeResult read = (ShapeResult) engine.read(name + source, transfers.get(source), true);
+          return engine.isSettling() ? side.apply(read) : initial.get(4);
+        });
+    return transfers;
+  }
+
+  /**
+   * A settlement pass iterates a cycle to a fixpoint (wala/ML#1293): a query whose partner the pass
+   * rewrote is recomputed by that pass, so the first read already returns the value the cycle
+   * settles at, and the next pass skips both queries.
+   */
+  @Test
+  public void testIterationSettlesRewrittenPartnerInOnePass() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    int[] runs = {0};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          runs[0]++;
+          return ((ShapeResult) engine.read("ITER_B", transfers.get(1), true)).union(scalar);
+        });
+    transfers.add(
+        () -> {
+          runs[0]++;
+          ShapeResult a = (ShapeResult) engine.read("ITER_A", transfers.get(0), true);
+          return engine.isSettling() ? a.union(vector) : a;
+        });
+
+    assertEquals(scalar.union(vector), engine.demand("ITER_A", transfers.get(0), true));
+    assertEquals(scalar.union(vector), engine.demand("ITER_B", transfers.get(1), true));
+    String census = engine.settlementCensus();
+    // One further step recomputes the first query, the reader of the one the pass rewrote, and a
+    // second finds the rewritten query unchanged by that.
+    assertEquals(census, 2, engine.iterationSteps());
+    assertEquals(census, 0, engine.orbits());
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.ITERATED, RecomputationOutcome.REPLACED));
+    // The check mode recomputed both queries at the fixpoint.
+    assertTrue(census, census.contains(", 2 queries checked at a fixpoint)"));
+
+    // The next pass skips both: every read of each was written before its last recomputation. The
+    // check mode recomputes a skipped query, so the runs are counted with it off.
+    engine.disableSkipCheck();
+    int settledRuns = runs[0];
+    settleAnotherCycle(engine, "ITER_C");
+    assertEquals(settledRuns, runs[0]);
+    assertEquals(scalar.union(vector), engine.demand("ITER_A", transfers.get(0), true));
+    for (RecomputationOutcome outcome : RecomputationOutcome.values())
+      assertEquals(0, engine.recomputations(RecomputationCause.READ_SETTLED, outcome));
+  }
+
+  /**
+   * A pass that iterates a cycle recomputes a query that reads itself after its own write-back
+   * (wala/ML#1293), though the engine records no read edge from a query to itself.
+   */
+  @Test
+  public void testIterationReachesSelfReaderFixpoint() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // Once settled, the query adds a vector, and a matrix once it holds the vector, so one settled
+    // recomputation does not reach its own fixpoint.
+    transfers.add(
+        () -> {
+          ShapeResult self = (ShapeResult) engine.read("OWN_A", transfers.get(0), true);
+          ShapeResult b = (ShapeResult) engine.read("OWN_B", transfers.get(1), true);
+          if (!engine.isSettling()) return b.union(scalar);
+          return self.members().containsAll(vector.members())
+              ? self.union(matrix)
+              : self.union(vector);
+        });
+    transfers.add(
+        () -> {
+          engine.read("OWN_A", transfers.get(0), true);
+          return scalar;
+        });
+
+    assertEquals(
+        scalar.union(vector).union(matrix), engine.demand("OWN_A", transfers.get(0), true));
+    String census = engine.settlementCensus();
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.ITERATED, RecomputationOutcome.REPLACED));
+    assertEquals(
+        census,
+        0,
+        engine.recomputations(RecomputationCause.OWN_WRITE, RecomputationOutcome.REPLACED));
+  }
+
+  /**
+   * Two queries that only swap their values are an orbit with no value in common, so each takes the
+   * join of the two (wala/ML#1293): each value is evidence of a tensor, and neither query's value
+   * depends any longer on how many passes ran.
+   */
+  @Test
+  public void testIterationSettlesSwapToJoin() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    engine.countRestoredValues(true);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    int[] runs = {0};
+    List<Supplier<Object>> transfers =
+        ring(engine, "BOTH_", List.of(scalar, vector), (index, read) -> read, runs);
+
+    for (int pass = 0; pass < 3; pass++) {
+      assertEquals(scalar.union(vector), engine.demand("BOTH_0", transfers.get(0), true));
+      assertEquals(scalar.union(vector), engine.demand("BOTH_1", transfers.get(1), true));
+      settleAnotherCycle(engine, "BOTH_PASS_" + pass + "_");
+    }
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 2, engine.orbitJoins());
+    assertEquals(census, 0, engine.orbitMeets());
+    assertEquals(census, 0, engine.joinedComponents());
+    // The swap back that closes the orbit gives each query its value back once, and no later pass
+    // moves either again.
+    for (RecomputationCause cause : RecomputationCause.values())
+      assertEquals(census, cause == RecomputationCause.ITERATED ? 2 : 0, engine.restored(cause));
+    assertEquals(census, 2, engine.iterationSteps());
+  }
+
+  /**
+   * A value that only moves around a cycle, sustained by no query outside it, is dropped by the
+   * pass that iterates the cycle (wala/ML#1293): the cycle returns to a state it was in, and each
+   * query takes the meet of the values that orbit gave it. Without the iteration the value moves
+   * one query a pass, so what a query holds depends on how many passes ran.
+   */
+  @Test
+  public void testIterationDropsValueOnlyTheCycleSustains() {
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<ShapeResult> initial = List.of(scalar.union(vector), scalar, scalar, scalar);
+
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    int[] runs = {0};
+    List<Supplier<Object>> transfers = ring(engine, "DROP_", initial, (index, read) -> read, runs);
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar, engine.demand("DROP_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 1, engine.orbitMeets());
+    assertEquals(census, 0, engine.orbitJoins());
+    assertEquals(census, 0, engine.joinedComponents());
+    // The ring stands: the next pass recomputes none of it.
+    engine.disableSkipCheck();
+    int settledRuns = runs[0];
+    settleAnotherCycle(engine, "DROP_PASS_");
+    assertEquals(settledRuns, runs[0]);
+
+    // The same ring in passes that do not iterate: the vector is at the next query after each.
+    uninstall();
+    WorklistTypeResolver stepping = WorklistTypeResolver.install(null);
+    stepping.disableIteration();
+    List<Supplier<Object>> moving =
+        ring(stepping, "MOVE_", initial, (index, read) -> read, new int[1]);
+    for (int pass = 1; pass <= 5; pass++) {
+      if (pass > 1) settleAnotherCycle(stepping, "MOVE_PASS_" + pass + "_");
+      for (int i = 0; i < 4; i++)
+        assertEquals(
+            "After pass " + pass + ", query " + i,
+            i == pass % 4 ? scalar.union(vector) : scalar,
+            stepping.demand("MOVE_" + i, moving.get(i), true));
+    }
+  }
+
+  /**
+   * Makes a ring of dtype queries. Once the state is settled each takes its predecessor's value.
+   *
+   * @param engine The engine.
+   * @param name The name the queries start with; the index of each follows.
+   * @param initial The initial value of each query, {@code null} for the unknown dtype.
+   * @return The transfers.
+   */
+  private static List<Supplier<Object>> dtypeRing(
+      WorklistTypeResolver engine, String name, List<Set<DType>> initial) {
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    int size = initial.size();
+    for (int i = 0; i < size; i++) {
+      int index = i;
+      int previous = (i + size - 1) % size;
+      transfers.add(
+          () -> {
+            Object read = engine.read(name + previous, transfers.get(previous), false);
+            return engine.isSettling() ? read : initial.get(index);
+          });
+    }
+    return transfers;
+  }
+
+  /**
+   * A dtype that only moves around a cycle is dropped as a shape is (wala/ML#1293): each query
+   * takes the meet of the dtypes its orbit gave it. The unknown dtype is above every dtype, so one
+   * that only moves around the cycle is dropped too, wherever in a query's orbit it comes.
+   */
+  @Test
+  public void testIterationDropsDTypeOnlyTheCycleSustains() {
+    Set<DType> kept = EnumSet.of(DType.FLOAT32);
+
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    List<Supplier<Object>> transfers =
+        dtypeRing(
+            engine, "TYPE_", List.of(EnumSet.of(DType.FLOAT32, DType.INT32), kept, kept, kept));
+    for (int i = 0; i < 4; i++)
+      assertEquals(kept, engine.demand("TYPE_" + i, transfers.get(i), false));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 1, engine.orbitMeets());
+    assertEquals(census, 0, engine.orbitJoins());
+    assertEquals(census, 0, engine.joinedComponents());
+
+    // The unknown dtype is the second value the first query's orbit gave it, and the first value
+    // each other query's orbit gave it.
+    uninstall();
+    WorklistTypeResolver unknown = WorklistTypeResolver.install(null);
+    unknown.enableSkipCheck();
+    List<Supplier<Object>> moving =
+        dtypeRing(unknown, "ANY_", Arrays.asList(null, kept, kept, kept));
+    for (int i = 0; i < 4; i++)
+      assertEquals(kept, unknown.demand("ANY_" + i, moving.get(i), false));
+    census = unknown.settlementCensus();
+    assertEquals(census, 1, unknown.orbits());
+    assertEquals(census, 1, unknown.orbitMeets());
+    assertEquals(census, 0, unknown.orbitJoins());
+    assertEquals(census, 0, unknown.joinedComponents());
+  }
+
+  /**
+   * A value a query outside the cycle sustains is kept by the pass that iterates the cycle, and
+   * reaches every query of the cycle in that pass, while a value only the cycle sustains is dropped
+   * (wala/ML#1293). The meet is over the states of an orbit, and the sustained value is in each of
+   * them.
+   */
+  @Test
+  public void testIterationKeepsValueSustainedFromOutside() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    Supplier<Object> outside = () -> vector;
+    // The first query adds what a query outside the ring holds, and the third starts with a matrix
+    // that nothing sustains.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "KEEP_",
+            List.of(scalar, scalar, scalar.union(matrix), scalar),
+            (index, read) ->
+                index == 0
+                    ? read.union((ShapeResult) engine.read("KEEP_OUTSIDE", outside, true))
+                    : read,
+            new int[1]);
+
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("KEEP_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 1, engine.orbitMeets());
+    assertEquals(census, 0, engine.orbitJoins());
+  }
+
+  /**
+   * The readers of the queries the step that closed an orbit wrote are recomputed after the orbit's
+   * meet (wala/ML#1293), also where the meet leaves those queries as they are. Here the query
+   * beside the ring holds a value computed from the ring's last query before that query lost the
+   * value moving around, and its meet is the value it holds, so only the last query's write makes
+   * it a target.
+   */
+  @Test
+  public void testIterationRecomputesReadersOfOrbitClosingStep() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    List<Supplier<Object>> transfers =
+        ringWithSide(
+            engine,
+            "LAST_",
+            List.of(scalar.union(vector), scalar, scalar, scalar, scalar),
+            3,
+            read -> read.members().containsAll(vector.members()) ? scalar : scalar.union(matrix));
+
+    assertEquals(scalar.union(matrix), engine.demand("LAST_4", transfers.get(4), true));
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar, engine.demand("LAST_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 1, engine.orbitMeets());
+    assertEquals(census, 0, engine.orbitJoins());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A query an orbit gave a value is recomputed after it (wala/ML#1293), also where no query it
+   * reads was written since: the value is the orbit's and not its recomputation's. Here the query
+   * beside the ring held a matrix and then a scalar, which have no value in common, so it takes
+   * both, and its recomputation from the settled ring returns the scalar alone.
+   */
+  @Test
+  public void testIterationRecomputesQueryGivenOrbitValue() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    List<Supplier<Object>> transfers =
+        ringWithSide(
+            engine,
+            "GIVEN_",
+            List.of(scalar.union(vector), scalar, scalar, scalar, scalar),
+            1,
+            read -> read.members().containsAll(vector.members()) ? matrix : scalar);
+
+    assertEquals(scalar, engine.demand("GIVEN_4", transfers.get(4), true));
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar, engine.demand("GIVEN_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 1, engine.orbitMeets());
+    assertEquals(census, 1, engine.orbitJoins());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A pass inside a generator guard makes its one step and does not iterate (wala/ML#1293): a guard
+   * can cut a recomputation at a frame that is gone by the next pass, so a value that moves there
+   * is not an orbit. The next pass outside a guard iterates the cycle.
+   */
+  @Test
+  public void testGuardedPassDoesNotIterate() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "INSIDE_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> read,
+            new int[1]);
+
+    // The guarded pass moves the vector to the second query and leaves it there.
+    assertEquals(
+        scalar,
+        TensorGenerator.underGuardForTest(() -> engine.demand("INSIDE_0", transfers.get(0), true)));
+    assertEquals(scalar.union(vector), engine.demand("INSIDE_1", transfers.get(1), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 0, engine.iterationSteps());
+
+    settleAnotherCycle(engine, "INSIDE_PASS_");
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar, engine.demand("INSIDE_" + i, transfers.get(i), true));
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+  }
+
+  /**
+   * A pass inside a generator guard does not write a query the iteration left to join
+   * (wala/ML#1293): the query only grows, so it would keep a value a guard decided for good. Here a
+   * ring goes past its budget, and one of its queries has no settled recomputation standing, since
+   * its transfer threw. A pass inside a guard recomputes that query to a value a guard decides, and
+   * the value is in no query of the ring after the next pass outside a guard.
+   */
+  @Test
+  public void testGuardedPassDoesNotJoinValueGuardDecided() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(3), new NumericDim(3))));
+    // What the third query's transfer does once the state is settled: 0 throws, 1 has a guard
+    // decide another value, and 2 takes its predecessor's value as the other queries do.
+    int[] mode = {0};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "HELD_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> {
+              if (index != 2 || mode[0] == 2) return read;
+              if (mode[0] == 0) throw new IllegalArgumentException("No recomputation stands.");
+              TensorGenerator.noteGuardDecision();
+              return matrix;
+            },
+            new int[1]);
+    engine.demand("HELD_0", transfers.get(0), true);
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+
+    mode[0] = 1;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "HELD_GUARDED_");
+          return null;
+        });
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.guardDecidedRecomputations());
+    assertEquals(
+        census, 1, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.KEPT));
+    assertEquals(census, 1, engine.guardHeldDiffering());
+
+    mode[0] = 2;
+    settleAnotherCycle(engine, "HELD_PASS_");
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("HELD_" + i, transfers.get(i), true));
+    // The ring went past its budget again, and is one component left to join.
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+  }
+
+  /**
+   * A pass inside a generator guard does not write a query left to join a value its recomputation
+   * read from a query a guard decided in that pass either (wala/ML#1293): no guard decides such a
+   * recomputation, and its value holds the guard's cut all the same. Here a query of a ring left to
+   * join reads a query of another cycle, which a pass inside a guard recomputes to a value a guard
+   * decides and writes. The next pass outside a guard replaces that value, and no query of the ring
+   * holds it.
+   */
+  @Test
+  public void testGuardedPassDoesNotJoinValueReadFromGuardDecided() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(3), new NumericDim(3))));
+    // What the outside query's transfer does once the state is settled: 0 throws, 1 has a guard
+    // decide another value, and 2 returns a scalar.
+    int[] mode = {0};
+    Supplier<Object> outside =
+        readingCycle(
+            engine,
+            "READ_OUTSIDE",
+            "READ_PARTNER",
+            () -> {
+              if (!engine.isSettling() || mode[0] == 2) return scalar;
+              if (mode[0] == 0) throw new IllegalArgumentException("No recomputation stands.");
+              TensorGenerator.noteGuardDecision();
+              return matrix;
+            });
+    assertEquals(scalar, engine.demand("READ_OUTSIDE", outside, true));
+
+    // The ring's third query takes its predecessor's value and the outside query's.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "READ_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) ->
+                index != 2
+                    ? read
+                    : read.union((ShapeResult) engine.read("READ_OUTSIDE", outside, true)),
+            new int[1]);
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("READ_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+
+    mode[0] = 1;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "READ_GUARDED_");
+          return null;
+        });
+    // A guard decided the outside query's recomputation alone, and the ring's reader of it was
+    // recomputed and not written.
+    census = engine.settlementCensus();
+    assertEquals(census, 1, engine.guardDecidedRecomputations());
+    assertEquals(
+        census,
+        1,
+        engine.recomputations(RecomputationCause.CHANGED_READ, RecomputationOutcome.KEPT));
+    assertEquals(census, 1, engine.guardHeldDiffering());
+
+    mode[0] = 2;
+    settleAnotherCycle(engine, "READ_PASS_");
+    assertEquals(scalar, engine.demand("READ_OUTSIDE", outside, true));
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("READ_" + i, transfers.get(i), true));
+  }
+
+  /**
+   * A recomputation a pass inside a generator guard makes of a query left to join leaves no record
+   * (wala/ML#1293): the pass does not write the query, so the query does not hold the value the
+   * record would stand for, and the next pass recomputes it. Here that recomputation returns a
+   * value no guard decided, which the query holds after the next pass outside a guard.
+   */
+  @Test
+  public void testGuardedPassLeavesNoRecordForQueryLeftToJoin() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    // Whether the third query's transfer throws once the state is settled, or takes its
+    // predecessor's value as the other queries do.
+    boolean[] throwing = {true};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "UNRECORDED_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> {
+              if (index == 2 && throwing[0])
+                throw new IllegalArgumentException("No recomputation stands.");
+              return read;
+            },
+            new int[1]);
+    engine.demand("UNRECORDED_0", transfers.get(0), true);
+
+    throwing[0] = false;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "UNRECORDED_GUARDED_");
+          return null;
+        });
+    String census = engine.settlementCensus();
+    assertEquals(
+        census, 1, engine.recomputations(RecomputationCause.NO_RECORD, RecomputationOutcome.KEPT));
+    assertEquals(census, 1, engine.guardHeldDiffering());
+
+    settleAnotherCycle(engine, "UNRECORDED_PASS_");
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("UNRECORDED_" + i, transfers.get(i), true));
+  }
+
+  /**
+   * The census counts the recomputations a pass inside a generator guard made of a query left to
+   * join, and those of them that differ from the settled value (wala/ML#1293): the pass writes
+   * neither, and a query whose recomputation differs holds less or more than its transfer returns
+   * until a later pass recomputes it. Here one pass inside a guard recomputes a query to the value
+   * it holds, and the next to another value.
+   */
+  @Test
+  public void testCensusCountsRecomputationsHeldInsideGuard() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    // What the third query's transfer does once the state is settled: 0 throws, 1 returns the
+    // scalar the query holds, and 2 takes its predecessor's value as the other queries do.
+    int[] mode = {0};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "COUNTED_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> {
+              if (index != 2 || mode[0] == 2) return read;
+              if (mode[0] == 0) throw new IllegalArgumentException("No recomputation stands.");
+              return scalar;
+            },
+            new int[1]);
+    engine.demand("COUNTED_0", transfers.get(0), true);
+
+    mode[0] = 1;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "COUNTED_SAME_");
+          return null;
+        });
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.guardHeld());
+    assertEquals(census, 0, engine.guardHeldDiffering());
+
+    mode[0] = 2;
+    TensorGenerator.underGuardForTest(
+        () -> {
+          settleAnotherCycle(engine, "COUNTED_DIFFERING_");
+          return null;
+        });
+    census = engine.settlementCensus();
+    assertEquals(census, 2, engine.guardHeld());
+    assertEquals(census, 1, engine.guardHeldDiffering());
+    assertTrue(
+        census,
+        census.contains(
+            "2 recomputations of queries left to join held inside a generator guard (1 differing"
+                + " from the settled value)"));
+  }
+
+  /**
+   * A pass inside a generator guard counts a recomputation that throws for a query left to join
+   * that has no settled value yet as one to the same value (wala/ML#1293): the recomputation keeps
+   * the settled value, and there is none. Here a query's evaluation reads a second query that reads
+   * it back, and then runs two passes before its own value is written. The first iterates the two
+   * past a budget of nothing and leaves them to join, and the second runs inside a guard. The query
+   * is a dtype query, which the promotion of a cycle's queries that hold nothing leaves without a
+   * value.
+   */
+  @Test
+  public void testCensusCountsGuardHeldThrowOverNoSettledValue() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.disableSkipCheck();
+    engine.countRestoredValues(false);
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          if (engine.isSettling()) throw new IllegalArgumentException("No value at settlement.");
+          engine.read("HELD_UNSET_INNER", transfers.get(1), true);
+          engine.requestSettledRecomputation();
+          settleAnotherCycle(engine, "HELD_UNSET_JOINING_");
+          engine.requestSettledRecomputation();
+          TensorGenerator.underGuardForTest(
+              () -> {
+                settleAnotherCycle(engine, "HELD_UNSET_GUARDED_");
+                return null;
+              });
+          return EnumSet.of(DType.FLOAT32);
+        });
+    transfers.add(
+        () -> {
+          engine.read("HELD_UNSET_OUTER", transfers.get(0), false);
+          engine.requestSettledRecomputation();
+          return engine.isSettling() ? vector : scalar;
+        });
+
+    Object outer = engine.demand("HELD_UNSET_OUTER", transfers.get(0), false);
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+    assertEquals(census, 1, engine.guardHeld());
+    assertEquals(census, 0, engine.guardHeldDiffering());
+    assertEquals(census, EnumSet.of(DType.FLOAT32), outer);
+  }
+
+  /**
+   * The census counts the queries first sighted during an iterated component's steps, and those of
+   * them that read the component (wala/ML#1293): such a query is evaluated where it is read and is
+   * not among the readers the iteration recomputes, and one that reads the component is on its
+   * cycle. Here a query of a ring reads three queries no evaluation has sighted, once the state is
+   * settled: one that reads a query that reads the ring, that query, and one that reads nothing.
+   */
+  @Test
+  public void testCensusCountsQueriesFirstSightedWhileIterating() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    Supplier<Object> apart = () -> scalar;
+    Supplier<Object> reading = () -> engine.read("SIGHTING_0", transfers.get(0), true);
+    Supplier<Object> through = () -> engine.read("SIGHTED_READING", reading, true);
+    transfers.addAll(
+        ring(
+            engine,
+            "SIGHTING_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) ->
+                index != 2
+                    ? read
+                    : read.union((ShapeResult) engine.read("SIGHTED_THROUGH", through, true))
+                        .union((ShapeResult) engine.read("SIGHTED_READING", reading, true))
+                        .union((ShapeResult) engine.read("SIGHTED_APART", apart, true)),
+            new int[1]));
+    engine.demand("SIGHTING_0", transfers.get(0), true);
+
+    String census = engine.settlementCensus();
+    assertEquals(census, 4, engine.iterationSteps());
+    assertEquals(census, 3, engine.sightedWhileIterating());
+    assertEquals(census, 2, engine.sightedOnCycle());
+    assertTrue(
+        census,
+        census.contains("3 queries first sighted in their steps (2 of them read the component)"));
+  }
+
+  /**
+   * The system property turns the iteration off (wala/ML#1293): each pass then makes its one step,
+   * and a value that only moves around a cycle is at the next query after it.
+   */
+  @Test
+  public void testIterationCanBeTurnedOff() {
+    String oldIterationProperty =
+        System.getProperty(WorklistTypeResolver.SETTLEMENT_ITERATION_PROPERTY);
+    System.setProperty(WorklistTypeResolver.SETTLEMENT_ITERATION_PROPERTY, "false");
+    try {
+      WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+      ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+      ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+      List<Supplier<Object>> transfers =
+          ring(
+              engine,
+              "OFF_",
+              List.of(scalar.union(vector), scalar, scalar, scalar),
+              (index, read) -> read,
+              new int[1]);
+
+      assertEquals(scalar, engine.demand("OFF_0", transfers.get(0), true));
+      assertEquals(scalar.union(vector), engine.demand("OFF_1", transfers.get(1), true));
+      String census = engine.settlementCensus();
+      assertEquals(census, 0, engine.iterationSteps());
+    } finally {
+      restore(WorklistTypeResolver.SETTLEMENT_ITERATION_PROPERTY, oldIterationProperty);
+    }
+  }
+
+  /**
+   * Past its budget of recomputations the iteration joins (wala/ML#1293): each query of the cycle
+   * then only grows, in this pass and in every later one, so the pass ends, at a value above the
+   * one the orbit's meet gives.
+   */
+  @Test
+  public void testIterationJoinsPastBudget() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "PAST_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> read,
+            new int[1]);
+
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("PAST_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+  }
+
+  /**
+   * Two states of a cycle with one fingerprint are not an orbit unless they are one state
+   * (wala/ML#1293): the fingerprint only names a step to compare with, and the writes since that
+   * step decide. Here the cycle passes through a state whose values differ from the first state's
+   * and have the same hash codes, and goes on from it to its fixpoint.
+   */
+  @Test
+  public void testIterationTellsStatesWithOneFingerprintApart() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0), new NumericDim(31))));
+    ShapeResult second = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult third = ShapeResult.of(Set.of(List.of(new NumericDim(1), new NumericDim(0))));
+    ShapeResult last = ShapeResult.of(Set.of(List.of()));
+    // The test is of these two: values that differ and hash alike.
+    assertNotEquals(first, third);
+    assertEquals(first.hashCode(), third.hashCode());
+    // The second query takes the value after the first query's, up to the last.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "ALIKE_",
+            List.of(first, first),
+            (index, read) ->
+                index == 0
+                    ? read
+                    : read.equals(first) ? second : read.equals(second) ? third : last,
+            new int[1]);
+
+    for (int i = 0; i < 2; i++)
+      assertEquals(last, engine.demand("ALIKE_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 0, engine.orbits());
+    assertEquals(census, 0, engine.joinedComponents());
+    assertEquals(census, 6, engine.iterationSteps());
+  }
+
+  /**
+   * An orbit whose meet moves no query leaves the cycle to join (wala/ML#1293). Here each query
+   * holds a scalar and a vector when the other holds no vector, and a scalar when it does, so both
+   * grow and shrink together, and each holds the meet of its orbit's values when the orbit closes.
+   * The iteration from the meet would be the same orbit again.
+   */
+  @Test(timeout = 60000)
+  public void testIterationJoinsAtOrbitItsMeetLeaves() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "BOTH_",
+            List.of(scalar, scalar),
+            (index, read) ->
+                read.members().containsAll(vector.members()) ? scalar : scalar.union(vector),
+            new int[1]);
+
+    for (int i = 0; i < 2; i++)
+      assertEquals(scalar.union(vector), engine.demand("BOTH_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 0, engine.orbitMeets());
+    assertEquals(census, 0, engine.orbitJoins());
+    assertEquals(census, 1, engine.joinedComponents());
+    // The step that closes the orbit, the step that joins, and the step that finds nothing to add.
+    assertEquals(census, 3, engine.iterationSteps());
+  }
+
+  /**
+   * A cycle whose transfers are not monotone can flip between two shapes for good, and the query
+   * that flips is widened (wala/ML#1293). Each flip makes a shape no query of the cycle holds then,
+   * though the cycle held it two steps before, so the query reaches the limit. It is widened over
+   * the shapes it made, which are of two ranks, and holds both. A widened query can then hold more
+   * than its recomputation returns, which the check mode accepts for such a query alone.
+   */
+  @Test(timeout = 60000)
+  public void testIterationWidensCycleThatFlipsBetweenShapes() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    // The second query holds a scalar when the first holds a vector, and a vector when it does not.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "FLIP_",
+            List.of(scalar, scalar),
+            (index, read) ->
+                index == 0 ? read : read.members().containsAll(vector.members()) ? scalar : vector,
+            new int[1]);
+
+    // The cycle returns to the state it began in once, and each query is given the join of what
+    // that orbit gave it. The second query flips on from there, and its third flip widens it.
+    for (int i = 0; i < 2; i++)
+      assertEquals(scalar.union(vector), engine.demand("FLIP_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 2, engine.orbitJoins());
+
+    // The next pass skips both queries, and the check mode recomputes the second to the scalar
+    // alone.
+    settleAnotherCycle(engine, "FLIP_PASS_");
+    assertEquals(scalar.union(vector), engine.demand("FLIP_1", transfers.get(1), true));
+    census = engine.settlementCensus();
+    assertTrue(census, census.contains(" skipped (0 inside a generator guard, 2 checked, "));
+  }
+
+  /**
+   * A cycle whose transfers are not monotone can leave an orbit again after each meet, and the
+   * budget ends that (wala/ML#1293). The queries here hold dtypes, which no query is widened over.
+   * A query the iteration left to join can then hold more than its recomputation returns, which the
+   * check mode accepts for such a query alone. What the queries hold then depends on where the
+   * budget ended the iteration: a transfer that is not monotone has no least fixpoint to reach.
+   */
+  @Test(timeout = 60000)
+  public void testIterationEndsOnTransferThatIsNotMonotone() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    engine.setIterationBudget(4, 8);
+
+    // The second query holds one dtype when the first holds the other, and the other when it does
+    // not.
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          Set<?> read = (Set<?>) engine.read("DFLIP_1", transfers.get(1), false);
+          if (!engine.isSettling()) return EnumSet.of(DType.FLOAT32);
+          Set<DType> handed = EnumSet.noneOf(DType.class);
+          for (Object dtype : read) handed.add((DType) dtype);
+          return handed;
+        });
+    transfers.add(
+        () -> {
+          Set<?> read = (Set<?>) engine.read("DFLIP_0", transfers.get(0), false);
+          return engine.isSettling() && !read.contains(DType.INT32)
+              ? EnumSet.of(DType.INT32)
+              : EnumSet.of(DType.FLOAT32);
+        });
+
+    // The budget ends the third orbit at the first query, which joins the dtype it reads to the
+    // one it holds; the second then recomputes to the dtype it holds.
+    Object joined = engine.demand("DFLIP_0", transfers.get(0), false);
+    String census = engine.settlementCensus();
+    assertEquals(census, EnumSet.of(DType.FLOAT32, DType.INT32), joined);
+    assertEquals(
+        census, EnumSet.of(DType.FLOAT32), engine.demand("DFLIP_1", transfers.get(1), false));
+    assertEquals(census, 1, engine.joinedComponents());
+    assertEquals(census, 2, engine.orbits());
+    assertEquals(census, 4, engine.orbitJoins());
+    assertEquals(census, 0, engine.widenedQueries());
+
+    // The next pass skips both queries, and the check mode recomputes the first to the dtype it
+    // reads.
+    settleAnotherCycle(engine, "DFLIP_PASS_");
+    assertEquals(
+        EnumSet.of(DType.FLOAT32, DType.INT32), engine.demand("DFLIP_0", transfers.get(0), false));
+    census = engine.settlementCensus();
+    assertTrue(census, census.contains(" skipped (0 inside a generator guard, 2 checked, "));
+  }
+
+  /**
+   * A query is widened over the shapes its own recomputations made, and not over the value it holds
+   * when it reaches the limit (wala/ML#1293). Here a query adds a longer vector to what it reads,
+   * gives its shapes up for the unknown shape once it reads three, and starts again from one vector
+   * when it reads the unknown shape, as an operation does that reads what it can resolve of an
+   * operand and gives up past a number of them. Its third recomputation that makes a shape is the
+   * one that starts again, when the query holds the unknown shape. Widening that value would leave
+   * it unknown, with nothing to say that the vectors it stands for are those the query made.
+   */
+  @Test(timeout = 60000)
+  public void testIterationWidensOverShapesMadeBeforeGivingUp() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult four = ShapeResult.of(Set.of(List.of(new NumericDim(4))));
+    ShapeResult six = four.union(ShapeResult.of(Set.of(List.of(new NumericDim(6)))));
+    ShapeResult eight = six.union(ShapeResult.of(Set.of(List.of(new NumericDim(8)))));
+    // The first query begins at a shape the cycle does not make, so the cycle does not return to
+    // the state it began in.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "REGROWS_",
+            List.of(ShapeResult.unknown(), ShapeResult.of(Set.of(List.of(new NumericDim(2))))),
+            (index, read) -> {
+              if (index == 0) return read;
+              if (read.hasUnknown()) return four;
+              return read.members().size() == 1
+                  ? six
+                  : read.members().size() == 2 ? eight : ShapeResult.unknown();
+            },
+            new int[1]);
+
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    for (int i = 0; i < 2; i++)
+      assertEquals(widened, engine.demand("REGROWS_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+  }
+
+  /**
+   * A value first evaluated after a widening is kept without the members a shape that widening made
+   * covers, as a settled recomputation is (wala/ML#1293). A query first evaluated then reads the
+   * widened cycle's shapes as any reader does, and one evaluated before the widening would be
+   * recomputed without them, so the order of the two would otherwise show in what a client reads.
+   */
+  @Test(timeout = 60000)
+  public void testFirstEvaluationDropsShapesWidenedShapeCovers() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "LATE_",
+            List.of(first, first),
+            (index, read) -> index == 0 ? read : read.union(longer(read)),
+            new int[1]);
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    for (int i = 0; i < 2; i++)
+      assertEquals(widened, engine.demand("LATE_" + i, transfers.get(i), true));
+    assertEquals(engine.settlementCensus(), 1, engine.widenedQueries());
+
+    ShapeResult seven = ShapeResult.of(Set.of(List.of(new NumericDim(7))));
+    assertEquals(widened, engine.demand("LATE_COVERED", () -> widened.union(seven), true));
+
+    // A shape the widened one does not cover stays, and so does one beside no widened shape.
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(7), new NumericDim(7))));
+    assertEquals(
+        widened.union(matrix), engine.demand("LATE_APART", () -> widened.union(matrix), true));
+    assertEquals(seven.union(first), engine.demand("LATE_ALONE", () -> seven.union(first), true));
+  }
+
+  /**
+   * A shape a widening takes over from the recomputation it widens by is not one the widening made,
+   * and stands for nothing (wala/ML#1293): a value that holds that shape for a reason of its own
+   * keeps the members the shape covers. The widened query's transfer returns a matrix whose first
+   * size was not computed, of a rank its settled value does not hold, so the widening takes the
+   * matrix as a member.
+   */
+  @Test(timeout = 60000)
+  public void testShapeWideningTookFromRecomputationCoversNothing() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE, new NumericDim(7))));
+    // The second query makes a longer vector at each recomputation, and the matrix beside the
+    // vector it is widened to.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "TOOK_",
+            List.of(first, first),
+            (index, read) ->
+                index == 0
+                    ? read
+                    : read.equals(widened) ? read.union(matrix) : read.union(longer(read)),
+            new int[1]);
+    for (int i = 0; i < 2; i++)
+      assertEquals(widened.union(matrix), engine.demand("TOOK_" + i, transfers.get(i), true));
+    assertEquals(engine.settlementCensus(), 1, engine.widenedQueries());
+
+    ShapeResult apart =
+        matrix.union(ShapeResult.of(Set.of(List.of(new NumericDim(4), new NumericDim(7)))));
+    assertEquals(apart, engine.demand("TOOK_APART", () -> apart, true));
+  }
+
+  /**
+   * A query that made shapes and stopped short of the limit is not widened, and the shape its
+   * recomputations would widen to stands for nothing (wala/ML#1293): a value that holds that shape
+   * for a reason of its own keeps the members the shape covers. Were the shape noted when the
+   * recomputations were folded, the value would keep those members when first evaluated before the
+   * cycle settled and lose them after, so the order of the two would show in what a client reads.
+   */
+  @Test(timeout = 60000)
+  public void testShapeOfQueryThatStoppedGrowingCoversNothing() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    List<Dimension<?>> last = List.of(new NumericDim(3));
+    // The second query makes a vector one longer at each of three recomputations, the first of
+    // them in the pass's own step, which counts no shape, and stops there.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "STOPS_",
+            List.of(first, first),
+            (index, read) ->
+                index == 0 || read.members().contains(last) ? read : read.union(longer(read)),
+            new int[1]);
+    ShapeResult grown =
+        ShapeResult.of(
+            Set.of(
+                List.of(new NumericDim(0)),
+                List.of(new NumericDim(1)),
+                List.of(new NumericDim(2)),
+                last));
+    for (int i = 0; i < 2; i++)
+      assertEquals(grown, engine.demand("STOPS_" + i, transfers.get(i), true));
+    assertEquals(engine.settlementCensus(), 0, engine.widenedQueries());
+
+    ShapeResult beside =
+        ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE), List.of(new NumericDim(7))));
+    assertEquals(beside, engine.demand("STOPS_BESIDE", () -> beside, true));
+  }
+
+  /**
+   * Returns a vector one longer than the longest a result holds, or the result's member whose size
+   * is not a number, when it has one.
+   *
+   * @param read The result.
+   * @return The longer vector.
+   */
+  private static ShapeResult longer(ShapeResult read) {
+    return longer(read, Integer.MAX_VALUE);
+  }
+
+  /**
+   * Returns a vector one longer than the longest a result holds and no longer than a limit, or the
+   * result's member whose size is not a number, when it has one.
+   *
+   * @param read The result.
+   * @param limit The longest vector to return.
+   * @return The longer vector.
+   */
+  private static ShapeResult longer(ShapeResult read, int limit) {
+    int longest = 0;
+    for (List<Dimension<?>> member : read.members()) {
+      if (!(member.get(0) instanceof NumericDim)) return ShapeResult.of(Set.of(member));
+      longest = Math.max(longest, ((NumericDim) member.get(0)).value());
+    }
+    return ShapeResult.of(Set.of(List.of(new NumericDim(Math.min(longest + 1, limit)))));
+  }
+
+  /**
+   * A cycle left to join whose value grows at every step reaches no fixpoint and no orbit
+   * (wala/ML#1293): the joined values pass the widening cap, and a query that did is not written
+   * again, so a join cannot restart from the widened value. The other query's transfer returns one
+   * vector from the unknown shape, which its joined value holds, so that value stands.
+   */
+  @Test(timeout = 60000)
+  public void testIterationEndsOnValueThatAlwaysGrows() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    // The second query holds a vector one longer than the longest the first holds, and starts
+    // again from a vector of one element when the first holds none, as it does once widened.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "GROW_",
+            List.of(first, first),
+            (index, read) -> index == 0 ? read : longer(read),
+            new int[1]);
+
+    assertEquals(ShapeResult.unknown(), engine.demand("GROW_0", transfers.get(0), true));
+    ShapeResult joined = (ShapeResult) engine.demand("GROW_1", transfers.get(1), true);
+    assertFalse(joined.toString(), joined.hasUnknown());
+    assertTrue(joined.toString(), joined.members().contains(List.of(new NumericDim(1))));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+    assertEquals(census, 0, engine.widenedQueries());
+    settleAnotherCycle(engine, "GROW_PASS_");
+    assertEquals(ShapeResult.unknown(), engine.demand("GROW_0", transfers.get(0), true));
+    assertEquals(joined, engine.demand("GROW_1", transfers.get(1), true));
+  }
+
+  /**
+   * A query left to join whose joined value passes the widening cap keeps the unknown shape it is
+   * widened to when a later step recomputes it (wala/ML#1293): a join of that value and the
+   * recomputation would hold the recomputation's shapes beside the unknown one, and a cycle could
+   * grow from it again. Here the first query takes the second's value, and the second returns nine
+   * vectors until the first holds an unknown shape and a scalar from then on, so the first is
+   * recomputed once more after it is widened.
+   */
+  @Test(timeout = 60000)
+  public void testIterationKeepsValueWidenedAtJoin() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    Set<List<Dimension<?>>> low = new HashSet<>();
+    Set<List<Dimension<?>>> high = new HashSet<>();
+    for (int size = 1; size <= 9; size++) {
+      low.add(List.of(new NumericDim(size)));
+      high.add(List.of(new NumericDim(size + 10)));
+    }
+    ShapeResult others = ShapeResult.of(high);
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "PIN_",
+            List.of(scalar, ShapeResult.of(low)),
+            (index, read) -> index == 0 ? read : read.hasUnknown() ? scalar : others,
+            new int[1]);
+
+    assertEquals(ShapeResult.unknown(), engine.demand("PIN_0", transfers.get(0), true));
+    assertEquals(others.union(scalar), engine.demand("PIN_1", transfers.get(1), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+    assertEquals(census, 0, engine.widenedQueries());
+    // The step that widens the first query, the step in which the second reads the unknown shape,
+    // and the step that recomputes the first to the second's value and keeps the unknown shape.
+    assertEquals(census, 3, engine.iterationSteps());
+    settleAnotherCycle(engine, "PIN_PASS_");
+    assertEquals(ShapeResult.unknown(), engine.demand("PIN_0", transfers.get(0), true));
+    assertEquals(others.union(scalar), engine.demand("PIN_1", transfers.get(1), true));
+  }
+
+  /**
+   * A cycle whose widened query takes it back to the state the iteration began in is at a fixpoint
+   * there, and not in an orbit (wala/ML#1293). The queries begin at the unknown shape, as the solve
+   * leaves a cycle it promoted, and the query that makes the shapes returns a shape of one axis
+   * from the unknown shape, as a read of the resolvable subset does. Once its rank has grown to the
+   * limit it is widened to the unknown shape, and the others take that.
+   */
+  @Test(timeout = 60000)
+  public void testIterationFindsNoOrbitAcrossWidening() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult unknown = ShapeResult.unknown();
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "AGAIN_",
+            List.of(unknown, unknown, unknown),
+            (index, read) -> {
+              if (index != 1) return read;
+              int rank = 0;
+              for (List<Dimension<?>> member : read.members()) rank = Math.max(rank, member.size());
+              List<Dimension<?>> deeper = new ArrayList<>();
+              for (int i = 0; i <= rank; i++) deeper.add(new NumericDim(2));
+              return ShapeResult.of(Set.of(deeper));
+            },
+            new int[1]);
+
+    for (int i = 0; i < 3; i++)
+      assertEquals(ShapeResult.unknown(), engine.demand("AGAIN_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.orbits());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A query that keeps making shapes its component has not held is widened (wala/ML#1293): the size
+   * that grows becomes one no one computed, the cycle reaches a fixpoint at that shape within its
+   * budget, and no query of it is left to join.
+   */
+  @Test(timeout = 60000)
+  public void testIterationWidensSizeThatKeepsGrowing() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "SIZE_",
+            List.of(first, first, first),
+            (index, read) -> index == 1 ? longer(read) : read,
+            new int[1]);
+
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    for (int i = 0; i < 3; i++)
+      assertEquals(widened, engine.demand("SIZE_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+    // The growth ended at the third shape the query made that the cycle had not held.
+    assertEquals(census, 12, engine.iterationSteps());
+
+    settleAnotherCycle(engine, "SIZE_PASS_");
+    for (int i = 0; i < 3; i++)
+      assertEquals(widened, engine.demand("SIZE_" + i, transfers.get(i), true));
+    assertEquals(engine.settlementCensus(), 1, engine.widenedQueries());
+    // A dtype is no shape, so one first evaluated after the widening is kept as it is.
+    Set<DType> dtype = EnumSet.of(DType.FLOAT32);
+    assertEquals(dtype, engine.demand("SIZE_DTYPE", () -> dtype, false));
+  }
+
+  /**
+   * A query that keeps making shapes of a rank its component has not held is widened to the unknown
+   * shape (wala/ML#1293), which the other queries of the cycle then take.
+   */
+  @Test(timeout = 60000)
+  public void testIterationWidensRankThatKeepsGrowing() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    // The second query holds a shape of one more axis than the longest the first holds.
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "RANK_",
+            List.of(first, first, first),
+            (index, read) -> {
+              if (index != 1) return read;
+              int rank = 0;
+              for (List<Dimension<?>> member : read.members()) rank = Math.max(rank, member.size());
+              List<Dimension<?>> deeper = new ArrayList<>();
+              for (int i = 0; i <= rank; i++) deeper.add(new NumericDim(2));
+              return ShapeResult.of(Set.of(deeper));
+            },
+            new int[1]);
+
+    for (int i = 0; i < 3; i++)
+      assertEquals(ShapeResult.unknown(), engine.demand("RANK_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A cycle whose queries each add one shape is not widened (wala/ML#1293), however many shapes
+   * that is in all: no query of it keeps making shapes, so each holds every shape at the fixpoint.
+   * Each query here adds its shape once it reads its predecessor's, so the shapes are made one
+   * after another, as a query that grows makes them.
+   */
+  @Test
+  public void testIterationDoesNotWidenCycleWhoseQueriesEachAddOneShape() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    int size = 6;
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(1))));
+    List<ShapeResult> initial = new ArrayList<>();
+    for (int i = 0; i < size; i++) initial.add(first);
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "UNION_",
+            initial,
+            (index, read) -> {
+              List<Dimension<?>> before = List.of(new NumericDim(20 + index - 1));
+              if (index != 0 && !read.members().contains(before)) return read;
+              return read.union(ShapeResult.of(Set.of(List.of(new NumericDim(20 + index)))));
+            },
+            new int[1]);
+
+    Set<List<Dimension<?>>> all = new HashSet<>();
+    all.add(List.of(new NumericDim(1)));
+    for (int i = 0; i < size; i++) all.add(List.of(new NumericDim(20 + i)));
+    for (int i = 0; i < size; i++)
+      assertEquals(ShapeResult.of(all), engine.demand("UNION_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 0, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * The shapes a query made before it was widened do not stay in its component (wala/ML#1293). Here
+   * two queries hand each other's value on as it is, and one of them also takes the value of a
+   * third, which grows. The two keep every shape the third made, since each reads them from the
+   * other. Once the third is widened, the shape it then holds covers those shapes, and each of the
+   * two is written without them.
+   */
+  @Test(timeout = 60000)
+  public void testIterationDropsShapesWidenedShapeCovers() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(0))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          ShapeResult handed = (ShapeResult) engine.read("COVERED_1", transfers.get(1), true);
+          ShapeResult grown = (ShapeResult) engine.read("COVERED_2", transfers.get(2), true);
+          return engine.isSettling() ? handed.union(grown) : first;
+        });
+    transfers.add(
+        () -> {
+          ShapeResult read = (ShapeResult) engine.read("COVERED_0", transfers.get(0), true);
+          return engine.isSettling() ? read : first;
+        });
+    transfers.add(
+        () -> {
+          ShapeResult read = (ShapeResult) engine.read("COVERED_0", transfers.get(0), true);
+          return engine.isSettling() ? longer(read) : first;
+        });
+
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    for (int i = 0; i < 3; i++)
+      assertEquals(widened, engine.demand("COVERED_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A cycle left to join does not gather the shapes a more general one of its shapes covers
+   * (wala/ML#1293). Here each query holds a vector of one element, and beside it the vector of a
+   * size that is {@code None} at run time when the other does not hold that one. Both gain and lose
+   * it together, no query makes a shape the cycle does not hold, and the cycle returns to the state
+   * it began in with each query holding the meet of its orbit's values. Its queries are left to
+   * join, and the join of the two vectors is the one that covers the other.
+   */
+  @Test(timeout = 60000)
+  public void testIterationJoinsWithoutShapesAnotherCovers() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult one = ShapeResult.of(Set.of(List.of(new NumericDim(1))));
+    ShapeResult general = ShapeResult.of(Set.of(List.of(DynamicDim.INSTANCE)));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "COVERS_",
+            List.of(one, one),
+            (index, read) ->
+                read.members().containsAll(general.members()) ? one : one.union(general),
+            new int[1]);
+
+    for (int i = 0; i < 2; i++)
+      assertEquals(general, engine.demand("COVERS_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 1, engine.joinedComponents());
+    assertEquals(census, 0, engine.widenedQueries());
+  }
+
+  /**
+   * A cycle that holds, when the iteration begins, every shape it goes on to make is widened all
+   * the same (wala/ML#1293). The solve joins at every update, so it can leave such a cycle holding
+   * the shapes of the turns it took, and how many it leaves depends on the order it took the
+   * queries in. Here a query adds a longer vector to what it reads until that holds four shapes,
+   * and then returns the vector of a size that is {@code None} at run time alone, as an operation
+   * does that gives up past a number of operands. The iteration replaces the shapes the cycle began
+   * with, and a shape counts as made once no query holds it, so the query that makes the vectors
+   * again reaches the limit and is widened to the vector that covers them.
+   */
+  @Test(timeout = 60000)
+  public void testIterationWidensCycleThatHeldItsShapesAtTheStart() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult general = ShapeResult.of(Set.of(List.of(DynamicDim.INSTANCE)));
+    ShapeResult full =
+        ShapeResult.of(
+            Set.of(
+                List.of(DynamicDim.INSTANCE),
+                List.of(new NumericDim(1)),
+                List.of(new NumericDim(2)),
+                List.of(new NumericDim(3))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "GIVES_UP_",
+            List.of(full, full),
+            (index, read) -> {
+              if (index == 0) return read;
+              if (read.members().size() >= 4) return general;
+              int longest = 0;
+              for (List<Dimension<?>> member : read.members())
+                if (member.get(0) instanceof NumericDim)
+                  longest = Math.max(longest, ((NumericDim) member.get(0)).value());
+              return read.union(ShapeResult.of(Set.of(List.of(new NumericDim(longest + 1)))));
+            },
+            new int[1]);
+
+    assertEquals(general, engine.demand("GIVES_UP_0", transfers.get(0), true));
+    assertEquals(general, engine.demand("GIVES_UP_1", transfers.get(1), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+  }
+
+  /**
+   * A query that recomputes to a shape it holds makes no shape, however often it is recomputed
+   * (wala/ML#1293): the shapes a component's queries hold when the iteration begins are held from
+   * then on, and not only the ones the iteration's steps write. Here a query returns one vector
+   * whatever it reads, and is recomputed each time the query it reads takes another dtype, which is
+   * more often than the limit.
+   */
+  @Test(timeout = 60000)
+  public void testIterationDoesNotWidenQueryThatRecomputesToShapeItHolds() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(5))));
+    List<DType> dtypes =
+        List.of(DType.FLOAT32, DType.FLOAT64, DType.INT32, DType.INT64, DType.BOOL, DType.STRING);
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read("HELD_1", transfers.get(1), false);
+          return vector;
+        });
+    // Once settled, the second query takes one more dtype each time it is recomputed.
+    transfers.add(
+        () -> {
+          engine.read("HELD_0", transfers.get(0), true);
+          Set<?> self = (Set<?>) engine.read("HELD_1", transfers.get(1), false);
+          Set<DType> taken = EnumSet.of(dtypes.get(0));
+          if (!engine.isSettling()) return taken;
+          for (Object dtype : self) taken.add((DType) dtype);
+          for (DType dtype : dtypes) if (taken.add(dtype)) break;
+          return taken;
+        });
+
+    assertEquals(vector, engine.demand("HELD_0", transfers.get(0), true));
+    assertEquals(EnumSet.copyOf(dtypes), engine.demand("HELD_1", transfers.get(1), false));
+    String census = engine.settlementCensus();
+    // The first query was recomputed at each step but the last.
+    assertEquals(census, 5, engine.iterationSteps());
+    assertEquals(census, 0, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A shape an orbit's join gives a query is held from then on, so a query that recomputes to it
+   * makes no shape (wala/ML#1293). Here two queries pass through an orbit that closes where neither
+   * holds the vector, and the join gives each the scalar and the vector, which each recomputes to
+   * from then on. A third query takes one more dtype at each step once the first holds both shapes,
+   * so the first is recomputed more often than the limit, to the two shapes each time.
+   */
+  @Test(timeout = 60000)
+  public void testIterationHoldsShapesOrbitJoinGives() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult both = scalar.union(vector);
+    List<DType> dtypes =
+        List.of(DType.FLOAT32, DType.FLOAT64, DType.INT32, DType.INT64, DType.BOOL, DType.STRING);
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read("NOTED_2", transfers.get(2), false);
+          Object read = engine.read("NOTED_1", transfers.get(1), true);
+          return engine.isSettling() ? read : scalar;
+        });
+    // The second query holds a scalar when the first holds a vector, a vector when it holds none,
+    // and what the first holds once that is both.
+    transfers.add(
+        () -> {
+          ShapeResult read = (ShapeResult) engine.read("NOTED_0", transfers.get(0), true);
+          if (!engine.isSettling()) return scalar;
+          if (read.members().containsAll(both.members())) return read;
+          return read.members().containsAll(vector.members()) ? scalar : vector;
+        });
+    transfers.add(
+        () -> {
+          ShapeResult read = (ShapeResult) engine.read("NOTED_0", transfers.get(0), true);
+          Set<?> self = (Set<?>) engine.read("NOTED_2", transfers.get(2), false);
+          Set<DType> taken = EnumSet.of(dtypes.get(0));
+          if (!engine.isSettling() || !read.members().containsAll(both.members())) return taken;
+          for (Object dtype : self) taken.add((DType) dtype);
+          for (DType dtype : dtypes) if (taken.add(dtype)) break;
+          return taken;
+        });
+
+    for (int i = 0; i < 2; i++)
+      assertEquals(both, engine.demand("NOTED_" + i, transfers.get(i), true));
+    assertEquals(EnumSet.copyOf(dtypes), engine.demand("NOTED_2", transfers.get(2), false));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.orbits());
+    assertEquals(census, 2, engine.orbitJoins());
+    assertEquals(census, 0, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+  }
+
+  /**
+   * A query that reaches the limit is widened over every shape its recomputations made, and not
+   * over the last of them alone (wala/ML#1293). Here a query takes a vector one longer than the one
+   * it reads and stops at the fifth, as an operation does that resolves no more than so many of an
+   * operand's shapes. The query recomputes to the fifth vector once it holds it, so widening that
+   * one alone would leave the query there, at the place its transfer stopped, with nothing to say
+   * that it stands for a size that kept growing.
+   */
+  @Test(timeout = 60000)
+  public void testIterationWidensOverEveryShapeQueryMade() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult first = ShapeResult.of(Set.of(List.of(new NumericDim(1))));
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "STOPS_",
+            List.of(first, first),
+            (index, read) -> index == 0 ? read : longer(read, 5),
+            new int[1]);
+
+    ShapeResult widened = ShapeResult.of(Set.of(List.of(UnresolvedDim.INSTANCE)));
+    for (int i = 0; i < 2; i++)
+      assertEquals(widened, engine.demand("STOPS_" + i, transfers.get(i), true));
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.widenedQueries());
+    assertEquals(census, 0, engine.joinedComponents());
+    assertEquals(census, 0, engine.orbits());
+  }
+
+  /**
+   * The check mode fails when a query recomputes, at the fixpoint the iteration reached, to a value
+   * other than the one it holds (wala/ML#1293): its transfer is then not a function of its reads,
+   * and the next pass's skip of it would keep a value its recomputation does not return.
+   */
+  @Test
+  public void testFixpointCheckFailsOnTransferThatIsNotAFunctionOfItsReads() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    int[] settledRuns = {0};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // The first settled recomputation returns a vector, and each later one a matrix.
+    transfers.add(
+        () -> {
+          engine.read("ONCE_B", transfers.get(1), true);
+          if (!engine.isSettling()) return scalar;
+          return settledRuns[0]++ == 0 ? vector : matrix;
+        });
+    transfers.add(
+        () -> {
+          engine.read("ONCE_A", transfers.get(0), true);
+          return scalar;
+        });
+
+    AssertionError failure =
+        assertThrows(AssertionError.class, () -> engine.demand("ONCE_A", transfers.get(0), true));
+    assertTrue(
+        failure.getMessage(),
+        failure.getMessage().startsWith("A settled recomputation at a fixpoint differs: "));
+  }
+
+  /**
+   * The check at a fixpoint leaves a query whose recomputation the next pass makes again
+   * (wala/ML#1293): the check stands for the skip of a recomputation that stands, and a query that
+   * first sighted one of its reads recomputed before that read was evaluated. Here the first query
+   * of a ring of three sights a query once the state is settled, and no later step recomputes it,
+   * since the query it reads in the ring keeps its value.
+   */
+  @Test
+  public void testFixpointCheckLeavesQueryThatFirstSightedARead() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read("SEEN_B", transfers.get(1), true);
+          if (engine.isSettling()) engine.read("SEEN_FRESH", () -> scalar, true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("SEEN_C", transfers.get(2), true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          Object read = engine.read("SEEN_A", transfers.get(0), true);
+          return engine.isSettling() ? read : vector;
+        });
+    assertEquals(scalar, engine.demand("SEEN_A", transfers.get(0), true));
+    assertEquals(scalar, engine.demand("SEEN_B", transfers.get(1), true));
+    assertEquals(scalar, engine.demand("SEEN_C", transfers.get(2), true));
+
+    String census = engine.settlementCensus();
+    assertEquals(census, 1, engine.iterationSteps());
+    assertEquals(census, 1, engine.sightedWhileIterating());
+    assertEquals(census, 0, engine.sightedOnCycle());
+    // The second and third queries are checked, and the first is not.
+    assertTrue(census, census.contains(", 2 queries checked at a fixpoint)"));
   }
 
   /**
@@ -901,6 +2812,83 @@ public class WorklistTypeResolverTest {
     engine.demand("CHECK_R", others.get(0), true);
 
     assertTrue(engine.checkedSkips() > 0);
+  }
+
+  /**
+   * The check mode fails when the recomputation of a query a pass skips writes state
+   * (wala/ML#1293): the skip stands for a recomputation that writes nothing. Here a query of a
+   * settled cycle reads, in the next pass, a query that nothing has evaluated, and the read
+   * evaluates it.
+   */
+  @Test
+  public void testSkipCheckModeFailsOnSkippedRecomputationThatWrites() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    boolean[] sights = {false};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    transfers.add(
+        () -> {
+          engine.read("WROTE_B", transfers.get(1), true);
+          if (sights[0]) engine.read("WROTE_FRESH", () -> scalar, true);
+          return scalar;
+        });
+    transfers.add(
+        () -> {
+          engine.read("WROTE_A", transfers.get(0), true);
+          return scalar;
+        });
+    engine.demand("WROTE_A", transfers.get(0), true);
+    sights[0] = true;
+
+    AssertionError failure =
+        assertThrows(AssertionError.class, () -> settleAnotherCycle(engine, "WROTE_PASS"));
+
+    assertEquals(
+        "A skipped settled recomputation of WROTE_A wrote state or deferred.",
+        failure.getMessage());
+  }
+
+  /**
+   * The check mode holds a query left to join to its join, and not to its recomputation
+   * (wala/ML#1293): a skip of it stands when the value it holds covers the recomputation, and fails
+   * when the recomputation holds a shape the value does not. Here a ring is joined past its budget,
+   * and its first query then recomputes to one of the two shapes it holds, and then to a third.
+   */
+  @Test
+  public void testSkipCheckModeHoldsJoinedQueryToItsJoin() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+    engine.enableSkipCheck();
+    engine.setIterationBudget(0, 0);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    ShapeResult vector = ShapeResult.of(Set.of(List.of(new NumericDim(2))));
+    ShapeResult matrix = ShapeResult.of(Set.of(List.of(new NumericDim(2), new NumericDim(2))));
+    ShapeResult[] instead = {null};
+    List<Supplier<Object>> transfers =
+        ring(
+            engine,
+            "COVER_",
+            List.of(scalar.union(vector), scalar, scalar, scalar),
+            (index, read) -> index == 0 && instead[0] != null ? instead[0] : read,
+            new int[1]);
+    for (int i = 0; i < 4; i++)
+      assertEquals(scalar.union(vector), engine.demand("COVER_" + i, transfers.get(i), true));
+    assertEquals(engine.settlementCensus(), 1, engine.joinedComponents());
+
+    instead[0] = scalar;
+    long checked = engine.checkedSkips();
+    settleAnotherCycle(engine, "COVER_FIRST");
+    assertEquals(checked + 4, engine.checkedSkips());
+
+    instead[0] = matrix;
+    AssertionError failure =
+        assertThrows(AssertionError.class, () -> settleAnotherCycle(engine, "COVER_SECOND"));
+
+    assertTrue(
+        failure.getMessage(),
+        failure.getMessage().startsWith("A skipped settled recomputation differs: COVER_0 "));
   }
 
   /**
