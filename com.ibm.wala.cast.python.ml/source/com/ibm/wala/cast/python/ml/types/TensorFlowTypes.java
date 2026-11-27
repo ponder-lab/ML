@@ -1155,6 +1155,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SPARSE_TO_DENSE_SIGNATURE = "tf.sparse.to_dense()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/sparse/reorder. */
+  public static final MethodReference SPARSE_REORDER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/sparse_reorder")),
+          AstMethodReference.fnSelector);
+
+  private static final String SPARSE_REORDER_SIGNATURE = "tf.sparse.reorder()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/io/VarLenFeature. */
   public static final MethodReference VAR_LEN_FEATURE =
       MethodReference.findOrCreate(
@@ -3449,6 +3459,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SPARSE_ADD.getDeclaringClass(), SPARSE_ADD_SIGNATURE),
           Map.entry(SPARSE_FROM_DENSE.getDeclaringClass(), SPARSE_FROM_DENSE_SIGNATURE),
           Map.entry(SPARSE_TO_DENSE.getDeclaringClass(), SPARSE_TO_DENSE_SIGNATURE),
+          Map.entry(SPARSE_REORDER.getDeclaringClass(), SPARSE_REORDER_SIGNATURE),
           Map.entry(VAR_LEN_FEATURE.getDeclaringClass(), VAR_LEN_FEATURE_SIGNATURE),
           Map.entry(FIXED_LEN_FEATURE.getDeclaringClass(), FIXED_LEN_FEATURE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),

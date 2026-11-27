@@ -133,6 +133,67 @@ public class TestSparseTensors extends AbstractTensorTest {
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32.asSparse())));
   }
 
+  /**
+   * {@code tf.sparse.reorder} returns a {@code SparseTensor} with the shape and dtype of its input
+   * (<a href="https://github.com/wala/ML/issues/1351">wala/ML#1351</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSparseReorder() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_sparse_reorder.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32.asSparse())));
+  }
+
+  /**
+   * {@code tf.sparse.reorder} with its input passed by the {@code sp_input} keyword.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSparseReorderKeyword()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_sparse_reorder.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse())));
+  }
+
+  /**
+   * {@code tf.sparse.reorder} of a {@code SparseTensor} whose {@code values} cannot be read keeps
+   * it a sparse tensor of unknown shape and dtype (<a
+   * href="https://github.com/wala/ML/issues/1344">wala/ML#1344</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSparseReorderUnreadableValues()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_sparse_reorder.py",
+        "h",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE.asSparse())));
+  }
+
+  /**
+   * The {@code values} of a {@code tf.sparse.reorder} result are those of its input, since {@code
+   * reorder} only permutes the entries: two {@code float32} values of a {@code [2, 7]} input read
+   * as {@code [2]}, not as a row of the dense shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSparseReorderValues()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_sparse_reorder.py", "k", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
   @Test
   public void testSparseEye() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_sparse_eye.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32.asSparse())));

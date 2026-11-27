@@ -226,6 +226,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_CATEGORICAL_CROSSENTROPY_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_REORDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TO_DENSE;
@@ -728,6 +729,8 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(SparseFromDense::new, SparseFromDense::new);
     if (isType(type, SPARSE_TO_DENSE.getDeclaringClass()))
       return anchor.makeGenerator(SparseToDense::new, SparseToDense::new);
+    if (isType(type, SPARSE_REORDER.getDeclaringClass()))
+      return anchor.makeGenerator(SparseReorder::new, SparseReorder::new);
     if (isType(type, SPARSE_EYE.getDeclaringClass()))
       return anchor.makeGenerator(SparseEye::new, SparseEye::new);
 

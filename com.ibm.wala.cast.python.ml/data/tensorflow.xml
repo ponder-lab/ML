@@ -1169,6 +1169,9 @@
         <new def="sparse_to_dense" class="Ltensorflow/functions/sparse_to_dense"/>
         <putfield class="LRoot" field="to_dense" fieldType="LRoot" ref="sparse" value="sparse_to_dense"/>
         <putfield class="LRoot" field="sparse_to_dense" fieldType="LRoot" ref="sparse_ops" value="sparse_to_dense"/>
+        <new def="sparse_reorder" class="Ltensorflow/functions/sparse_reorder"/>
+        <putfield class="LRoot" field="reorder" fieldType="LRoot" ref="sparse" value="sparse_reorder"/>
+        <putfield class="LRoot" field="sparse_reorder" fieldType="LRoot" ref="sparse_ops" value="sparse_reorder"/>
         <new def="convert_to_tensor" class="Ltensorflow/functions/convert_to_tensor"/>
         <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="x" value="convert_to_tensor"/>
         <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="ops" value="convert_to_tensor"/>
@@ -2538,6 +2541,19 @@
         <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/to_dense. Fresh allocation, not pass-through; the dense result's shape (from `dense_shape`) and dtype (from `values`) of the `sp_input` SparseTensor are inferred in the `SparseToDense` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self sp_input default_value validate_indices name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="sparse_reorder" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/reorder. Fresh `SparseTensor` allocation, not pass-through; its shape and dtype are those of the `sp_input` SparseTensor, inferred in the `SparseReorder` generator (wala/ML#1351). `reorder` only permutes the entries, so the result's `indices`, `values` and `dense_shape` fields are copied from `sp_input`: allocated as an `ops/Tensor`, the result has no such fields, and a read of one reads as an element of the tensor, a row of its dense shape. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self sp_input name">
+          <new def="res" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor"/>
+          <getfield class="LRoot" field="indices" fieldType="LRoot" ref="sp_input" def="i"/>
+          <putfield class="LRoot" field="indices" fieldType="LRoot" ref="res" value="i"/>
+          <getfield class="LRoot" field="values" fieldType="LRoot" ref="sp_input" def="v"/>
+          <putfield class="LRoot" field="values" fieldType="LRoot" ref="res" value="v"/>
+          <getfield class="LRoot" field="dense_shape" fieldType="LRoot" ref="sp_input" def="d"/>
+          <putfield class="LRoot" field="dense_shape" fieldType="LRoot" ref="res" value="d"/>
           <return value="res"/>
         </method>
       </class>
