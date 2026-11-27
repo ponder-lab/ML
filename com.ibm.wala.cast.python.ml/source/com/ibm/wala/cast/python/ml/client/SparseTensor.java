@@ -4,6 +4,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -47,13 +48,28 @@ public class SparseTensor extends TensorTypeAllocator {
     super(node);
   }
 
-  /** The dtype is inferred from the 'values' argument. */
+  /**
+   * The dtype is inferred from the 'values' argument. The constructor yields a sparse tensor
+   * whatever it is given, so a {@code values} the analysis cannot read, such as an attribute of an
+   * unmodeled library object, contributes the unknown dtype rather than none, which would erase the
+   * tensor (wala/ML#1344).
+   *
+   * <p>An empty read that is not final is the exception, following {@code
+   * ElementWiseOperation.resultDTypes} (wala/ML#1094): a loop-carried {@code values} is read while
+   * its own cycle is still converging, and unknown there would be a member its later dtypes cannot
+   * displace, since the dtype join absorbs into unknown. The result is ⊥ instead, and {@link
+   * #isObservationFinal} schedules the query to be recomputed against the settled state, where a
+   * read that is still empty gives unknown.
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int valuesValNum =
         this.getArgumentValueNumber(
             builder, this.getValuesParameterPosition(), this.getValuesParameterName(), false);
-    return this.getDTypes(builder, valuesValNum);
+    Set<DType> ret = this.getDTypes(builder, valuesValNum);
+    if (ret != null && !ret.isEmpty()) return ret;
+    if (ret != null && !isObservationFinal(builder)) return EnumSet.noneOf(DType.class);
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   protected int getIndicesParameterPosition() {
