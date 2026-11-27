@@ -168,6 +168,22 @@ public class TestSparseTensors extends AbstractTensorTest {
     test("tf2_test_sparse_tensor.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
+  /**
+   * A {@code tf.SparseTensor} built from a SciPy matrix's attributes, which the analysis cannot
+   * read, is a sparse tensor of unknown shape and dtype rather than no tensor at all
+   * (https://github.com/wala/ML/issues/1344).
+   */
+  @Test
+  public void testSparseTensorUnreadableValues()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_sparse_tensor_unreadable_values.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE.asSparse())));
+  }
+
   @Test
   public void testSparseAdd7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -184,15 +200,24 @@ public class TestSparseTensors extends AbstractTensorTest {
   /**
    * The sum of a sparse tensor whose {@code values} the analysis cannot read, a result of the
    * unmodeled {@code tf.sparse.reduce_sum}, and a {@code float32} sparse tensor. The sum's dtype
-   * read reports the unknown dtype, and the engine's dtype fill then takes the other operand's
-   * {@code float32}, as at run time; the shape comes from {@code dense_shape}. Before this, the
-   * dtype read threw a {@link NullPointerException} (<a
-   * href="https://github.com/wala/ML/issues/1343">wala/ML#1343</a>).
+   * read reports the unknown dtype, and the engine's dtype fill joins the operands' dtypes; the
+   * shape comes from {@code dense_shape}. Before <a
+   * href="https://github.com/wala/ML/issues/1343">wala/ML#1343</a>, the dtype read threw a {@link
+   * NullPointerException}. Since <a href="https://github.com/wala/ML/issues/1344">wala/ML#1344</a>
+   * the operand of unreadable {@code values} is a sparse tensor of unknown dtype rather than none,
+   * so the fill joins its unknown dtype beside the other operand's {@code float32}.
    */
   @Test
   public void testSparseAddUnreadableValues()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sparse_add8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse())));
+    // TODO: Expect `TENSOR_2_2_FLOAT32.asSparse()` alone once the fill takes a known operand's
+    // dtype for an operation requiring equal dtypes (https://github.com/wala/ML/issues/1349).
+    test(
+        "tf2_test_sparse_add8.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse(), TensorType.of(UNKNOWN, 2, 2).asSparse())));
   }
 
   @Test

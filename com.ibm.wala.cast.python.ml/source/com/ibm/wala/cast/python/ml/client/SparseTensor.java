@@ -4,6 +4,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -47,13 +48,19 @@ public class SparseTensor extends TensorTypeAllocator {
     super(node);
   }
 
-  /** The dtype is inferred from the 'values' argument. */
+  /**
+   * The dtype is inferred from the 'values' argument. The constructor yields a sparse tensor
+   * whatever it is given, so a {@code values} the analysis cannot read, such as an attribute of an
+   * unmodeled library object, contributes the unknown dtype rather than none, which would erase the
+   * tensor (wala/ML#1344).
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int valuesValNum =
         this.getArgumentValueNumber(
             builder, this.getValuesParameterPosition(), this.getValuesParameterName(), false);
-    return this.getDTypes(builder, valuesValNum);
+    Set<DType> ret = this.getDTypes(builder, valuesValNum);
+    return ret == null || ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
   }
 
   protected int getIndicesParameterPosition() {
