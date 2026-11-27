@@ -1,7 +1,10 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.Set;
 
 /**
  * Generator for the {@code __call__} on a {@code tf.initializers.RandomNormal} instance. A call
@@ -76,5 +79,14 @@ public class RandomNormalCall extends Normal {
   @Override
   protected String getDTypeParameterName() {
     return "dtype";
+  }
+
+  /**
+   * A Keras initializer called without a {@code dtype} takes {@code tf.keras.backend.floatx()}
+   * (wala/ML#871).
+   */
+  @Override
+  protected Set<DType> getApiDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return KerasFloatx.at(builder, this.getNode());
   }
 }

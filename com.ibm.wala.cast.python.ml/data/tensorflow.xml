@@ -1258,10 +1258,10 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend/int_shape. Returns the input's static shape as a Python tuple of ints and `None`s, never a tensor; see the `int_shape` class. -->
         <new def="int_shape" class="Ltensorflow/functions/int_shape"/>
         <putfield class="LRoot" field="int_shape" fieldType="LRoot" ref="backend" value="int_shape"/>
-        <!-- `tf.keras.backend.floatx()` returns the backend's default float dtype, documented as `float32`. It is a CALL, not a module field, so the dtype-argument resolver's field-identity match cannot see it; the paired resolver arm recognizes a `DType` allocated in this function's node as `float32` (wala/ML#870). `tf.keras.backend.set_floatx` can change that default program-wide, which this arm does not yet read (wala/ML#871). -->
+        <!-- `tf.keras.backend.floatx()` returns the backend's default float dtype, documented as `float32`. It is a CALL, not a module field, so the dtype-argument resolver's field-identity match cannot see it; the paired resolver arm recognizes a `DType` allocated in this function's node as `float32` (wala/ML#870). `tf.keras.backend.set_floatx` can change that default program-wide, so the arm, like every Keras default that is `floatx()`, takes the values `KerasFloatx` reads from the reachable `set_floatx` calls (wala/ML#871). -->
         <new def="floatx" class="Ltensorflow/functions/floatx"/>
         <putfield class="LRoot" field="floatx" fieldType="LRoot" ref="backend" value="floatx"/>
-        <!-- `tf.keras.backend.set_floatx(value)` changes the backend default float dtype program-wide. Modeled only so a call to it is resolved and appears in the call graph; the `floatx()` resolver arm reads its reachability and declines to the unknown dtype rather than assuming the `float32` default (wala/ML#871). -->
+        <!-- `tf.keras.backend.set_floatx(value)` changes the backend default float dtype program-wide. Modeled so a call to it is resolved and appears in the call graph, where `KerasFloatx` reads its argument and scope for every Keras default that is `floatx()` (wala/ML#871). -->
         <new def="set_floatx" class="Ltensorflow/functions/set_floatx"/>
         <putfield class="LRoot" field="set_floatx" fieldType="LRoot" ref="backend" value="set_floatx"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend/update. Assigns `new_x` to the variable `x`; see the `backend_update` class. -->
@@ -3160,7 +3160,7 @@
           <return value="x"/>
         </method>
       </class>
-      <!-- `tf.keras.backend.set_floatx(value)` (wala/ML#871): modeled only so its call resolves and appears in the call graph, which the `floatx()` resolver arm reads to decline. Returns its argument; the result is unused. -->
+      <!-- `tf.keras.backend.set_floatx(value)` (wala/ML#871): modeled so its call resolves and appears in the call graph, where `KerasFloatx` reads its argument and scope. Returns its argument; the result is unused. -->
       <class name="set_floatx" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
           <return value="value"/>

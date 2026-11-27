@@ -1,10 +1,12 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Set;
 
 /**
  * A generator for weights created by {@code tf.keras.layers.Layer.add_weight()}, the universal
@@ -82,5 +84,14 @@ public class AddWeight extends TensorTypeAllocator {
     boolean manual = this.getInvokeInstruction() == null && this.getSource() == null;
     return super.getArgumentPointsToSet(
         builder, manual && paramPos >= 0 ? paramPos + 1 : paramPos, paramName);
+  }
+
+  /**
+   * A weight added without a {@code dtype} takes the layer's variable dtype, {@code
+   * tf.keras.backend.floatx()} under the default policy (wala/ML#871).
+   */
+  @Override
+  protected Set<DType> getApiDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return KerasFloatx.at(builder, this.getNode());
   }
 }

@@ -649,6 +649,7 @@ public abstract class TensorGenerator implements Cloneable {
     UNSEEN_GLOBAL_WRITES.remove(builder);
     DictComprehensionComponent.clearComprehensions(builder);
     ElementWiseOperation.clearPythonNumbers(builder);
+    KerasFloatx.clearCache(builder);
     FIELD_PUT_INDEX.remove(builder);
     ATTRIBUTE_WRITERS_CACHE.remove(builder);
     METHOD_BODIES_BY_CLASS_PREFIX.remove(builder);
@@ -8323,39 +8324,22 @@ public abstract class TensorGenerator implements Cloneable {
         // it: a call result is not a module field. Detected here by the ALLOCATING method's
         // declaring class, before that degrade, exactly as the `tf.constant` arm below detects its
         // result by its containing method. `float32` is the documented default of `floatx()`, but
-        // `tf.keras.backend.set_floatx` can change it program-wide, so the default holds only where
-        // `set_floatx` is not reachable. When it is reachable the value is not statically knowable,
-        // so this degrades to the unknown dtype rather than assuming the default and being
-        // confidently wrong (wala/ML#871). This is the same adopter contract as the API-default
-        // arms (wala/ML#804, wala/ML#809): emit a documented default only where its override is
-        // determinately absent. The gate is WHOLE-PROGRAM reachability of `set_floatx`, not flow
-        // sensitivity: a program that calls it anywhere degrades every `floatx()` token, including
-        // on paths the call cannot affect and tokens created before the call runs. That is the
-        // sound
-        // direction, since it never assumes the default where an override could be present, at the
-        // cost of precision where `set_floatx` is reachable but provably irrelevant to a token.
-        if (!builder.getCallGraph().getNodes(TensorFlowTypes.SET_FLOATX).isEmpty()) {
-          LOGGER.fine(
-              () ->
-                  "tf.keras.backend.set_floatx is reachable, so floatx() is not statically"
-                      + " knowable; degrading "
-                      + describe(instanceKey)
-                      + " to "
-                      + DType.UNKNOWN
-                      + " (wala/ML#871).");
-          ret.add(DType.UNKNOWN);
-        } else {
-          LOGGER.fine(
-              () ->
-                  "Found dtype: "
-                      + FLOAT32
-                      + " for source: "
-                      + describe(this.getSource())
-                      + " from a tf.keras.backend.floatx() result: "
-                      + describe(instanceKey)
-                      + ".");
-          ret.add(FLOAT32);
-        }
+        // `tf.keras.backend.set_floatx` can change it program-wide, so the token takes each value
+        // `floatx()` may return where this generator's value is made: the default, and what a
+        // reachable `set_floatx` may set there, the unknown dtype for a value it cannot read
+        // (wala/ML#871). This is the same adopter contract as the API-default arms (wala/ML#804,
+        // wala/ML#809): emit a documented default only where its override is determinately absent.
+        Set<DType> floatx = KerasFloatx.at(builder, this.getNode());
+        LOGGER.fine(
+            () ->
+                "Found dtypes: "
+                    + floatx
+                    + " for source: "
+                    + describe(this.getSource())
+                    + " from a tf.keras.backend.floatx() result: "
+                    + describe(instanceKey)
+                    + " (wala/ML#871).");
+        ret.addAll(floatx);
       } else if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         // An unmodeled dtype: a `tf.DType` instance with no entry in `FIELD_REFERENCE_TO_DTYPE`
         // (e.g. a half-precision or quantized dtype not yet enumerated). Degrade to UNKNOWN (the ⊤

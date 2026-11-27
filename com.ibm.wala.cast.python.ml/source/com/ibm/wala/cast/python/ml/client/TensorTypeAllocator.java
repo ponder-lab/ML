@@ -83,11 +83,22 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     // inheritors (`FixedLenFeature`, `VarLenFeature`, `Gamma`, `Poisson`, `Eye`, `SparseEye`,
     // `AddWeight`, `RandomDistribution`) inherit the arm WITHOUT a witness and are listed here so
     // they do not borrow the witnessed surfaces' verification.
-    Set<DType> ret = this.dTypeApiDefaultOrUnknown(builder, EnumSet.of(FLOAT32));
+    Set<DType> ret = this.dTypeApiDefaultOrUnknown(builder, this.getApiDefaultDTypes(builder));
 
     LOGGER.fine(() -> "Default dtypes for source: " + describe(source) + " are: " + ret + ".");
 
     return ret;
+  }
+
+  /**
+   * The dtypes the API documents for an absent {@code dtype} argument: {@code float32}, unless the
+   * API takes {@code tf.keras.backend.floatx()} instead, as a Keras one does (wala/ML#871).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The default dtypes.
+   */
+  protected Set<DType> getApiDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(FLOAT32);
   }
 
   /**

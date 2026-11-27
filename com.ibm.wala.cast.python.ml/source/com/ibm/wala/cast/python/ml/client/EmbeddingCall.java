@@ -22,7 +22,6 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -107,15 +106,16 @@ public class EmbeddingCall extends TensorGenerator {
   }
 
   /**
-   * Returns float32: embedding tables default to the layer variable dtype under the default global
-   * policy, and the lookup result carries it regardless of the integer input dtype.
+   * Returns the values {@code tf.keras.backend.floatx()} may take here: embedding tables default to
+   * the layer variable dtype under the default global policy, {@code floatx()}, and the lookup
+   * result carries it regardless of the integer input dtype (wala/ML#871).
    *
    * @param builder The propagation call graph builder.
-   * @return {@code {FLOAT32}}.
+   * @return {@code {FLOAT32}} unless a reachable {@code set_floatx} may change it.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return EnumSet.of(DType.FLOAT32);
+    return KerasFloatx.at(builder, this.getNode());
   }
 
   /**
