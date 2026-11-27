@@ -15,6 +15,10 @@ def h(a):
     pass
 
 
+def k(a):
+    pass
+
+
 # `tf.sparse.reorder(sp_input, name=None)`: the result is a `SparseTensor` with the shape and
 # dtype of `sp_input` (wala/ML#1351).
 x = tf.SparseTensor(indices=[[1, 0], [0, 2]], values=[1.0, 2.0], dense_shape=[2, 3])
@@ -43,3 +47,13 @@ assert isinstance(u, tf.SparseTensor)
 assert u.shape == (4, 4)
 assert u.dtype == tf.float32
 h(u)
+
+# The result's fields are its input's: `reorder` only permutes the entries, so the `values` of the
+# result are the input's two values, not a row of its dense shape.
+r = tf.sparse.reorder(
+    tf.SparseTensor(indices=[[1, 0], [0, 2]], values=[1.0, 2.0], dense_shape=[2, 7])
+)
+rv = tf.identity(r.values)
+assert rv.shape == (2,)
+assert rv.dtype == tf.float32
+k(rv)
