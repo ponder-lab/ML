@@ -53,6 +53,13 @@ public class SparseTensor extends TensorTypeAllocator {
    * whatever it is given, so a {@code values} the analysis cannot read, such as an attribute of an
    * unmodeled library object, contributes the unknown dtype rather than none, which would erase the
    * tensor (wala/ML#1344).
+   *
+   * <p>An empty read that is not final is the exception, following {@code
+   * ElementWiseOperation.resultDTypes} (wala/ML#1094): a loop-carried {@code values} is read while
+   * its own cycle is still converging, and unknown there would be a member its later dtypes cannot
+   * displace, since the dtype join absorbs into unknown. The result is ⊥ instead, and {@link
+   * #isObservationFinal} schedules the query to be recomputed against the settled state, where a
+   * read that is still empty gives unknown.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
@@ -60,7 +67,9 @@ public class SparseTensor extends TensorTypeAllocator {
         this.getArgumentValueNumber(
             builder, this.getValuesParameterPosition(), this.getValuesParameterName(), false);
     Set<DType> ret = this.getDTypes(builder, valuesValNum);
-    return ret == null || ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
+    if (ret != null && !ret.isEmpty()) return ret;
+    if (ret != null && !isObservationFinal(builder)) return EnumSet.noneOf(DType.class);
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   protected int getIndicesParameterPosition() {
