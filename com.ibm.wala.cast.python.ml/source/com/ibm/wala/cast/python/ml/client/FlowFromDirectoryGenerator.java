@@ -1,6 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.withoutClientOnlyKeys;
 
 import com.ibm.wala.cast.loader.AstMethod;
@@ -107,9 +106,11 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Both positions are float32: images through the iterator's `dtype` parameter (default
-    // "float32"), labels through the same cast under the common `class_mode`s.
-    return EnumSet.of(FLOAT32);
+    // Both positions take the generator's `dtype`, whose default is `floatx()`: images through the
+    // iterator's `dtype` parameter, labels through the same cast under the common `class_mode`s.
+    // That is `float32` unless a reachable `set_floatx` may change it where the generator was
+    // created, which is when it reads `floatx()` (wala/ML#871).
+    return KerasFloatx.atCreation(builder, () -> this.getArgumentPointsToSet(builder, 0, "self"));
   }
 
   /**

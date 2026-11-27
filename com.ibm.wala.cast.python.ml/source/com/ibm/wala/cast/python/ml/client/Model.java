@@ -16,7 +16,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -86,7 +85,7 @@ public class Model extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return this.getWeightDTypes();
+    return this.getWeightDTypes(builder);
   }
 
   /**
@@ -193,12 +192,16 @@ public class Model extends TensorGenerator {
   }
 
   /**
-   * Infers the dtypes of the model's weights.
+   * Infers the dtypes of the model's weights: the layers' variable dtype, {@code
+   * tf.keras.backend.floatx()} under the default policy, which a reachable {@code set_floatx} may
+   * change (wala/ML#871).
    *
+   * @param builder The propagation call graph builder.
    * @return A set of weight dtypes.
    */
-  Set<DType> getWeightDTypes() {
-    // For now, we assume float32 for most Keras weights.
-    return EnumSet.of(DType.FLOAT32);
+  Set<DType> getWeightDTypes(PropagationCallGraphBuilder builder) {
+    // Each layer read `floatx()` when it was created, which this model does not trace, so the
+    // values any node may see.
+    return KerasFloatx.at(builder, null);
   }
 }

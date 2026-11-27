@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_INIT;
 import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
@@ -746,8 +745,15 @@ public class ModelCall extends TensorGenerator {
       }
     }
 
-    // If we couldn't find any dtypes, default to FLOAT32.
-    if (outputDTypes.isEmpty()) outputDTypes.add(FLOAT32);
+    // If we couldn't find any dtypes, default to the compute dtype, `floatx()` as the model read it
+    // when it was created, which a reachable `set_floatx` may change (wala/ML#871).
+    if (outputDTypes.isEmpty())
+      outputDTypes.addAll(
+          KerasFloatx.atCreation(
+              builder,
+              () ->
+                  this.getArgumentPointsToSet(
+                      builder, Parameters.SELF.getIndex(), Parameters.SELF.getName())));
 
     return outputDTypes;
   }

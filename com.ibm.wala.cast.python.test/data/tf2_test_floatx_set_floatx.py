@@ -1,11 +1,10 @@
-# Witness for wala/ML#871: when tf.keras.backend.set_floatx is reachable, the floatx() default is
-# no longer statically knowable, so a dtype=floatx() token degrades to the unknown dtype rather than
-# the assumed float32. set_floatx changes the backend default program-wide; assuming float32 here
-# would be confidently wrong for a program that overrode it.
+# Witness for wala/ML#871: when tf.keras.backend.set_floatx is reachable, floatx() may return what it
+# sets as well as the float32 default. set_floatx changes the backend default program-wide, and a
+# call at a module's top level is restored by no function, so its effect is the whole program.
 #
 # At run time set_floatx("float64") makes floatx() return "float64", so via_floatx_call's array is
-# float64. The static analysis cannot know which value set_floatx installed, so it declines to the
-# unknown dtype rather than guessing; the JUnit expectation is that unknown, not this runtime dtype.
+# float64. The analysis is flow-insensitive, so it reads both the default and the value set; the JUnit
+# expectation is that union, which contains this runtime dtype.
 import tensorflow as tf
 
 tf.keras.backend.set_floatx("float64")

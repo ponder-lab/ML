@@ -14,7 +14,6 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -218,8 +217,9 @@ public class KerasApplicationCall extends TensorGenerator {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Keras models compute in the floating-point default whatever the input dtype, as `DenseCall`
-    // assumes for layers.
-    return EnumSet.of(DType.FLOAT32);
+    // assumes for layers: `floatx()`, which a reachable `set_floatx` may change (wala/ML#871).
+    // The model reads `floatx()` when it is created.
+    return KerasFloatx.atCreation(builder, () -> this.getArgumentPointsToSet(builder, 0, "self"));
   }
 
   @Override

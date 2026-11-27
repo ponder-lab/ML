@@ -290,4 +290,13 @@ public class Input extends TensorTypeAllocator {
   protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
     return EnumSet.of(TensorOrigin.TENSORFLOW, TensorOrigin.KERAS_SYMBOLIC);
   }
+
+  /**
+   * A Keras {@code Input} without a {@code dtype} takes {@code tf.keras.backend.floatx()}
+   * (wala/ML#871).
+   */
+  @Override
+  protected Set<DType> getApiDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return KerasFloatx.at(builder, this.getNode());
+  }
 }

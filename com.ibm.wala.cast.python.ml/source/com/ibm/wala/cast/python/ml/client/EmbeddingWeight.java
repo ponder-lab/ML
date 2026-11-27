@@ -1,7 +1,9 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -93,5 +95,14 @@ public class EmbeddingWeight extends EyeBase {
   @Override
   protected String getDTypeParameterName() {
     return null;
+  }
+
+  /**
+   * An {@code Embedding} layer's weight takes the layer's variable dtype, {@code
+   * tf.keras.backend.floatx()} under the default policy (wala/ML#871).
+   */
+  @Override
+  protected Set<DType> getApiDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return KerasFloatx.at(builder, this.getNode());
   }
 }

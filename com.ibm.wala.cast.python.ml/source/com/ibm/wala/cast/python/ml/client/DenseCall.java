@@ -31,7 +31,6 @@ import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -511,8 +510,14 @@ public class DenseCall extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Keras layers like Dense usually output FLOAT32 by default, regardless of input dtype.
-    return EnumSet.of(DType.FLOAT32);
+    // A Keras layer like Dense outputs its compute dtype whatever the input dtype: `floatx()`
+    // under the default policy, read when the layer is created, `float32` unless a reachable
+    // `set_floatx` may change it there (wala/ML#871).
+    return KerasFloatx.atCreation(
+        builder,
+        () ->
+            this.getArgumentPointsToSet(
+                builder, Parameters.SELF.getIndex(), Parameters.SELF.getName()));
   }
 
   @Override

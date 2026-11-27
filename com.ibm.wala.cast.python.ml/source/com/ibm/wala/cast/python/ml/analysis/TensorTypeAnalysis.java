@@ -489,9 +489,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * <p>Only floating-point cells are rewritten. Keras leaves an integral, boolean or complex
    * argument alone, which is why a {@code uint8} label parameter keeps reporting the caller's type.
    *
-   * <p>The compute dtype is taken to be {@link #COMPUTE_DTYPE}, the default policy. A layer
-   * constructed with an explicit {@code dtype=} is therefore reported as if it carried the default;
-   * that construction is rare and unmodeled, and the runtime evidence is what would catch it.
+   * <p>The compute dtypes are those {@code tf.keras.backend.floatx()} may return where the body
+   * runs: {@code float32}, the default policy's, unless a reachable {@code
+   * tf.keras.backend.set_floatx} may have changed it, when each value it may set is one more
+   * (wala/ML#871). A layer constructed with an explicit {@code dtype=} is reported as if it carried
+   * the default; that construction is rare and unmodeled (wala/ML#822), and the runtime evidence is
+   * what would catch it.
    *
    * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
    * destination is a parameter and this operator replaces rather than supplements that barrier; the
@@ -499,7 +502,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * #crossMarkers}), as it does at that barrier.
    */
   static final class ComputeDTypeCastOp extends UnaryOperator<TensorVariable> {
-    static final ComputeDTypeCastOp INSTANCE = new ComputeDTypeCastOp();
+    /** The cast under the default {@code floatx()}, {@code float32}. */
+    static final ComputeDTypeCastOp INSTANCE = new ComputeDTypeCastOp(EnumSet.of(DType.FLOAT32));
 
     /**
      * The provenance markers that cross into a Keras {@code call} body's input: {@link
@@ -513,10 +517,24 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
      */
     private static final Set<TensorOrigin> CALL_INPUT_MARKERS = EnumSet.of(TensorOrigin.ANNOTATION);
 
-    /** The compute dtype of a layer under the default policy. */
-    private static final DType COMPUTE_DTYPE = DType.FLOAT32;
+    /** The compute dtypes a layer may have where its body runs. */
+    private final Set<DType> computeDTypes;
 
-    private ComputeDTypeCastOp() {}
+    private ComputeDTypeCastOp(Set<DType> computeDTypes) {
+      this.computeDTypes = Collections.unmodifiableSet(EnumSet.copyOf(computeDTypes));
+    }
+
+    /**
+     * The cast to the given compute dtypes.
+     *
+     * @param computeDTypes The compute dtypes a layer may have where its body runs; non-empty.
+     * @return The cast.
+     */
+    static ComputeDTypeCastOp of(Set<DType> computeDTypes) {
+      return INSTANCE.computeDTypes.equals(computeDTypes)
+          ? INSTANCE
+          : new ComputeDTypeCastOp(computeDTypes);
+    }
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
@@ -526,7 +544,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         // Materializing a null state is itself a change, even from an empty rhs.
         changed = lhs.state == null;
         if (changed) lhs.state = HashSetFactory.make();
-        for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
+        for (TensorType t : rhs.state) for (TensorType c : cast(t)) changed |= lhs.state.add(c);
       }
       // wala/ML#901: the annotation provenance crosses the parameter boundary. A Keras symbolic
       // argument does not reach `call` as one: `Layer.__call__` runs `call` on a graph tensor it
@@ -537,31 +555,40 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     }
 
     /**
-     * The type as the {@code call} body sees it.
+     * The types as the {@code call} body may see it.
      *
      * @param type The type the caller holds.
-     * @return {@code type} with a floating-point cell replaced by the compute dtype, or {@code
+     * @return {@code type} with a floating-point cell replaced by each compute dtype, or {@code
      *     type} itself when Keras would not cast it.
      */
-    private static TensorType cast(TensorType type) {
+    private Set<TensorType> cast(TensorType type) {
       DType dtype = type.getDType();
-      if (dtype == null || !dtype.isFloatingPoint() || dtype == COMPUTE_DTYPE) return type;
-      return TensorType.of(COMPUTE_DTYPE, type.getDims(), type.layout());
+      if (dtype == null || !dtype.isFloatingPoint()) return Set.of(type);
+      Set<TensorType> ret = HashSetFactory.make();
+      for (DType computeDType : this.computeDTypes)
+        ret.add(
+            computeDType == dtype
+                ? type
+                : TensorType.of(computeDType, type.getDims(), type.layout()));
+      return ret;
     }
 
     @Override
     public int hashCode() {
-      return 0x821CA57;
+      return 0x821CA57 ^ this.computeDTypes.hashCode();
     }
 
     @Override
     public boolean equals(Object o) {
-      return o instanceof ComputeDTypeCastOp;
+      return o instanceof ComputeDTypeCastOp other
+          && this.computeDTypes.equals(other.computeDTypes);
     }
 
     @Override
     public String toString() {
-      return "cast a floating-point argument to the layer's compute dtype (Keras call input)";
+      return "cast a floating-point argument to the layer's compute dtype "
+          + this.computeDTypes
+          + " (Keras call input)";
     }
   }
 
@@ -773,7 +800,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
-      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, Set<DType>> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
@@ -1512,8 +1539,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new ConvOp(3, node);
             } else if (dtypeCoercions.containsKey(node)) {
               return new CoerceDTypeOp(dtypeCoercions.get(node), false);
-            } else if (computeDTypeCasts.contains(node)) {
-              return ComputeDTypeCastOp.INSTANCE;
+            } else if (computeDTypeCasts.containsKey(node)) {
+              return ComputeDTypeCastOp.of(computeDTypeCasts.get(node));
             } else if (parameters.contains(node)) {
               return ParameterBarrierOp.INSTANCE;
             } else if (iterationProducts.contains(node)) {
@@ -1566,8 +1593,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new RefineShapeOp(refinements.get(dst), dst);
             } else if (dtypeCoercions.containsKey(dst)) {
               return new CoerceDTypeOp(dtypeCoercions.get(dst), true);
-            } else if (computeDTypeCasts.contains(dst)) {
-              return ComputeDTypeCastOp.INSTANCE;
+            } else if (computeDTypeCasts.containsKey(dst)) {
+              return ComputeDTypeCastOp.of(computeDTypeCasts.get(dst));
             } else if (parameters.contains(dst)) {
               return ParameterBarrierOp.INSTANCE;
             } else if (iterationProducts.contains(dst)) {
@@ -1672,7 +1699,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    *     pinned to their {@link TensorOrigin#PARAMETER} seed by blocking caller-side origin inflow
    *     (wala/ML#726).
    * @param computeDTypeCasts Keras {@code call} first-argument destinations, whose incoming
-   *     floating-point types are rewritten to the layer's compute dtype (wala/ML#821).
+   *     floating-point types are rewritten to the layer's compute dtype (wala/ML#821), each keyed
+   *     to the compute dtypes the layer may have where its body runs (wala/ML#871).
    * @param dtypeCoercions Parameter destinations whose consumers coerce them, keyed to the dtypes
    *     eager execution imposes there (wala/ML#828): a singleton where the consumers agree, the
    *     union over the imposed dtypes where they disagree (wala/ML#829).
@@ -1693,7 +1721,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
-      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, Set<DType>> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
@@ -1739,7 +1767,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
-      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, Set<DType>> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
@@ -1786,7 +1814,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
-      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, Set<DType>> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
@@ -1837,7 +1865,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
-      Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, Set<DType>> computeDTypeCasts,
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> markerEdges,
