@@ -12,7 +12,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_INT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -711,14 +710,11 @@ public class TestDecoratedMethods extends AbstractTensorTest {
    * passes, never the first function's {@code (1, 4)} bounding boxes: the library's pass-through
    * decorator is applied once per decorated function from one site, and keyed on that site alone it
    * bound every wrapper to every decorated name, so each wrapper dispatched to both functions with
-   * the other's arguments. The shape-unknown float32 twin beside the scalar is the wrapper's own
-   * forwarding arm: {@code len(args) >= 1} over the empty varargs tuple is not folded by the branch
-   * decider, so the arm's cast of a missing {@code args[0]} still reaches the function with the
-   * cast's dtype and no shape, joined in from the other decorated function's call. The dtype is
-   * float32 throughout.
-   *
-   * <p>TODO: The parameter reads the float32 scalar alone once
-   * https://github.com/wala/ML/issues/1305 separates the two calls of the wrapper.
+   * the other's arguments. The wrapper's forwarding arm, whose {@code len(args) >= 1} over the
+   * empty varargs tuple the branch decider does not fold, casts a missing {@code args[0]}; that
+   * cast gave the parameter a shape-unknown float32 twin while the wrapper's calls had one node for
+   * both decorated functions. The wrapper passes its parameters on, so its calls now have a node
+   * for each (wala/ML#1305), and the parameter reads the scalar alone.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
@@ -732,7 +728,7 @@ public class TestDecoratedMethods extends AbstractTensorTest {
         "consume_param",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32))));
   }
 
   /**

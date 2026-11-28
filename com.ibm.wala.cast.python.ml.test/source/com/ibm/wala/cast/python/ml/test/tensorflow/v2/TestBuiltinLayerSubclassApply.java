@@ -60,17 +60,14 @@ public class TestBuiltinLayerSubclassApply extends AbstractTensorTest {
   /**
    * The same subclass constructed through a program factory, {@code make(cls, n)}, with two
    * different sizes: the factory's {@code cls(n)} is the constructor's one call, and its size is
-   * the factory's parameter, so each application gets the join of both sizes rather than one size
-   * alone.
-   *
-   * <p>TODO: {@code consume_made_six} reads {@code (2, 6)} alone and {@code consume_made_seven}
-   * {@code (2, 7)} alone once https://github.com/wala/ML/issues/1305 is fixed.
+   * the factory's parameter. The factory passes its parameters on, so the call has a node for each
+   * call of the factory (wala/ML#1305), and each application gets its own size alone.
    */
   @Test
-  public void testFactoryJoinsSizes() throws ClassHierarchyException, CancelException, IOException {
-    Set<TensorType> joined = Set.of(TensorType.of(FLOAT_32, 2, 6), TensorType.of(FLOAT_32, 2, 7));
-    test(FILE, "consume_made_six", 1, 1, Map.of(2, joined));
-    test(FILE, "consume_made_seven", 1, 1, Map.of(2, joined));
+  public void testFactoryKeepsSizesApart()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(FILE, "consume_made_six", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+    test(FILE, "consume_made_seven", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 7))));
   }
 
   /**
