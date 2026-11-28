@@ -335,8 +335,11 @@ import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -3737,7 +3740,7 @@ public class TensorGeneratorFactory {
    * @param generator The generator, never handed out itself, or {@code null} when there is none.
    * @param failure What the dispatch threw, or {@code null} when it returned.
    */
-  private record Dispatch(TensorGenerator generator, IllegalArgumentException failure) {
+  record Dispatch(TensorGenerator generator, IllegalArgumentException failure) {
 
     /**
      * Replays this dispatch.
@@ -3912,6 +3915,8 @@ public class TensorGeneratorFactory {
         visited.memoizes() && WorklistTypeResolver.active(builder) != null
             ? dispatches(builder)
             : null;
+    // A member of a component being solved reads its entry (wala/ML#1274).
+    if (visited.solving(source)) return visited.entry(source);
     if (visited.cuts(source)) {
       final PointsToSetVariable cycleSource = source;
       LOGGER.log(
@@ -3926,22 +3931,208 @@ public class TensorGeneratorFactory {
       Dispatch memoized = dispatches.get(source);
       if (memoized != null) return memoized.replay();
     }
-    long mark = visited.enter(source);
+    Dispatch kept = visited.kept(source);
+    if (kept != null) return kept.replay();
+    visited.enter(source);
     TensorGenerator generator = null;
     IllegalArgumentException failure = null;
-    boolean ownSourceOnly;
+    Dispatch own;
     try {
       generator = getGeneratorBody(source, builder, visited);
     } catch (IllegalArgumentException e) {
       failure = e;
     } finally {
-      ownSourceOnly = visited.leave(source, mark);
+      own = visited.leave(source, generator, failure);
     }
-    if (dispatches != null && ownSourceOnly)
-      dispatches.putIfAbsent(
-          source, new Dispatch(generator == null ? null : generator.copy(), failure));
+    List<PointsToSetVariable> component = visited.takeComponent();
+    if (component != null) return solveComponent(source, component, builder, visited, dispatches);
+    if (dispatches != null && own != null) dispatches.putIfAbsent(source, own);
     if (failure != null) throw failure;
     return generator;
+  }
+
+  /** How many dispatches each builder's walks computed, for tests of their cost (wala/ML#1274). */
+  private static final Map<PropagationCallGraphBuilder, AtomicLong> DISPATCH_COMPUTATIONS =
+      new WeakHashMap<>();
+
+  /**
+   * How many dispatches a builder's walks computed, rather than replayed.
+   *
+   * @param builder The builder.
+   * @return The count.
+   */
+  static long dispatchComputations(PropagationCallGraphBuilder builder) {
+    synchronized (DISPATCH_COMPUTATIONS) {
+      AtomicLong computations = DISPATCH_COMPUTATIONS.get(builder);
+      return computations == null ? 0 : computations.get();
+    }
+  }
+
+  /** The most rounds a component's solve takes before it keeps what its entries have gathered. */
+  private static final int MAX_SOLVE_ROUNDS = 64;
+
+  /**
+   * How many rounds the solves of each builder's components took, and how many of them, for tests
+   * of the solve's cost (wala/ML#1274).
+   */
+  private static final Map<PropagationCallGraphBuilder, long[]> SOLVES = new WeakHashMap<>();
+
+  /**
+   * The solves a builder's dispatches made so far.
+   *
+   * @param builder The builder.
+   * @return The number of components solved and the rounds their solves took, in that order.
+   */
+  static long[] solves(PropagationCallGraphBuilder builder) {
+    synchronized (SOLVES) {
+      long[] solves = SOLVES.get(builder);
+      return solves == null ? new long[2] : solves.clone();
+    }
+  }
+
+  /**
+   * Solves the dispatches of a component of sources that reach each other, once its first source is
+   * left (wala/ML#1274). The members are dispatched in rounds, in an order fixed by their pointer
+   * keys rather than by which member the walk entered first. Each member's dispatch reads the
+   * others' entries, and its own, instead of walking them. An entry gathers the generators its
+   * member's dispatches give, joined, until a round adds none to any entry. The members' dispatches
+   * are then kept for the walk and memoized per builder as any other is.
+   *
+   * @param root The source that completed the component.
+   * @param members The component's members, the root among them.
+   * @param builder The builder.
+   * @param visited The dispatch path, with the root left.
+   * @param dispatches The builder's memo, or {@code null} when dispatches are not memoized.
+   * @return The root's generator, or {@code null} when it has none.
+   * @throws IllegalArgumentException What the root's dispatch threw in the last round, when its
+   *     entry gathered no generator.
+   */
+  private static TensorGenerator solveComponent(
+      PointsToSetVariable root,
+      List<PointsToSetVariable> members,
+      PropagationCallGraphBuilder builder,
+      DispatchPath visited,
+      Map<PointsToSetVariable, Dispatch> dispatches) {
+    List<PointsToSetVariable> order = new ArrayList<>(members);
+    order.sort(Comparator.comparing(TensorGeneratorFactory::solveKey));
+    Map<PointsToSetVariable, TensorGenerator> table = new HashMap<>();
+    Map<PointsToSetVariable, Map<TensorGenerator, TensorGenerator>> gathered = new HashMap<>();
+    Map<PointsToSetVariable, IllegalArgumentException> failures = new HashMap<>();
+    for (PointsToSetVariable member : order) {
+      table.put(member, null);
+      gathered.put(member, new LinkedHashMap<>());
+    }
+    boolean outside = false;
+    boolean enclosing = false;
+    boolean changed = true;
+    int rounds = 0;
+    int depth = visited.beginSolve(table);
+    try {
+      while (changed && rounds < MAX_SOLVE_ROUNDS) {
+        changed = false;
+        rounds++;
+        for (PointsToSetVariable member : order) {
+          visited.enter(member);
+          TensorGenerator generator = null;
+          try {
+            generator = getGeneratorBody(member, builder, visited);
+            failures.remove(member);
+          } catch (IllegalArgumentException e) {
+            failures.put(member, e);
+          } finally {
+            DispatchPath.Solved solved = visited.leaveSolved(member, depth);
+            outside |= solved.outside();
+            enclosing |= solved.enclosing();
+          }
+          Map<TensorGenerator, TensorGenerator> parts = gathered.get(member);
+          // An equal generator from a later round replaces the earlier one, so a generator holding
+          // an entry holds the one the round read.
+          for (TensorGenerator part : joinedParts(generator))
+            if (parts.put(part, part) == null) changed = true;
+          table.put(member, joinOf(member, parts.values()));
+        }
+      }
+    } finally {
+      visited.endSolve();
+    }
+    final int size = members.size();
+    final int taken = rounds;
+    final boolean bounded = changed;
+    LOGGER.log(
+        bounded ? Level.WARNING : Level.FINE,
+        () ->
+            "solveComponent: "
+                + size
+                + " members of "
+                + root
+                + " in "
+                + taken
+                + " rounds"
+                + (bounded ? ", stopped at the bound." : "."));
+    synchronized (SOLVES) {
+      long[] solves = SOLVES.computeIfAbsent(builder, b -> new long[2]);
+      solves[0]++;
+      solves[1] += rounds;
+    }
+    for (PointsToSetVariable member : order) {
+      TensorGenerator generator = table.get(member);
+      Dispatch dispatch =
+          new Dispatch(
+              generator == null ? null : generator.copy(),
+              generator == null ? failures.get(member) : null);
+      // A member that read an enclosing component's entry holds only while that one is solved.
+      if (enclosing) continue;
+      visited.keep(member, dispatch, outside);
+      if (dispatches != null && !outside) dispatches.putIfAbsent(member, dispatch);
+    }
+    TensorGenerator generator = table.get(root);
+    if (generator == null && failures.containsKey(root)) throw failures.get(root);
+    return generator == null ? null : generator.copy();
+  }
+
+  /**
+   * The order a component's members are solved in, fixed by the call graph and the pointer analysis
+   * rather than by the walk.
+   *
+   * @param member A member.
+   * @return Its key.
+   */
+  private static String solveKey(PointsToSetVariable member) {
+    PointerKey key = member.getPointerKey();
+    if (key instanceof LocalPointerKey local)
+      return String.format("%010d:%010d", local.getNode().getGraphNodeId(), local.getValueNumber());
+    return "~" + key;
+  }
+
+  /**
+   * The generators a dispatch gives, with the parts of a join in place of the join, recursively.
+   *
+   * @param generator The dispatch's generator, or {@code null}.
+   * @return Its parts.
+   */
+  private static List<TensorGenerator> joinedParts(TensorGenerator generator) {
+    if (generator == null) return List.of();
+    if (!(generator instanceof CreatorJoin join)) return List.of(generator);
+    List<TensorGenerator> ret = new ArrayList<>();
+    for (TensorGenerator part : join.getParts()) ret.addAll(joinedParts(part));
+    return ret;
+  }
+
+  /**
+   * A member's entry: the one generator its dispatches gave, or their join.
+   *
+   * @param member The member.
+   * @param parts The generators, without joins among them.
+   * @return The entry, or {@code null} when there are none.
+   */
+  private static TensorGenerator joinOf(
+      PointsToSetVariable member, Collection<TensorGenerator> parts) {
+    if (parts.isEmpty()) return null;
+    if (parts.size() == 1) return parts.iterator().next();
+    List<TensorGenerator> list = new ArrayList<>(parts);
+    return list.stream().allMatch(TupleElementProvider.class::isInstance)
+        ? new DatasetCreatorJoin(member, list)
+        : new CreatorJoin(member, list);
   }
 
   /**
@@ -3951,6 +4142,9 @@ public class TensorGeneratorFactory {
    */
   private static TensorGenerator getGeneratorBody(
       PointsToSetVariable source, PropagationCallGraphBuilder builder, DispatchPath visited) {
+    synchronized (DISPATCH_COMPUTATIONS) {
+      DISPATCH_COMPUTATIONS.computeIfAbsent(builder, b -> new AtomicLong()).incrementAndGet();
+    }
     PointerKey k = source.getPointerKey();
     // The data a Keras `fit`, `evaluate` or `predict` summary packs for the model's step, or an
     // `unpack_x_y_sample_weight` result, reaches a step as a parameter or an unpack result and is
